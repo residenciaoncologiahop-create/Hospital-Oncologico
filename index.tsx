@@ -20,7 +20,10 @@ import {
     List,
     File,
     Loader2,
-    AlertCircle
+    AlertCircle,
+    ShieldAlert,
+    Info,
+    Terminal
 } from 'lucide-react';
 
 // --- Types ---
@@ -36,7 +39,7 @@ interface ClinicalEvent {
     professional: string;
     category: string;
     note: string;
-    isKey: boolean; // New field to identify important events
+    isKey: boolean; 
 }
 
 interface Patient {
@@ -63,24 +66,21 @@ const extractTimelineFromDocs = async (
     historyFiles: FileData[]
 ): Promise<ClinicalEvent[]> => {
     if (!historyText && historyFiles.length === 0) return [];
+    
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) throw new Error("API_KEY_MISSING");
 
     try {
-        const ai = new GoogleGenAI({ apiKey: "AIzaSyAYo5qUNgElAizoJWY9K2hovQy1yenqOFY" });
+        const ai = new GoogleGenAI({ apiKey });
         const modelId = 'gemini-3-flash-preview'; 
 
         const parts: any[] = [];
-        // Updated prompt to be exhaustive and identify key events
-        parts.push({ text: "Analiza los siguientes documentos de historia clínica de manera EXHAUSTIVA. Tu objetivo es extraer TODOS los eventos médicos encontrados, sin omitir consultas de rutina, laboratorios o procedimientos menores. Queremos una bitácora completa.\n\nPara cada evento:\n1. Identifica la fecha exacta.\n2. Identifica el profesional o institución.\n3. Categoriza el evento.\n4. Escribe un resumen.\n5. Determina si es un 'Evento Clave' (isKey). Un evento clave es: Nuevo Diagnóstico, Cirugía, Inicio/Fin de Quimioterapia/Radioterapia, Hospitalización, Recurrencia/Metástasis, o cambio drástico de medicación. Las consultas de seguimiento normales o laboratorios de rutina NO son claves." });
+        parts.push({ text: "Analiza los siguientes documentos médicos de forma EXHAUSTIVA. No resumas; extrae CADA evento, consulta, resultado de laboratorio o estudio de imagen mencionado. \n\nPara cada evento determina:\n1. Fecha (DD/MM/YYYY).\n2. Profesional/Institución.\n3. Categoría (Consulta, Laboratorio, Imagen, Cirugía, Quimio, Radio, etc).\n4. Resumen detallado de hallazgos.\n5. 'isKey' (true/false): Marca como true solo eventos CRÍTICOS (diagnósticos, cirugías, cambios de tratamiento, progresión de enfermedad). Eventos de rutina deben ser false." });
         
-        if (historyText) parts.push({ text: `Texto de historia clínica:\n${historyText}` });
+        if (historyText) parts.push({ text: `Historia manual: ${historyText}` });
         
         for (const file of historyFiles) {
-            parts.push({
-                inlineData: {
-                    mimeType: file.type,
-                    data: file.data
-                }
-            });
+            parts.push({ inlineData: { mimeType: file.type, data: file.data } });
         }
 
         const response = await ai.models.generateContent({
@@ -93,25 +93,23 @@ const extractTimelineFromDocs = async (
                     items: {
                         type: Type.OBJECT,
                         properties: {
-                            date: { type: Type.STRING, description: "Fecha del evento (DD/MM/YYYY)" },
-                            professional: { type: Type.STRING, description: "Nombre del profesional o institución" },
-                            category: { type: Type.STRING, description: "Categoría del evento" },
-                            note: { type: Type.STRING, description: "Resumen del evento." },
-                            isKey: { type: Type.BOOLEAN, description: "True si es un evento crítico/importante, False si es rutina." }
-                        }
+                            date: { type: Type.STRING },
+                            professional: { type: Type.STRING },
+                            category: { type: Type.STRING },
+                            note: { type: Type.STRING },
+                            isKey: { type: Type.BOOLEAN }
+                        },
+                        required: ["date", "professional", "category", "note", "isKey"]
                     }
                 }
             }
         });
 
-        if (response.text) {
-            const parsed = JSON.parse(response.text);
-            return parsed;
-        }
+        if (response.text) return JSON.parse(response.text);
         return [];
-    } catch (e) {
-        console.error("Extraction error", e);
-        return [];
+    } catch (e: any) {
+        console.error("Extraction error:", e);
+        throw e;
     }
 };
 
@@ -123,83 +121,62 @@ const getAIResponse = async (
     messages: ChatMessage[],
     newMessage: string
 ) => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return "ERROR: API_KEY no configurada. Verifica las variables de entorno en Vercel.";
+
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        // Using pro model for complex medical reasoning
+        const ai = new GoogleGenAI({ apiKey });
         const modelId = 'gemini-3-pro-preview'; 
         
         const parts: any[] = [];
-
-        // 1. Add Context (History & Guidelines)
-        let contextPrompt = "CONTEXTO MÉDICO:\n";
+        let contextPrompt = "CONTEXTO ONCOLÓGICO DEL PACIENTE:\n";
         
         if (timeline && timeline.length > 0) {
-            contextPrompt += "\nLÍNEA DE TIEMPO COMPLETA (Historial de Eventos):\n";
+            contextPrompt += "\nEVENTOS DEL HISTORIAL (Ordenados):\n";
             timeline.forEach(t => {
-                const marker = t.isKey ? "[CLAVE] " : "";
-                contextPrompt += `- ${marker}[${t.date}] (${t.category}) ${t.professional}: ${t.note}\n`;
+                contextPrompt += `- ${t.isKey ? '[CRÍTICO] ' : ''}${t.date}: ${t.note} (${t.category})\n`;
             });
-        }
-
-        if (historyText) {
-            contextPrompt += `\nNOTAS ADICIONALES:\n${historyText}\n`;
         }
         
         parts.push({ text: contextPrompt });
 
-        // Add history files
-        for (const file of historyFiles) {
-            parts.push({
-                inlineData: {
-                    mimeType: file.type,
-                    data: file.data
-                }
-            });
-            parts.push({ text: `\n(Archivo adjunto: Historia Clínica - ${file.name})\n` });
+        for (const file of historyFiles.slice(0, 3)) {
+            parts.push({ inlineData: { mimeType: file.type, data: file.data } });
         }
 
-        // Add guideline files
-        parts.push({ text: "\nGUÍAS NCCN / DOCUMENTOS DE REFERENCIA:\n" });
-        for (const file of guidelineFiles) {
-            parts.push({
-                inlineData: {
-                    mimeType: file.type,
-                    data: file.data
-                }
-            });
-            parts.push({ text: `\n(Archivo adjunto: Guía NCCN - ${file.name})\n` });
+        if (guidelineFiles.length > 0) {
+            parts.push({ text: "\nGUÍAS NCCN ADJUNTAS:\n" });
+            for (const file of guidelineFiles.slice(0, 3)) {
+                parts.push({ inlineData: { mimeType: file.type, data: file.data } });
+            }
         }
 
-        // 2. Add Chat History (Simplified context window for this demo)
         const recentMessages = messages.slice(-5);
-        let conversationHistory = "\nCONVERSACIÓN PREVIA:\n";
+        let conversationHistory = "\nCHAT PREVIO:\n";
         recentMessages.forEach(msg => {
-            conversationHistory += `${msg.role === 'user' ? 'Doctor' : 'AI'}: ${msg.text}\n`;
+            conversationHistory += `${msg.role === 'user' ? 'Dr' : 'IA'}: ${msg.text}\n`;
         });
         parts.push({ text: conversationHistory });
-
-        // 3. Add current query
-        parts.push({ text: `\nCONSULTA ACTUAL:\n${newMessage}` });
+        parts.push({ text: `\nCONSULTA MÉDICA: ${newMessage}` });
 
         const response = await ai.models.generateContent({
             model: modelId,
             contents: { parts },
             config: {
-                systemInstruction: "Actúa como un oncólogo experto y asistente clínico. Tu objetivo es analizar la historia clínica del paciente y contrastarla con las guías NCCN proporcionadas (o tu conocimiento general si no se adjuntan) para recomendar pasos de tratamiento, seguimiento o diagnóstico. Tienes acceso a una línea de tiempo exhaustiva; utilízala para identificar tendencias sutiles, pero prioriza los eventos marcados como CLAVE para el resumen general. Sé preciso, cita las guías si es posible, y mantén un tono profesional y médico.",
-                temperature: 0.2, 
+                systemInstruction: "Eres un oncólogo experto y asistente de guías clínicas. Analiza el historial completo del paciente y responde basándote en la evidencia y las guías NCCN. Si no hay guías adjuntas, usa tu conocimiento médico actualizado. Sé técnico, preciso y profesional.",
+                temperature: 0.1,
             }
         });
 
-        return response.text || "No se pudo generar una respuesta.";
-    } catch (error) {
-        console.error("AI Error:", error);
-        return "Error al consultar a la IA. Verifique su conexión o intente nuevamente.";
+        return response.text || "Sin respuesta del modelo.";
+    } catch (error: any) {
+        return `ERROR DE IA: ${error.message || "Error desconocido en la comunicación con Gemini"}.`;
     }
 };
 
 // --- Components ---
 
-const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/*,.pdf,.txt,.png,.jpg,.jpeg" }: { label: string, files: FileData[], setFiles: (f: FileData[]) => void, accept?: string }) => {
+const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/*" }: { label: string, files: FileData[], setFiles: (f: FileData[]) => void, accept?: string }) => {
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const newFiles: FileData[] = [];
@@ -210,11 +187,7 @@ const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/
                     reader.onload = (evt) => {
                         if (evt.target?.result) {
                             const base64 = (evt.target.result as string).split(',')[1];
-                            newFiles.push({
-                                name: file.name,
-                                type: file.type,
-                                data: base64
-                            });
+                            newFiles.push({ name: file.name, type: file.type, data: base64 });
                         }
                         resolve();
                     };
@@ -225,84 +198,22 @@ const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/
         }
     };
 
-    const removeFile = (index: number) => {
-        setFiles(files.filter((_, i) => i !== index));
-    };
-
     return (
         <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-            
-            {/* File List */}
-            {files.length > 0 && (
-                <div className="flex flex-col space-y-2 mb-3">
-                    {files.map((file, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-blue-50 text-blue-700 px-3 py-2 rounded-lg text-sm border border-blue-200">
-                            <div className="flex items-center truncate overflow-hidden">
-                                <FileText size={16} className="mr-2 flex-shrink-0" />
-                                <span className="truncate">{file.name}</span>
-                            </div>
-                            <button onClick={() => removeFile(idx)} className="ml-2 text-blue-400 hover:text-blue-600 flex-shrink-0">
-                                <X size={16} />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* Dropzone-like Button */}
-            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-blue-400 transition-all group">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <div className="bg-white p-2 rounded-full shadow-sm mb-2 group-hover:scale-110 transition-transform">
-                        <Upload className="w-6 h-6 text-blue-500" />
+            <label className="block text-[10px] font-black text-gray-400 mb-2 uppercase tracking-widest">{label}</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+                {files.map((f, i) => (
+                    <div key={i} className="flex items-center bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-[10px] border border-blue-100 font-bold">
+                        <span className="truncate max-w-[120px]">{f.name}</span>
+                        <button onClick={() => setFiles(files.filter((_, idx) => idx !== i))} className="ml-1 text-blue-300 hover:text-blue-600"><X size={12} /></button>
                     </div>
-                    <p className="mb-1 text-sm text-gray-600 font-medium">Haga clic para subir archivos</p>
-                    <p className="text-xs text-gray-400">PDF, Imágenes o Texto</p>
-                </div>
+                ))}
+            </div>
+            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-gray-100 border-dashed rounded-2xl cursor-pointer bg-gray-50 hover:bg-white hover:border-blue-300 transition-all group">
+                <Upload className="w-5 h-5 text-gray-300 group-hover:text-blue-400 mb-1" />
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Seleccionar Archivos</span>
                 <input type="file" className="hidden" multiple accept={accept} onChange={handleFileChange} />
             </label>
-        </div>
-    );
-};
-
-const AuthScreen = ({ onLogin }: { onLogin: (name: string) => void }) => {
-    const [name, setName] = useState('');
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (name.trim()) onLogin(name);
-    };
-
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-            <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
-                <div className="flex justify-center mb-6">
-                    <div className="bg-blue-600 p-3 rounded-full">
-                        <Stethoscope className="text-white w-8 h-8" />
-                    </div>
-                </div>
-                <h1 className="text-2xl font-bold text-center text-gray-800 mb-2">OncoGuide AI</h1>
-                <p className="text-center text-gray-500 mb-8">Gestión inteligente de pacientes y guías NCCN</p>
-                <form onSubmit={handleSubmit}>
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Doctor</label>
-                        <input
-                            type="text"
-                            required
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            placeholder="Ej. Dr. Juan Pérez"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                        />
-                    </div>
-                    <button
-                        type="submit"
-                        className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    >
-                        Ingresar al Sistema
-                    </button>
-                </form>
-            </div>
         </div>
     );
 };
@@ -313,13 +224,12 @@ const App = () => {
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!process.env.API_KEY);
 
-    // Form states for new patient
     const [newPatientName, setNewPatientName] = useState('');
     const [newPatientAge, setNewPatientAge] = useState('');
     const [newPatientDiagnosis, setNewPatientDiagnosis] = useState('');
 
-    // Active Patient State
     const [historyText, setHistoryText] = useState('');
     const [historyFiles, setHistoryFiles] = useState<FileData[]>([]);
     const [timeline, setTimeline] = useState<ClinicalEvent[]>([]);
@@ -328,613 +238,305 @@ const App = () => {
     const [chatInput, setChatInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
+    const [lastError, setLastError] = useState<string | null>(null);
     
-    // View State for Left Panel
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline'>('docs');
-
     const chatEndRef = useRef<HTMLDivElement>(null);
 
-    // Load data on login
+    useEffect(() => {
+        setApiKeyExists(!!process.env.API_KEY);
+    }, []);
+
     useEffect(() => {
         if (doctorName) {
-            const savedData = localStorage.getItem(`onco_patients_${doctorName}`);
-            if (savedData) {
-                try {
-                    setPatients(JSON.parse(savedData));
-                } catch(e) {
-                    console.error("Error loading patients", e);
-                }
-            }
+            const saved = localStorage.getItem(`onco_v2_patients_${doctorName}`);
+            if (saved) setPatients(JSON.parse(saved));
         }
     }, [doctorName]);
 
-    // Save data on change
     useEffect(() => {
         if (doctorName && patients.length > 0) {
-            localStorage.setItem(`onco_patients_${doctorName}`, JSON.stringify(patients));
+            localStorage.setItem(`onco_v2_patients_${doctorName}`, JSON.stringify(patients));
         }
     }, [patients, doctorName]);
 
-    // Scroll to bottom of chat
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chatMessages, isTyping]);
 
-    // Load patient specific data into view when selected
     useEffect(() => {
         if (selectedPatientId) {
-            // Find in current state to ensure we get latest messages
             const p = patients.find(pat => pat.id === selectedPatientId);
             if (p) {
                 setHistoryText(p.historyText || '');
-                setHistoryFiles([]); 
-                setGuidelineFiles([]);
-                
-                // Load persisted chat and timeline
                 setChatMessages(p.chatHistory || []);
                 setTimeline(p.timeline || []); 
-                
-                // Switch to timeline if it exists, otherwise docs
+                setHistoryFiles([]); setGuidelineFiles([]);
+                setLastError(null);
                 setActiveTab(p.timeline && p.timeline.length > 0 ? 'timeline' : 'docs');
             }
         }
-    }, [selectedPatientId]); // Only run when ID changes, not when patients updates to avoid loops
-
-    const handleLogin = (name: string) => {
-        setDoctorName(name);
-    };
-
-    const handleLogout = () => {
-        setDoctorName(null);
-        setPatients([]);
-        setSelectedPatientId(null);
-    };
-
-    const handleCreatePatient = (e: React.FormEvent) => {
-        e.preventDefault();
-        const newPatient: Patient = {
-            id: Date.now().toString(),
-            name: newPatientName,
-            age: parseInt(newPatientAge),
-            diagnosis: newPatientDiagnosis,
-            historyText: '',
-            chatHistory: [],
-            timeline: [],
-            lastUpdated: Date.now()
-        };
-        const updatedPatients = [...patients, newPatient];
-        setPatients(updatedPatients);
-        setShowNewPatientModal(false);
-        setSelectedPatientId(newPatient.id);
-        // Reset form
-        setNewPatientName('');
-        setNewPatientAge('');
-        setNewPatientDiagnosis('');
-    };
+    }, [selectedPatientId]);
 
     const handleProcessDocuments = async () => {
-        if (!historyText && historyFiles.length === 0) {
-            alert("Por favor ingrese texto o adjunte archivos primero.");
-            return;
-        }
+        if (!historyText && historyFiles.length === 0) return;
         setIsProcessingDocs(true);
-        const events = await extractTimelineFromDocs(historyText, historyFiles);
-        setTimeline(events);
-        setIsProcessingDocs(false);
-        
-        // Persist Timeline
-        if (selectedPatientId) {
-            setPatients(prev => prev.map(p => 
-                p.id === selectedPatientId 
-                ? { ...p, timeline: events, lastUpdated: Date.now() } 
-                : p
-            ));
-        }
-
-        if (events.length > 0) {
+        setLastError(null);
+        try {
+            const events = await extractTimelineFromDocs(historyText, historyFiles);
+            setTimeline(events);
+            if (selectedPatientId) {
+                setPatients(patients.map(p => p.id === selectedPatientId ? { ...p, timeline: events, lastUpdated: Date.now() } : p));
+            }
             setActiveTab('timeline');
-        }
-    };
-
-    const handleSaveHistory = () => {
-        if (selectedPatientId) {
-            const updatedPatients = patients.map(p => 
-                p.id === selectedPatientId ? { ...p, historyText, lastUpdated: Date.now() } : p
-            );
-            setPatients(updatedPatients);
-            alert('Historia clínica guardada localmente.');
+        } catch (e: any) {
+            setLastError(e.message || "Error desconocido al procesar documentos.");
+        } finally {
+            setIsProcessingDocs(false);
         }
     };
 
     const handleSendMessage = async () => {
         if (!chatInput.trim() || !selectedPatientId) return;
-
-        const newUserMsg: ChatMessage = {
-            role: 'user',
-            text: chatInput,
-            timestamp: Date.now()
-        };
-
-        const updatedMessagesUser = [...chatMessages, newUserMsg];
-        setChatMessages(updatedMessagesUser);
+        setLastError(null);
+        const newUserMsg: ChatMessage = { role: 'user', text: chatInput, timestamp: Date.now() };
+        const updatedUser = [...chatMessages, newUserMsg];
+        setChatMessages(updatedUser);
         setChatInput('');
         setIsTyping(true);
+        
+        const responseText = await getAIResponse(historyText, historyFiles, timeline, guidelineFiles, updatedUser, newUserMsg.text);
+        
+        if (responseText.startsWith("ERROR")) {
+            setLastError(responseText);
+        }
 
-        // Persist User Message
-        setPatients(prev => prev.map(p => 
-            p.id === selectedPatientId 
-            ? { ...p, chatHistory: updatedMessagesUser, lastUpdated: Date.now() } 
-            : p
-        ));
-
-        const responseText = await getAIResponse(
-            historyText,
-            historyFiles,
-            timeline,
-            guidelineFiles,
-            updatedMessagesUser,
-            newUserMsg.text
-        );
-
-        const newAiMsg: ChatMessage = {
-            role: 'model',
-            text: responseText,
-            timestamp: Date.now()
-        };
-
-        const updatedMessagesAI = [...updatedMessagesUser, newAiMsg];
-        setChatMessages(updatedMessagesAI);
+        const newAiMsg: ChatMessage = { role: 'model', text: responseText, timestamp: Date.now() };
+        const updatedAI = [...updatedUser, newAiMsg];
+        setChatMessages(updatedAI);
         setIsTyping(false);
 
-        // Persist AI Message
-        setPatients(prev => prev.map(p => 
-            p.id === selectedPatientId 
-            ? { ...p, chatHistory: updatedMessagesAI, lastUpdated: Date.now() } 
-            : p
-        ));
+        setPatients(patients.map(p => p.id === selectedPatientId ? { ...p, chatHistory: updatedAI, lastUpdated: Date.now() } : p));
     };
+
+    const handleCreatePatient = (e: React.FormEvent) => {
+        e.preventDefault();
+        const p: Patient = {
+            id: Date.now().toString(),
+            name: newPatientName,
+            age: parseInt(newPatientAge),
+            diagnosis: newPatientDiagnosis,
+            historyText: '',
+            lastUpdated: Date.now(),
+            chatHistory: [],
+            timeline: []
+        };
+        setPatients([...patients, p]);
+        setSelectedPatientId(p.id);
+        setShowNewPatientModal(false);
+        setNewPatientName(''); setNewPatientAge(''); setNewPatientDiagnosis('');
+    };
+
+    if (!doctorName) return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+            <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-sm w-full border border-gray-100 text-center">
+                <div className="inline-block bg-blue-600 p-5 rounded-3xl shadow-xl shadow-blue-100 mb-8"><Stethoscope className="text-white w-10 h-10" /></div>
+                <h1 className="text-3xl font-black text-gray-800 mb-2 tracking-tighter">OncoGuide AI</h1>
+                <p className="text-gray-400 mb-10 text-sm font-medium">Asistente Clínico de Nueva Generación</p>
+                <div className="space-y-4">
+                    <input type="text" className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-blue-100 outline-none transition-all font-bold text-center" placeholder="Tu Nombre Profesional" onKeyDown={(e) => {if(e.key==='Enter' && (e.target as any).value) setDoctorName((e.target as any).value)}} />
+                    <button onClick={() => {
+                        const input = document.querySelector('input');
+                        if(input?.value) setDoctorName(input.value);
+                    }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all">Acceder al Sistema</button>
+                </div>
+            </div>
+        </div>
+    );
 
     const selectedPatient = patients.find(p => p.id === selectedPatientId);
 
-    if (!doctorName) return <AuthScreen onLogin={handleLogin} />;
-
     return (
-        <div className="flex h-screen overflow-hidden bg-gray-50">
-            {/* Mobile Menu Overlay */}
-            {mobileMenuOpen && (
-                <div className="fixed inset-0 z-20 bg-black bg-opacity-50 lg:hidden" onClick={() => setMobileMenuOpen(false)} />
-            )}
-
+        <div className="flex h-screen overflow-hidden bg-white text-gray-800 font-medium">
             {/* Sidebar */}
-            <aside className={`
-                fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-auto flex flex-col
-                ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-            `}>
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-                    <div className="flex items-center space-x-2 text-blue-600 font-bold text-lg">
-                        <Activity />
-                        <span>OncoGuide</span>
-                    </div>
-                    <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-500">
-                        <X size={20} />
-                    </button>
+            <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className="p-6 border-b flex items-center justify-between bg-white">
+                    <div className="flex items-center space-x-2 text-blue-600 font-black text-xl tracking-tighter"><Activity size={28} /><span>OncoGuide</span></div>
+                    <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-300"><X size={24}/></button>
                 </div>
-
-                <div className="p-4 bg-gray-50 border-b border-gray-200">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Doctor</p>
-                    <p className="font-medium text-gray-800 truncate">{doctorName}</p>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-3">
-                    <div className="flex justify-between items-center mb-4 px-1">
-                        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mis Pacientes</h2>
-                        <button 
-                            onClick={() => setShowNewPatientModal(true)}
-                            className="text-blue-600 hover:bg-blue-50 p-1 rounded transition-colors"
-                        >
-                            <Plus size={18} />
-                        </button>
-                    </div>
-                    
-                    <div className="space-y-1">
-                        {patients.map(patient => (
-                            <button
-                                key={patient.id}
-                                onClick={() => {
-                                    setSelectedPatientId(patient.id);
-                                    setMobileMenuOpen(false);
-                                }}
-                                className={`w-full text-left p-3 rounded-lg text-sm transition-colors flex items-center justify-between group ${
-                                    selectedPatientId === patient.id 
-                                    ? 'bg-blue-50 text-blue-700 font-medium' 
-                                    : 'text-gray-700 hover:bg-gray-100'
-                                }`}
-                            >
-                                <div className="truncate">
-                                    <div className="truncate">{patient.name}</div>
-                                    <div className="text-xs text-gray-500 truncate">{patient.diagnosis}</div>
-                                </div>
-                                <ChevronRight size={16} className={`text-gray-400 ${selectedPatientId === patient.id ? 'text-blue-500' : 'opacity-0 group-hover:opacity-100'}`} />
-                            </button>
-                        ))}
-                        {patients.length === 0 && (
-                            <p className="text-sm text-gray-400 italic text-center py-4">No hay pacientes registrados.</p>
-                        )}
+                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                    <div>
+                        <div className="flex items-center justify-between text-[10px] font-black text-gray-300 uppercase tracking-widest px-2 mb-4"><span>Pacientes Activos</span><button onClick={() => setShowNewPatientModal(true)} className="text-blue-600 bg-blue-50 p-1.5 rounded-xl"><Plus size={16}/></button></div>
+                        <div className="space-y-2">
+                            {patients.map(p => (
+                                <button key={p.id} onClick={() => {setSelectedPatientId(p.id); setMobileMenuOpen(false);}} className={`w-full text-left p-4 rounded-[1.5rem] transition-all flex flex-col ${selectedPatientId === p.id ? 'bg-blue-600 text-white shadow-2xl shadow-blue-200' : 'hover:bg-white border border-transparent hover:border-gray-100'}`}>
+                                    <span className="font-black text-sm truncate">{p.name}</span>
+                                    <span className={`text-[10px] font-bold truncate ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
-
-                <div className="p-4 border-t border-gray-200">
-                    <button onClick={handleLogout} className="flex items-center space-x-2 text-gray-600 hover:text-red-600 text-sm w-full p-2 rounded hover:bg-red-50 transition-colors">
-                        <LogOut size={18} />
-                        <span>Cerrar Sesión</span>
-                    </button>
+                <div className="p-6 border-t bg-white flex items-center justify-between">
+                    <div className="flex items-center space-x-3 truncate">
+                        <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-lg shadow-blue-50">{doctorName[0]}</div>
+                        <div className="flex flex-col truncate"><span className="text-[10px] font-black text-gray-300 uppercase leading-none mb-1">Profesional</span><span className="text-xs font-black truncate leading-none">Dr. {doctorName}</span></div>
+                    </div>
+                    <button onClick={() => setDoctorName(null)} className="text-gray-200 hover:text-red-500 transition-colors"><LogOut size={20} /></button>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col h-full w-full">
-                {/* Header */}
-                <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 lg:px-6">
-                    <div className="flex items-center">
-                        <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden mr-4 text-gray-500">
-                            <Menu size={24} />
-                        </button>
-                        {selectedPatient ? (
-                            <div>
-                                <h1 className="text-xl font-bold text-gray-800">{selectedPatient.name}</h1>
-                                <p className="text-xs text-gray-500">{selectedPatient.age} años • {selectedPatient.diagnosis}</p>
-                            </div>
-                        ) : (
-                            <h1 className="text-xl font-bold text-gray-800">Panel de Control</h1>
-                        )}
+            {/* Main */}
+            <main className="flex-1 flex flex-col h-full overflow-hidden">
+                <header className="bg-white/80 backdrop-blur-md border-b h-20 flex items-center px-8 justify-between z-20">
+                    <div className="flex items-center space-x-6">
+                        <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={28} /></button>
+                        <div className="flex flex-col">
+                            <h1 className="font-black text-gray-800 text-2xl tracking-tight leading-none truncate max-w-xs">{selectedPatient ? selectedPatient.name : 'Bienvenido'}</h1>
+                            {selectedPatient && <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1">{selectedPatient.diagnosis} • {selectedPatient.age} Años</span>}
+                        </div>
+                    </div>
+                    
+                    {/* Diagnostic Indicator */}
+                    <div className={`px-4 py-2 rounded-2xl flex items-center space-x-2 text-[10px] font-black tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
+                        {apiKeyExists ? <div className="w-2 h-2 bg-green-500 rounded-full"></div> : <ShieldAlert size={14}/>}
+                        <span>{apiKeyExists ? 'API Cloud: Conectado' : 'API Cloud: Error Vercel'}</span>
                     </div>
                 </header>
 
-                {/* Content Area */}
                 {selectedPatient ? (
-                    <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
-                        {/* Left Panel: Clinical Data & Guidelines */}
-                        <div className="flex-1 lg:flex-[0.5] flex flex-col border-r border-gray-200 bg-white overflow-hidden">
-                            {/* Tabs */}
-                            <div className="flex border-b border-gray-200">
-                                <button 
-                                    onClick={() => setActiveTab('docs')}
-                                    className={`flex-1 py-3 text-sm font-medium flex items-center justify-center space-x-2 transition-colors ${
-                                        activeTab === 'docs' 
-                                        ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' 
-                                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    <File size={16} />
-                                    <span>Documentos</span>
-                                </button>
-                                <button 
-                                    onClick={() => setActiveTab('timeline')}
-                                    className={`flex-1 py-3 text-sm font-medium flex items-center justify-center space-x-2 transition-colors ${
-                                        activeTab === 'timeline' 
-                                        ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' 
-                                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    <Clock size={16} />
-                                    <span>Línea de Tiempo</span>
-                                    {timeline.length > 0 && (
-                                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs">
-                                            {timeline.length}
-                                        </span>
-                                    )}
-                                </button>
+                    <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-50">
+                        {/* Left Panel */}
+                        <div className="lg:w-1/2 flex flex-col border-r bg-white h-full overflow-hidden shadow-2xl relative z-10">
+                            <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
+                                <button onClick={() => setActiveTab('docs')} className={`flex-1 py-6 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-300 hover:text-gray-500'}`}>1. Documentación</button>
+                                <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-6 transition-all ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-300 hover:text-gray-500'}`}>2. Historial de Eventos</button>
                             </div>
 
-                            {/* Tab Content */}
-                            <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+                            <div className="flex-1 overflow-y-auto p-8 space-y-10 scrollbar-hide">
                                 {activeTab === 'docs' ? (
-                                    <div className="space-y-6">
-                                        {/* Clinical History Section */}
-                                        <section>
-                                            <div className="flex items-center justify-between mb-3">
-                                                <div className="flex items-center space-x-2 text-gray-800">
-                                                    <FileText className="text-blue-600" size={20} />
-                                                    <h2 className="font-semibold">Historia Clínica</h2>
-                                                </div>
-                                                <button 
-                                                    onClick={handleSaveHistory}
-                                                    className="text-xs flex items-center bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded transition-colors"
-                                                >
-                                                    <Save size={14} className="mr-1" /> Guardar Texto
-                                                </button>
+                                    <>
+                                        <section className="space-y-6">
+                                            <div className="flex items-center justify-between border-b border-gray-50 pb-2"><h3 className="text-xs font-black text-gray-300 uppercase tracking-widest">Información Base</h3><button onClick={() => {if(selectedPatientId) setPatients(patients.map(p => p.id === selectedPatientId ? {...p, historyText} : p));}} className="text-blue-500 font-black text-[10px] hover:underline uppercase">Guardar Cambios</button></div>
+                                            <FileUploader label="Historia Clínica Digital" files={historyFiles} setFiles={setHistoryFiles} />
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Notas Manuales del Profesional</label>
+                                                <textarea className="w-full h-40 p-6 border-2 border-gray-50 rounded-3xl text-sm font-semibold bg-gray-50 focus:bg-white focus:border-blue-100 transition-all outline-none resize-none shadow-inner" placeholder="Escribe hallazgos adicionales..." value={historyText} onChange={(e) => setHistoryText(e.target.value)} />
                                             </div>
-                                            
-                                            <FileUploader 
-                                                label="Cargar Historia Clínica (PDF)" 
-                                                files={historyFiles} 
-                                                setFiles={setHistoryFiles} 
-                                            />
-
-                                            <div className="relative my-4">
-                                                <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                                                    <div className="w-full border-t border-gray-200"></div>
-                                                </div>
-                                                <div className="relative flex justify-center">
-                                                    <span className="px-2 bg-white text-xs text-gray-400">O ingrese texto manualmente</span>
-                                                </div>
-                                            </div>
-
-                                            <textarea
-                                                className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm resize-y bg-gray-50"
-                                                placeholder="Escriba o pegue la historia clínica del paciente aquí..."
-                                                value={historyText}
-                                                onChange={(e) => setHistoryText(e.target.value)}
-                                            />
-                                            
-                                            <button 
-                                                onClick={handleProcessDocuments}
-                                                disabled={isProcessingDocs}
-                                                className="w-full mt-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3 rounded-xl font-medium shadow-sm flex items-center justify-center transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-                                            >
-                                                {isProcessingDocs ? (
-                                                    <>
-                                                        <Loader2 className="animate-spin mr-2" size={18} />
-                                                        Procesando Documentos...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <List className="mr-2" size={18} />
-                                                        Procesar y Generar Cronología
-                                                    </>
-                                                )}
+                                            <button onClick={handleProcessDocuments} disabled={isProcessingDocs} className="w-full bg-blue-600 text-white py-5 rounded-[1.5rem] text-xs font-black tracking-widest shadow-2xl shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center">
+                                                {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={18}/>Analizando Documentos...</> : "PROCESAR HISTORIA COMPLETA"}
                                             </button>
-                                            <p className="text-xs text-gray-500 mt-2 text-center">
-                                                Al procesar, la IA extraerá automáticamente las fechas y eventos clave de los archivos PDF o texto.
-                                            </p>
                                         </section>
-
-                                        <hr className="border-gray-100" />
-
-                                        {/* Guidelines Section */}
-                                        <section>
-                                            <div className="flex items-center space-x-2 text-gray-800 mb-3">
-                                                <Activity className="text-purple-600" size={20} />
-                                                <h2 className="font-semibold">Guías NCCN / Protocolos</h2>
-                                            </div>
-                                            <p className="text-xs text-gray-500 mb-3">
-                                                Adjunte las guías NCCN específicas (PDF) o protocolos que desea que la IA utilice como referencia principal para este caso.
-                                            </p>
-                                            <FileUploader 
-                                                label="Subir Guías (PDF)" 
-                                                files={guidelineFiles} 
-                                                setFiles={setGuidelineFiles}
-                                                accept="application/pdf,.pdf"
-                                            />
+                                        <section className="space-y-6 pt-4">
+                                            <h3 className="text-xs font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 pb-2">Material de Referencia</h3>
+                                            <FileUploader label="Guías NCCN / Protocolos Locales" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
                                         </section>
-                                    </div>
+                                    </>
                                 ) : (
-                                    <div className="space-y-4">
+                                    <div className="space-y-4 pt-4">
                                         {timeline.length === 0 ? (
-                                            <div className="text-center py-10">
-                                                <div className="bg-gray-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
-                                                    <Clock className="text-gray-400" size={24} />
-                                                </div>
-                                                <p className="text-gray-500 text-sm">No hay eventos procesados aún.</p>
-                                                <button 
-                                                    onClick={() => setActiveTab('docs')}
-                                                    className="text-blue-600 text-sm mt-2 font-medium hover:underline"
-                                                >
-                                                    Ir a Documentos para procesar
-                                                </button>
-                                            </div>
+                                            <div className="flex flex-col items-center justify-center py-24 text-gray-200"><Clock size={48} className="mb-4 opacity-10" /><p className="text-xs font-black uppercase tracking-widest">No hay datos procesados aún</p></div>
                                         ) : (
-                                            <div className="relative pl-4 border-l-2 border-blue-100 space-y-6 my-2">
-                                                {timeline.map((event, idx) => (
-                                                    <div key={idx} className="relative">
-                                                        {/* Marker */}
-                                                        <div className={`absolute -left-[21px] top-1.5 w-3 h-3 rounded-full border-2 border-white shadow-sm transition-colors ${
-                                                            event.isKey ? 'bg-red-500' : 'bg-blue-300'
-                                                        }`}></div>
-                                                        
-                                                        {/* Card */}
-                                                        <div className={`p-4 rounded-xl border shadow-sm hover:shadow-md transition-all ${
-                                                            event.isKey ? 'bg-red-50 border-red-100' : 'bg-white border-gray-200'
-                                                        }`}>
-                                                            <div className="flex justify-between items-start mb-2">
-                                                                <div>
-                                                                    <div className="flex items-center space-x-2">
-                                                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                                                            event.isKey ? 'bg-red-100 text-red-700' : 'bg-blue-50 text-blue-600'
-                                                                        }`}>
-                                                                            {event.date}
-                                                                        </span>
-                                                                        {event.isKey && (
-                                                                            <span className="text-[10px] font-bold text-red-600 flex items-center uppercase tracking-wide">
-                                                                                <AlertCircle size={10} className="mr-1"/> Clave
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <h3 className={`font-bold mt-1 ${event.isKey ? 'text-red-900' : 'text-gray-800'}`}>
-                                                                        {event.category}
-                                                                    </h3>
-                                                                </div>
-                                                                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">
-                                                                    {event.professional}
-                                                                </span>
-                                                            </div>
-                                                            <p className={`text-sm leading-relaxed ${event.isKey ? 'text-gray-800' : 'text-gray-600'}`}>
-                                                                {event.note}
-                                                            </p>
-                                                        </div>
+                                            timeline.map((ev, i) => (
+                                                <div key={i} className="relative pl-10 border-l-4 border-gray-50 pb-8 group">
+                                                    <div className={`absolute -left-[14px] top-2 w-6 h-6 rounded-full border-4 border-white shadow-xl transition-all group-hover:scale-110 flex items-center justify-center ${ev.isKey ? 'bg-red-500 text-white' : 'bg-blue-400 text-white'}`}>
+                                                        {ev.isKey ? <AlertCircle size={10}/> : <Info size={10}/>}
                                                     </div>
-                                                ))}
-                                            </div>
+                                                    <div className={`p-6 rounded-[2rem] border-2 transition-all hover:shadow-2xl ${ev.isKey ? 'bg-red-50/50 border-red-200' : 'bg-white border-gray-50 shadow-sm'}`}>
+                                                        <div className="flex justify-between items-center mb-3">
+                                                            <span className={`text-[10px] font-black px-3 py-1.5 rounded-full tracking-widest uppercase ${ev.isKey ? 'bg-red-500 text-white shadow-lg shadow-red-100' : 'bg-blue-50 text-blue-600'}`}>{ev.date}</span>
+                                                            <span className="text-[10px] text-gray-300 font-black uppercase truncate max-w-[150px]">{ev.professional}</span>
+                                                        </div>
+                                                        <h4 className={`font-black text-sm mb-2 uppercase tracking-tight ${ev.isKey ? 'text-red-900' : 'text-gray-800'}`}>{ev.category}</h4>
+                                                        <p className={`leading-relaxed text-xs font-semibold ${ev.isKey ? 'text-red-800' : 'text-gray-500'}`}>{ev.note}</p>
+                                                    </div>
+                                                </div>
+                                            ))
                                         )}
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Right Panel: AI Chat */}
-                        <div className="flex-1 lg:flex-[0.5] flex flex-col bg-gray-50 h-full">
-                            <div className="p-4 border-b border-gray-200 bg-white shadow-sm z-10">
-                                <h2 className="font-semibold text-gray-800 flex items-center">
-                                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-                                    Asistente Virtual Oncológico
-                                </h2>
-                            </div>
+                        {/* Right Panel: Chat */}
+                        <div className="lg:w-1/2 flex flex-col bg-gray-50 h-full overflow-hidden relative">
+                            {lastError && (
+                                <div className="absolute top-4 left-4 right-4 z-30 bg-red-600 text-white p-4 rounded-2xl shadow-2xl flex items-start space-x-3 border border-red-500 animate-in slide-in-from-top">
+                                    <Terminal className="flex-shrink-0 mt-1" size={18}/>
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest mb-1">Diagnóstico de Error (Vercel):</p>
+                                        <p className="text-xs font-bold leading-tight">{lastError}</p>
+                                    </div>
+                                    <button onClick={() => setLastError(null)} className="ml-auto opacity-60 hover:opacity-100"><X size={16}/></button>
+                                </div>
+                            )}
 
-                            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
                                 {chatMessages.length === 0 && (
-                                    <div className="text-center py-10 opacity-60">
-                                        <div className="bg-blue-100 text-blue-600 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-                                            <MessageSquare size={24} />
+                                    <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none">
+                                        <div className="bg-white p-8 rounded-[3rem] shadow-sm"><MessageSquare size={56} className="text-blue-600" /></div>
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-black uppercase tracking-widest">Asistente Oncológico</p>
+                                            <p className="text-xs font-bold max-w-[220px] mx-auto leading-relaxed">Analice el caso clínico y contraste con las guías internacionales.</p>
                                         </div>
-                                        <h3 className="font-medium text-gray-900">Inicie la consulta</h3>
-                                        <p className="text-sm text-gray-500 mt-1 max-w-xs mx-auto">
-                                            Pregunte sobre tratamientos, seguimiento o análisis de la historia clínica en base a las guías adjuntas.
-                                        </p>
                                     </div>
                                 )}
-                                
-                                {chatMessages.map((msg, idx) => (
-                                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                        <div 
-                                            className={`max-w-[85%] lg:max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                                                msg.role === 'user' 
-                                                ? 'bg-blue-600 text-white rounded-br-none' 
-                                                : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
-                                            }`}
-                                        >
-                                            <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
-                                            <div className={`text-[10px] mt-1 ${msg.role === 'user' ? 'text-blue-200' : 'text-gray-400'}`}>
-                                                {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                            </div>
+                                {chatMessages.map((m, i) => (
+                                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-[85%] p-6 rounded-[2.5rem] text-sm shadow-xl leading-relaxed font-bold ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-blue-100' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}`}>
+                                            <div className="whitespace-pre-wrap">{m.text}</div>
+                                            <div className={`text-[9px] mt-4 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>{new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                         </div>
                                     </div>
                                 ))}
-                                {isTyping && (
-                                    <div className="flex justify-start">
-                                        <div className="bg-white border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm">
-                                            <div className="flex space-x-1">
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                                {isTyping && <div className="flex justify-start"><div className="bg-white px-6 py-4 rounded-[1.5rem] border border-gray-100 shadow-sm animate-pulse text-[10px] font-black text-blue-600 tracking-[0.2em] uppercase">IA Razonando...</div></div>}
                                 <div ref={chatEndRef} />
                             </div>
 
-                            <div className="p-4 bg-white border-t border-gray-200">
-                                <div className="relative">
-                                    <textarea
-                                        className="w-full pl-4 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none bg-gray-50"
-                                        placeholder="Escriba su consulta médica..."
-                                        rows={2}
-                                        value={chatInput}
-                                        onChange={(e) => setChatInput(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleSendMessage();
-                                            }
-                                        }}
-                                    />
-                                    <button
-                                        onClick={handleSendMessage}
-                                        disabled={!chatInput.trim() || isTyping}
-                                        className="absolute right-2 bottom-2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        <MessageSquare size={18} />
-                                    </button>
+                            <div className="p-8 bg-white/80 backdrop-blur-md border-t">
+                                <div className="relative flex items-center bg-gray-50 rounded-[2rem] border-2 border-transparent focus-within:border-blue-100 focus-within:bg-white transition-all p-3 pl-6">
+                                    <textarea className="flex-1 bg-transparent text-sm font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" placeholder="Consulta Médica / Plan de Tratamiento..." rows={2} value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} />
+                                    <button onClick={handleSendMessage} disabled={!chatInput.trim() || isTyping} className="ml-3 p-4 bg-blue-600 text-white rounded-[1.5rem] shadow-xl shadow-blue-100 disabled:opacity-50 active:scale-90 transition-all"><MessageSquare size={24} /></button>
                                 </div>
-                                <p className="text-center text-[10px] text-gray-400 mt-2">
-                                    La IA puede cometer errores. Verifique siempre con criterio médico profesional.
-                                </p>
                             </div>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 p-6 text-center">
-                        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 max-w-md w-full">
-                            <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
-                                <User size={32} />
-                            </div>
-                            <h2 className="text-xl font-bold text-gray-800 mb-2">Bienvenido, {doctorName}</h2>
-                            <p className="text-gray-500 mb-6">Seleccione un paciente del menú lateral o cree uno nuevo para comenzar a trabajar.</p>
-                            <button 
-                                onClick={() => setShowNewPatientModal(true)}
-                                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
-                            >
-                                <Plus size={18} className="mr-2" />
-                                Nuevo Paciente
-                            </button>
+                    <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-gray-50">
+                        <div className="bg-white p-16 rounded-[4rem] shadow-2xl border border-gray-100 max-w-sm">
+                            <Activity size={80} className="mb-8 text-blue-600 mx-auto opacity-10 animate-pulse" />
+                            <h2 className="text-2xl font-black text-gray-800 tracking-tight">Consola de Decisión</h2>
+                            <p className="text-gray-400 text-sm mt-4 font-bold leading-relaxed">Seleccione un paciente o inicie un nuevo registro para comenzar el análisis oncológico asistido por IA.</p>
+                            <button onClick={() => setShowNewPatientModal(true)} className="mt-10 bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black text-xs tracking-widest hover:bg-blue-700 transition-all shadow-2xl shadow-blue-100 uppercase">Nuevo Paciente</button>
                         </div>
                     </div>
                 )}
             </main>
 
-            {/* Modal for New Patient */}
+            {/* Modal */}
             {showNewPatientModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-gray-800">Nuevo Paciente</h3>
-                            <button onClick={() => setShowNewPatientModal(false)} className="text-gray-400 hover:text-gray-600">
-                                <X size={20} />
-                            </button>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-md p-6">
+                    <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-sm overflow-hidden transform animate-in fade-in zoom-in duration-300">
+                        <div className="p-8 border-b flex justify-between items-center bg-gray-50/50">
+                            <h3 className="font-black text-gray-800 text-xs uppercase tracking-widest">Registro Clínico</h3>
+                            <button onClick={() => setShowNewPatientModal(false)} className="text-gray-300 hover:text-gray-600"><X size={24} /></button>
                         </div>
-                        <form onSubmit={handleCreatePatient} className="p-6">
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={newPatientName}
-                                        onChange={e => setNewPatientName(e.target.value)}
-                                        placeholder="Ej. María García"
-                                    />
+                        <form onSubmit={handleCreatePatient} className="p-10 space-y-8">
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Paciente</label>
+                                <input type="text" required className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Nombre Completo" value={newPatientName} onChange={e => setNewPatientName(e.target.value)} />
+                            </div>
+                            <div className="flex space-x-6">
+                                <div className="w-1/3 space-y-3">
+                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Edad</label>
+                                    <input type="number" required className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="--" value={newPatientAge} onChange={e => setNewPatientAge(e.target.value)} />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Edad</label>
-                                        <input
-                                            type="number"
-                                            required
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={newPatientAge}
-                                            onChange={e => setNewPatientAge(e.target.value)}
-                                            placeholder="Ej. 45"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Diagnóstico (Breve)</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={newPatientDiagnosis}
-                                            onChange={e => setNewPatientDiagnosis(e.target.value)}
-                                            placeholder="Ej. Ca. Mama"
-                                        />
-                                    </div>
+                                <div className="w-2/3 space-y-3">
+                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Base</label>
+                                    <input type="text" required className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: Ca Mama" value={newPatientDiagnosis} onChange={e => setNewPatientDiagnosis(e.target.value)} />
                                 </div>
                             </div>
-                            <div className="mt-6 flex justify-end space-x-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowNewPatientModal(false)}
-                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition-colors"
-                                >
-                                    Crear Paciente
-                                </button>
-                            </div>
+                            <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-[1.5rem] text-xs font-black shadow-2xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase tracking-widest">Registrar Paciente</button>
                         </form>
                     </div>
                 </div>
