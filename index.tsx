@@ -65,7 +65,7 @@ const extractTimelineFromDocs = async (
     if (!historyText && historyFiles.length === 0) return [];
 
     try {
-        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+        const ai = new GoogleGenAI({ apiKey: "AIzaSyAYo5qUNgElAizoJWY9K2hovQy1yenqOFY" });
         const modelId = 'gemini-3-flash-preview'; 
 
         const parts: any[] = [];
