@@ -67,7 +67,7 @@ const extractTimelineFromDocs = async (
 ): Promise<ClinicalEvent[]> => {
     if (!historyText && historyFiles.length === 0) return [];
     
-    const apiKey = process.env.API_KEY;
+    const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("API_KEY_MISSING");
 
     try {
