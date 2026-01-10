@@ -121,7 +121,7 @@ const getAIResponse = async (
     messages: ChatMessage[],
     newMessage: string
 ) => {
-    const apiKey = process.env.API_KEY;
+    const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) return "ERROR: API_KEY no configurada. Verifica las variables de entorno en Vercel.";
 
     try {
@@ -224,7 +224,7 @@ const App = () => {
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!process.env.API_KEY);
+    const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!import.meta.env.VITE_API_KEY);;
 
     const [newPatientName, setNewPatientName] = useState('');
     const [newPatientAge, setNewPatientAge] = useState('');
@@ -244,7 +244,7 @@ const App = () => {
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        setApiKeyExists(!!process.env.API_KEY);
+        setApiKeyExists(!!import.meta.env.VITE_API_KEY);
     }, []);
 
     useEffect(() => {
