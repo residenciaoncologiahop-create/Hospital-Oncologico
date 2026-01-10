@@ -72,7 +72,7 @@ const extractTimelineFromDocs = async (
 
     try {
         const ai = new GoogleGenAI({ apiKey });
-        const modelId = 'gemini-2.5-flash'; 
+        const modelId = 'gemini-3-flash'; 
 
         const parts: any[] = [];
         parts.push({ text: "Analiza los siguientes documentos médicos de forma EXHAUSTIVA. No resumas; extrae CADA evento, consulta, resultado de laboratorio o estudio de imagen mencionado. \n\nPara cada evento determina:\n1. Fecha (DD/MM/YYYY).\n2. Profesional/Institución.\n3. Categoría (Consulta, Laboratorio, Imagen, Cirugía, Quimio, Radio, etc).\n4. Resumen detallado de hallazgos.\n5. 'isKey' (true/false): Marca como true solo eventos CRÍTICOS (diagnósticos, cirugías, cambios de tratamiento, progresión de enfermedad). Eventos de rutina deben ser false." });
@@ -126,7 +126,7 @@ const getAIResponse = async (
 
     try {
         const ai = new GoogleGenAI({ apiKey });
-        const modelId = 'gemini-2.5-pro'; 
+        const modelId = 'gemini-3-flash'; 
         
         const parts: any[] = [];
         let contextPrompt = "CONTEXTO ONCOLÓGICO DEL PACIENTE:\n";
