@@ -126,7 +126,7 @@ const getAIResponse = async (
 
     try {
         const ai = new GoogleGenAI({ apiKey });
-        const modelId = 'gemini-3-flash'; 
+        const modelId = 'gemini-2.5-flash'; 
         
         const parts: any[] = [];
         let contextPrompt = "CONTEXTO ONCOLÓGICO DEL PACIENTE:\n";
