@@ -2,9 +2,9 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Configuración usando las variables de entorno que creamos en el paso 1
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_API_KEY,
+  // Nota el cambio de nombre aquí abajo para ser más específicos
+  apiKey: import.meta.env.VITE_API_KEY_FIREBASE,
   authDomain: import.meta.env.VITE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
@@ -12,9 +12,6 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_APP_ID
 };
 
-// Inicializar Firebase
 const app = initializeApp(firebaseConfig);
-
-// Exportamos la base de datos (db) y el almacenamiento (storage) para usarlos en la App
 export const db = getFirestore(app);
 export const storage = getStorage(app);
