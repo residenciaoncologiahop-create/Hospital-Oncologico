@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { GoogleGenAI, Type, SchemaType } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { 
     User, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
@@ -18,40 +18,17 @@ import {
     ClinicalNote 
 } from './patientService';
 
-// --- Types ---
-interface ChatMessage {
-    role: 'user' | 'model';
-    text: string;
-    timestamp: number;
-}
+// --- UTILIDADES ---
 
-interface ClinicalEvent {
-    date: string;
-    professional: string;
-    category: string;
-    note: string;
-    isKey: boolean; 
-}
-
-interface FileData {
-    name: string;
-    type: string;
-    data: string; // base64
-}
-
-// --- API Helpers ---
-
-// FIX: Función para limpiar el JSON antes de leerlo
+// Función para limpiar respuestas de la IA si vienen sucias
 const cleanJsonString = (str: string) => {
-    // Elimina bloques de markdown ```json ... ``` si existen
     let cleaned = str.replace(/^```json\s*/, "").replace(/^```\s*/, "").replace(/\s*```$/, "");
-    // Intenta arreglar comas finales comunes en listas largas
-    cleaned = cleaned.replace(/,\s*]/g, "]"); 
-    cleaned = cleaned.replace(/,\s*}/g, "}");
     return cleaned;
 };
 
-const extractTimelineFromDocs = async (historyText: string, historyFiles: FileData[]): Promise<ClinicalEvent[]> => {
+// --- API HELPERS ---
+
+const extractTimelineFromDocs = async (historyText: string, historyFiles: any[]): Promise<any[]> => {
     if (!historyText && historyFiles.length === 0) return [];
     
     const apiKey = import.meta.env.VITE_API_KEY;
@@ -59,11 +36,10 @@ const extractTimelineFromDocs = async (historyText: string, historyFiles: FileDa
 
     try {
         const ai = new GoogleGenAI({ apiKey });
-        // Usamos flash-1.5 o 2.0. Flash 1.5 suele ser más estable para JSON estricto
         const modelId = 'gemini-1.5-flash'; 
 
         const parts: any[] = [];
-        parts.push({ text: "Analiza los siguientes documentos médicos. Extrae UNA LISTA CRONOLÓGICA de eventos. \nIMPORTANTE: Responde SOLAMENTE con un JSON válido. No uses bloques de código markdown.\n\nEstructura requerida para cada evento:\n- date (string, DD/MM/YYYY)\n- professional (string)\n- category (string: Consulta, Imagen, Lab, Cirugia, Quimio, etc)\n- note (string: resumen breve)\n- isKey (boolean: true si es relevante para la evolución oncológica)" });
+        parts.push({ text: "Analiza los documentos. Extrae eventos en JSON estricto:\n[{\"date\": \"DD/MM/YYYY\", \"professional\": \"Nombre\", \"category\": \"Categoria\", \"note\": \"Resumen\", \"isKey\": true/false}]" });
         
         if (historyText) parts.push({ text: `Historia manual: ${historyText}` });
         
@@ -75,41 +51,20 @@ const extractTimelineFromDocs = async (historyText: string, historyFiles: FileDa
             model: modelId,
             contents: { parts },
             config: {
-                responseMimeType: "application/json",
-                // Definimos el esquema estricto para evitar errores de sintaxis
-                responseSchema: {
-                    type: SchemaType.ARRAY,
-                    items: {
-                        type: SchemaType.OBJECT,
-                        properties: {
-                            date: { type: SchemaType.STRING },
-                            professional: { type: SchemaType.STRING },
-                            category: { type: SchemaType.STRING },
-                            note: { type: SchemaType.STRING },
-                            isKey: { type: SchemaType.BOOLEAN }
-                        },
-                        required: ["date", "category", "note", "isKey"]
-                    }
-                }
+                responseMimeType: "application/json"
             }
         });
 
         const textResponse = response.text || "[]";
-        try {
-            // Intentamos limpiar y parsear
-            return JSON.parse(cleanJsonString(textResponse));
-        } catch (parseError) {
-            console.error("Error parseando JSON:", textResponse);
-            throw new Error("La IA generó una respuesta con formato inválido. Intenta procesar menos documentos a la vez.");
-        }
-
+        return JSON.parse(cleanJsonString(textResponse));
     } catch (e: any) {
         console.error("Extraction error:", e);
-        throw e;
+        // Si falla, devolvemos array vacío para no romper la app
+        return [];
     }
 };
 
-const getAIResponse = async (historyText: string, historyFiles: FileData[], timeline: ClinicalEvent[], guidelineFiles: FileData[], messages: ChatMessage[], newMessage: string) => {
+const getAIResponse = async (historyText: string, historyFiles: any[], timeline: any[], guidelineFiles: any[], messages: any[], newMessage: string) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) return "ERROR: API_KEY no configurada.";
 
@@ -118,65 +73,55 @@ const getAIResponse = async (historyText: string, historyFiles: FileData[], time
         const modelId = 'gemini-1.5-flash'; 
         
         const parts: any[] = [];
-        let contextPrompt = "ERES UN ASISTENTE ONCOLÓGICO. Tienes acceso a este historial:\n";
+        let contextPrompt = "ERES UN ASISTENTE ONCOLÓGICO. HISTORIAL:\n";
         
         if (timeline && timeline.length > 0) {
-            contextPrompt += "\n--- LÍNEA DE TIEMPO ---\n";
-            timeline.slice(0, 50).forEach(t => { // Limitamos a 50 eventos para no saturar
-                contextPrompt += `${t.date}: ${t.note} (${t.category})\n`;
+            timeline.slice(0, 30).forEach((t: any) => {
+                contextPrompt += `${t.date}: ${t.note}\n`;
             });
         }
         
         parts.push({ text: contextPrompt });
 
-        // Solo enviamos los últimos archivos para ahorrar tokens y evitar errores
         for (const file of historyFiles.slice(0, 2)) {
             parts.push({ inlineData: { mimeType: file.type, data: file.data } });
         }
 
         if (guidelineFiles.length > 0) {
-            parts.push({ text: "\n--- GUÍAS CLÍNICAS ---\n" });
+            parts.push({ text: "\nGUÍAS:\n" });
             for (const file of guidelineFiles.slice(0, 2)) {
                 parts.push({ inlineData: { mimeType: file.type, data: file.data } });
             }
         }
 
         const recentMessages = messages.slice(-6);
-        let conversationHistory = "\n--- CHAT RECIENTE ---\n";
-        recentMessages.forEach(msg => {
+        let conversationHistory = "\nCHAT:\n";
+        recentMessages.forEach((msg: any) => {
             conversationHistory += `${msg.role === 'user' ? 'Dr' : 'IA'}: ${msg.text}\n`;
         });
         parts.push({ text: conversationHistory });
-        parts.push({ text: `\nCONSULTA ACTUAL: ${newMessage}` });
+        parts.push({ text: `\nCONSULTA: ${newMessage}` });
 
         const response = await ai.models.generateContent({
             model: modelId,
-            contents: { parts },
-            config: {
-                systemInstruction: "Responde como un oncólogo senior. Sé conciso, técnico y básate en las guías adjuntas si existen.",
-                temperature: 0.2,
-            }
+            contents: { parts }
         });
 
-        return response.text || "Sin respuesta del modelo.";
+        return response.text || "Sin respuesta.";
     } catch (error: any) {
-        return `ERROR DE IA: ${error.message || "Error desconocido"}.`;
+        return `ERROR DE IA: ${error.message}`;
     }
 };
 
-// --- Components ---
+// --- COMPONENTES ---
 
-const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/*" }: { label: string, files: FileData[], setFiles: (f: FileData[]) => void, accept?: string }) => {
+const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/*" }: { label: string, files: any[], setFiles: (f: any[]) => void, accept?: string }) => {
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            const newFiles: FileData[] = [];
+            const newFiles: any[] = [];
             for (let i = 0; i < e.target.files.length; i++) {
                 const file = e.target.files[i];
-                // Límite de seguridad: 5MB por archivo para no saturar la IA
-                if (file.size > 5 * 1024 * 1024) {
-                    alert(`El archivo ${file.name} es muy pesado (>5MB). Por favor comprímelo.`);
-                    continue;
-                }
+                if (file.size > 5 * 1024 * 1024) continue; // Skip archivos gigantes
                 const reader = new FileReader();
                 await new Promise<void>((resolve) => {
                     reader.onload = (evt) => {
@@ -218,7 +163,7 @@ const App = () => {
     const [patients, setPatients] = useState<Patient[]>([]);
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
     
-    // UI States
+    // UI
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isCreatingPatient, setIsCreatingPatient] = useState(false);
@@ -228,23 +173,21 @@ const App = () => {
     const [newPatientAge, setNewPatientAge] = useState('');
     const [newPatientDiagnosis, setNewPatientDiagnosis] = useState('');
 
-    // Patient Data
+    // Datos Paciente
     const [historyText, setHistoryText] = useState('');
-    const [clinicalNotes, setClinicalNotes] = useState<ClinicalNote[]>([]); // Evoluciones
+    const [clinicalNotes, setClinicalNotes] = useState<ClinicalNote[]>([]);
     const [newNoteText, setNewNoteText] = useState(''); 
     
-    const [historyFiles, setHistoryFiles] = useState<FileData[]>([]);
-    const [timeline, setTimeline] = useState<ClinicalEvent[]>([]);
-    const [guidelineFiles, setGuidelineFiles] = useState<FileData[]>([]);
-    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [historyFiles, setHistoryFiles] = useState<any[]>([]);
+    const [timeline, setTimeline] = useState<any[]>([]);
+    const [guidelineFiles, setGuidelineFiles] = useState<any[]>([]);
+    const [chatMessages, setChatMessages] = useState<any[]>([]);
     
     // Chat & Logic
     const [chatInput, setChatInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
-    
-    // VOLVEMOS A 2 PESTAÑAS
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline'>('docs');
     
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -272,42 +215,38 @@ const App = () => {
                 setTimeline(p.timeline || []); 
                 setHistoryFiles([]); setGuidelineFiles([]);
                 setLastError(null);
-                setActiveTab('docs'); // Reset a docs al cambiar paciente
+                setActiveTab('docs');
             }
         }
     }, [selectedPatientId, patients]);
 
-    // --- HANDLERS ---
-
+    // Handlers
     const handleCreatePatient = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isCreatingPatient) return;
-
         setIsCreatingPatient(true);
-        const newPatient: Patient = {
-            name: newPatientName,
-            age: parseInt(newPatientAge),
-            diagnosis: newPatientDiagnosis,
-            historyText: '',
-            clinicalNotes: [],
-            lastUpdated: Date.now(),
-            chatHistory: [],
-            timeline: []
-        };
-
         try {
-            await createPatient(newPatient);
+            await createPatient({
+                name: newPatientName,
+                age: parseInt(newPatientAge),
+                diagnosis: newPatientDiagnosis,
+                historyText: '',
+                clinicalNotes: [],
+                lastUpdated: Date.now(),
+                chatHistory: [],
+                timeline: []
+            });
             setShowNewPatientModal(false);
             setNewPatientName(''); setNewPatientAge(''); setNewPatientDiagnosis('');
         } catch (e: any) {
-            setLastError("Error creando paciente: " + e.message);
+            setLastError("Error: " + e.message);
         } finally {
             setIsCreatingPatient(false);
         }
     };
 
     const handleDeletePatient = async (id: string) => {
-        if (confirm("¿Eliminar paciente y sus datos permanentemente?")) {
+        if (confirm("¿Borrar paciente?")) {
             if (selectedPatientId === id) setSelectedPatientId(null);
             await deletePatient(id);
         }
@@ -323,9 +262,9 @@ const App = () => {
             if (selectedPatientId) {
                 await updatePatient(selectedPatientId, { timeline: events, historyText });
             }
-            setActiveTab('timeline'); // Auto-switch para ver resultados
+            setActiveTab('timeline');
         } catch (e: any) {
-            setLastError(e.message || "Error al procesar documentos.");
+            setLastError("Error analizando documentos.");
         } finally {
             setIsProcessingDocs(false);
         }
@@ -333,23 +272,20 @@ const App = () => {
 
     const handleAddNote = async () => {
         if (!newNoteText.trim() || !selectedPatientId) return;
-        
         const newNote: ClinicalNote = {
             id: Date.now().toString(),
             date: new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
             text: newNoteText
         };
-
         const updatedNotes = [newNote, ...clinicalNotes];
         setClinicalNotes(updatedNotes);
         setNewNoteText('');
-
         await updatePatient(selectedPatientId, { clinicalNotes: updatedNotes });
     };
 
     const handleSendMessage = async () => {
         if (!chatInput.trim() || !selectedPatientId) return;
-        const newUserMsg: ChatMessage = { role: 'user', text: chatInput, timestamp: Date.now() };
+        const newUserMsg = { role: 'user', text: chatInput, timestamp: Date.now() };
         const updatedUserMsgs = [...chatMessages, newUserMsg];
         setChatMessages(updatedUserMsgs);
         setChatInput('');
@@ -357,15 +293,14 @@ const App = () => {
         
         const responseText = await getAIResponse(historyText, historyFiles, timeline, guidelineFiles, updatedUserMsgs, newUserMsg.text);
         
-        const newAiMsg: ChatMessage = { role: 'model', text: responseText, timestamp: Date.now() };
+        const newAiMsg = { role: 'model', text: responseText, timestamp: Date.now() };
         const updatedAllMsgs = [...updatedUserMsgs, newAiMsg];
         setChatMessages(updatedAllMsgs);
         setIsTyping(false);
         await updatePatient(selectedPatientId, { chatHistory: updatedAllMsgs });
     };
 
-    // --- RENDER ---
-
+    // Render
     if (!doctorName) return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
             <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-sm w-full border border-gray-100 text-center">
@@ -406,7 +341,7 @@ const App = () => {
                 <div className="p-6 border-t bg-white flex items-center justify-between">
                     <div className="flex items-center space-x-3 truncate">
                         <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-lg shadow-blue-50">{doctorName[0]}</div>
-                        <div className="flex flex-col truncate"><span className="text-[10px] font-black text-gray-300 uppercase leading-none mb-1">Profesional</span><span className="text-xs font-black truncate leading-none">Dr. {doctorName}</span></div>
+                        <div className="flex flex-col truncate"><span className="text-[10px] font-black text-gray-300 uppercase leading-none mb-1">Dr. {doctorName}</span></div>
                     </div>
                     <button onClick={() => setDoctorName(null)} className="text-gray-200 hover:text-red-500 transition-colors"><LogOut size={20} /></button>
                 </div>
@@ -426,9 +361,8 @@ const App = () => {
 
                 {selectedPatient ? (
                     <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-50">
-                        {/* Left Panel */}
+                        {/* Panel Izquierdo: Docs y Notas */}
                         <div className="lg:w-1/2 flex flex-col border-r bg-white h-full overflow-hidden shadow-2xl relative z-10">
-                            {/* TAB HEADER RESTAURADO A 2 OPCIONES */}
                             <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
                                 <button onClick={() => setActiveTab('docs')} className={`flex-1 py-6 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-300 hover:text-gray-500'}`}>1. Documentación & Evoluciones</button>
                                 <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-6 transition-all ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-300 hover:text-gray-500'}`}>2. Línea de Tiempo</button>
@@ -437,69 +371,47 @@ const App = () => {
                             <div className="flex-1 overflow-y-auto p-8 space-y-10 scrollbar-hide">
                                 {activeTab === 'docs' && (
                                     <>
-                                        {/* SECCION 1: HISTORIA Y ARCHIVOS (LO DE SIEMPRE) */}
                                         <section className="space-y-6">
                                             <h3 className="text-xs font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 pb-2">Información Base</h3>
-                                            
                                             <FileUploader label="Historia Clínica Digital" files={historyFiles} setFiles={setHistoryFiles} />
-                                            
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Resumen Manual del Profesional</label>
-                                                <textarea className="w-full h-32 p-6 border-2 border-gray-50 rounded-3xl text-sm font-semibold bg-gray-50 focus:bg-white focus:border-blue-100 transition-all outline-none resize-none shadow-inner" placeholder="Antecedentes, resumen del caso..." value={historyText} onChange={(e) => setHistoryText(e.target.value)} onBlur={() => updatePatient(selectedPatient.id!, { historyText })} />
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Resumen Manual</label>
+                                                <textarea className="w-full h-32 p-6 border-2 border-gray-50 rounded-3xl text-sm font-semibold bg-gray-50 focus:bg-white focus:border-blue-100 transition-all outline-none resize-none shadow-inner" placeholder="Resumen del caso..." value={historyText} onChange={(e) => setHistoryText(e.target.value)} onBlur={() => updatePatient(selectedPatient.id!, { historyText })} />
                                             </div>
-
                                             <button onClick={handleProcessDocuments} disabled={isProcessingDocs} className="w-full bg-blue-600 text-white py-5 rounded-[1.5rem] text-xs font-black tracking-widest shadow-2xl shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center">
-                                                {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={18}/>Analizando...</> : "ANALIZAR DOCUMENTOS CON IA"}
+                                                {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={18}/>Analizando...</> : "ANALIZAR DOCUMENTOS"}
                                             </button>
                                         </section>
 
-                                        {/* SECCION 2: EVOLUCIONES (INTEGRADA AQUI) */}
                                         <section className="space-y-6 pt-4 border-t border-gray-100">
                                             <div className="flex items-center space-x-2 text-gray-300 mb-2">
                                                 <PenTool size={16} />
                                                 <h3 className="text-xs font-black uppercase tracking-widest">Evoluciones Médicas</h3>
                                             </div>
-                                            
-                                            {/* Input nueva nota */}
                                             <div className="bg-blue-50/50 p-4 rounded-[1.5rem] border border-blue-50">
-                                                <textarea 
-                                                    className="w-full h-20 bg-white rounded-xl p-3 text-sm font-medium outline-none border border-transparent focus:border-blue-200 transition-all mb-2" 
-                                                    placeholder="Escribir nueva evolución..."
-                                                    value={newNoteText}
-                                                    onChange={(e) => setNewNoteText(e.target.value)}
-                                                />
-                                                <div className="flex justify-end">
-                                                    <button onClick={handleAddNote} disabled={!newNoteText.trim()} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-100 hover:bg-blue-700 disabled:opacity-50 transition-all">Guardar Evolución</button>
-                                                </div>
+                                                <textarea className="w-full h-20 bg-white rounded-xl p-3 text-sm font-medium outline-none border border-transparent focus:border-blue-200 transition-all mb-2" placeholder="Nueva evolución..." value={newNoteText} onChange={(e) => setNewNoteText(e.target.value)} />
+                                                <div className="flex justify-end"><button onClick={handleAddNote} disabled={!newNoteText.trim()} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-100 hover:bg-blue-700 disabled:opacity-50 transition-all">Guardar</button></div>
                                             </div>
-
-                                            {/* Lista de notas previas */}
                                             <div className="space-y-3">
                                                 {clinicalNotes.map((note) => (
                                                     <div key={note.id} className="bg-white p-5 rounded-[1.5rem] border border-gray-100 shadow-sm">
-                                                        <div className="flex items-center space-x-2 mb-2 text-gray-400">
-                                                            <Calendar size={12} />
-                                                            <span className="text-[10px] font-black uppercase tracking-widest">{note.date}</span>
-                                                        </div>
+                                                        <div className="flex items-center space-x-2 mb-2 text-gray-400"><Calendar size={12} /><span className="text-[10px] font-black uppercase tracking-widest">{note.date}</span></div>
                                                         <p className="text-sm font-medium text-gray-700 whitespace-pre-wrap leading-relaxed">{note.text}</p>
                                                     </div>
                                                 ))}
                                             </div>
                                         </section>
 
-                                        {/* SECCION 3: REFERENCIAS */}
                                         <section className="space-y-6 pt-4 border-t border-gray-100">
-                                            <h3 className="text-xs font-black text-gray-300 uppercase tracking-widest">Material de Referencia</h3>
-                                            <FileUploader label="Guías NCCN / Protocolos" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
+                                            <h3 className="text-xs font-black text-gray-300 uppercase tracking-widest">Guías Clínicas</h3>
+                                            <FileUploader label="Adjuntar PDF" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
                                         </section>
                                     </>
                                 )}
 
                                 {activeTab === 'timeline' && (
                                     <div className="space-y-4 pt-4">
-                                        {timeline.length === 0 ? (
-                                            <div className="flex flex-col items-center justify-center py-24 text-gray-200"><Clock size={48} className="mb-4 opacity-10" /><p className="text-xs font-black uppercase tracking-widest">Sin línea de tiempo</p></div>
-                                        ) : (
+                                        {timeline.length === 0 ? <div className="text-center py-20 text-gray-300 text-xs font-black uppercase">Sin línea de tiempo</div> : 
                                             timeline.map((ev, i) => (
                                                 <div key={i} className="relative pl-10 border-l-4 border-gray-50 pb-8 group">
                                                     <div className={`absolute -left-[14px] top-2 w-6 h-6 rounded-full border-4 border-white shadow-xl transition-all group-hover:scale-110 flex items-center justify-center ${ev.isKey ? 'bg-red-500 text-white' : 'bg-blue-400 text-white'}`}>
@@ -515,18 +427,18 @@ const App = () => {
                                                     </div>
                                                 </div>
                                             ))
-                                        )}
+                                        }
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Right Panel: Chat */}
+                        {/* Panel Derecho: Chat */}
                         <div className="lg:w-1/2 flex flex-col bg-gray-50 h-full overflow-hidden relative">
                             {lastError && (
                                 <div className="absolute top-4 left-4 right-4 z-30 bg-red-600 text-white p-4 rounded-2xl shadow-2xl flex items-start space-x-3 border border-red-500 animate-in slide-in-from-top">
                                     <Terminal className="flex-shrink-0 mt-1" size={18}/>
-                                    <div><p className="text-[10px] font-black uppercase tracking-widest mb-1">Diagnóstico de Error:</p><p className="text-xs font-bold leading-tight">{lastError}</p></div>
+                                    <div><p className="text-[10px] font-black uppercase tracking-widest mb-1">Aviso:</p><p className="text-xs font-bold leading-tight">{lastError}</p></div>
                                     <button onClick={() => setLastError(null)} className="ml-auto opacity-60 hover:opacity-100"><X size={16}/></button>
                                 </div>
                             )}
@@ -535,7 +447,7 @@ const App = () => {
                                 {chatMessages.length === 0 && (
                                     <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none">
                                         <div className="bg-white p-8 rounded-[3rem] shadow-sm"><MessageSquare size={56} className="text-blue-600" /></div>
-                                        <div className="space-y-2"><p className="text-sm font-black uppercase tracking-widest">Asistente Oncológico</p><p className="text-xs font-bold max-w-[220px] mx-auto leading-relaxed">Analice el caso clínico y contraste con las guías internacionales.</p></div>
+                                        <div className="space-y-2"><p className="text-sm font-black uppercase tracking-widest">Asistente Oncológico</p></div>
                                     </div>
                                 )}
                                 {chatMessages.map((m, i) => (
@@ -563,14 +475,13 @@ const App = () => {
                         <div className="bg-white p-16 rounded-[4rem] shadow-2xl border border-gray-100 max-w-sm">
                             <Activity size={80} className="mb-8 text-blue-600 mx-auto opacity-10 animate-pulse" />
                             <h2 className="text-2xl font-black text-gray-800 tracking-tight">Consola de Decisión</h2>
-                            <p className="text-gray-400 text-sm mt-4 font-bold leading-relaxed">Seleccione un paciente o inicie un nuevo registro.</p>
                             <button onClick={() => setShowNewPatientModal(true)} className="mt-10 bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black text-xs tracking-widest hover:bg-blue-700 transition-all shadow-2xl shadow-blue-100 uppercase">Nuevo Paciente</button>
                         </div>
                     </div>
                 )}
             </main>
 
-            {/* Modal de Nuevo Paciente */}
+            {/* Modal */}
             {showNewPatientModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-md p-6">
                     <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-sm overflow-hidden transform animate-in fade-in zoom-in duration-300">
@@ -584,14 +495,8 @@ const App = () => {
                                 <input type="text" required className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Nombre Completo" value={newPatientName} onChange={e => setNewPatientName(e.target.value)} />
                             </div>
                             <div className="flex space-x-6">
-                                <div className="w-1/3 space-y-3">
-                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Edad</label>
-                                    <input type="number" required className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="--" value={newPatientAge} onChange={e => setNewPatientAge(e.target.value)} />
-                                </div>
-                                <div className="w-2/3 space-y-3">
-                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Base</label>
-                                    <input type="text" required className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: Ca Mama" value={newPatientDiagnosis} onChange={e => setNewPatientDiagnosis(e.target.value)} />
-                                </div>
+                                <div className="w-1/3 space-y-3"><label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Edad</label><input type="number" required className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="--" value={newPatientAge} onChange={e => setNewPatientAge(e.target.value)} /></div>
+                                <div className="w-2/3 space-y-3"><label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Base</label><input type="text" required className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: Ca Mama" value={newPatientDiagnosis} onChange={e => setNewPatientDiagnosis(e.target.value)} /></div>
                             </div>
                             <button type="submit" disabled={isCreatingPatient} className="w-full bg-blue-600 text-white py-5 rounded-[1.5rem] text-xs font-black shadow-2xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase tracking-widest disabled:opacity-50">{isCreatingPatient ? "Registrando..." : "Registrar Paciente"}</button>
                         </form>
