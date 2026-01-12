@@ -2,31 +2,22 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from "@google/genai";
 import { 
-    User, 
-    FileText, 
-    MessageSquare, 
-    Plus, 
-    LogOut, 
-    Search, 
-    ChevronRight,
-    Upload,
-    Stethoscope,
-    Activity,
-    Trash2,
-    Save,
-    Menu,
-    X,
-    Clock,
-    List,
-    File,
-    Loader2,
-    AlertCircle,
-    ShieldAlert,
-    Info,
-    Terminal
+    User, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
+    Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
+    List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal
 } from 'lucide-react';
 
+// Importamos el servicio que creaste para conectar con Firebase
+import { 
+    subscribeToPatients, 
+    createPatient, 
+    updatePatient, 
+    uploadFile,
+    Patient 
+} from './patientService';
+
 // --- Types ---
+// (Reutilizamos tus interfaces, pero Patient ahora viene del servicio)
 
 interface ChatMessage {
     role: 'user' | 'model';
@@ -42,17 +33,6 @@ interface ClinicalEvent {
     isKey: boolean; 
 }
 
-interface Patient {
-    id: string;
-    name: string;
-    age: number;
-    diagnosis: string;
-    historyText: string;
-    lastUpdated: number;
-    chatHistory?: ChatMessage[];
-    timeline?: ClinicalEvent[];
-}
-
 interface FileData {
     name: string;
     type: string;
@@ -61,6 +41,7 @@ interface FileData {
 
 // --- API Helpers ---
 
+// NOTA: Usamos VITE_API_KEY para Gemini (la IA), diferente a la de Firebase
 const extractTimelineFromDocs = async (
     historyText: string,
     historyFiles: FileData[]
@@ -72,7 +53,7 @@ const extractTimelineFromDocs = async (
 
     try {
         const ai = new GoogleGenAI({ apiKey });
-        const modelId = 'gemini-2.5-flash'; 
+        const modelId = 'gemini-2.0-flash'; 
 
         const parts: any[] = [];
         parts.push({ text: "Analiza los siguientes documentos médicos de forma EXHAUSTIVA. No resumas; extrae CADA evento, consulta, resultado de laboratorio o estudio de imagen mencionado. \n\nPara cada evento determina:\n1. Fecha (DD/MM/YYYY).\n2. Profesional/Institución.\n3. Categoría (Consulta, Laboratorio, Imagen, Cirugía, Quimio, Radio, etc).\n4. Resumen detallado de hallazgos.\n5. 'isKey' (true/false): Marca como true solo eventos CRÍTICOS (diagnósticos, cirugías, cambios de tratamiento, progresión de enfermedad). Eventos de rutina deben ser false." });
@@ -122,11 +103,11 @@ const getAIResponse = async (
     newMessage: string
 ) => {
     const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) return "ERROR: API_KEY no configurada. Verifica las variables de entorno en Vercel.";
+    if (!apiKey) return "ERROR: API_KEY no configurada.";
 
     try {
         const ai = new GoogleGenAI({ apiKey });
-        const modelId = 'gemini-2.5-flash'; 
+        const modelId = 'gemini-2.0-flash'; 
         
         const parts: any[] = [];
         let contextPrompt = "CONTEXTO ONCOLÓGICO DEL PACIENTE:\n";
@@ -140,6 +121,7 @@ const getAIResponse = async (
         
         parts.push({ text: contextPrompt });
 
+        // Enviamos solo los últimos archivos para no saturar el contexto
         for (const file of historyFiles.slice(0, 3)) {
             parts.push({ inlineData: { mimeType: file.type, data: file.data } });
         }
@@ -219,51 +201,59 @@ const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/
 };
 
 const App = () => {
-    const [doctorName, setDoctorName] = useState<string | null>(null);
+    // Estado
+    const [doctorName, setDoctorName] = useState<string | null>(localStorage.getItem('doctor_name'));
     const [patients, setPatients] = useState<Patient[]>([]);
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+    
+    // UI States
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!import.meta.env.VITE_API_KEY);;
-
+    
+    // New Patient Form
     const [newPatientName, setNewPatientName] = useState('');
     const [newPatientAge, setNewPatientAge] = useState('');
     const [newPatientDiagnosis, setNewPatientDiagnosis] = useState('');
 
+    // Patient Data (Local View)
     const [historyText, setHistoryText] = useState('');
     const [historyFiles, setHistoryFiles] = useState<FileData[]>([]);
     const [timeline, setTimeline] = useState<ClinicalEvent[]>([]);
     const [guidelineFiles, setGuidelineFiles] = useState<FileData[]>([]);
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    
+    // Chat & Processing
     const [chatInput, setChatInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
-    
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline'>('docs');
+    
     const chatEndRef = useRef<HTMLDivElement>(null);
 
+    // --- EFFECT 1: Conexión a Firebase (Reemplaza al localStorage) ---
     useEffect(() => {
-        setApiKeyExists(!!import.meta.env.VITE_API_KEY);
+        // Nos suscribimos a cambios en la base de datos
+        // Si otro médico agrega un paciente, aparecerá aquí automáticamente
+        const unsubscribe = subscribeToPatients((data) => {
+            setPatients(data);
+        });
+        
+        // Limpiamos la conexión al salir
+        return () => unsubscribe();
     }, []);
 
+    // Guardar nombre del doctor (esto sí puede quedar en local para no loguearse siempre)
     useEffect(() => {
-        if (doctorName) {
-            const saved = localStorage.getItem(`onco_v2_patients_${doctorName}`);
-            if (saved) setPatients(JSON.parse(saved));
-        }
+        if (doctorName) localStorage.setItem('doctor_name', doctorName);
     }, [doctorName]);
 
-    useEffect(() => {
-        if (doctorName && patients.length > 0) {
-            localStorage.setItem(`onco_v2_patients_${doctorName}`, JSON.stringify(patients));
-        }
-    }, [patients, doctorName]);
-
+    // Scroll chat
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chatMessages, isTyping]);
 
+    // Cargar datos al seleccionar paciente
     useEffect(() => {
         if (selectedPatientId) {
             const p = patients.find(pat => pat.id === selectedPatientId);
@@ -271,12 +261,15 @@ const App = () => {
                 setHistoryText(p.historyText || '');
                 setChatMessages(p.chatHistory || []);
                 setTimeline(p.timeline || []); 
-                setHistoryFiles([]); setGuidelineFiles([]);
+                setHistoryFiles([]); // Limpiamos archivos temporales al cambiar
+                setGuidelineFiles([]);
                 setLastError(null);
                 setActiveTab(p.timeline && p.timeline.length > 0 ? 'timeline' : 'docs');
             }
         }
-    }, [selectedPatientId]);
+    }, [selectedPatientId, patients]);
+
+    // --- HANDLERS ---
 
     const handleProcessDocuments = async () => {
         if (!historyText && historyFiles.length === 0) return;
@@ -285,44 +278,64 @@ const App = () => {
         try {
             const events = await extractTimelineFromDocs(historyText, historyFiles);
             setTimeline(events);
+            
+            // ACTUALIZACIÓN EN LA NUBE
             if (selectedPatientId) {
-                setPatients(patients.map(p => p.id === selectedPatientId ? { ...p, timeline: events, lastUpdated: Date.now() } : p));
+                await updatePatient(selectedPatientId, { 
+                    timeline: events,
+                    historyText: historyText // Guardamos también el texto manual
+                });
             }
             setActiveTab('timeline');
         } catch (e: any) {
-            setLastError(e.message || "Error desconocido al procesar documentos.");
+            setLastError(e.message || "Error al procesar documentos.");
         } finally {
             setIsProcessingDocs(false);
         }
     };
 
+    const handleSaveManualNotes = async () => {
+        if (selectedPatientId) {
+             try {
+                await updatePatient(selectedPatientId, { historyText });
+             } catch(e) { console.error(e); }
+        }
+    }
+
     const handleSendMessage = async () => {
         if (!chatInput.trim() || !selectedPatientId) return;
         setLastError(null);
+        
         const newUserMsg: ChatMessage = { role: 'user', text: chatInput, timestamp: Date.now() };
-        const updatedUser = [...chatMessages, newUserMsg];
-        setChatMessages(updatedUser);
+        const updatedUserMsgs = [...chatMessages, newUserMsg];
+        
+        setChatMessages(updatedUserMsgs);
         setChatInput('');
         setIsTyping(true);
         
-        const responseText = await getAIResponse(historyText, historyFiles, timeline, guidelineFiles, updatedUser, newUserMsg.text);
+        // Obtenemos respuesta IA
+        const responseText = await getAIResponse(historyText, historyFiles, timeline, guidelineFiles, updatedUserMsgs, newUserMsg.text);
         
         if (responseText.startsWith("ERROR")) {
             setLastError(responseText);
         }
 
         const newAiMsg: ChatMessage = { role: 'model', text: responseText, timestamp: Date.now() };
-        const updatedAI = [...updatedUser, newAiMsg];
-        setChatMessages(updatedAI);
+        const updatedAllMsgs = [...updatedUserMsgs, newAiMsg];
+        
+        setChatMessages(updatedAllMsgs);
         setIsTyping(false);
 
-        setPatients(patients.map(p => p.id === selectedPatientId ? { ...p, chatHistory: updatedAI, lastUpdated: Date.now() } : p));
+        // GUARDADO EN LA NUBE
+        await updatePatient(selectedPatientId, { 
+            chatHistory: updatedAllMsgs 
+        });
     };
 
-    const handleCreatePatient = (e: React.FormEvent) => {
+    const handleCreatePatient = async (e: React.FormEvent) => {
         e.preventDefault();
-        const p: Patient = {
-            id: Date.now().toString(),
+        const newPatient: Patient = {
+            // El ID lo genera Firebase automáticamente
             name: newPatientName,
             age: parseInt(newPatientAge),
             diagnosis: newPatientDiagnosis,
@@ -331,11 +344,19 @@ const App = () => {
             chatHistory: [],
             timeline: []
         };
-        setPatients([...patients, p]);
-        setSelectedPatientId(p.id);
-        setShowNewPatientModal(false);
-        setNewPatientName(''); setNewPatientAge(''); setNewPatientDiagnosis('');
+
+        try {
+            const id = await createPatient(newPatient);
+            // Firebase nos devuelve el ID, podemos seleccionarlo automáticamente
+            // (La suscripción actualizará la lista 'patients' sola)
+            setShowNewPatientModal(false);
+            setNewPatientName(''); setNewPatientAge(''); setNewPatientDiagnosis('');
+        } catch (e: any) {
+            setLastError("Error creando paciente: " + e.message);
+        }
     };
+
+    // --- RENDER ---
 
     if (!doctorName) return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
@@ -366,10 +387,11 @@ const App = () => {
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
                     <div>
-                        <div className="flex items-center justify-between text-[10px] font-black text-gray-300 uppercase tracking-widest px-2 mb-4"><span>Pacientes Activos</span><button onClick={() => setShowNewPatientModal(true)} className="text-blue-600 bg-blue-50 p-1.5 rounded-xl"><Plus size={16}/></button></div>
+                        <div className="flex items-center justify-between text-[10px] font-black text-gray-300 uppercase tracking-widest px-2 mb-4"><span>Pacientes (Cloud)</span><button onClick={() => setShowNewPatientModal(true)} className="text-blue-600 bg-blue-50 p-1.5 rounded-xl"><Plus size={16}/></button></div>
                         <div className="space-y-2">
+                            {patients.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Sin pacientes</p>}
                             {patients.map(p => (
-                                <button key={p.id} onClick={() => {setSelectedPatientId(p.id); setMobileMenuOpen(false);}} className={`w-full text-left p-4 rounded-[1.5rem] transition-all flex flex-col ${selectedPatientId === p.id ? 'bg-blue-600 text-white shadow-2xl shadow-blue-200' : 'hover:bg-white border border-transparent hover:border-gray-100'}`}>
+                                <button key={p.id} onClick={() => {setSelectedPatientId(p.id!); setMobileMenuOpen(false);}} className={`w-full text-left p-4 rounded-[1.5rem] transition-all flex flex-col ${selectedPatientId === p.id ? 'bg-blue-600 text-white shadow-2xl shadow-blue-200' : 'hover:bg-white border border-transparent hover:border-gray-100'}`}>
                                     <span className="font-black text-sm truncate">{p.name}</span>
                                     <span className={`text-[10px] font-bold truncate ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
                                 </button>
@@ -396,12 +418,6 @@ const App = () => {
                             {selectedPatient && <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1">{selectedPatient.diagnosis} • {selectedPatient.age} Años</span>}
                         </div>
                     </div>
-                    
-                    {/* Diagnostic Indicator */}
-                    <div className={`px-4 py-2 rounded-2xl flex items-center space-x-2 text-[10px] font-black tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
-                        {apiKeyExists ? <div className="w-2 h-2 bg-green-500 rounded-full"></div> : <ShieldAlert size={14}/>}
-                        <span>{apiKeyExists ? 'API Cloud: Conectado' : 'API Cloud: Error Vercel'}</span>
-                    </div>
                 </header>
 
                 {selectedPatient ? (
@@ -417,11 +433,11 @@ const App = () => {
                                 {activeTab === 'docs' ? (
                                     <>
                                         <section className="space-y-6">
-                                            <div className="flex items-center justify-between border-b border-gray-50 pb-2"><h3 className="text-xs font-black text-gray-300 uppercase tracking-widest">Información Base</h3><button onClick={() => {if(selectedPatientId) setPatients(patients.map(p => p.id === selectedPatientId ? {...p, historyText} : p));}} className="text-blue-500 font-black text-[10px] hover:underline uppercase">Guardar Cambios</button></div>
-                                            <FileUploader label="Historia Clínica Digital" files={historyFiles} setFiles={setHistoryFiles} />
+                                            <div className="flex items-center justify-between border-b border-gray-50 pb-2"><h3 className="text-xs font-black text-gray-300 uppercase tracking-widest">Información Base</h3><button onClick={handleSaveManualNotes} className="text-blue-500 font-black text-[10px] hover:underline uppercase">Guardar Notas</button></div>
+                                            <FileUploader label="Historia Clínica Digital (Análisis Temporal)" files={historyFiles} setFiles={setHistoryFiles} />
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Notas Manuales del Profesional</label>
-                                                <textarea className="w-full h-40 p-6 border-2 border-gray-50 rounded-3xl text-sm font-semibold bg-gray-50 focus:bg-white focus:border-blue-100 transition-all outline-none resize-none shadow-inner" placeholder="Escribe hallazgos adicionales..." value={historyText} onChange={(e) => setHistoryText(e.target.value)} />
+                                                <textarea className="w-full h-40 p-6 border-2 border-gray-50 rounded-3xl text-sm font-semibold bg-gray-50 focus:bg-white focus:border-blue-100 transition-all outline-none resize-none shadow-inner" placeholder="Escribe hallazgos adicionales..." value={historyText} onChange={(e) => setHistoryText(e.target.value)} onBlur={handleSaveManualNotes} />
                                             </div>
                                             <button onClick={handleProcessDocuments} disabled={isProcessingDocs} className="w-full bg-blue-600 text-white py-5 rounded-[1.5rem] text-xs font-black tracking-widest shadow-2xl shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center">
                                                 {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={18}/>Analizando Documentos...</> : "PROCESAR HISTORIA COMPLETA"}
@@ -464,7 +480,7 @@ const App = () => {
                                 <div className="absolute top-4 left-4 right-4 z-30 bg-red-600 text-white p-4 rounded-2xl shadow-2xl flex items-start space-x-3 border border-red-500 animate-in slide-in-from-top">
                                     <Terminal className="flex-shrink-0 mt-1" size={18}/>
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest mb-1">Diagnóstico de Error (Vercel):</p>
+                                        <p className="text-[10px] font-black uppercase tracking-widest mb-1">Error de Sistema:</p>
                                         <p className="text-xs font-bold leading-tight">{lastError}</p>
                                     </div>
                                     <button onClick={() => setLastError(null)} className="ml-auto opacity-60 hover:opacity-100"><X size={16}/></button>
