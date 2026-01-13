@@ -8,7 +8,8 @@ import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot
 import { 
     User, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
-    List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal
+    List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal,
+    Calendar, PenTool, FileOutput
 } from 'lucide-react';
 
 // --- FIREBASE CONFIGURATION ---
@@ -43,7 +44,7 @@ interface ClinicalEvent {
 
 interface Patient {
     id: string;
-    doctorId: string; // Identificación del médico
+    doctorId: string; 
     name: string;
     age: number;
     diagnosis: string;
@@ -59,8 +60,25 @@ interface FileData {
     data: string; // base64
 }
 
+// --- Helper: Date Sorter (DD/MM/YYYY) ---
+const parseDate = (dateStr: string) => {
+    if (!dateStr) return 0;
+    // Intenta parsear DD/MM/YYYY
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
+    }
+    return 0; 
+};
+
+const sortTimeline = (events: ClinicalEvent[]) => {
+    // Ordenar de más antiguo a más reciente (Cronológico)
+    return events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
+};
+
 // --- API Helpers ---
 
+// 1. EXTRACT TIMELINE
 const extractTimelineFromDocs = async (
     historyText: string,
     historyFiles: FileData[]
@@ -75,7 +93,8 @@ const extractTimelineFromDocs = async (
         const modelId = 'gemini-2.5-flash'; 
 
         const parts: any[] = [];
-        parts.push({ text: "Analiza los siguientes documentos médicos de forma EXHAUSTIVA. No resumas; extrae CADA evento, consulta, resultado de laboratorio o estudio de imagen mencionado. \n\nPara cada evento determina:\n1. Fecha (DD/MM/YYYY).\n2. Profesional/Institución.\n3. Categoría (Consulta, Laboratorio, Imagen, Cirugía, Quimio, Radio, etc).\n4. Resumen detallado de hallazgos.\n5. 'isKey' (true/false): Marca como true solo eventos CRÍTICOS (diagnósticos, cirugías, cambios de tratamiento, progresión de enfermedad). Eventos de rutina deben ser false." });
+        // MODIFICADO: Se pide explícitamente ESPAÑOL y orden
+        parts.push({ text: "Analiza los documentos. Extrae eventos cronológicos. \nREGLAS:\n1. IDIOMA: SIEMPRE EN ESPAÑOL.\n2. FECHAS: Formato estricto DD/MM/YYYY.\n3. CATEGORÍAS: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.\n4. CRITICIDAD: 'isKey': true solo para hitos oncológicos mayores." });
         
         if (historyText) parts.push({ text: `Historia manual: ${historyText}` });
         
@@ -105,7 +124,10 @@ const extractTimelineFromDocs = async (
             }
         });
 
-        if (response.text) return JSON.parse(response.text);
+        if (response.text) {
+            const rawEvents = JSON.parse(response.text);
+            return sortTimeline(rawEvents); // Ordenamos antes de devolver
+        }
         return [];
     } catch (e: any) {
         console.error("Extraction error:", e);
@@ -113,6 +135,82 @@ const extractTimelineFromDocs = async (
     }
 };
 
+// 2. GENERATE SUMMARY (NUEVO)
+const generateClinicalSummary = async (
+    patient: Patient,
+    files: FileData[]
+): Promise<string> => {
+    const apiKey = import.meta.env.VITE_API_KEY;
+    if (!apiKey) return "Error: API Key faltante";
+
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        const modelId = 'gemini-2.5-flash';
+
+        const parts: any[] = [];
+        
+        // Data estructurada del paciente para el prompt
+        const patientData = `
+            PACIENTE: ${patient.name}
+            EDAD: ${patient.age}
+            DIAGNÓSTICO: ${patient.diagnosis}
+            NOTAS MANUALES: ${patient.historyText}
+            LÍNEA DE TIEMPO EXISTENTE: ${JSON.stringify(patient.timeline)}
+        `;
+
+        const prompt = `
+            Genera un RESUMEN DE HISTORIA CLÍNICA oncológico completo y profesional.
+            
+            FORMATO REQUERIDO (Estricto, sin asteriscos de markdown, usar texto plano limpio):
+            
+            Resumen de Historia Clínica
+            Paciente: [Nombre] Edad: [Edad] [Otros datos si figuran]
+            
+            1. Motivo de Consulta y Enfermedad Actual
+            [Redacción narrativa cronológica del diagnóstico y situación actual]
+            
+            2. Antecedentes
+            [Listar APP, AQX, ATOX, AGO, AHF si figuran]
+            
+            3. Examen Físico
+            [Datos de PS, Peso, Talla y hallazgos relevantes]
+            
+            4. Estudios Complementarios
+            [Anatomía Patológica, Laboratorios clave, Imágenes con fechas y conclusiones]
+            
+            5. Diagnóstico y Estadificación
+            Diagnóstico: [Texto]
+            Estadificación: [TNM/Estadio]
+            
+            6. Evolución y Tratamiento
+            [Narrativa cronológica de tratamientos recibidos, toxicidades y respuesta hasta la fecha actual]
+
+            IMPORTANTE:
+            - No uses negritas (**) ni cursivas.
+            - Sé preciso con las fechas.
+            - Usa lenguaje médico técnico.
+        `;
+
+        parts.push({ text: prompt });
+        parts.push({ text: patientData });
+
+        for (const file of files) {
+            parts.push({ inlineData: { mimeType: file.type, data: file.data } });
+        }
+
+        const response = await ai.models.generateContent({
+            model: modelId,
+            contents: { parts }
+        });
+
+        return response.text || "No se pudo generar el resumen.";
+
+    } catch (e: any) {
+        return "Error generando resumen: " + e.message;
+    }
+};
+
+// 3. CHAT BOT (Existente)
 const getAIResponse = async (
     historyText: string,
     historyFiles: FileData[],
@@ -122,7 +220,7 @@ const getAIResponse = async (
     newMessage: string
 ) => {
     const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) return "ERROR: API_KEY no configurada. Verifica las variables de entorno en Vercel.";
+    if (!apiKey) return "ERROR: API_KEY no configurada.";
 
     try {
         const ai = new GoogleGenAI({ apiKey });
@@ -163,14 +261,14 @@ const getAIResponse = async (
             model: modelId,
             contents: { parts },
             config: {
-                systemInstruction: "Eres un oncólogo experto y asistente de guías clínicas. Analiza el historial completo del paciente y responde basándote en la evidencia y las guías NCCN. Si no hay guías adjuntas, usa tu conocimiento médico actualizado. Sé técnico, preciso y profesional.",
+                systemInstruction: "Eres un oncólogo experto. Responde en español técnico.",
                 temperature: 0.1,
             }
         });
 
         return response.text || "Sin respuesta del modelo.";
     } catch (error: any) {
-        return `ERROR DE IA: ${error.message || "Error desconocido en la comunicación con Gemini"}.`;
+        return `ERROR DE IA: ${error.message}`;
     }
 };
 
@@ -224,7 +322,7 @@ const App = () => {
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!import.meta.env.VITE_API_KEY);;
+    const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!import.meta.env.VITE_API_KEY);
 
     const [newPatientName, setNewPatientName] = useState('');
     const [newPatientAge, setNewPatientAge] = useState('');
@@ -240,6 +338,18 @@ const App = () => {
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
     
+    // --- ESTADOS PARA EVOLUCIÓN MANUAL ---
+    const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
+    const [manualDoctor, setManualDoctor] = useState(doctorName || '');
+    const [manualNote, setManualNote] = useState('');
+    // -------------------------------------
+
+    // --- ESTADOS PARA RESUMEN ---
+    const [showSummaryModal, setShowSummaryModal] = useState(false);
+    const [summaryText, setSummaryText] = useState('');
+    const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+    // ----------------------------
+
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline'>('docs');
     const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -247,32 +357,29 @@ const App = () => {
         setApiKeyExists(!!import.meta.env.VITE_API_KEY);
     }, []);
 
-    // --- FIREBASE: Cargar Pacientes (Filtrados por Médico) ---
+    // Load Patients filtered by Doctor
     useEffect(() => {
         if (!doctorName) {
             setPatients([]);
             return;
         }
-
         const q = query(collection(db, "patients"), where("doctorId", "==", doctorName));
-        
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const firebasePatients = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             } as Patient));
-            
-            // Ordenamiento manual en cliente por última actualización
             firebasePatients.sort((a, b) => b.lastUpdated - a.lastUpdated);
-            
             setPatients(firebasePatients);
         });
-        
         return () => unsubscribe();
     }, [doctorName]);
 
     useEffect(() => {
-        if (doctorName) localStorage.setItem('doctor_name', doctorName);
+        if (doctorName) {
+            localStorage.setItem('doctor_name', doctorName);
+            setManualDoctor(doctorName);
+        }
     }, [doctorName]);
 
     useEffect(() => {
@@ -285,10 +392,13 @@ const App = () => {
             if (p) {
                 setHistoryText(p.historyText || '');
                 setChatMessages(p.chatHistory || []);
-                setTimeline(p.timeline || []); 
+                // Ensure timeline is sorted when loaded
+                setTimeline(p.timeline ? sortTimeline([...p.timeline]) : []); 
                 setHistoryFiles([]); setGuidelineFiles([]);
                 setLastError(null);
                 setActiveTab(p.timeline && p.timeline.length > 0 ? 'timeline' : 'docs');
+                setManualDate(new Date().toISOString().split('T')[0]); // Reset date
+                setManualDoctor(doctorName || '');
             }
         }
     }, [selectedPatientId, patients]);
@@ -299,23 +409,73 @@ const App = () => {
         setLastError(null);
         try {
             const events = await extractTimelineFromDocs(historyText, historyFiles);
-            setTimeline(events);
+            // Fusionamos con la línea de tiempo existente si hay
+            const currentTimeline = timeline || [];
+            // Combinar y ordenar
+            const combinedTimeline = sortTimeline([...currentTimeline, ...events]);
+            
+            setTimeline(combinedTimeline);
             
             if (selectedPatientId) {
                 const patientRef = doc(db, "patients", selectedPatientId);
                 await updateDoc(patientRef, {
-                    timeline: events,
+                    timeline: combinedTimeline,
                     historyText: historyText,
                     lastUpdated: Date.now()
                 });
             }
             setActiveTab('timeline');
         } catch (e: any) {
-            setLastError(e.message || "Error desconocido al procesar documentos.");
+            setLastError(e.message || "Error procesando documentos.");
         } finally {
             setIsProcessingDocs(false);
         }
     };
+
+    // --- NUEVA FUNCIÓN: AGREGAR EVOLUCIÓN MANUAL ---
+    const handleAddManualEvolution = async () => {
+        if (!manualNote.trim() || !selectedPatientId) return;
+
+        // Convertir YYYY-MM-DD a DD/MM/YYYY para consistencia
+        const [y, m, d] = manualDate.split('-');
+        const formattedDate = `${d}/${m}/${y}`;
+
+        const newEvent: ClinicalEvent = {
+            date: formattedDate,
+            professional: manualDoctor,
+            category: "Evolución Manual",
+            note: manualNote,
+            isKey: false
+        };
+
+        const updatedTimeline = sortTimeline([...timeline, newEvent]);
+        setTimeline(updatedTimeline);
+        setManualNote(''); // Limpiar campo
+
+        // Guardar en Firebase
+        const patientRef = doc(db, "patients", selectedPatientId);
+        await updateDoc(patientRef, {
+            timeline: updatedTimeline,
+            lastUpdated: Date.now()
+        });
+    };
+    // -----------------------------------------------
+
+    // --- NUEVA FUNCIÓN: GENERAR RESUMEN ---
+    const handleGenerateSummary = async () => {
+        if (!selectedPatientId) return;
+        const p = patients.find(pat => pat.id === selectedPatientId);
+        if (!p) return;
+
+        setIsGeneratingSummary(true);
+        setShowSummaryModal(true);
+        setSummaryText("Generando resumen detallado...");
+
+        const summary = await generateClinicalSummary(p, historyFiles);
+        setSummaryText(summary);
+        setIsGeneratingSummary(false);
+    };
+    // --------------------------------------
 
     const handleSendMessage = async () => {
         if (!chatInput.trim() || !selectedPatientId) return;
@@ -328,10 +488,6 @@ const App = () => {
         
         const responseText = await getAIResponse(historyText, historyFiles, timeline, guidelineFiles, updatedUser, newUserMsg.text);
         
-        if (responseText.startsWith("ERROR")) {
-            setLastError(responseText);
-        }
-
         const newAiMsg: ChatMessage = { role: 'model', text: responseText, timestamp: Date.now() };
         const updatedAI = [...updatedUser, newAiMsg];
         setChatMessages(updatedAI);
@@ -365,11 +521,10 @@ const App = () => {
             setShowNewPatientModal(false);
             setNewPatientName(''); setNewPatientAge(''); setNewPatientDiagnosis('');
         } catch (error: any) {
-            setLastError("Error creando paciente en la nube: " + error.message);
+            setLastError("Error creando paciente: " + error.message);
         }
     };
 
-    // Función para borrar paciente
     const handleDeletePatient = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation(); 
         if (confirm("¿Estás seguro de que deseas eliminar este paciente permanentemente?")) {
@@ -420,12 +575,7 @@ const App = () => {
                                         <span className="font-black text-sm truncate">{p.name}</span>
                                         <span className={`text-[10px] font-bold truncate ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
                                     </div>
-                                    <button 
-                                        onClick={(e) => handleDeletePatient(p.id, e)} 
-                                        className={`p-2 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedPatientId === p.id ? 'text-blue-200 hover:text-white hover:bg-blue-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
+                                    <button onClick={(e) => handleDeletePatient(p.id, e)} className={`p-2 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedPatientId === p.id ? 'text-blue-200 hover:text-white hover:bg-blue-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}><Trash2 size={14} /></button>
                                 </div>
                             ))}
                         </div>
@@ -450,8 +600,6 @@ const App = () => {
                             {selectedPatient && <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1">{selectedPatient.diagnosis} • {selectedPatient.age} Años</span>}
                         </div>
                     </div>
-                    
-                    {/* Diagnostic Indicator */}
                     <div className={`px-4 py-2 rounded-2xl flex items-center space-x-2 text-[10px] font-black tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
                         {apiKeyExists ? <div className="w-2 h-2 bg-green-500 rounded-full"></div> : <ShieldAlert size={14}/>}
                         <span>{apiKeyExists ? 'API Cloud: Conectado' : 'API Cloud: Error Vercel'}</span>
@@ -472,7 +620,6 @@ const App = () => {
                                     <>
                                         <section className="space-y-6">
                                             <div className="flex items-center justify-between border-b border-gray-50 pb-2"><h3 className="text-xs font-black text-gray-300 uppercase tracking-widest">Información Base</h3><button onClick={() => {
-                                                // FIREBASE: Guardar notas manuales
                                                 if(selectedPatientId) {
                                                     const patientRef = doc(db, "patients", selectedPatientId);
                                                     updateDoc(patientRef, { historyText, lastUpdated: Date.now() });
@@ -487,7 +634,25 @@ const App = () => {
                                                 {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={18}/>Analizando Documentos...</> : "PROCESAR HISTORIA COMPLETA"}
                                             </button>
                                         </section>
-                                        <section className="space-y-6 pt-4">
+
+                                        {/* NUEVA SECCIÓN DE EVOLUCIÓN A MANO */}
+                                        <section className="space-y-4 pt-6 border-t border-gray-100">
+                                            <div className="flex items-center space-x-2 text-gray-400"><PenTool size={14} /><h3 className="text-xs font-black uppercase tracking-widest">Evolución Manual (Al Timeline)</h3></div>
+                                            <div className="bg-gray-50 p-4 rounded-[1.5rem] border border-gray-100 space-y-3">
+                                                <div className="flex space-x-2">
+                                                    <input type="date" className="bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200" value={manualDate} onChange={e => setManualDate(e.target.value)} />
+                                                    <input type="text" className="flex-1 bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200" placeholder="Médico" value={manualDoctor} onChange={e => setManualDoctor(e.target.value)} />
+                                                </div>
+                                                <textarea className="w-full h-20 bg-white p-3 rounded-xl text-sm font-medium border border-gray-200 resize-none" placeholder="Escribir evolución..." value={manualNote} onChange={e => setManualNote(e.target.value)} />
+                                                <button onClick={handleAddManualEvolution} disabled={!manualNote.trim()} className="w-full bg-gray-800 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black disabled:opacity-50">Agregar a Línea de Tiempo</button>
+                                            </div>
+                                        </section>
+
+                                        <section className="space-y-6 pt-4 border-t border-gray-100">
+                                            <button onClick={handleGenerateSummary} disabled={isGeneratingSummary} className="w-full flex items-center justify-center space-x-2 bg-indigo-50 text-indigo-600 border border-indigo-100 py-4 rounded-[1.5rem] text-xs font-black tracking-widest hover:bg-indigo-100 transition-all">
+                                                {isGeneratingSummary ? <Loader2 className="animate-spin" size={16} /> : <FileOutput size={16} />}
+                                                <span>GENERAR RESUMEN CLÍNICO</span>
+                                            </button>
                                             <h3 className="text-xs font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 pb-2">Material de Referencia</h3>
                                             <FileUploader label="Guías NCCN / Protocolos Locales" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
                                         </section>
@@ -573,7 +738,32 @@ const App = () => {
                 )}
             </main>
 
-            {/* Modal */}
+            {/* Modal de Resumen */}
+            {showSummaryModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-6">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+                            <div className="flex items-center space-x-2 text-indigo-600 font-black text-sm uppercase tracking-widest"><FileOutput size={18}/><span>Resumen de Historia Clínica</span></div>
+                            <button onClick={() => setShowSummaryModal(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                        </div>
+                        <div className="flex-1 p-8 overflow-y-auto bg-gray-50/50">
+                            {isGeneratingSummary ? (
+                                <div className="h-full flex flex-col items-center justify-center text-indigo-400 space-y-4">
+                                    <Loader2 size={40} className="animate-spin" />
+                                    <p className="text-xs font-black uppercase tracking-widest">Redactando resumen profesional...</p>
+                                </div>
+                            ) : (
+                                <textarea className="w-full h-full bg-white p-8 rounded-xl border border-gray-100 text-sm font-mono leading-relaxed resize-none focus:outline-none" value={summaryText} readOnly />
+                            )}
+                        </div>
+                        <div className="p-6 border-t bg-white flex justify-end">
+                            <button onClick={() => {navigator.clipboard.writeText(summaryText); alert("Copiado al portapapeles");}} className="bg-indigo-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all">Copiar Texto</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Crear Paciente */}
             {showNewPatientModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-md p-6">
                     <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-sm overflow-hidden transform animate-in fade-in zoom-in duration-300">
