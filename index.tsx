@@ -63,7 +63,6 @@ interface FileData {
 // --- Helper: Date Sorter (DD/MM/YYYY) ---
 const parseDate = (dateStr: string) => {
     if (!dateStr) return 0;
-    // Intenta parsear DD/MM/YYYY
     const parts = dateStr.split('/');
     if (parts.length === 3) {
         return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
@@ -72,13 +71,12 @@ const parseDate = (dateStr: string) => {
 };
 
 const sortTimeline = (events: ClinicalEvent[]) => {
-    // Ordenar de más antiguo a más reciente (Cronológico)
     return events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 };
 
 // --- API Helpers ---
 
-// 1. EXTRACT TIMELINE
+// 1. EXTRACT TIMELINE (MODIFICADO EL PROMPT SOLAMENTE)
 const extractTimelineFromDocs = async (
     historyText: string,
     historyFiles: FileData[]
@@ -93,8 +91,9 @@ const extractTimelineFromDocs = async (
         const modelId = 'gemini-2.5-flash'; 
 
         const parts: any[] = [];
-        // MODIFICADO: Se pide explícitamente ESPAÑOL y orden
-        parts.push({ text: "Analiza los documentos. Extrae eventos cronológicos. \nREGLAS:\n1. IDIOMA: SIEMPRE EN ESPAÑOL.\n2. FECHAS: Formato estricto DD/MM/YYYY.\n3. CATEGORÍAS: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.\n4. CRITICIDAD: 'isKey': true solo para hitos oncológicos mayores." });
+        // --- MODIFICACIÓN AQUÍ: Se agregan reglas de EXCLUSIÓN ---
+        parts.push({ text: "Analiza los documentos y extrae la cronología clínica RELEVANTE. \nREGLAS OBLIGATORIAS:\n1. IDIOMA: SIEMPRE EN ESPAÑOL.\n2. FECHAS: Formato estricto DD/MM/YYYY.\n3. CATEGORÍAS: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.\n4. CRITICIDAD: 'isKey': true solo para hitos oncológicos mayores (diagnóstico, inicio/fin tratamiento, progresión, cirugía).\n5. EXCLUSIÓN (MUY IMPORTANTE): OMITIR eventos puramente administrativos (ej: 'solicitud de turno', 'firma de consentimiento', 'empadronamiento', 'se solicita estudio'), consultas sin datos clínicos relevantes, o resultados de laboratorio normales que no aporten al cuadro oncológico. Solo incluir eventos con verdadero valor clínico." });
+        // ---------------------------------------------------------
         
         if (historyText) parts.push({ text: `Historia manual: ${historyText}` });
         
@@ -126,7 +125,7 @@ const extractTimelineFromDocs = async (
 
         if (response.text) {
             const rawEvents = JSON.parse(response.text);
-            return sortTimeline(rawEvents); // Ordenamos antes de devolver
+            return sortTimeline(rawEvents); 
         }
         return [];
     } catch (e: any) {
@@ -135,7 +134,7 @@ const extractTimelineFromDocs = async (
     }
 };
 
-// 2. GENERATE SUMMARY (NUEVO)
+// 2. GENERATE SUMMARY
 const generateClinicalSummary = async (
     patient: Patient,
     files: FileData[]
@@ -149,7 +148,6 @@ const generateClinicalSummary = async (
 
         const parts: any[] = [];
         
-        // Data estructurada del paciente para el prompt
         const patientData = `
             PACIENTE: ${patient.name}
             EDAD: ${patient.age}
@@ -210,7 +208,7 @@ const generateClinicalSummary = async (
     }
 };
 
-// 3. CHAT BOT (Existente)
+// 3. CHAT BOT
 const getAIResponse = async (
     historyText: string,
     historyFiles: FileData[],
@@ -338,17 +336,13 @@ const App = () => {
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
     
-    // --- ESTADOS PARA EVOLUCIÓN MANUAL ---
     const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
     const [manualDoctor, setManualDoctor] = useState(doctorName || '');
     const [manualNote, setManualNote] = useState('');
-    // -------------------------------------
 
-    // --- ESTADOS PARA RESUMEN ---
     const [showSummaryModal, setShowSummaryModal] = useState(false);
     const [summaryText, setSummaryText] = useState('');
     const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-    // ----------------------------
 
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline'>('docs');
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -357,7 +351,6 @@ const App = () => {
         setApiKeyExists(!!import.meta.env.VITE_API_KEY);
     }, []);
 
-    // Load Patients filtered by Doctor
     useEffect(() => {
         if (!doctorName) {
             setPatients([]);
@@ -392,12 +385,11 @@ const App = () => {
             if (p) {
                 setHistoryText(p.historyText || '');
                 setChatMessages(p.chatHistory || []);
-                // Ensure timeline is sorted when loaded
                 setTimeline(p.timeline ? sortTimeline([...p.timeline]) : []); 
                 setHistoryFiles([]); setGuidelineFiles([]);
                 setLastError(null);
                 setActiveTab(p.timeline && p.timeline.length > 0 ? 'timeline' : 'docs');
-                setManualDate(new Date().toISOString().split('T')[0]); // Reset date
+                setManualDate(new Date().toISOString().split('T')[0]); 
                 setManualDoctor(doctorName || '');
             }
         }
@@ -409,9 +401,7 @@ const App = () => {
         setLastError(null);
         try {
             const events = await extractTimelineFromDocs(historyText, historyFiles);
-            // Fusionamos con la línea de tiempo existente si hay
             const currentTimeline = timeline || [];
-            // Combinar y ordenar
             const combinedTimeline = sortTimeline([...currentTimeline, ...events]);
             
             setTimeline(combinedTimeline);
@@ -432,11 +422,8 @@ const App = () => {
         }
     };
 
-    // --- NUEVA FUNCIÓN: AGREGAR EVOLUCIÓN MANUAL ---
     const handleAddManualEvolution = async () => {
         if (!manualNote.trim() || !selectedPatientId) return;
-
-        // Convertir YYYY-MM-DD a DD/MM/YYYY para consistencia
         const [y, m, d] = manualDate.split('-');
         const formattedDate = `${d}/${m}/${y}`;
 
@@ -450,18 +437,15 @@ const App = () => {
 
         const updatedTimeline = sortTimeline([...timeline, newEvent]);
         setTimeline(updatedTimeline);
-        setManualNote(''); // Limpiar campo
+        setManualNote('');
 
-        // Guardar en Firebase
         const patientRef = doc(db, "patients", selectedPatientId);
         await updateDoc(patientRef, {
             timeline: updatedTimeline,
             lastUpdated: Date.now()
         });
     };
-    // -----------------------------------------------
 
-    // --- NUEVA FUNCIÓN: GENERAR RESUMEN ---
     const handleGenerateSummary = async () => {
         if (!selectedPatientId) return;
         const p = patients.find(pat => pat.id === selectedPatientId);
@@ -475,7 +459,6 @@ const App = () => {
         setSummaryText(summary);
         setIsGeneratingSummary(false);
     };
-    // --------------------------------------
 
     const handleSendMessage = async () => {
         if (!chatInput.trim() || !selectedPatientId) return;
@@ -635,7 +618,6 @@ const App = () => {
                                             </button>
                                         </section>
 
-                                        {/* NUEVA SECCIÓN DE EVOLUCIÓN A MANO */}
                                         <section className="space-y-4 pt-6 border-t border-gray-100">
                                             <div className="flex items-center space-x-2 text-gray-400"><PenTool size={14} /><h3 className="text-xs font-black uppercase tracking-widest">Evolución Manual (Al Timeline)</h3></div>
                                             <div className="bg-gray-50 p-4 rounded-[1.5rem] border border-gray-100 space-y-3">
