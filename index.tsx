@@ -76,7 +76,7 @@ const sortTimeline = (events: ClinicalEvent[]) => {
 
 // --- API Helpers ---
 
-// 1. EXTRACT TIMELINE
+// 1. EXTRACT TIMELINE (MODIFICADO PARA FORZAR ESPAÑOL)
 const extractTimelineFromDocs = async (
     historyText: string,
     historyFiles: FileData[]
@@ -91,14 +91,19 @@ const extractTimelineFromDocs = async (
         const modelId = 'gemini-2.5-flash'; 
 
         const parts: any[] = [];
+        // --- CAMBIO AQUÍ: INSTRUCCIÓN DE TRADUCCIÓN FORZADA ---
         parts.push({ text: `
             Analiza los documentos y extrae la cronología clínica.
+            
+            REGLA DE ORO (IDIOMA): TODO el contenido extraído (especialmente el campo 'note') DEBE estar escrito en ESPAÑOL. 
+            Si el documento original está en inglés (ej: reportes de imágenes, papers, labs), TRADÚCELO AL ESPAÑOL antes de generar el JSON. No dejes frases en inglés.
+
             FORMATO:
-            1. IDIOMA: Español.
-            2. FECHAS: DD/MM/YYYY.
-            3. CATEGORÍAS: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
-            4. isKey: true solo para hitos mayores (Diagnóstico, Inicio Tratamiento, Progresión).
+            1. FECHAS: DD/MM/YYYY.
+            2. CATEGORÍAS: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+            3. isKey: true solo para hitos mayores.
         `});
+        // ------------------------------------------------------
         
         if (historyText) parts.push({ text: `Historia manual: ${historyText}` });
         
@@ -451,17 +456,14 @@ const App = () => {
         });
     };
 
-    // --- NUEVA FUNCIÓN: BORRAR EVENTO INDIVIDUAL ---
     const handleDeleteEvent = async (indexToDelete: number) => {
         if (!selectedPatientId || !timeline) return;
         
         if (confirm("¿Estás seguro de eliminar este evento de la historia?")) {
-            // Creamos una copia del array excluyendo el índice seleccionado
             const updatedTimeline = timeline.filter((_, index) => index !== indexToDelete);
             
-            setTimeline(updatedTimeline); // Actualizamos UI instantáneamente
+            setTimeline(updatedTimeline); 
 
-            // Guardamos en Firebase
             const patientRef = doc(db, "patients", selectedPatientId);
             await updateDoc(patientRef, {
                 timeline: updatedTimeline,
@@ -469,7 +471,6 @@ const App = () => {
             });
         }
     };
-    // ------------------------------------------------
 
     const handleGenerateSummary = async () => {
         if (!selectedPatientId) return;
