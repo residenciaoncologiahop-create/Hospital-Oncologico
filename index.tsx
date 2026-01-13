@@ -60,7 +60,7 @@ interface FileData {
     data: string; // base64
 }
 
-// --- Helper: Date Sorter (DD/MM/YYYY) ---
+// --- Helper: Date Sorter & Cleaner ---
 const parseDate = (dateStr: string) => {
     if (!dateStr) return 0;
     const parts = dateStr.split('/');
@@ -70,13 +70,28 @@ const parseDate = (dateStr: string) => {
     return 0; 
 };
 
+// FILTRO DE SEGURIDAD: Elimina eventos basura si la IA los deja pasar
+const isEventRelevant = (e: ClinicalEvent): boolean => {
+    const text = (e.note + " " + e.category).toLowerCase();
+    const forbiddenTerms = [
+        "turno", "reprogram", "administrativ", "empadron", "mesa de entrada", 
+        "carnet", "validaci", "autorizaci", "consentimiento informado", "firma", 
+        "citad", "ausente", "solicitud de", "se solicita", "para evaluar", 
+        "plan:", "a confirmar", "asignado", "cupo", "voucher"
+    ];
+    // Si contiene alguno de los términos prohibidos, se descarta (retorna false)
+    return !forbiddenTerms.some(term => text.includes(term));
+};
+
 const sortTimeline = (events: ClinicalEvent[]) => {
-    return events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
+    return events
+        .filter(isEventRelevant) // Aplicamos el filtro aquí
+        .sort((a, b) => parseDate(a.date) - parseDate(b.date));
 };
 
 // --- API Helpers ---
 
-// 1. EXTRACT TIMELINE (MODIFICADO EL PROMPT SOLAMENTE)
+// 1. EXTRACT TIMELINE
 const extractTimelineFromDocs = async (
     historyText: string,
     historyFiles: FileData[]
@@ -91,9 +106,20 @@ const extractTimelineFromDocs = async (
         const modelId = 'gemini-2.5-flash'; 
 
         const parts: any[] = [];
-        // --- MODIFICACIÓN AQUÍ: Se agregan reglas de EXCLUSIÓN ---
-        parts.push({ text: "Analiza los documentos y extrae la cronología clínica RELEVANTE. \nREGLAS OBLIGATORIAS:\n1. IDIOMA: SIEMPRE EN ESPAÑOL.\n2. FECHAS: Formato estricto DD/MM/YYYY.\n3. CATEGORÍAS: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.\n4. CRITICIDAD: 'isKey': true solo para hitos oncológicos mayores (diagnóstico, inicio/fin tratamiento, progresión, cirugía).\n5. EXCLUSIÓN (MUY IMPORTANTE): OMITIR eventos puramente administrativos (ej: 'solicitud de turno', 'firma de consentimiento', 'empadronamiento', 'se solicita estudio'), consultas sin datos clínicos relevantes, o resultados de laboratorio normales que no aporten al cuadro oncológico. Solo incluir eventos con verdadero valor clínico." });
-        // ---------------------------------------------------------
+        parts.push({ text: `
+            Analiza los documentos y extrae la cronología clínica.
+            
+            REGLAS DE EXCLUSIÓN (ESTRICTAS):
+            - NO INCLUIR: Turnos, "se solicita turno", "asistirá a", "paciente citado", reprogramaciones, trámites administrativos, empadronamiento, firmas de consentimientos, autorizaciones de obra social, "mesa de entradas".
+            - NO INCLUIR: Consultas donde solo se indica "se solicita estudio" sin ver al paciente o sin datos clínicos nuevos.
+            - SOLO INCLUIR: Hechos consumados (Cirugías HECHAS, Quimio RECIBIDA, Estudios CON RESULTADO, Consultas CON EXAMEN FÍSICO).
+            
+            FORMATO:
+            1. IDIOMA: Español.
+            2. FECHAS: DD/MM/YYYY.
+            3. CATEGORÍAS: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+            4. isKey: true solo para hitos mayores (Diagnóstico, Inicio Tratamiento, Progresión).
+        `});
         
         if (historyText) parts.push({ text: `Historia manual: ${historyText}` });
         
