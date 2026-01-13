@@ -60,7 +60,7 @@ interface FileData {
     data: string; // base64
 }
 
-// --- Helper: Date Sorter & Cleaner ---
+// --- Helper: Date Sorter ---
 const parseDate = (dateStr: string) => {
     if (!dateStr) return 0;
     const parts = dateStr.split('/');
@@ -70,23 +70,8 @@ const parseDate = (dateStr: string) => {
     return 0; 
 };
 
-// FILTRO DE SEGURIDAD: Elimina eventos basura si la IA los deja pasar
-const isEventRelevant = (e: ClinicalEvent): boolean => {
-    const text = (e.note + " " + e.category).toLowerCase();
-    const forbiddenTerms = [
-        "turno", "reprogram", "administrativ", "empadron", "mesa de entrada", 
-        "carnet", "validaci", "autorizaci", "consentimiento informado", "firma", 
-        "citad", "ausente", "solicitud de", "se solicita", "para evaluar", 
-        "plan:", "a confirmar", "asignado", "cupo", "voucher"
-    ];
-    // Si contiene alguno de los términos prohibidos, se descarta (retorna false)
-    return !forbiddenTerms.some(term => text.includes(term));
-};
-
 const sortTimeline = (events: ClinicalEvent[]) => {
-    return events
-        .filter(isEventRelevant) // Aplicamos el filtro aquí
-        .sort((a, b) => parseDate(a.date) - parseDate(b.date));
+    return events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 };
 
 // --- API Helpers ---
@@ -108,12 +93,6 @@ const extractTimelineFromDocs = async (
         const parts: any[] = [];
         parts.push({ text: `
             Analiza los documentos y extrae la cronología clínica.
-            
-            REGLAS DE EXCLUSIÓN (ESTRICTAS):
-            - NO INCLUIR: Turnos, "se solicita turno", "asistirá a", "paciente citado", reprogramaciones, trámites administrativos, empadronamiento, firmas de consentimientos, autorizaciones de obra social, "mesa de entradas".
-            - NO INCLUIR: Consultas donde solo se indica "se solicita estudio" sin ver al paciente o sin datos clínicos nuevos.
-            - SOLO INCLUIR: Hechos consumados (Cirugías HECHAS, Quimio RECIBIDA, Estudios CON RESULTADO, Consultas CON EXAMEN FÍSICO).
-            
             FORMATO:
             1. IDIOMA: Español.
             2. FECHAS: DD/MM/YYYY.
@@ -472,6 +451,26 @@ const App = () => {
         });
     };
 
+    // --- NUEVA FUNCIÓN: BORRAR EVENTO INDIVIDUAL ---
+    const handleDeleteEvent = async (indexToDelete: number) => {
+        if (!selectedPatientId || !timeline) return;
+        
+        if (confirm("¿Estás seguro de eliminar este evento de la historia?")) {
+            // Creamos una copia del array excluyendo el índice seleccionado
+            const updatedTimeline = timeline.filter((_, index) => index !== indexToDelete);
+            
+            setTimeline(updatedTimeline); // Actualizamos UI instantáneamente
+
+            // Guardamos en Firebase
+            const patientRef = doc(db, "patients", selectedPatientId);
+            await updateDoc(patientRef, {
+                timeline: updatedTimeline,
+                lastUpdated: Date.now()
+            });
+        }
+    };
+    // ------------------------------------------------
+
     const handleGenerateSummary = async () => {
         if (!selectedPatientId) return;
         const p = patients.find(pat => pat.id === selectedPatientId);
@@ -678,7 +677,10 @@ const App = () => {
                                                     <div className={`p-6 rounded-[2rem] border-2 transition-all hover:shadow-2xl ${ev.isKey ? 'bg-red-50/50 border-red-200' : 'bg-white border-gray-50 shadow-sm'}`}>
                                                         <div className="flex justify-between items-center mb-3">
                                                             <span className={`text-[10px] font-black px-3 py-1.5 rounded-full tracking-widest uppercase ${ev.isKey ? 'bg-red-500 text-white shadow-lg shadow-red-100' : 'bg-blue-50 text-blue-600'}`}>{ev.date}</span>
-                                                            <span className="text-[10px] text-gray-300 font-black uppercase truncate max-w-[150px]">{ev.professional}</span>
+                                                            <div className="flex items-center space-x-2">
+                                                                <span className="text-[10px] text-gray-300 font-black uppercase truncate max-w-[150px]">{ev.professional}</span>
+                                                                <button onClick={() => handleDeleteEvent(i)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12}/></button>
+                                                            </div>
                                                         </div>
                                                         <h4 className={`font-black text-sm mb-2 uppercase tracking-tight ${ev.isKey ? 'text-red-900' : 'text-gray-800'}`}>{ev.category}</h4>
                                                         <p className={`leading-relaxed text-xs font-semibold ${ev.isKey ? 'text-red-800' : 'text-gray-500'}`}>{ev.note}</p>
