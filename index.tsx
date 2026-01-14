@@ -26,7 +26,7 @@ const db = getFirestore(app);
 // --- TYPES ---
 interface ChatMessage { role: 'user' | 'model'; text: string; timestamp: number; }
 interface ClinicalEvent { date: string; professional: string; category: string; note: string; isKey: boolean; }
-interface Biomarker { name: string; status: string; date: string; technique?: string; } // NUEVO TIPO
+interface Biomarker { name: string; status: string; date: string; technique?: string; } 
 
 interface Patient {
     id: string;
@@ -38,7 +38,7 @@ interface Patient {
     lastUpdated: number;
     chatHistory?: ChatMessage[];
     timeline?: ClinicalEvent[];
-    biomarkers?: Biomarker[]; // NUEVO CAMPO
+    biomarkers?: Biomarker[];
 }
 
 interface FileData { name: string; type: string; data: string; }
@@ -80,7 +80,7 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
     } catch (e) { console.error(e); return []; }
 };
 
-// 2. EXTRACT BIOMARKERS (NUEVO)
+// 2. EXTRACT BIOMARKERS
 const extractBiomarkersFromDocs = async (text: string, files: FileData[]): Promise<Biomarker[]> => {
     if (!text && files.length === 0) return [];
     const apiKey = import.meta.env.VITE_API_KEY;
@@ -89,22 +89,9 @@ const extractBiomarkersFromDocs = async (text: string, files: FileData[]): Promi
         const ai = new GoogleGenAI({ apiKey: apiKey! });
         const parts: any[] = [{ text: `
             Actúa como un patólogo molecular. Analiza los documentos y extrae TABLA DE BIOMARCADORES.
-            Busca explícitamente:
-            - Receptores Hormonales (RE, RP)
-            - HER2 (IHC / FISH)
-            - Ki67
-            - PD-L1 (TPS/CPS)
-            - Mutaciones (EGFR, KRAS, BRAF, BRCA1/2, PIK3CA, ALK, ROS1, etc.)
-            - MSI / MMR
-            
-            Retorna un JSON Array con objetos:
-            {
-                "name": "Nombre del marcador (ej: EGFR)",
-                "status": "Resultado (ej: Mutado Exón 19, o Positivo 80%)",
-                "date": "Fecha del reporte (DD/MM/YYYY)",
-                "technique": "Técnica si figura (ej: PCR, NGS, IHC)"
-            }
-            Si no hay datos, devuelve array vacío [].
+            Busca explícitamente: Receptores Hormonales, HER2, Ki67, PD-L1, Mutaciones (EGFR, KRAS, BRAF, BRCA, etc), MSI.
+            Retorna un JSON Array con: { "name": "Nombre", "status": "Resultado", "date": "Fecha", "technique": "Técnica" }
+            Si no hay datos, devuelve [].
         `}];
         
         if (text) parts.push({ text: `Contexto: ${text}` });
@@ -119,7 +106,7 @@ const extractBiomarkersFromDocs = async (text: string, files: FileData[]): Promi
     } catch (e) { return []; }
 };
 
-// 3. GENERATORS (Summary, FollowUp, TumorBoard)
+// 3. GENERATORS
 const generateText = async (prompt: string, context: string, files: FileData[]) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey! });
@@ -195,6 +182,10 @@ const App = () => {
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     
+    // --- ESTA ES LA VARIABLE QUE FALTABA Y CAUSABA EL ERROR ---
+    const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!import.meta.env.VITE_API_KEY);
+    // ---------------------------------------------------------
+
     // Patient Data
     const [newPatientName, setNewPatientName] = useState('');
     const [newPatientAge, setNewPatientAge] = useState('');
@@ -203,7 +194,7 @@ const App = () => {
     const [historyText, setHistoryText] = useState('');
     const [historyFiles, setHistoryFiles] = useState<FileData[]>([]);
     const [timeline, setTimeline] = useState<ClinicalEvent[]>([]);
-    const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]); // STATE FOR BIOMARKERS
+    const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
     const [guidelineFiles, setGuidelineFiles] = useState<FileData[]>([]);
     
     // Chat & Tools
@@ -211,7 +202,7 @@ const App = () => {
     const [chatInput, setChatInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [isAnalyzingBio, setIsAnalyzingBio] = useState(false); // Spinner biomarkers
+    const [isAnalyzingBio, setIsAnalyzingBio] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
     const [manualDoctor, setManualDoctor] = useState(doctorName || '');
@@ -220,7 +211,6 @@ const App = () => {
     // Modals
     const [modalContent, setModalContent] = useState({ title: '', text: '', show: false, loading: false });
 
-    // Tabs: 'docs', 'timeline', 'bio'
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'bio'>('docs');
     const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -228,7 +218,16 @@ const App = () => {
         if (!doctorName) return;
         const q = query(collection(db, "patients"), where("doctorId", "==", doctorName));
         return onSnapshot(q, (snap) => {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Patient));
+            const list = snap.docs.map(d => {
+                const data = d.data();
+                return { 
+                    id: d.id, 
+                    ...data,
+                    // Protección contra datos nulos para evitar crash en búsqueda
+                    name: data.name || '', 
+                    diagnosis: data.diagnosis || ''
+                } as Patient;
+            });
             list.sort((a, b) => b.lastUpdated - a.lastUpdated);
             setPatients(list);
         });
@@ -240,7 +239,7 @@ const App = () => {
             if (p) {
                 setHistoryText(p.historyText || '');
                 setTimeline(p.timeline || []);
-                setBiomarkers(p.biomarkers || []); // Load biomarkers
+                setBiomarkers(p.biomarkers || []);
                 setChatMessages(p.chatHistory || []);
                 setHistoryFiles([]); setGuidelineFiles([]);
                 setActiveTab(p.timeline?.length ? 'timeline' : 'docs');
@@ -269,8 +268,7 @@ const App = () => {
     const handleAnalyzeBiomarkers = async () => {
         setIsAnalyzingBio(true);
         const bios = await extractBiomarkersFromDocs(historyText, historyFiles);
-        // Merge with existing avoiding duplicates roughly
-        const combined = [...biomarkers, ...bios]; // Simplified merge
+        const combined = [...biomarkers, ...bios];
         setBiomarkers(combined);
         await savePatient({ biomarkers: combined });
         setIsAnalyzingBio(false);
@@ -330,6 +328,12 @@ const App = () => {
 
     const selP = patients.find(p => p.id === selectedPatientId);
 
+    // Filter patients safely
+    const filteredPatients = patients.filter(p => 
+        (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (p.diagnosis || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
     return (
         <div className="flex h-screen bg-white text-gray-800 font-medium text-xs overflow-hidden">
             {/* SIDEBAR */}
@@ -342,9 +346,9 @@ const App = () => {
                     <div className="flex justify-between items-center px-1 mb-2"><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pacientes</span><button onClick={() => setShowNewPatientModal(true)} className="text-blue-600 bg-blue-100 p-1 rounded"><Plus size={14}/></button></div>
                     <div className="relative mb-3"><Search className="absolute left-2 top-2 text-gray-400" size={12}/><input className="w-full pl-7 pr-2 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] outline-none" placeholder="Buscar..." onChange={e => setSearchTerm(e.target.value)} /></div>
                     <div className="space-y-1">
-                        {patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                        {filteredPatients.map(p => (
                             <div key={p.id} onClick={() => { setSelectedPatientId(p.id); setMobileMenuOpen(false); }} className={`p-3 rounded-xl cursor-pointer flex justify-between group ${selP?.id === p.id ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-white border border-transparent hover:border-gray-200'}`}>
-                                <div><div className="font-bold text-xs">{p.name}</div><div className={`text-[9px] ${selP?.id === p.id ? 'text-blue-200' : 'text-gray-400'}`}>{p.diagnosis}</div></div>
+                                <div><div className="font-bold text-xs truncate max-w-[140px]">{p.name}</div><div className={`text-[9px] truncate max-w-[140px] ${selP?.id === p.id ? 'text-blue-200' : 'text-gray-400'}`}>{p.diagnosis}</div></div>
                                 <button onClick={(e) => { e.stopPropagation(); if(confirm('Borrar?')) deleteDoc(doc(db, "patients", p.id)); }} className={`opacity-0 group-hover:opacity-100 ${selP?.id === p.id ? 'text-white' : 'text-gray-400 hover:text-red-500'}`}><Trash2 size={12}/></button>
                             </div>
                         ))}
@@ -357,9 +361,12 @@ const App = () => {
             <main className="flex-1 flex flex-col h-full lg:ml-0">
                 <header className="h-14 border-b flex items-center justify-between px-6 bg-white/90 backdrop-blur z-20">
                     <div className="flex items-center space-x-4"><button onClick={() => setMobileMenuOpen(true)} className="lg:hidden"><Menu size={20}/></button>
-                        <div><h1 className="font-black text-base leading-none">{selP ? selP.name : 'Bienvenido'}</h1>{selP && <span className="text-[10px] text-blue-500 font-bold tracking-wider">{selP.diagnosis} • {selP.age} Años</span>}</div>
+                        <div><h1 className="font-black text-base leading-none truncate max-w-[200px]">{selP ? selP.name : 'Bienvenido'}</h1>{selP && <span className="text-[10px] text-blue-500 font-bold tracking-wider">{selP.diagnosis} • {selP.age} Años</span>}</div>
                     </div>
-                    <div className={`w-2 h-2 rounded-full ${apiKeyExists ? 'bg-green-500' : 'bg-red-500'}`} title={apiKeyExists ? "API Online" : "API Error"}></div>
+                    <div className={`flex items-center space-x-2 px-3 py-1 rounded-full ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                        <div className={`w-2 h-2 rounded-full ${apiKeyExists ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className="text-[9px] font-bold tracking-wider">{apiKeyExists ? "ONLINE" : "OFFLINE"}</span>
+                    </div>
                 </header>
 
                 {selP ? (
