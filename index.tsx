@@ -9,7 +9,8 @@ import {
     User, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
     List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal,
-    Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation
+    Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation,
+    PanelLeftClose, PanelLeftOpen // IMPORTAMOS ICONOS
 } from 'lucide-react';
 
 // --- FIREBASE CONFIGURATION ---
@@ -102,7 +103,7 @@ const sortTimeline = (events: ClinicalEvent[]) => {
     return events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 };
 
-// --- API Helpers (CON PROTECCIÓN DE PRIVACIDAD) ---
+// --- API Helpers ---
 
 // 1. EXTRACT TIMELINE
 const extractTimelineFromDocs = async (
@@ -122,12 +123,8 @@ const extractTimelineFromDocs = async (
         parts.push({ text: `
             Analiza los documentos y extrae la cronología clínica.
             
-            REGLAS DE PRIVACIDAD (ESTRICTAS):
-            - NO incluyas DNI, CUIT, pasaportes, direcciones exactas ni teléfonos en la salida.
-            - Si el documento tiene un DNI, ignóralo.
-            
-            REGLA DE IDIOMA:
-            - TODO el contenido extraído (especialmente 'note') DEBE estar en ESPAÑOL.
+            REGLA DE ORO (IDIOMA): TODO el contenido extraído (especialmente el campo 'note') DEBE estar escrito en ESPAÑOL. 
+            Si el documento original está en inglés, TRADÚCELO AL ESPAÑOL.
 
             FORMATO:
             1. FECHAS: DD/MM/YYYY.
@@ -199,8 +196,6 @@ const generateClinicalSummary = async (
         const prompt = `
             Genera un RESUMEN DE HISTORIA CLÍNICA oncológico profesional en ESPAÑOL.
             
-            PRIVACIDAD: Omitir DNI, teléfonos y direcciones.
-            
             FORMATO REQUERIDO (Texto plano limpio, sin markdown):
             
             Resumen de Historia Clínica
@@ -269,7 +264,6 @@ const generateTumorBoardPresentation = async (
         const prompt = `
             Actúa como un oncólogo presentando un caso en un ATENEO MULTIDISCIPLINARIO (Tumor Board).
             Genera una presentación estructurada y concisa para discusión en ESPAÑOL.
-            PRIVACIDAD: No incluyas DNI.
             
             ESTRUCTURA:
             1. TITULAR DEL CASO (Resumen en 1 línea)
@@ -312,7 +306,7 @@ const generateFollowUpAdvice = async (
 
         const parts: any[] = [];
         const context = `PACIENTE: ${patient.name}. DIAGNÓSTICO: ${patient.diagnosis}. HISTORIAL: ${JSON.stringify(patient.timeline)}`;
-        const prompt = "Sugiere PLAN DE SEGUIMIENTO (Follow-up) detallado basado en NCCN/ESMO en ESPAÑOL. Incluir: Estado Actual, Próximos Estudios, Frecuencia consultas. Omitir datos sensibles.";
+        const prompt = "Sugiere PLAN DE SEGUIMIENTO (Follow-up) detallado basado en NCCN/ESMO en ESPAÑOL. Incluir: Estado Actual, Próximos Estudios, Frecuencia consultas.";
 
         parts.push({ text: prompt });
         parts.push({ text: context });
@@ -366,7 +360,7 @@ const getAIResponse = async (
         const response = await ai.models.generateContent({
             model: modelId,
             contents: { parts },
-            config: { systemInstruction: "Eres un oncólogo experto. Responde en español técnico. NUNCA incluyas DNI, teléfonos o direcciones.", temperature: 0.1 }
+            config: { systemInstruction: "Eres un oncólogo experto. Responde en español técnico.", temperature: 0.1 }
         });
 
         return response.text || "Sin respuesta.";
@@ -426,6 +420,9 @@ const App = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!import.meta.env.VITE_API_KEY);
 
+    // NUEVO ESTADO: Panel Izquierdo Visible
+    const [showLeftPanel, setShowLeftPanel] = useState(true);
+
     const [newPatientName, setNewPatientName] = useState('');
     const [newPatientAge, setNewPatientAge] = useState('');
     const [newPatientDiagnosis, setNewPatientDiagnosis] = useState('');
@@ -466,7 +463,7 @@ const App = () => {
 
     useEffect(() => {
         setApiKeyExists(!!import.meta.env.VITE_API_KEY);
-        getOrInitFingerprint(); // Inicializar huella
+        getOrInitFingerprint(); // Inicializar huella al cargar
     }, []);
 
     // Firebase Load
@@ -517,6 +514,7 @@ const App = () => {
                 setActiveTab(p.timeline && p.timeline.length > 0 ? 'timeline' : 'docs');
                 setManualDate(new Date().toISOString().split('T')[0]); 
                 setManualDoctor(doctorName || '');
+                setShowLeftPanel(true); // Restablecer vista
             }
         }
     }, [selectedPatientId, patients]);
@@ -648,6 +646,7 @@ const App = () => {
 
         const patientRef = doc(db, "patients", selectedPatientId);
         await updateDoc(patientRef, { chatHistory: updatedAI, lastUpdated: Date.now() });
+        logAction("CHAT_MESSAGE", selectedPatientId, doctorName);
     };
 
     const handleCreatePatient = async (e: React.FormEvent) => {
@@ -718,7 +717,7 @@ const App = () => {
     return (
         <div className="flex h-screen overflow-hidden bg-white text-gray-800 font-medium text-xs">
             {/* Sidebar */}
-            <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
                 <div className="p-6 border-b flex items-center justify-between bg-white">
                     <div className="flex items-center space-x-2 text-blue-600 font-black text-xl tracking-tighter"><Activity size={24} /><span>OncoGuide</span></div>
                     <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-300"><X size={24}/></button>
@@ -763,6 +762,16 @@ const App = () => {
                 <header className="bg-white/80 backdrop-blur-md border-b h-16 flex items-center px-6 justify-between z-20">
                     <div className="flex items-center space-x-4">
                         <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={24} /></button>
+                        {/* TOGGLE PANEL BUTTON */}
+                        {selectedPatient && (
+                            <button 
+                                onClick={() => setShowLeftPanel(!showLeftPanel)} 
+                                className="hidden lg:block text-gray-400 hover:text-blue-600 transition-colors"
+                                title={showLeftPanel ? "Expandir Chat" : "Mostrar Documentación"}
+                            >
+                                {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+                            </button>
+                        )}
                         <div className="flex flex-col">
                             <h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">{selectedPatient ? selectedPatient.name : 'Bienvenido'}</h1>
                             {selectedPatient && <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">{selectedPatient.diagnosis} • {selectedPatient.age} Años</span>}
@@ -776,8 +785,8 @@ const App = () => {
 
                 {selectedPatient ? (
                     <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-50">
-                        {/* Left Panel */}
-                        <div className="lg:w-1/2 flex flex-col border-r bg-white h-full overflow-hidden shadow-2xl relative z-10">
+                        {/* Left Panel (CONDITIONAL CLASS) */}
+                        <div className={`${showLeftPanel ? 'lg:w-1/2 border-r' : 'hidden'} flex flex-col bg-white h-full overflow-hidden shadow-2xl relative z-10 transition-all duration-300`}>
                             <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
                                 <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>1. Documentación</button>
                                 <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historial de Eventos</button>
@@ -854,8 +863,8 @@ const App = () => {
                             </div>
                         </div>
 
-                        {/* Right Panel: Chat */}
-                        <div className="lg:w-1/2 flex flex-col bg-gray-50 h-full overflow-hidden relative">
+                        {/* Right Panel: Chat (CONDITIONAL CLASS) */}
+                        <div className={`${showLeftPanel ? 'lg:w-1/2' : 'w-full'} flex flex-col bg-gray-50 h-full overflow-hidden relative transition-all duration-300`}>
                             {lastError && (
                                 <div className="absolute top-4 left-4 right-4 z-30 bg-red-600 text-white p-4 rounded-2xl shadow-xl flex items-start space-x-3 border border-red-500 animate-in slide-in-from-top">
                                     <Terminal className="flex-shrink-0 mt-0.5" size={16}/>
@@ -898,9 +907,9 @@ const App = () => {
                     <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-gray-50">
                         <div className="bg-white p-12 rounded-[3rem] shadow-2xl border border-gray-100 max-w-sm">
                             <Activity size={64} className="mb-6 text-blue-600 mx-auto opacity-10 animate-pulse" />
-                            <h2 className="text-xl font-black text-gray-800 tracking-tight">Consola de Decisión</h2>
-                            <p className="text-gray-400 text-xs mt-4 font-bold leading-relaxed">Seleccione un paciente o inicie un nuevo registro.</p>
-                            <button onClick={() => setShowNewPatientModal(true)} className="mt-8 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 uppercase">Nuevo Paciente</button>
+                            <h2 className="text-3xl font-black text-gray-800 tracking-tight">Consola de Decisión</h2>
+                            <p className="text-gray-400 text-base mt-6 font-bold leading-relaxed">Seleccione un paciente o inicie un nuevo registro.</p>
+                            <button onClick={() => setShowNewPatientModal(true)} className="mt-12 bg-blue-600 text-white px-12 py-6 rounded-[2.5rem] font-black text-sm tracking-widest hover:bg-blue-700 transition-all shadow-2xl shadow-blue-100 uppercase">Nuevo Paciente</button>
                         </div>
                     </div>
                 )}
@@ -909,7 +918,7 @@ const App = () => {
             {/* SHARED MODAL COMPONENT */}
             {(showSummaryModal || showFollowUpModal || showTumorBoardModal) && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-6">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
                         <div className="p-6 border-b flex justify-between items-center bg-gray-50">
                             <div className="flex items-center space-x-3 text-gray-800 font-black text-xs uppercase tracking-widest">
                                 {showSummaryModal ? <><FileOutput size={18} className="text-indigo-600"/><span>Resumen Clínico</span></> : 
