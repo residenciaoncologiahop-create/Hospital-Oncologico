@@ -61,7 +61,7 @@ interface Patient {
     doctorId: string; 
     name: string;
     age: number;
-    sex: 'masculino' | 'femenino'; // NUEVO CAMPO
+    sex: 'masculino' | 'femenino'; // CAMPO NUEVO
     diagnosis: string;
     historyText: string;
     lastUpdated: number;
@@ -103,7 +103,7 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
             - Fechas: DD/MM/YYYY.
             - Categorías: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
         `}];
-        if (text) parts.push({ text: `Notas: ${text}` });
+        if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
         const res = await ai.models.generateContent({
@@ -129,7 +129,7 @@ const extractBiomarkersFromDocs = async (text: string, files: FileData[]): Promi
             Retorna JSON Array: { "name", "status", "date", "technique" }.
         `}];
         
-        if (text) parts.push({ text: `Contexto: ${text}` });
+        if (text) parts.push({ text: `Contexto anónimo: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
         const res = await ai.models.generateContent({
@@ -141,11 +141,12 @@ const extractBiomarkersFromDocs = async (text: string, files: FileData[]): Promi
     } catch (e) { return []; }
 };
 
-// 3. GENERATORS
+// 3. GENERATORS (GENÉRICO)
 const generateText = async (prompt: string, context: string, files: FileData[]) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey! });
     
+    // REGLA DE PRIVACIDAD GLOBAL INYECTADA
     const privacyRule = "\n\nIMPORTANTE: Protege la privacidad. NO incluyas nombres reales, DNI, ni datos de contacto. Usa términos genéricos como 'El paciente'.";
     
     const parts: any[] = [{ text: prompt + privacyRule }, { text: context }];
@@ -223,12 +224,14 @@ const App = () => {
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!import.meta.env.VITE_API_KEY);
-
+    
+    // UI State
     const [showLeftPanel, setShowLeftPanel] = useState(true);
 
+    // Patient Data (Nuevo estado para Sexo)
     const [newPatientName, setNewPatientName] = useState('');
     const [newPatientAge, setNewPatientAge] = useState('');
-    const [newPatientSex, setNewPatientSex] = useState<'masculino' | 'femenino'>('masculino'); // NUEVO ESTADO
+    const [newPatientSex, setNewPatientSex] = useState<'masculino' | 'femenino'>('masculino'); // Default
     const [newPatientDiagnosis, setNewPatientDiagnosis] = useState('');
 
     const [historyText, setHistoryText] = useState('');
@@ -240,6 +243,7 @@ const App = () => {
     const [chatInput, setChatInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
+    const [isAnalyzingBio, setIsAnalyzingBio] = useState(false); // Estado para biomarkers
     const [lastError, setLastError] = useState<string | null>(null);
     
     // Search
@@ -283,7 +287,7 @@ const App = () => {
                     ...data,
                     name: data.name || '', 
                     diagnosis: data.diagnosis || '',
-                    sex: data.sex || 'masculino' // Retrocompatibilidad
+                    sex: data.sex || 'masculino' // RETROCOMPATIBILIDAD
                 } as Patient;
             });
             list.sort((a, b) => b.lastUpdated - a.lastUpdated);
@@ -312,19 +316,37 @@ const App = () => {
                 setBiomarkers(p.biomarkers || []);
                 setChatMessages(p.chatHistory || []);
                 setHistoryFiles([]); setGuidelineFiles([]);
-                setActiveTab(p.timeline?.length ? 'timeline' : 'docs');
+                setLastError(null);
+                setActiveTab(p.timeline && p.timeline.length > 0 ? 'timeline' : 'docs');
+                setManualDate(new Date().toISOString().split('T')[0]); 
+                setManualDoctor(doctorName || '');
                 setShowLeftPanel(true);
             }
         }
     }, [selectedPatientId]);
 
-    const savePatient = async (data: Partial<Patient>) => {
-        if (!selectedPatientId) return;
-        await updateDoc(doc(db, "patients", selectedPatientId), { ...data, lastUpdated: Date.now() });
-        if(doctorName) logAction('UPDATE_PATIENT_DATA', selectedPatientId, doctorName);
+    // --- HELPER PARA ANONIMIZACIÓN (NUEVO) ---
+    const getAnonContext = (p: Patient) => {
+        // Reemplaza nombre por datos demográficos
+        return `Paciente ${p.sex}, ${p.age} años.
+        Diagnóstico: ${p.diagnosis}.
+        Historial: ${JSON.stringify(p.timeline || [])}.
+        Biomarcadores: ${JSON.stringify(p.biomarkers || [])}.
+        Notas Clínicas (Anónimas): ${p.historyText || ''}`;
     };
+    // ----------------------------------------
 
-    // --- HANDLERS ---
+    // Save Patient Details Helper (AQUÍ ESTÁ LA FUNCIÓN QUE FALTABA)
+    const savePatientDetails = async () => {
+        if (selectedPatientId) {
+            const patientRef = doc(db, "patients", selectedPatientId);
+            await updateDoc(patientRef, { 
+                historyText, 
+                lastUpdated: Date.now() 
+            });
+            logAction("UPDATE_PATIENT_DATA", selectedPatientId, doctorName);
+        }
+    };
 
     const handleProcessDocuments = async () => {
         if (!historyText && historyFiles.length === 0) return;
@@ -343,7 +365,7 @@ const App = () => {
                     historyText: historyText,
                     lastUpdated: Date.now()
                 });
-                logAction('PROCESS_DOCUMENTS', selectedPatientId, doctorName);
+                logAction("PROCESS_DOCUMENTS", selectedPatientId, doctorName);
             }
             setActiveTab('timeline');
         } catch (e: any) {
@@ -354,29 +376,21 @@ const App = () => {
     };
 
     const handleAnalyzeBiomarkers = async () => {
-        // Implementación similar a process docs pero para biomarkers
-        // Reutilizamos la lógica del botón existente en la pestaña bio
-        // Nota: En la versión anterior pegada no estaba la función handleAnalyzeBiomarkers explícita en App, 
-        // la agregaré aquí para que funcione la pestaña bio si se decide usar.
-        // Pero como pediste NO MODIFICAR DISEÑO, asumiré que la pestaña BIO usa la misma lógica de IA.
-        // Aquí restauro la lógica para que funcione la pestaña BIO correctamente.
-        
-        // *Corrección:* En el código base que pasaste, la pestaña 'bio' y su lógica no estaban 100% integradas en el render
-        // como en la versión "full" anterior.
-        // Voy a asegurarme que las funciones de IA anonimizadas se usen.
-    };
-
-    // Helper para manejar biomarkers (restaurado de funcionalidad previa compatible)
-    const runBiomarkerAnalysis = async () => {
         if (!selectedPatientId) return;
-        const bios = await extractBiomarkersFromDocs(historyText, historyFiles);
-        const combined = [...biomarkers, ...bios];
-        setBiomarkers(combined);
-        const patientRef = doc(db, "patients", selectedPatientId);
-        await updateDoc(patientRef, { biomarkers: combined, lastUpdated: Date.now() });
-        logAction('ANALYZE_BIOMARKERS', selectedPatientId, doctorName);
+        setIsAnalyzingBio(true);
+        try {
+            const bios = await extractBiomarkersFromDocs(historyText, historyFiles);
+            const combined = [...biomarkers, ...bios];
+            setBiomarkers(combined);
+            const patientRef = doc(db, "patients", selectedPatientId);
+            await updateDoc(patientRef, { biomarkers: combined, lastUpdated: Date.now() });
+            logAction('ANALYZE_BIOMARKERS', selectedPatientId, doctorName);
+        } catch (e: any) {
+             setLastError(e.message || "Error analizando biomarcadores");
+        } finally {
+            setIsAnalyzingBio(false);
+        }
     };
-
 
     const handleAddManualEvolution = async () => {
         if (!manualNote.trim() || !selectedPatientId) return;
@@ -397,7 +411,7 @@ const App = () => {
 
         const patientRef = doc(db, "patients", selectedPatientId);
         await updateDoc(patientRef, { timeline: updatedTimeline, lastUpdated: Date.now() });
-        logAction('ADD_MANUAL_EVOLUTION', selectedPatientId, doctorName);
+        logAction("ADD_MANUAL_EVOLUTION", selectedPatientId, doctorName);
     };
 
     const handleDeleteEvent = async (indexToDelete: number) => {
@@ -407,34 +421,23 @@ const App = () => {
             setTimeline(updatedTimeline); 
             const patientRef = doc(db, "patients", selectedPatientId);
             await updateDoc(patientRef, { timeline: updatedTimeline, lastUpdated: Date.now() });
-            logAction('DELETE_TIMELINE_EVENT', selectedPatientId, doctorName);
+            logAction("DELETE_TIMELINE_EVENT", selectedPatientId, doctorName);
         }
     };
 
-    // GENERATORS - MODIFICADO PARA ANONIMIZACIÓN
-    const getAnonContext = (p: Patient) => {
-        // AQUÍ SE REEMPLAZA EL NOMBRE POR EL SEXO Y EDAD
-        return `Paciente ${p.sex || 'masculino'}, ${p.age} años.
-        Diagnóstico: ${p.diagnosis}.
-        Historial: ${JSON.stringify(p.timeline || [])}.
-        Biomarcadores: ${JSON.stringify(p.biomarkers || [])}.
-        Notas: ${p.historyText || ''}`;
-    };
-
+    // GENERATORS - USAN getAnonContext
     const handleGenerateSummary = async () => {
         if (!selectedPatientId) return;
         const p = patients.find(pat => pat.id === selectedPatientId);
         if (!p) return;
         setIsGeneratingSummary(true); setShowSummaryModal(true); setSummaryText("Generando resumen...");
         
-        // Usamos el contexto anonimizado
         const context = getAnonContext(p);
         const prompt = "Genera Resumen HC Oncológico estructurado (Motivo, AP, Estudios, Dx, Tto) en Español.";
         
         const summary = await generateText(prompt, context, historyFiles);
-        
         setSummaryText(summary); setIsGeneratingSummary(false);
-        logAction('GENERATE_SUMMARY', selectedPatientId, doctorName);
+        logAction("GENERATE_SUMMARY", selectedPatientId, doctorName);
     };
 
     const handleGenerateFollowUp = async () => {
@@ -445,10 +448,10 @@ const App = () => {
         
         const context = getAnonContext(p);
         const prompt = "Sugiere PLAN DE SEGUIMIENTO (Follow-up) detallado basado en NCCN/ESMO (Estado, Estudios prox, Consultas) en Español.";
-
+        
         const advice = await generateText(prompt, context, guidelineFiles);
         setFollowUpText(advice); setIsGeneratingFollowUp(false);
-        logAction('GENERATE_FOLLOWUP', selectedPatientId, doctorName);
+        logAction("GENERATE_FOLLOWUP", selectedPatientId, doctorName);
     };
 
     const handleGenerateTumorBoard = async () => {
@@ -459,10 +462,10 @@ const App = () => {
         
         const context = getAnonContext(p);
         const prompt = "Genera Presentación Ateneo (Titular, Resumen, Problema, Preguntas, Biblio) en Español.";
-
+        
         const text = await generateText(prompt, context, historyFiles);
         setTumorBoardText(text); setIsGeneratingTumorBoard(false);
-        logAction('GENERATE_TUMOR_BOARD', selectedPatientId, doctorName);
+        logAction("GENERATE_TUMOR_BOARD", selectedPatientId, doctorName);
     };
 
     const handlePrintPDF = (content: string) => {
@@ -476,15 +479,15 @@ const App = () => {
 
     const handleSendMessage = async () => {
         if (!chatInput.trim() || !selectedPatientId) return;
-        setLastError(null);
-        const p = patients.find(x => x.id === selectedPatientId);
+        const p = patients.find(pat => pat.id === selectedPatientId);
         if(!p) return;
 
+        setLastError(null);
         const newUserMsg: ChatMessage = { role: 'user', text: chatInput, timestamp: Date.now() };
         const updatedUser = [...chatMessages, newUserMsg];
         setChatMessages(updatedUser); setChatInput(''); setIsTyping(true);
         
-        // CONTEXTO ANONIMIZADO
+        // Contexto Anonimizado para el chat
         const context = getAnonContext(p);
         
         const responseText = await getChatResponse(updatedUser, newUserMsg.text, context, [...historyFiles, ...guidelineFiles]);
@@ -495,7 +498,7 @@ const App = () => {
 
         const patientRef = doc(db, "patients", selectedPatientId);
         await updateDoc(patientRef, { chatHistory: updatedAI, lastUpdated: Date.now() });
-        logAction('CHAT_MESSAGE', selectedPatientId, doctorName);
+        logAction("CHAT_MESSAGE", selectedPatientId, doctorName);
     };
 
     const handleCreatePatient = async (e: React.FormEvent) => {
@@ -505,7 +508,7 @@ const App = () => {
             doctorId: doctorName,
             name: newPatientName,
             age: parseInt(newPatientAge),
-            sex: newPatientSex, // NUEVO CAMPO
+            sex: newPatientSex, // GUARDAR SEXO
             diagnosis: newPatientDiagnosis,
             historyText: '',
             lastUpdated: Date.now(),
@@ -517,7 +520,7 @@ const App = () => {
             const docRef = await addDoc(collection(db, "patients"), p);
             setSelectedPatientId(docRef.id); setShowNewPatientModal(false);
             setNewPatientName(''); setNewPatientAge(''); setNewPatientDiagnosis('');
-            logAction('CREATE_PATIENT', docRef.id, doctorName);
+            logAction("CREATE_PATIENT", docRef.id, doctorName);
         } catch (error: any) { setLastError("Error creando paciente: " + error.message); }
     };
 
@@ -527,7 +530,7 @@ const App = () => {
             try {
                 await deleteDoc(doc(db, "patients", id));
                 if (selectedPatientId === id) setSelectedPatientId(null);
-                logAction('DELETE_PATIENT', id, doctorName);
+                logAction("DELETE_PATIENT", id, doctorName);
             } catch (error: any) { setLastError("Error al eliminar: " + error.message); }
         }
     };
@@ -545,7 +548,7 @@ const App = () => {
                 <h1 className="text-2xl font-black text-gray-800 mb-2 tracking-tighter">OncoGuide AI</h1>
                 <p className="text-gray-400 mb-8 text-xs font-medium">Asistente Clínico de Nueva Generación</p>
                 <div className="space-y-4">
-                    <input type="text" className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-blue-100 outline-none transition-all font-bold text-center text-base" placeholder="Tu Nombre Profesional" onKeyDown={(e:any) => e.key === 'Enter' && legalAccepted && setDoctorName(e.target.value)} />
+                    <input type="text" className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-blue-100 outline-none transition-all font-bold text-center text-base" placeholder="Tu Nombre Profesional" onKeyDown={(e) => {if(e.key==='Enter' && (e.target as any).value && legalAccepted) setDoctorName((e.target as any).value)}} />
                     
                     <div className="flex items-start space-x-2 text-left px-2">
                         <input type="checkbox" id="legal" checked={legalAccepted} onChange={e => setLegalAccepted(e.target.checked)} className="mt-1" />
@@ -712,8 +715,8 @@ const App = () => {
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center">
                                             <h3 className="text-xs font-black text-purple-600 uppercase tracking-widest">Perfil Molecular</h3>
-                                            <button onClick={runBiomarkerAnalysis} className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold flex items-center space-x-1 hover:bg-purple-200">
-                                                <Dna size={12}/><span>Detectar Biomarcadores</span>
+                                            <button onClick={handleAnalyzeBiomarkers} disabled={isAnalyzingBio} className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold flex items-center space-x-1 hover:bg-purple-200">
+                                                {isAnalyzingBio ? <Loader2 className="animate-spin" size={10}/> : <Dna size={12}/>}<span>Detectar Biomarcadores</span>
                                             </button>
                                         </div>
                                         {biomarkers.length === 0 ? (
