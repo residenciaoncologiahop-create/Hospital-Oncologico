@@ -9,7 +9,7 @@ import {
     User, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
     List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal,
-    Calendar, PenTool, FileOutput
+    Calendar, PenTool, FileOutput, FileDown, ClipboardCheck
 } from 'lucide-react';
 
 // --- FIREBASE CONFIGURATION ---
@@ -76,7 +76,7 @@ const sortTimeline = (events: ClinicalEvent[]) => {
 
 // --- API Helpers ---
 
-// 1. EXTRACT TIMELINE (MODIFICADO PARA FORZAR ESPAÑOL)
+// 1. EXTRACT TIMELINE
 const extractTimelineFromDocs = async (
     historyText: string,
     historyFiles: FileData[]
@@ -91,19 +91,17 @@ const extractTimelineFromDocs = async (
         const modelId = 'gemini-2.5-flash'; 
 
         const parts: any[] = [];
-        // --- CAMBIO AQUÍ: INSTRUCCIÓN DE TRADUCCIÓN FORZADA ---
         parts.push({ text: `
             Analiza los documentos y extrae la cronología clínica.
             
             REGLA DE ORO (IDIOMA): TODO el contenido extraído (especialmente el campo 'note') DEBE estar escrito en ESPAÑOL. 
-            Si el documento original está en inglés (ej: reportes de imágenes, papers, labs), TRADÚCELO AL ESPAÑOL antes de generar el JSON. No dejes frases en inglés.
+            Si el documento original está en inglés (ej: reportes de imágenes, papers, labs), TRADÚCELO AL ESPAÑOL antes de generar el JSON.
 
             FORMATO:
             1. FECHAS: DD/MM/YYYY.
             2. CATEGORÍAS: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
             3. isKey: true solo para hitos mayores.
         `});
-        // ------------------------------------------------------
         
         if (historyText) parts.push({ text: `Historia manual: ${historyText}` });
         
@@ -167,7 +165,7 @@ const generateClinicalSummary = async (
         `;
 
         const prompt = `
-            Genera un RESUMEN DE HISTORIA CLÍNICA oncológico completo y profesional.
+            Genera un RESUMEN DE HISTORIA CLÍNICA oncológico completo y profesional en ESPAÑOL.
             
             FORMATO REQUERIDO (Estricto, sin asteriscos de markdown, usar texto plano limpio):
             
@@ -196,7 +194,7 @@ const generateClinicalSummary = async (
             IMPORTANTE:
             - No uses negritas (**) ni cursivas.
             - Sé preciso con las fechas.
-            - Usa lenguaje médico técnico.
+            - Usa lenguaje médico técnico en Español.
         `;
 
         parts.push({ text: prompt });
@@ -218,7 +216,58 @@ const generateClinicalSummary = async (
     }
 };
 
-// 3. CHAT BOT
+// 3. GENERATE FOLLOW-UP SUGGESTIONS (NUEVO)
+const generateFollowUpAdvice = async (
+    patient: Patient,
+    files: FileData[]
+): Promise<string> => {
+    const apiKey = import.meta.env.VITE_API_KEY;
+    if (!apiKey) return "Error de API Key";
+
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        const modelId = 'gemini-2.5-flash';
+
+        const parts: any[] = [];
+        
+        const context = `
+            PACIENTE: ${patient.name}, ${patient.age} años.
+            DIAGNÓSTICO: ${patient.diagnosis}.
+            HISTORIAL: ${JSON.stringify(patient.timeline)}
+        `;
+
+        const prompt = `
+            Actúa como un oncólogo experto basado en guías NCCN, ASCO y ESMO.
+            Analiza el caso del paciente y sugiere un PLAN DE SEGUIMIENTO (Follow-up) detallado.
+            
+            Tu respuesta debe contener:
+            1. Estado Actual estimado (¿Está en tratamiento, finalizó, en vigilancia?).
+            2. Próximos Estudios Sugeridos (Qué pedir y cuándo, basado en las guías para este diagnóstico).
+            3. Frecuencia de consultas clínicas.
+            
+            Sé conciso, usa formato de lista y lenguaje técnico en Español.
+        `;
+
+        parts.push({ text: prompt });
+        parts.push({ text: context });
+        
+        // Adjuntamos guías si existen
+        for (const file of files) {
+            parts.push({ inlineData: { mimeType: file.type, data: file.data } });
+        }
+
+        const response = await ai.models.generateContent({
+            model: modelId,
+            contents: { parts }
+        });
+
+        return response.text || "No se pudo generar sugerencia.";
+    } catch(e: any) {
+        return "Error: " + e.message;
+    }
+};
+
+// 4. CHAT BOT
 const getAIResponse = async (
     historyText: string,
     historyFiles: FileData[],
@@ -350,9 +399,15 @@ const App = () => {
     const [manualDoctor, setManualDoctor] = useState(doctorName || '');
     const [manualNote, setManualNote] = useState('');
 
+    // --- SUMMARY & FOLLOW-UP STATES ---
     const [showSummaryModal, setShowSummaryModal] = useState(false);
     const [summaryText, setSummaryText] = useState('');
     const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+    
+    const [showFollowUpModal, setShowFollowUpModal] = useState(false);
+    const [followUpText, setFollowUpText] = useState('');
+    const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
+    // ----------------------------------
 
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline'>('docs');
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -458,12 +513,9 @@ const App = () => {
 
     const handleDeleteEvent = async (indexToDelete: number) => {
         if (!selectedPatientId || !timeline) return;
-        
         if (confirm("¿Estás seguro de eliminar este evento de la historia?")) {
             const updatedTimeline = timeline.filter((_, index) => index !== indexToDelete);
-            
             setTimeline(updatedTimeline); 
-
             const patientRef = doc(db, "patients", selectedPatientId);
             await updateDoc(patientRef, {
                 timeline: updatedTimeline,
@@ -485,6 +537,47 @@ const App = () => {
         setSummaryText(summary);
         setIsGeneratingSummary(false);
     };
+
+    // --- NUEVA FUNCIÓN: Generar Sugerencias de Seguimiento ---
+    const handleGenerateFollowUp = async () => {
+        if (!selectedPatientId) return;
+        const p = patients.find(pat => pat.id === selectedPatientId);
+        if (!p) return;
+
+        setIsGeneratingFollowUp(true);
+        setShowFollowUpModal(true);
+        setFollowUpText("Analizando guías NCCN/ESMO...");
+
+        const advice = await generateFollowUpAdvice(p, guidelineFiles);
+        setFollowUpText(advice);
+        setIsGeneratingFollowUp(false);
+    };
+    // ---------------------------------------------------------
+
+    // --- NUEVA FUNCIÓN: Descargar PDF (Impresión) ---
+    const handlePrintPDF = (content: string) => {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Resumen Clínico OncoGuide</title>
+                    <style>
+                        body { font-family: monospace; padding: 40px; white-space: pre-wrap; font-size: 12px; }
+                        h1 { font-family: sans-serif; font-size: 18px; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;}
+                    </style>
+                </head>
+                <body>
+                    <h1>OncoGuide - Documento Clínico</h1>
+                    ${content}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+        }
+    };
+    // ------------------------------------------------
 
     const handleSendMessage = async () => {
         if (!chatInput.trim() || !selectedPatientId) return;
@@ -657,11 +750,18 @@ const App = () => {
                                         </section>
 
                                         <section className="space-y-6 pt-4 border-t border-gray-100">
-                                            <button onClick={handleGenerateSummary} disabled={isGeneratingSummary} className="w-full flex items-center justify-center space-x-2 bg-indigo-50 text-indigo-600 border border-indigo-100 py-4 rounded-[1.5rem] text-xs font-black tracking-widest hover:bg-indigo-100 transition-all">
-                                                {isGeneratingSummary ? <Loader2 className="animate-spin" size={16} /> : <FileOutput size={16} />}
-                                                <span>GENERAR RESUMEN CLÍNICO</span>
-                                            </button>
-                                            <h3 className="text-xs font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 pb-2">Material de Referencia</h3>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <button onClick={handleGenerateSummary} disabled={isGeneratingSummary} className="flex items-center justify-center space-x-2 bg-indigo-50 text-indigo-600 border border-indigo-100 py-4 rounded-[1.5rem] text-xs font-black tracking-widest hover:bg-indigo-100 transition-all">
+                                                    {isGeneratingSummary ? <Loader2 className="animate-spin" size={16} /> : <FileOutput size={16} />}
+                                                    <span>RESUMEN CLÍNICO</span>
+                                                </button>
+                                                <button onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp} className="flex items-center justify-center space-x-2 bg-teal-50 text-teal-600 border border-teal-100 py-4 rounded-[1.5rem] text-xs font-black tracking-widest hover:bg-teal-100 transition-all">
+                                                    {isGeneratingFollowUp ? <Loader2 className="animate-spin" size={16} /> : <ClipboardCheck size={16} />}
+                                                    <span>SEGUIMIENTO (NCCN)</span>
+                                                </button>
+                                            </div>
+                                            
+                                            <h3 className="text-xs font-black text-gray-300 uppercase tracking-widest border-b border-gray-50 pb-2 pt-2">Material de Referencia</h3>
                                             <FileUploader label="Guías NCCN / Protocolos Locales" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
                                         </section>
                                     </>
@@ -767,8 +867,40 @@ const App = () => {
                                 <textarea className="w-full h-full bg-white p-8 rounded-xl border border-gray-100 text-sm font-mono leading-relaxed resize-none focus:outline-none" value={summaryText} readOnly />
                             )}
                         </div>
-                        <div className="p-6 border-t bg-white flex justify-end">
+                        <div className="p-6 border-t bg-white flex justify-end space-x-3">
+                            <button onClick={() => handlePrintPDF(summaryText)} className="flex items-center space-x-2 bg-gray-800 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all">
+                                <FileDown size={14} /><span>Descargar PDF</span>
+                            </button>
                             <button onClick={() => {navigator.clipboard.writeText(summaryText); alert("Copiado al portapapeles");}} className="bg-indigo-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all">Copiar Texto</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Sugerencia de Seguimiento */}
+            {showFollowUpModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-6">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+                            <div className="flex items-center space-x-2 text-teal-600 font-black text-sm uppercase tracking-widest"><ClipboardCheck size={18}/><span>Plan de Seguimiento (NCCN/ESMO)</span></div>
+                            <button onClick={() => setShowFollowUpModal(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                        </div>
+                        <div className="flex-1 p-8 overflow-y-auto bg-gray-50/50">
+                            {isGeneratingFollowUp ? (
+                                <div className="h-full flex flex-col items-center justify-center text-teal-400 space-y-4">
+                                    <Loader2 size={40} className="animate-spin" />
+                                    <p className="text-xs font-black uppercase tracking-widest">Analizando guías internacionales...</p>
+                                </div>
+                            ) : (
+                                <div className="w-full bg-white p-8 rounded-xl border border-gray-100 text-sm leading-relaxed whitespace-pre-wrap">
+                                    {followUpText}
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-6 border-t bg-white flex justify-end space-x-3">
+                            <button onClick={() => handlePrintPDF(followUpText)} className="flex items-center space-x-2 bg-gray-800 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all">
+                                <FileDown size={14} /><span>Imprimir Plan</span>
+                            </button>
                         </div>
                     </div>
                 </div>
