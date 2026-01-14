@@ -9,7 +9,7 @@ import {
     User, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
     List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal,
-    Calendar, PenTool, FileOutput, FileDown, ClipboardCheck
+    Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Dna, Presentation, CheckCircle
 } from 'lucide-react';
 
 // --- FIREBASE CONFIGURATION ---
@@ -42,13 +42,23 @@ interface ClinicalEvent {
     isKey: boolean; 
 }
 
+interface OncologyPlan {
+    intent: string; // Curativa, Paliativa, Adyuvante
+    line: string;   // 1ra, 2da, 3ra
+    scheme: string; // Drogas actuales
+}
+
 interface Patient {
     id: string;
     doctorId: string; 
     name: string;
     age: number;
     diagnosis: string;
+    
     historyText: string;
+    molecularData: string; // NUEVO: Biomarcadores
+    oncologyPlan: OncologyPlan; // NUEVO: Plan estructurado
+    
     lastUpdated: number;
     chatHistory?: ChatMessage[];
     timeline?: ClinicalEvent[];
@@ -95,12 +105,12 @@ const extractTimelineFromDocs = async (
             Analiza los documentos y extrae la cronología clínica.
             
             REGLA DE ORO (IDIOMA): TODO el contenido extraído (especialmente el campo 'note') DEBE estar escrito en ESPAÑOL. 
-            Si el documento original está en inglés (ej: reportes de imágenes, papers, labs), TRADÚCELO AL ESPAÑOL antes de generar el JSON.
+            Si el documento original está en inglés, TRADÚCELO AL ESPAÑOL.
 
             FORMATO:
             1. FECHAS: DD/MM/YYYY.
             2. CATEGORÍAS: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
-            3. isKey: true solo para hitos mayores.
+            3. isKey: true solo para hitos mayores (Diagnóstico, Inicio Tratamiento, Progresión).
         `});
         
         if (historyText) parts.push({ text: `Historia manual: ${historyText}` });
@@ -161,40 +171,38 @@ const generateClinicalSummary = async (
             EDAD: ${patient.age}
             DIAGNÓSTICO: ${patient.diagnosis}
             NOTAS MANUALES: ${patient.historyText}
-            LÍNEA DE TIEMPO EXISTENTE: ${JSON.stringify(patient.timeline)}
+            BIOMARCADORES: ${patient.molecularData}
+            PLAN ACTUAL: ${JSON.stringify(patient.oncologyPlan)}
+            LÍNEA DE TIEMPO: ${JSON.stringify(patient.timeline)}
         `;
 
         const prompt = `
-            Genera un RESUMEN DE HISTORIA CLÍNICA oncológico completo y profesional en ESPAÑOL.
+            Genera un RESUMEN DE HISTORIA CLÍNICA oncológico profesional en ESPAÑOL.
             
-            FORMATO REQUERIDO (Estricto, sin asteriscos de markdown, usar texto plano limpio):
+            FORMATO REQUERIDO (Texto plano limpio, sin markdown):
             
             Resumen de Historia Clínica
-            Paciente: [Nombre] Edad: [Edad] [Otros datos si figuran]
+            Paciente: [Nombre] Edad: [Edad]
             
             1. Motivo de Consulta y Enfermedad Actual
-            [Redacción narrativa cronológica del diagnóstico y situación actual]
+            [Narrativa cronológica]
             
             2. Antecedentes
-            [Listar APP, AQX, ATOX, AGO, AHF si figuran]
+            [APP, AQX, ATOX, AGO, AHF]
             
-            3. Examen Físico
-            [Datos de PS, Peso, Talla y hallazgos relevantes]
+            3. Biología Molecular y Biomarcadores
+            [Incluir datos de biomarcadores si existen]
             
             4. Estudios Complementarios
-            [Anatomía Patológica, Laboratorios clave, Imágenes con fechas y conclusiones]
+            [Anatomía Patológica, Labs, Imágenes]
             
-            5. Diagnóstico y Estadificación
+            5. Diagnóstico, Estadificación y Plan Actual
             Diagnóstico: [Texto]
-            Estadificación: [TNM/Estadio]
+            Estadio: [TNM]
+            Plan Vigente: [Intención, Línea, Esquema]
             
-            6. Evolución y Tratamiento
-            [Narrativa cronológica de tratamientos recibidos, toxicidades y respuesta hasta la fecha actual]
-
-            IMPORTANTE:
-            - No uses negritas (**) ni cursivas.
-            - Sé preciso con las fechas.
-            - Usa lenguaje médico técnico en Español.
+            6. Evolución
+            [Resumen de tratamientos recibidos y respuesta]
         `;
 
         parts.push({ text: prompt });
@@ -216,8 +224,8 @@ const generateClinicalSummary = async (
     }
 };
 
-// 3. GENERATE FOLLOW-UP SUGGESTIONS
-const generateFollowUpAdvice = async (
+// 3. GENERATE TUMOR BOARD PRESENTATION (NUEVO: MODO ATENEO)
+const generateTumorBoardPresentation = async (
     patient: Patient,
     files: FileData[]
 ): Promise<string> => {
@@ -233,19 +241,34 @@ const generateFollowUpAdvice = async (
         const context = `
             PACIENTE: ${patient.name}, ${patient.age} años.
             DIAGNÓSTICO: ${patient.diagnosis}.
+            MOLECULAR: ${patient.molecularData}.
+            PLAN: ${JSON.stringify(patient.oncologyPlan)}.
             HISTORIAL: ${JSON.stringify(patient.timeline)}
         `;
 
         const prompt = `
-            Actúa como un oncólogo experto basado en guías NCCN, ASCO y ESMO.
-            Analiza el caso del paciente y sugiere un PLAN DE SEGUIMIENTO (Follow-up) detallado.
+            Actúa como un oncólogo presentando un caso en un ATENEO MULTIDISCIPLINARIO (Tumor Board).
+            Genera una presentación estructurada y concisa para discusión.
             
-            Tu respuesta debe contener:
-            1. Estado Actual estimado (¿Está en tratamiento, finalizó, en vigilancia?).
-            2. Próximos Estudios Sugeridos (Qué pedir y cuándo, basado en las guías para este diagnóstico).
-            3. Frecuencia de consultas clínicas.
+            ESTRUCTURA DE LA PRESENTACIÓN:
             
-            Sé conciso, usa formato de lista y lenguaje técnico en Español.
+            1. TITULAR DEL CASO
+            (Ej: Paciente de X años con Ca de Pulmón E-IV en progresión...)
+            
+            2. RESUMEN CRONOLÓGICO CLAVE
+            (Solo los hitos que definen la situación actual, no todo el historial).
+            
+            3. ESTATUS MOLECULAR Y PERFORMANCE STATUS
+            (Drivers moleculares, PD-L1, ECOG estimado).
+            
+            4. SITUACIÓN ACTUAL Y PROBLEMA A RESOLVER
+            (¿Por qué se presenta? ¿Falla de tratamiento? ¿Toxicidad? ¿Duda diagnóstica?).
+            
+            5. PREGUNTAS AL COMITÉ
+            (Listar 3 preguntas clave para los colegas: Cirugía, Radioterapia, Oncología).
+            
+            6. BIBLIOGRAFÍA SUGERIDA (NCCN/ESMO)
+            (Breve mención de guías aplicables).
         `;
 
         parts.push({ text: prompt });
@@ -260,20 +283,47 @@ const generateFollowUpAdvice = async (
             contents: { parts }
         });
 
-        return response.text || "No se pudo generar sugerencia.";
+        return response.text || "No se pudo generar la presentación.";
     } catch(e: any) {
         return "Error: " + e.message;
     }
 };
 
-// 4. CHAT BOT
+// 4. FOLLOW UP
+const generateFollowUpAdvice = async (
+    patient: Patient,
+    files: FileData[]
+): Promise<string> => {
+    const apiKey = import.meta.env.VITE_API_KEY;
+    if (!apiKey) return "Error de API Key";
+
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        const modelId = 'gemini-2.5-flash';
+
+        const parts: any[] = [];
+        const context = `PACIENTE: ${patient.name}. DIAGNÓSTICO: ${patient.diagnosis}. MOLECULAR: ${patient.molecularData}. PLAN: ${JSON.stringify(patient.oncologyPlan)}. HISTORIAL: ${JSON.stringify(patient.timeline)}`;
+        const prompt = "Sugiere PLAN DE SEGUIMIENTO (Follow-up) detallado basado en NCCN/ESMO. Incluir: Estado Actual, Próximos Estudios, Frecuencia consultas.";
+
+        parts.push({ text: prompt });
+        parts.push({ text: context });
+        for (const file of files) parts.push({ inlineData: { mimeType: file.type, data: file.data } });
+
+        const response = await ai.models.generateContent({model: modelId, contents: { parts }});
+        return response.text || "Sin respuesta.";
+    } catch(e: any) { return "Error: " + e.message; }
+};
+
+// 5. CHAT BOT
 const getAIResponse = async (
     historyText: string,
     historyFiles: FileData[],
     timeline: ClinicalEvent[],
     guidelineFiles: FileData[],
     messages: ChatMessage[],
-    newMessage: string
+    newMessage: string,
+    molecularData: string,
+    oncologyPlan: OncologyPlan
 ) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) return "ERROR: API_KEY no configurada.";
@@ -283,49 +333,37 @@ const getAIResponse = async (
         const modelId = 'gemini-2.5-flash'; 
         
         const parts: any[] = [];
-        let contextPrompt = "CONTEXTO ONCOLÓGICO DEL PACIENTE:\n";
+        let contextPrompt = `CONTEXTO ONCOLÓGICO:\nBIOMARCADORES: ${molecularData}\nPLAN ACTUAL: ${JSON.stringify(oncologyPlan)}\n`;
         
         if (timeline && timeline.length > 0) {
-            contextPrompt += "\nEVENTOS DEL HISTORIAL (Ordenados):\n";
-            timeline.forEach(t => {
-                contextPrompt += `- ${t.isKey ? '[CRÍTICO] ' : ''}${t.date}: ${t.note} (${t.category})\n`;
+            contextPrompt += "\nEVENTOS RECIENTES:\n";
+            timeline.slice(-15).forEach(t => {
+                contextPrompt += `- ${t.date}: ${t.note} (${t.category})\n`;
             });
         }
         
         parts.push({ text: contextPrompt });
 
-        for (const file of historyFiles.slice(0, 3)) {
-            parts.push({ inlineData: { mimeType: file.type, data: file.data } });
-        }
-
+        for (const file of historyFiles.slice(0, 3)) parts.push({ inlineData: { mimeType: file.type, data: file.data } });
         if (guidelineFiles.length > 0) {
             parts.push({ text: "\nGUÍAS NCCN ADJUNTAS:\n" });
-            for (const file of guidelineFiles.slice(0, 3)) {
-                parts.push({ inlineData: { mimeType: file.type, data: file.data } });
-            }
+            for (const file of guidelineFiles.slice(0, 3)) parts.push({ inlineData: { mimeType: file.type, data: file.data } });
         }
 
         const recentMessages = messages.slice(-5);
         let conversationHistory = "\nCHAT PREVIO:\n";
-        recentMessages.forEach(msg => {
-            conversationHistory += `${msg.role === 'user' ? 'Dr' : 'IA'}: ${msg.text}\n`;
-        });
+        recentMessages.forEach(msg => conversationHistory += `${msg.role === 'user' ? 'Dr' : 'IA'}: ${msg.text}\n`);
         parts.push({ text: conversationHistory });
         parts.push({ text: `\nCONSULTA MÉDICA: ${newMessage}` });
 
         const response = await ai.models.generateContent({
             model: modelId,
             contents: { parts },
-            config: {
-                systemInstruction: "Eres un oncólogo experto. Responde en español técnico.",
-                temperature: 0.1,
-            }
+            config: { systemInstruction: "Eres un oncólogo experto. Responde en español técnico.", temperature: 0.1 }
         });
 
-        return response.text || "Sin respuesta del modelo.";
-    } catch (error: any) {
-        return `ERROR DE IA: ${error.message}`;
-    }
+        return response.text || "Sin respuesta.";
+    } catch (error: any) { return `ERROR IA: ${error.message}`; }
 };
 
 // --- Components ---
@@ -363,8 +401,8 @@ const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/
                     </div>
                 ))}
             </div>
-            <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-gray-100 border-dashed rounded-2xl cursor-pointer bg-gray-50 hover:bg-white hover:border-blue-300 transition-all group">
-                <Upload className="w-6 h-6 text-gray-300 group-hover:text-blue-400 mb-2" />
+            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-gray-100 border-dashed rounded-2xl cursor-pointer bg-gray-50 hover:bg-white hover:border-blue-300 transition-all group">
+                <Upload className="w-5 h-5 text-gray-300 group-hover:text-blue-400 mb-2" />
                 <span className="text-xs text-gray-400 font-bold uppercase tracking-tight">Seleccionar Archivos</span>
                 <input type="file" className="hidden" multiple accept={accept} onChange={handleFileChange} />
             </label>
@@ -374,6 +412,7 @@ const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/
 
 const App = () => {
     const [doctorName, setDoctorName] = useState<string | null>(localStorage.getItem('doctor_name'));
+    const [legalAccepted, setLegalAccepted] = useState(false); // NUEVO: Check legal
     const [patients, setPatients] = useState<Patient[]>([]);
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
@@ -385,6 +424,9 @@ const App = () => {
     const [newPatientDiagnosis, setNewPatientDiagnosis] = useState('');
 
     const [historyText, setHistoryText] = useState('');
+    const [molecularData, setMolecularData] = useState(''); // NUEVO
+    const [oncologyPlan, setOncologyPlan] = useState<OncologyPlan>({ intent: '', line: '', scheme: '' }); // NUEVO
+
     const [historyFiles, setHistoryFiles] = useState<FileData[]>([]);
     const [timeline, setTimeline] = useState<ClinicalEvent[]>([]);
     const [guidelineFiles, setGuidelineFiles] = useState<FileData[]>([]);
@@ -394,11 +436,15 @@ const App = () => {
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
     
+    // Search
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // Manual Evolution
     const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
     const [manualDoctor, setManualDoctor] = useState(doctorName || '');
     const [manualNote, setManualNote] = useState('');
 
-    // --- SUMMARY & FOLLOW-UP STATES ---
+    // Modal States
     const [showSummaryModal, setShowSummaryModal] = useState(false);
     const [summaryText, setSummaryText] = useState('');
     const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
@@ -406,7 +452,10 @@ const App = () => {
     const [showFollowUpModal, setShowFollowUpModal] = useState(false);
     const [followUpText, setFollowUpText] = useState('');
     const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
-    // ----------------------------------
+
+    const [showTumorBoardModal, setShowTumorBoardModal] = useState(false); // NUEVO: Modal Ateneo
+    const [tumorBoardText, setTumorBoardText] = useState('');
+    const [isGeneratingTumorBoard, setIsGeneratingTumorBoard] = useState(false);
 
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline'>('docs');
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -415,17 +464,27 @@ const App = () => {
         setApiKeyExists(!!import.meta.env.VITE_API_KEY);
     }, []);
 
+    // Firebase Load
     useEffect(() => {
-        if (!doctorName) {
-            setPatients([]);
-            return;
-        }
+        if (!doctorName) { setPatients([]); return; }
         const q = query(collection(db, "patients"), where("doctorId", "==", doctorName));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const firebasePatients = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as Patient));
+            const firebasePatients = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    doctorId: data.doctorId,
+                    name: data.name,
+                    age: data.age,
+                    diagnosis: data.diagnosis,
+                    historyText: data.historyText || '',
+                    molecularData: data.molecularData || '', // Default empty
+                    oncologyPlan: data.oncologyPlan || { intent: '', line: '', scheme: '' }, // Default obj
+                    lastUpdated: data.lastUpdated,
+                    chatHistory: data.chatHistory,
+                    timeline: data.timeline
+                } as Patient;
+            });
             firebasePatients.sort((a, b) => b.lastUpdated - a.lastUpdated);
             setPatients(firebasePatients);
         });
@@ -448,6 +507,9 @@ const App = () => {
             const p = patients.find(pat => pat.id === selectedPatientId);
             if (p) {
                 setHistoryText(p.historyText || '');
+                setMolecularData(p.molecularData || '');
+                setOncologyPlan(p.oncologyPlan || { intent: '', line: '', scheme: '' });
+                
                 setChatMessages(p.chatHistory || []);
                 setTimeline(p.timeline ? sortTimeline([...p.timeline]) : []); 
                 setHistoryFiles([]); setGuidelineFiles([]);
@@ -459,6 +521,19 @@ const App = () => {
         }
     }, [selectedPatientId, patients]);
 
+    // Save Patient Details Helper
+    const savePatientDetails = async () => {
+        if (selectedPatientId) {
+            const patientRef = doc(db, "patients", selectedPatientId);
+            await updateDoc(patientRef, { 
+                historyText, 
+                molecularData, 
+                oncologyPlan,
+                lastUpdated: Date.now() 
+            });
+        }
+    };
+
     const handleProcessDocuments = async () => {
         if (!historyText && historyFiles.length === 0) return;
         setIsProcessingDocs(true);
@@ -467,7 +542,6 @@ const App = () => {
             const events = await extractTimelineFromDocs(historyText, historyFiles);
             const currentTimeline = timeline || [];
             const combinedTimeline = sortTimeline([...currentTimeline, ...events]);
-            
             setTimeline(combinedTimeline);
             
             if (selectedPatientId) {
@@ -504,71 +578,51 @@ const App = () => {
         setManualNote('');
 
         const patientRef = doc(db, "patients", selectedPatientId);
-        await updateDoc(patientRef, {
-            timeline: updatedTimeline,
-            lastUpdated: Date.now()
-        });
+        await updateDoc(patientRef, { timeline: updatedTimeline, lastUpdated: Date.now() });
     };
 
     const handleDeleteEvent = async (indexToDelete: number) => {
         if (!selectedPatientId || !timeline) return;
-        if (confirm("¿Estás seguro de eliminar este evento de la historia?")) {
+        if (confirm("¿Eliminar este evento?")) {
             const updatedTimeline = timeline.filter((_, index) => index !== indexToDelete);
             setTimeline(updatedTimeline); 
             const patientRef = doc(db, "patients", selectedPatientId);
-            await updateDoc(patientRef, {
-                timeline: updatedTimeline,
-                lastUpdated: Date.now()
-            });
+            await updateDoc(patientRef, { timeline: updatedTimeline, lastUpdated: Date.now() });
         }
     };
 
+    // GENERATORS
     const handleGenerateSummary = async () => {
         if (!selectedPatientId) return;
         const p = patients.find(pat => pat.id === selectedPatientId);
         if (!p) return;
-
-        setIsGeneratingSummary(true);
-        setShowSummaryModal(true);
-        setSummaryText("Generando resumen detallado...");
-
+        setIsGeneratingSummary(true); setShowSummaryModal(true); setSummaryText("Generando resumen...");
         const summary = await generateClinicalSummary(p, historyFiles);
-        setSummaryText(summary);
-        setIsGeneratingSummary(false);
+        setSummaryText(summary); setIsGeneratingSummary(false);
     };
 
     const handleGenerateFollowUp = async () => {
         if (!selectedPatientId) return;
         const p = patients.find(pat => pat.id === selectedPatientId);
         if (!p) return;
-
-        setIsGeneratingFollowUp(true);
-        setShowFollowUpModal(true);
-        setFollowUpText("Analizando guías NCCN/ESMO...");
-
+        setIsGeneratingFollowUp(true); setShowFollowUpModal(true); setFollowUpText("Analizando guías...");
         const advice = await generateFollowUpAdvice(p, guidelineFiles);
-        setFollowUpText(advice);
-        setIsGeneratingFollowUp(false);
+        setFollowUpText(advice); setIsGeneratingFollowUp(false);
+    };
+
+    const handleGenerateTumorBoard = async () => {
+        if (!selectedPatientId) return;
+        const p = patients.find(pat => pat.id === selectedPatientId);
+        if (!p) return;
+        setIsGeneratingTumorBoard(true); setShowTumorBoardModal(true); setTumorBoardText("Preparando presentación...");
+        const text = await generateTumorBoardPresentation(p, historyFiles);
+        setTumorBoardText(text); setIsGeneratingTumorBoard(false);
     };
 
     const handlePrintPDF = (content: string) => {
         const printWindow = window.open('', '_blank');
         if (printWindow) {
-            printWindow.document.write(`
-                <html>
-                <head>
-                    <title>Documento Clínico - OncoGuide</title>
-                    <style>
-                        body { font-family: monospace; padding: 40px; white-space: pre-wrap; font-size: 14px; line-height: 1.5; }
-                        h1 { font-family: sans-serif; font-size: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;}
-                    </style>
-                </head>
-                <body>
-                    <h1>OncoGuide - Documento Clínico</h1>
-                    ${content}
-                </body>
-                </html>
-            `);
+            printWindow.document.write(`<html><head><title>OncoGuide Doc</title><style>body { font-family: monospace; padding: 40px; white-space: pre-wrap; font-size: 14px; line-height: 1.5; } h1 { font-family: sans-serif; font-size: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;}</style></head><body><h1>OncoGuide - Documento Clínico</h1>${content}</body></html>`);
             printWindow.document.close();
             printWindow.print();
         }
@@ -579,73 +633,77 @@ const App = () => {
         setLastError(null);
         const newUserMsg: ChatMessage = { role: 'user', text: chatInput, timestamp: Date.now() };
         const updatedUser = [...chatMessages, newUserMsg];
-        setChatMessages(updatedUser);
-        setChatInput('');
-        setIsTyping(true);
+        setChatMessages(updatedUser); setChatInput(''); setIsTyping(true);
         
-        const responseText = await getAIResponse(historyText, historyFiles, timeline, guidelineFiles, updatedUser, newUserMsg.text);
+        const responseText = await getAIResponse(historyText, historyFiles, timeline, guidelineFiles, updatedUser, newUserMsg.text, molecularData, oncologyPlan);
         
         const newAiMsg: ChatMessage = { role: 'model', text: responseText, timestamp: Date.now() };
         const updatedAI = [...updatedUser, newAiMsg];
-        setChatMessages(updatedAI);
-        setIsTyping(false);
+        setChatMessages(updatedAI); setIsTyping(false);
 
         const patientRef = doc(db, "patients", selectedPatientId);
-        await updateDoc(patientRef, {
-            chatHistory: updatedAI,
-            lastUpdated: Date.now()
-        });
+        await updateDoc(patientRef, { chatHistory: updatedAI, lastUpdated: Date.now() });
     };
 
     const handleCreatePatient = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!doctorName) return;
-
         const p = {
             doctorId: doctorName,
             name: newPatientName,
             age: parseInt(newPatientAge),
             diagnosis: newPatientDiagnosis,
             historyText: '',
+            molecularData: '', // Init empty
+            oncologyPlan: { intent: '', line: '', scheme: '' }, // Init empty
             lastUpdated: Date.now(),
             chatHistory: [],
             timeline: []
         };
-
         try {
             const docRef = await addDoc(collection(db, "patients"), p);
-            setSelectedPatientId(docRef.id);
-            setShowNewPatientModal(false);
+            setSelectedPatientId(docRef.id); setShowNewPatientModal(false);
             setNewPatientName(''); setNewPatientAge(''); setNewPatientDiagnosis('');
-        } catch (error: any) {
-            setLastError("Error creando paciente: " + error.message);
-        }
+        } catch (error: any) { setLastError("Error creando paciente: " + error.message); }
     };
 
     const handleDeletePatient = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation(); 
-        if (confirm("¿Estás seguro de que deseas eliminar este paciente permanentemente?")) {
+        if (confirm("¿Eliminar paciente permanentemente?")) {
             try {
                 await deleteDoc(doc(db, "patients", id));
                 if (selectedPatientId === id) setSelectedPatientId(null);
-            } catch (error: any) {
-                setLastError("Error al eliminar: " + error.message);
-            }
+            } catch (error: any) { setLastError("Error al eliminar: " + error.message); }
         }
     };
+
+    // Filter logic
+    const filteredPatients = patients.filter(p => 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     if (!doctorName) return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
             <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-sm w-full border border-gray-100 text-center">
                 <div className="inline-block bg-blue-600 p-5 rounded-3xl shadow-xl shadow-blue-100 mb-8"><Stethoscope className="text-white w-10 h-10" /></div>
                 <h1 className="text-3xl font-black text-gray-800 mb-2 tracking-tighter">OncoGuide AI</h1>
-                <p className="text-gray-400 mb-10 text-base font-medium">Asistente Clínico de Nueva Generación</p>
+                <p className="text-gray-400 mb-8 text-sm font-medium">Asistente Clínico de Nueva Generación</p>
                 <div className="space-y-4">
-                    <input type="text" className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-blue-100 outline-none transition-all font-bold text-center text-lg" placeholder="Tu Nombre Profesional" onKeyDown={(e) => {if(e.key==='Enter' && (e.target as any).value) setDoctorName((e.target as any).value)}} />
+                    <input type="text" className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-blue-100 outline-none transition-all font-bold text-center text-lg" placeholder="Tu Nombre Profesional" onKeyDown={(e) => {if(e.key==='Enter' && (e.target as any).value && legalAccepted) setDoctorName((e.target as any).value)}} />
+                    
+                    {/* LEGAL CHECKBOX */}
+                    <div className="flex items-start space-x-2 text-left px-2">
+                        <input type="checkbox" id="legal" checked={legalAccepted} onChange={e => setLegalAccepted(e.target.checked)} className="mt-1" />
+                        <label htmlFor="legal" className="text-[10px] text-gray-400 leading-tight">
+                            Entiendo que esta herramienta utiliza IA como apoyo y <strong>no sustituye el juicio clínico</strong>. La responsabilidad de las decisiones médicas recae exclusivamente en el profesional tratante.
+                        </label>
+                    </div>
+
                     <button onClick={() => {
-                        const input = document.querySelector('input');
-                        if(input?.value) setDoctorName(input.value);
-                    }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-base shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all">Acceder al Sistema</button>
+                        const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+                        if(input?.value && legalAccepted) setDoctorName(input.value);
+                    }} disabled={!legalAccepted} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-base shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50">Acceder al Sistema</button>
                 </div>
             </div>
         </div>
@@ -654,52 +712,61 @@ const App = () => {
     const selectedPatient = patients.find(p => p.id === selectedPatientId);
 
     return (
-        <div className="flex h-screen overflow-hidden bg-white text-gray-800 font-medium text-base">
+        <div className="flex h-screen overflow-hidden bg-white text-gray-800 font-medium text-sm">
             {/* Sidebar */}
             <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="p-6 border-b flex items-center justify-between bg-white">
-                    <div className="flex items-center space-x-2 text-blue-600 font-black text-2xl tracking-tighter"><Activity size={32} /><span>OncoGuide</span></div>
-                    <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-300"><X size={28}/></button>
+                    <div className="flex items-center space-x-2 text-blue-600 font-black text-2xl tracking-tighter"><Activity size={28} /><span>OncoGuide</span></div>
+                    <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-300"><X size={24}/></button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     <div>
-                        <div className="flex items-center justify-between text-xs font-black text-gray-400 uppercase tracking-widest px-2 mb-4"><span>Pacientes (Nube)</span><button onClick={() => setShowNewPatientModal(true)} className="text-blue-600 bg-blue-50 p-2 rounded-xl"><Plus size={18}/></button></div>
+                        <div className="flex items-center justify-between text-xs font-black text-gray-400 uppercase tracking-widest px-2 mb-4"><span>Pacientes (Nube)</span><button onClick={() => setShowNewPatientModal(true)} className="text-blue-600 bg-blue-50 p-1.5 rounded-xl"><Plus size={16}/></button></div>
+                        <div className="px-2 mb-4">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                                <input type="text" placeholder="Buscar..." className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-blue-300 transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                            </div>
+                        </div>
                         <div className="space-y-2">
-                            {patients.length === 0 && <p className="text-center text-sm text-gray-400 py-4">No tienes pacientes aún.</p>}
-                            {patients.map(p => (
+                            {filteredPatients.length === 0 && <p className="text-center text-xs text-gray-400 py-4">Sin resultados.</p>}
+                            {filteredPatients.map(p => (
                                 <div key={p.id} onClick={() => {setSelectedPatientId(p.id); setMobileMenuOpen(false);}} className={`group w-full text-left p-4 rounded-[1.5rem] transition-all flex items-center justify-between cursor-pointer ${selectedPatientId === p.id ? 'bg-blue-600 text-white shadow-2xl shadow-blue-200' : 'hover:bg-white border border-transparent hover:border-gray-100'}`}>
                                     <div className="flex flex-col truncate pr-2">
-                                        <span className="font-black text-base truncate">{p.name}</span>
-                                        <span className={`text-xs font-bold truncate ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
+                                        <span className="font-black text-sm truncate">{p.name}</span>
+                                        <span className={`text-[10px] font-bold truncate ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
                                     </div>
-                                    <button onClick={(e) => handleDeletePatient(p.id, e)} className={`p-2 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedPatientId === p.id ? 'text-blue-200 hover:text-white hover:bg-blue-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}><Trash2 size={16} /></button>
+                                    <button onClick={(e) => handleDeletePatient(p.id, e)} className={`p-2 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedPatientId === p.id ? 'text-blue-200 hover:text-white hover:bg-blue-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}><Trash2 size={14} /></button>
                                 </div>
                             ))}
                         </div>
                     </div>
                 </div>
-                <div className="p-6 border-t bg-white flex items-center justify-between">
-                    <div className="flex items-center space-x-3 truncate">
-                        <div className="w-12 h-12 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-blue-50">{doctorName[0]}</div>
-                        <div className="flex flex-col truncate"><span className="text-xs font-black text-gray-400 uppercase leading-none mb-1">Profesional</span><span className="text-sm font-black truncate leading-none">Dr. {doctorName}</span></div>
+                <div className="p-6 border-t bg-white flex flex-col space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3 truncate">
+                            <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-blue-50">{doctorName[0]}</div>
+                            <div className="flex flex-col truncate"><span className="text-xs font-black text-gray-400 uppercase leading-none mb-1">Profesional</span><span className="text-sm font-black truncate leading-none">Dr. {doctorName}</span></div>
+                        </div>
+                        <button onClick={() => setDoctorName(null)} className="text-gray-200 hover:text-red-500 transition-colors"><LogOut size={20} /></button>
                     </div>
-                    <button onClick={() => setDoctorName(null)} className="text-gray-200 hover:text-red-500 transition-colors"><LogOut size={24} /></button>
+                    <p className="text-[9px] text-gray-300 text-center font-medium">Uso exclusivo médico. <br/>Decisión clínica no automatizada.</p>
                 </div>
             </aside>
 
             {/* Main */}
             <main className="flex-1 flex flex-col h-full overflow-hidden">
-                <header className="bg-white/80 backdrop-blur-md border-b h-24 flex items-center px-8 justify-between z-20">
+                <header className="bg-white/80 backdrop-blur-md border-b h-20 flex items-center px-8 justify-between z-20">
                     <div className="flex items-center space-x-6">
-                        <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={32} /></button>
+                        <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={28} /></button>
                         <div className="flex flex-col">
-                            <h1 className="font-black text-gray-800 text-3xl tracking-tight leading-none truncate max-w-lg">{selectedPatient ? selectedPatient.name : 'Bienvenido'}</h1>
+                            <h1 className="font-black text-gray-800 text-2xl tracking-tight leading-none truncate max-w-lg">{selectedPatient ? selectedPatient.name : 'Bienvenido'}</h1>
                             {selectedPatient && <span className="text-xs font-black text-blue-500 uppercase tracking-widest mt-1">{selectedPatient.diagnosis} • {selectedPatient.age} Años</span>}
                         </div>
                     </div>
                     <div className={`px-4 py-2 rounded-2xl flex items-center space-x-2 text-xs font-black tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
                         {apiKeyExists ? <div className="w-2.5 h-2.5 bg-green-500 rounded-full"></div> : <ShieldAlert size={16}/>}
-                        <span>{apiKeyExists ? 'API Cloud: Conectado' : 'API Cloud: Error Vercel'}</span>
+                        <span>{apiKeyExists ? 'API Cloud: Conectado' : 'API Cloud: Error'}</span>
                     </div>
                 </header>
 
@@ -712,58 +779,71 @@ const App = () => {
                                 <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-6 transition-all ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historial de Eventos</button>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto p-10 space-y-12 scrollbar-hide">
+                            <div className="flex-1 overflow-y-auto p-10 space-y-10 scrollbar-hide">
                                 {activeTab === 'docs' ? (
                                     <>
-                                        <section className="space-y-6">
-                                            <div className="flex items-center justify-between border-b border-gray-50 pb-2"><h3 className="text-sm font-black text-gray-400 uppercase tracking-widest">Información Base</h3><button onClick={() => {
-                                                if(selectedPatientId) {
-                                                    const patientRef = doc(db, "patients", selectedPatientId);
-                                                    updateDoc(patientRef, { historyText, lastUpdated: Date.now() });
-                                                }
-                                            }} className="text-blue-600 font-black text-xs hover:underline uppercase">Guardar Cambios</button></div>
-                                            <FileUploader label="Historia Clínica Digital" files={historyFiles} setFiles={setHistoryFiles} />
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Notas Manuales del Profesional</label>
-                                                <textarea className="w-full h-48 p-6 border-2 border-gray-100 rounded-3xl text-base font-medium bg-gray-50 focus:bg-white focus:border-blue-200 transition-all outline-none resize-none shadow-inner" placeholder="Escribe hallazgos adicionales..." value={historyText} onChange={(e) => setHistoryText(e.target.value)} />
+                                        {/* SECTION 1: ONCOLOGY PLAN (NUEVO) */}
+                                        <section className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100 space-y-4">
+                                            <div className="flex items-center space-x-2 text-blue-600"><CheckCircle size={16} /><h3 className="text-xs font-black uppercase tracking-widest">Plan Oncológico Vigente</h3></div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <input type="text" placeholder="Intención (Curativa/Pal...)" className="bg-white px-4 py-3 rounded-2xl text-xs font-bold border border-blue-100 text-blue-800 placeholder-blue-300" value={oncologyPlan.intent} onChange={e => setOncologyPlan({...oncologyPlan, intent: e.target.value})} onBlur={savePatientDetails} />
+                                                <input type="text" placeholder="Línea (1ra, 2da...)" className="bg-white px-4 py-3 rounded-2xl text-xs font-bold border border-blue-100 text-blue-800 placeholder-blue-300" value={oncologyPlan.line} onChange={e => setOncologyPlan({...oncologyPlan, line: e.target.value})} onBlur={savePatientDetails} />
                                             </div>
-                                            <button onClick={handleProcessDocuments} disabled={isProcessingDocs} className="w-full bg-blue-600 text-white py-5 rounded-[1.5rem] text-sm font-black tracking-widest shadow-2xl shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center">
-                                                {isProcessingDocs ? <><Loader2 className="animate-spin mr-3" size={20}/>Analizando Documentos...</> : "PROCESAR HISTORIA COMPLETA"}
+                                            <input type="text" placeholder="Esquema Actual (Drogas)" className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-bold border border-blue-100 text-blue-800 placeholder-blue-300" value={oncologyPlan.scheme} onChange={e => setOncologyPlan({...oncologyPlan, scheme: e.target.value})} onBlur={savePatientDetails} />
+                                        </section>
+
+                                        {/* SECTION 2: BIOMARKERS (NUEVO) */}
+                                        <section className="space-y-2">
+                                            <div className="flex items-center space-x-2 text-gray-400 px-2"><Dna size={14} /><h3 className="text-xs font-black uppercase tracking-widest">Biología Molecular / Biomarcadores</h3></div>
+                                            <textarea className="w-full h-24 p-4 border-2 border-gray-100 rounded-3xl text-sm font-medium bg-gray-50 focus:bg-white focus:border-purple-200 transition-all outline-none resize-none" placeholder="Ej: BRCA1+, PD-L1 80%, MSI-High..." value={molecularData} onChange={(e) => setMolecularData(e.target.value)} onBlur={savePatientDetails} />
+                                        </section>
+
+                                        {/* SECTION 3: BASE DOCS */}
+                                        <section className="space-y-6">
+                                            <div className="flex items-center justify-between border-b border-gray-50 pb-2"><h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Historia Clínica Base</h3><button onClick={savePatientDetails} className="text-blue-600 font-black text-[10px] hover:underline uppercase">Guardar Notas</button></div>
+                                            <FileUploader label="Archivos Digitales" files={historyFiles} setFiles={setHistoryFiles} />
+                                            <textarea className="w-full h-40 p-6 border-2 border-gray-100 rounded-3xl text-sm font-medium bg-gray-50 focus:bg-white focus:border-blue-200 transition-all outline-none resize-none shadow-inner" placeholder="Resumen manual del caso..." value={historyText} onChange={(e) => setHistoryText(e.target.value)} onBlur={savePatientDetails} />
+                                            <button onClick={handleProcessDocuments} disabled={isProcessingDocs} className="w-full bg-blue-600 text-white py-5 rounded-[1.5rem] text-xs font-black tracking-widest shadow-2xl shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center">
+                                                {isProcessingDocs ? <><Loader2 className="animate-spin mr-3" size={18}/>Analizando...</> : "PROCESAR DOCUMENTOS"}
                                             </button>
                                         </section>
 
-                                        <section className="space-y-4 pt-8 border-t border-gray-100">
-                                            <div className="flex items-center space-x-2 text-gray-400"><PenTool size={16} /><h3 className="text-sm font-black uppercase tracking-widest">Evolución Manual (Al Timeline)</h3></div>
+                                        {/* SECTION 4: MANUAL EVOLUTION */}
+                                        <section className="space-y-4 pt-6 border-t border-gray-100">
+                                            <div className="flex items-center space-x-2 text-gray-400"><PenTool size={14} /><h3 className="text-xs font-black uppercase tracking-widest">Evolución Manual</h3></div>
                                             <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100 space-y-4">
                                                 <div className="flex space-x-3">
-                                                    <input type="date" className="bg-white px-4 py-3 rounded-2xl text-sm font-bold border border-gray-200" value={manualDate} onChange={e => setManualDate(e.target.value)} />
-                                                    <input type="text" className="flex-1 bg-white px-4 py-3 rounded-2xl text-sm font-bold border border-gray-200" placeholder="Médico" value={manualDoctor} onChange={e => setManualDoctor(e.target.value)} />
+                                                    <input type="date" className="bg-white px-4 py-3 rounded-2xl text-xs font-bold border border-gray-200" value={manualDate} onChange={e => setManualDate(e.target.value)} />
+                                                    <input type="text" className="flex-1 bg-white px-4 py-3 rounded-2xl text-xs font-bold border border-gray-200" placeholder="Médico" value={manualDoctor} onChange={e => setManualDoctor(e.target.value)} />
                                                 </div>
-                                                <textarea className="w-full h-24 bg-white p-4 rounded-2xl text-base font-medium border border-gray-200 resize-none" placeholder="Escribir evolución..." value={manualNote} onChange={e => setManualNote(e.target.value)} />
-                                                <button onClick={handleAddManualEvolution} disabled={!manualNote.trim()} className="w-full bg-gray-800 text-white py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black disabled:opacity-50">Agregar a Línea de Tiempo</button>
+                                                <textarea className="w-full h-24 bg-white p-4 rounded-2xl text-sm font-medium border border-gray-200 resize-none" placeholder="Escribir evolución..." value={manualNote} onChange={e => setManualNote(e.target.value)} />
+                                                <button onClick={handleAddManualEvolution} disabled={!manualNote.trim()} className="w-full bg-gray-800 text-white py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black disabled:opacity-50">Agregar a Timeline</button>
                                             </div>
                                         </section>
 
+                                        {/* SECTION 5: TOOLS & GUIDELINES */}
                                         <section className="space-y-6 pt-6 border-t border-gray-100">
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button onClick={handleGenerateSummary} disabled={isGeneratingSummary} className="flex items-center justify-center space-x-2 bg-indigo-50 text-indigo-600 border border-indigo-100 py-5 rounded-[1.5rem] text-xs font-black tracking-widest hover:bg-indigo-100 transition-all">
-                                                    {isGeneratingSummary ? <Loader2 className="animate-spin" size={18} /> : <FileOutput size={18} />}
-                                                    <span>RESUMEN CLÍNICO</span>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <button onClick={handleGenerateSummary} disabled={isGeneratingSummary} className="flex flex-col items-center justify-center bg-indigo-50 text-indigo-600 border border-indigo-100 py-4 rounded-[1.5rem] hover:bg-indigo-100 transition-all">
+                                                    {isGeneratingSummary ? <Loader2 className="animate-spin mb-1" size={16} /> : <FileOutput size={16} className="mb-1" />}
+                                                    <span className="text-[9px] font-black tracking-widest">RESUMEN</span>
                                                 </button>
-                                                <button onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp} className="flex items-center justify-center space-x-2 bg-teal-50 text-teal-600 border border-teal-100 py-5 rounded-[1.5rem] text-xs font-black tracking-widest hover:bg-teal-100 transition-all">
-                                                    {isGeneratingFollowUp ? <Loader2 className="animate-spin" size={18} /> : <ClipboardCheck size={18} />}
-                                                    <span>SEGUIMIENTO (NCCN)</span>
+                                                <button onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp} className="flex flex-col items-center justify-center bg-teal-50 text-teal-600 border border-teal-100 py-4 rounded-[1.5rem] hover:bg-teal-100 transition-all">
+                                                    {isGeneratingFollowUp ? <Loader2 className="animate-spin mb-1" size={16} /> : <ClipboardCheck size={16} className="mb-1" />}
+                                                    <span className="text-[9px] font-black tracking-widest">SEGUIMIENTO</span>
+                                                </button>
+                                                <button onClick={handleGenerateTumorBoard} disabled={isGeneratingTumorBoard} className="flex flex-col items-center justify-center bg-rose-50 text-rose-600 border border-rose-100 py-4 rounded-[1.5rem] hover:bg-rose-100 transition-all">
+                                                    {isGeneratingTumorBoard ? <Loader2 className="animate-spin mb-1" size={16} /> : <Presentation size={16} className="mb-1" />}
+                                                    <span className="text-[9px] font-black tracking-widest">ATENEO</span>
                                                 </button>
                                             </div>
-                                            
-                                            <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2 pt-4">Material de Referencia</h3>
-                                            <FileUploader label="Guías NCCN / Protocolos Locales" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
+                                            <FileUploader label="Guías NCCN / Protocolos" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
                                         </section>
                                     </>
                                 ) : (
                                     <div className="space-y-6 pt-4">
                                         {timeline.length === 0 ? (
-                                            <div className="flex flex-col items-center justify-center py-24 text-gray-200"><Clock size={56} className="mb-4 opacity-10" /><p className="text-sm font-black uppercase tracking-widest">No hay datos procesados aún</p></div>
+                                            <div className="flex flex-col items-center justify-center py-24 text-gray-200"><Clock size={56} className="mb-4 opacity-10" /><p className="text-sm font-black uppercase tracking-widest">Sin eventos registrados</p></div>
                                         ) : (
                                             timeline.map((ev, i) => (
                                                 <div key={i} className="relative pl-12 border-l-4 border-gray-100 pb-10 group">
@@ -794,10 +874,7 @@ const App = () => {
                             {lastError && (
                                 <div className="absolute top-6 left-6 right-6 z-30 bg-red-600 text-white p-6 rounded-3xl shadow-2xl flex items-start space-x-4 border border-red-500 animate-in slide-in-from-top">
                                     <Terminal className="flex-shrink-0 mt-1" size={20}/>
-                                    <div>
-                                        <p className="text-xs font-black uppercase tracking-widest mb-1">Diagnóstico de Error:</p>
-                                        <p className="text-sm font-bold leading-tight">{lastError}</p>
-                                    </div>
+                                    <div><p className="text-xs font-black uppercase tracking-widest mb-1">Error:</p><p className="text-sm font-bold leading-tight">{lastError}</p></div>
                                     <button onClick={() => setLastError(null)} className="ml-auto opacity-60 hover:opacity-100"><X size={20}/></button>
                                 </div>
                             )}
@@ -808,7 +885,7 @@ const App = () => {
                                         <div className="bg-white p-10 rounded-[3rem] shadow-sm"><MessageSquare size={64} className="text-blue-600" /></div>
                                         <div className="space-y-3">
                                             <p className="text-base font-black uppercase tracking-widest">Asistente Oncológico</p>
-                                            <p className="text-sm font-bold max-w-[260px] mx-auto leading-relaxed">Analice el caso clínico y contraste con las guías internacionales.</p>
+                                            <p className="text-sm font-bold max-w-[260px] mx-auto leading-relaxed">Soporte a la decisión clínica.</p>
                                         </div>
                                     </div>
                                 )}
@@ -837,65 +914,40 @@ const App = () => {
                         <div className="bg-white p-20 rounded-[5rem] shadow-2xl border border-gray-100 max-w-md">
                             <Activity size={96} className="mb-10 text-blue-600 mx-auto opacity-10 animate-pulse" />
                             <h2 className="text-3xl font-black text-gray-800 tracking-tight">Consola de Decisión</h2>
-                            <p className="text-gray-400 text-base mt-6 font-bold leading-relaxed">Seleccione un paciente o inicie un nuevo registro para comenzar el análisis oncológico asistido por IA.</p>
+                            <p className="text-gray-400 text-base mt-6 font-bold leading-relaxed">Seleccione un paciente o inicie un nuevo registro.</p>
                             <button onClick={() => setShowNewPatientModal(true)} className="mt-12 bg-blue-600 text-white px-12 py-6 rounded-[2.5rem] font-black text-sm tracking-widest hover:bg-blue-700 transition-all shadow-2xl shadow-blue-100 uppercase">Nuevo Paciente</button>
                         </div>
                     </div>
                 )}
             </main>
 
-            {/* Modal de Resumen */}
-            {showSummaryModal && (
+            {/* SHARED MODAL COMPONENT */}
+            {(showSummaryModal || showFollowUpModal || showTumorBoardModal) && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-8">
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
                         <div className="p-8 border-b flex justify-between items-center bg-gray-50">
-                            <div className="flex items-center space-x-3 text-indigo-600 font-black text-sm uppercase tracking-widest"><FileOutput size={20}/><span>Resumen de Historia Clínica</span></div>
-                            <button onClick={() => setShowSummaryModal(false)} className="text-gray-400 hover:text-gray-600"><X size={28}/></button>
+                            <div className="flex items-center space-x-3 text-gray-800 font-black text-sm uppercase tracking-widest">
+                                {showSummaryModal ? <><FileOutput size={20} className="text-indigo-600"/><span>Resumen Clínico</span></> : 
+                                 showFollowUpModal ? <><ClipboardCheck size={20} className="text-teal-600"/><span>Seguimiento</span></> :
+                                 <><Presentation size={20} className="text-rose-600"/><span>Ateneo / Tumor Board</span></>}
+                            </div>
+                            <button onClick={() => {setShowSummaryModal(false); setShowFollowUpModal(false); setShowTumorBoardModal(false);}} className="text-gray-400 hover:text-gray-600"><X size={28}/></button>
                         </div>
                         <div className="flex-1 p-10 overflow-y-auto bg-gray-50/50">
-                            {isGeneratingSummary ? (
-                                <div className="h-full flex flex-col items-center justify-center text-indigo-400 space-y-6">
+                            {(isGeneratingSummary || isGeneratingFollowUp || isGeneratingTumorBoard) ? (
+                                <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-6">
                                     <Loader2 size={48} className="animate-spin" />
-                                    <p className="text-sm font-black uppercase tracking-widest">Redactando resumen profesional...</p>
+                                    <p className="text-sm font-black uppercase tracking-widest">Generando análisis experto...</p>
                                 </div>
                             ) : (
-                                <textarea className="w-full h-full bg-white p-10 rounded-3xl border border-gray-100 text-base font-mono leading-loose resize-none focus:outline-none" value={summaryText} readOnly />
+                                <textarea className="w-full h-full bg-white p-10 rounded-3xl border border-gray-100 text-base font-mono leading-loose resize-none focus:outline-none" value={showSummaryModal ? summaryText : showFollowUpModal ? followUpText : tumorBoardText} readOnly />
                             )}
                         </div>
                         <div className="p-8 border-t bg-white flex justify-end space-x-4">
-                            <button onClick={() => handlePrintPDF(summaryText)} className="flex items-center space-x-3 bg-gray-800 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all">
+                            <button onClick={() => handlePrintPDF(showSummaryModal ? summaryText : showFollowUpModal ? followUpText : tumorBoardText)} className="flex items-center space-x-3 bg-gray-800 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all">
                                 <FileDown size={16} /><span>Descargar PDF</span>
                             </button>
-                            <button onClick={() => {navigator.clipboard.writeText(summaryText); alert("Copiado al portapapeles");}} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all">Copiar Texto</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal de Sugerencia de Seguimiento */}
-            {showFollowUpModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-8">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
-                        <div className="p-8 border-b flex justify-between items-center bg-gray-50">
-                            <div className="flex items-center space-x-3 text-teal-600 font-black text-sm uppercase tracking-widest"><ClipboardCheck size={20}/><span>Plan de Seguimiento (NCCN/ESMO)</span></div>
-                            <button onClick={() => setShowFollowUpModal(false)} className="text-gray-400 hover:text-gray-600"><X size={28}/></button>
-                        </div>
-                        <div className="flex-1 p-10 overflow-y-auto bg-gray-50/50">
-                            {isGeneratingFollowUp ? (
-                                <div className="h-full flex flex-col items-center justify-center text-teal-400 space-y-6">
-                                    <Loader2 size={48} className="animate-spin" />
-                                    <p className="text-sm font-black uppercase tracking-widest">Analizando guías internacionales...</p>
-                                </div>
-                            ) : (
-                                <div className="w-full bg-white p-10 rounded-3xl border border-gray-100 text-base leading-loose whitespace-pre-wrap">
-                                    {followUpText}
-                                </div>
-                            )}
-                        </div>
-                        <div className="p-8 border-t bg-white flex justify-end space-x-4">
-                            <button onClick={() => handlePrintPDF(followUpText)} className="flex items-center space-x-3 bg-gray-800 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all">
-                                <FileDown size={16} /><span>Imprimir Plan</span>
-                            </button>
+                            <button onClick={() => {navigator.clipboard.writeText(showSummaryModal ? summaryText : showFollowUpModal ? followUpText : tumorBoardText); alert("Copiado");}} className="bg-blue-600 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all">Copiar</button>
                         </div>
                     </div>
                 </div>
