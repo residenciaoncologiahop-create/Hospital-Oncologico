@@ -10,7 +10,7 @@ import {
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
     List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal,
     Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation,
-    PanelLeftClose, PanelLeftOpen, Dna
+    PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 
 // --- FIREBASE CONFIGURATION ---
@@ -54,20 +54,17 @@ const logAction = async (action: string, patientId: string | null, doctorName: s
 // --- TYPES ---
 interface ChatMessage { role: 'user' | 'model'; text: string; timestamp: number; }
 interface ClinicalEvent { date: string; professional: string; category: string; note: string; isKey: boolean; }
-interface Biomarker { name: string; status: string; date: string; technique?: string; } 
 
 interface Patient {
     id: string;
     doctorId: string; 
     name: string;
     age: number;
-    sex: 'masculino' | 'femenino'; // CAMPO NUEVO
     diagnosis: string;
     historyText: string;
     lastUpdated: number;
     chatHistory?: ChatMessage[];
     timeline?: ClinicalEvent[];
-    biomarkers?: Biomarker[];
 }
 
 interface FileData { name: string; type: string; data: string; }
@@ -115,33 +112,7 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
     } catch (e) { console.error(e); return []; }
 };
 
-// 2. EXTRACT BIOMARKERS
-const extractBiomarkersFromDocs = async (text: string, files: FileData[]): Promise<Biomarker[]> => {
-    if (!text && files.length === 0) return [];
-    const apiKey = import.meta.env.VITE_API_KEY;
-    
-    try {
-        const ai = new GoogleGenAI({ apiKey: apiKey! });
-        const parts: any[] = [{ text: `
-            Actúa como un patólogo molecular. Extrae tabla de biomarcadores.
-            PRIVACIDAD: No incluyas DNI ni datos de contacto.
-            Busca: Receptores, HER2, Ki67, PD-L1, Mutaciones.
-            Retorna JSON Array: { "name", "status", "date", "technique" }.
-        `}];
-        
-        if (text) parts.push({ text: `Contexto anónimo: ${text}` });
-        files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
-
-        const res = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts },
-            config: { responseMimeType: "application/json" }
-        });
-        return JSON.parse(res.text || "[]");
-    } catch (e) { return []; }
-};
-
-// 3. GENERATORS (GENÉRICO)
+// 2. GENERATORS (GENÉRICO)
 const generateText = async (prompt: string, context: string, files: FileData[]) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey! });
@@ -155,7 +126,7 @@ const generateText = async (prompt: string, context: string, files: FileData[]) 
     return res.text || "Error.";
 };
 
-// 4. CHAT
+// 3. CHAT
 const getChatResponse = async (msgs: ChatMessage[], newMsg: string, context: string, files: FileData[]) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey! });
@@ -228,22 +199,19 @@ const App = () => {
     // UI State
     const [showLeftPanel, setShowLeftPanel] = useState(true);
 
-    // Patient Data (Nuevo estado para Sexo)
+    // Patient Data
     const [newPatientName, setNewPatientName] = useState('');
     const [newPatientAge, setNewPatientAge] = useState('');
-    const [newPatientSex, setNewPatientSex] = useState<'masculino' | 'femenino'>('masculino'); // Default
     const [newPatientDiagnosis, setNewPatientDiagnosis] = useState('');
 
     const [historyText, setHistoryText] = useState('');
     const [historyFiles, setHistoryFiles] = useState<FileData[]>([]);
     const [timeline, setTimeline] = useState<ClinicalEvent[]>([]);
-    const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
     const [guidelineFiles, setGuidelineFiles] = useState<FileData[]>([]);
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [chatInput, setChatInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
-    const [isAnalyzingBio, setIsAnalyzingBio] = useState(false); // Estado para biomarkers
     const [lastError, setLastError] = useState<string | null>(null);
     
     // Search
@@ -267,7 +235,7 @@ const App = () => {
     const [tumorBoardText, setTumorBoardText] = useState('');
     const [isGeneratingTumorBoard, setIsGeneratingTumorBoard] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'bio'>('docs');
+    const [activeTab, setActiveTab] = useState<'docs' | 'timeline'>('docs');
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -286,8 +254,7 @@ const App = () => {
                     id: doc.id, 
                     ...data,
                     name: data.name || '', 
-                    diagnosis: data.diagnosis || '',
-                    sex: data.sex || 'masculino' // RETROCOMPATIBILIDAD
+                    diagnosis: data.diagnosis || ''
                 } as Patient;
             });
             list.sort((a, b) => b.lastUpdated - a.lastUpdated);
@@ -313,7 +280,6 @@ const App = () => {
             if (p) {
                 setHistoryText(p.historyText || '');
                 setTimeline(p.timeline || []);
-                setBiomarkers(p.biomarkers || []);
                 setChatMessages(p.chatHistory || []);
                 setHistoryFiles([]); setGuidelineFiles([]);
                 setLastError(null);
@@ -325,18 +291,16 @@ const App = () => {
         }
     }, [selectedPatientId]);
 
-    // --- HELPER PARA ANONIMIZACIÓN (NUEVO) ---
+    // --- HELPER PARA ANONIMIZACIÓN (SIN SEXO, SOLO EDAD Y DX) ---
     const getAnonContext = (p: Patient) => {
-        // Reemplaza nombre por datos demográficos
-        return `Paciente ${p.sex}, ${p.age} años.
+        return `Paciente de ${p.age} años.
         Diagnóstico: ${p.diagnosis}.
         Historial: ${JSON.stringify(p.timeline || [])}.
-        Biomarcadores: ${JSON.stringify(p.biomarkers || [])}.
         Notas Clínicas (Anónimas): ${p.historyText || ''}`;
     };
     // ----------------------------------------
 
-    // Save Patient Details Helper (AQUÍ ESTÁ LA FUNCIÓN QUE FALTABA)
+    // Save Patient Details Helper
     const savePatientDetails = async () => {
         if (selectedPatientId) {
             const patientRef = doc(db, "patients", selectedPatientId);
@@ -372,23 +336,6 @@ const App = () => {
             setLastError(e.message || "Error procesando documentos.");
         } finally {
             setIsProcessingDocs(false);
-        }
-    };
-
-    const handleAnalyzeBiomarkers = async () => {
-        if (!selectedPatientId) return;
-        setIsAnalyzingBio(true);
-        try {
-            const bios = await extractBiomarkersFromDocs(historyText, historyFiles);
-            const combined = [...biomarkers, ...bios];
-            setBiomarkers(combined);
-            const patientRef = doc(db, "patients", selectedPatientId);
-            await updateDoc(patientRef, { biomarkers: combined, lastUpdated: Date.now() });
-            logAction('ANALYZE_BIOMARKERS', selectedPatientId, doctorName);
-        } catch (e: any) {
-             setLastError(e.message || "Error analizando biomarcadores");
-        } finally {
-            setIsAnalyzingBio(false);
         }
     };
 
@@ -508,7 +455,6 @@ const App = () => {
             doctorId: doctorName,
             name: newPatientName,
             age: parseInt(newPatientAge),
-            sex: newPatientSex, // GUARDAR SEXO
             diagnosis: newPatientDiagnosis,
             historyText: '',
             lastUpdated: Date.now(),
@@ -548,7 +494,7 @@ const App = () => {
                 <h1 className="text-2xl font-black text-gray-800 mb-2 tracking-tighter">OncoGuide AI</h1>
                 <p className="text-gray-400 mb-8 text-xs font-medium">Asistente Clínico de Nueva Generación</p>
                 <div className="space-y-4">
-                    <input type="text" className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-blue-100 outline-none transition-all font-bold text-center text-base" placeholder="Tu Nombre Profesional" onKeyDown={(e) => {if(e.key==='Enter' && (e.target as any).value && legalAccepted) setDoctorName((e.target as any).value)}} />
+                    <input type="text" className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-blue-100 outline-none transition-all font-bold text-center text-base" placeholder="Tu Nombre Profesional" onKeyDown={(e:any) => e.key === 'Enter' && legalAccepted && setDoctorName(e.target.value)} />
                     
                     <div className="flex items-start space-x-2 text-left px-2">
                         <input type="checkbox" id="legal" checked={legalAccepted} onChange={e => setLegalAccepted(e.target.checked)} className="mt-1" />
@@ -568,7 +514,7 @@ const App = () => {
     return (
         <div className="flex h-screen bg-white text-gray-800 font-medium text-xs overflow-hidden">
             {/* Sidebar */}
-            <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
+            <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full' lg:translate-x-0`}>
                 <div className="p-6 border-b flex items-center justify-between bg-white">
                     <div className="flex items-center space-x-2 text-blue-600 font-black text-xl tracking-tighter"><Activity size={24} /><span>OncoGuide</span></div>
                     <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-300"><X size={24}/></button>
@@ -637,11 +583,10 @@ const App = () => {
                             <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
                                 <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>1. Documentación</button>
                                 <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historial de Eventos</button>
-                                <button onClick={() => setActiveTab('bio')} className={`flex-1 py-4 flex items-center justify-center space-x-1 ${activeTab === 'bio' ? 'text-blue-600 bg-blue-50/50' : 'text-gray-400 hover:text-gray-600'}`}><Dna size={12}/><span>Bio Molecular</span></button>
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
-                                {activeTab === 'docs' && (
+                                {activeTab === 'docs' ? (
                                     <>
                                         <section className="space-y-4">
                                             <div className="flex items-center justify-between border-b border-gray-50 pb-2"><h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Historia Clínica Base</h3><button onClick={savePatientDetails} className="text-blue-600 font-bold text-[10px] hover:underline uppercase">Guardar Notas</button></div>
@@ -682,9 +627,7 @@ const App = () => {
                                             <FileUploader label="Guías NCCN / Protocolos" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
                                         </section>
                                     </>
-                                )}
-
-                                {activeTab === 'timeline' && (
+                                ) : (
                                     <div className="space-y-4 pt-2">
                                         {timeline.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center py-20 text-gray-200"><Clock size={40} className="mb-3 opacity-10" /><p className="text-xs font-black uppercase tracking-widest">Sin eventos</p></div>
@@ -708,35 +651,6 @@ const App = () => {
                                                 </div>
                                             ))
                                         )}
-                                    </div>
-                                )}
-
-                                {activeTab === 'bio' && (
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-center">
-                                            <h3 className="text-xs font-black text-purple-600 uppercase tracking-widest">Perfil Molecular</h3>
-                                            <button onClick={handleAnalyzeBiomarkers} disabled={isAnalyzingBio} className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-bold flex items-center space-x-1 hover:bg-purple-200">
-                                                {isAnalyzingBio ? <Loader2 className="animate-spin" size={10}/> : <Dna size={12}/>}<span>Detectar Biomarcadores</span>
-                                            </button>
-                                        </div>
-                                        {biomarkers.length === 0 ? (
-                                            <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200"><Dna className="mx-auto text-gray-200 mb-2" size={32}/><p className="text-gray-400 text-[10px]">No se detectaron datos moleculares.<br/>Sube informes de patología y pulsa Detectar.</p></div>
-                                        ) : (
-                                            <div className="grid grid-cols-1 gap-2">
-                                                {biomarkers.map((bio, i) => (
-                                                    <div key={i} className="bg-white p-3 rounded-xl border-l-4 border-purple-500 shadow-sm flex justify-between items-center">
-                                                        <div>
-                                                            <div className="text-xs font-black text-gray-800">{bio.name}</div>
-                                                            <div className="text-[10px] text-gray-500">{bio.date} {bio.technique ? `• ${bio.technique}` : ''}</div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="text-xs font-bold text-purple-700 bg-purple-50 px-2 py-1 rounded-md">{bio.status}</div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <FileUploader label="Informes Patología / NGS" files={historyFiles} setFiles={setHistoryFiles} />
                                     </div>
                                 )}
                             </div>
@@ -845,16 +759,9 @@ const App = () => {
                                     <input type="number" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="--" value={newPatientAge} onChange={e => setNewPatientAge(e.target.value)} />
                                 </div>
                                 <div className="w-2/3 space-y-2">
-                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Sexo</label>
-                                    <select required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all appearance-none" value={newPatientSex} onChange={e => setNewPatientSex(e.target.value as any)}>
-                                        <option value="masculino">Masculino</option>
-                                        <option value="femenino">Femenino</option>
-                                    </select>
+                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Base</label>
+                                    <input type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: Ca Mama" value={newPatientDiagnosis} onChange={e => setNewPatientDiagnosis(e.target.value)} />
                                 </div>
-                            </div>
-                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Base</label>
-                                <input type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: Ca Mama" value={newPatientDiagnosis} onChange={e => setNewPatientDiagnosis(e.target.value)} />
                             </div>
                             <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-xl text-xs font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase tracking-widest">Registrar Paciente</button>
                         </form>
