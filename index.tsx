@@ -78,7 +78,7 @@ const parseDate = (dateStr: string) => {
 };
 const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 
-// --- AI FUNCTIONS (PRIVACIDAD REFORZADA) ---
+// --- AI FUNCTIONS (PRIVACIDAD REFORZADA & MEJORA DE DATOS) ---
 
 // 1. EXTRACT TIMELINE
 const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
@@ -112,7 +112,7 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
     } catch (e) { console.error(e); return []; }
 };
 
-// 2. GENERATORS (GENÉRICO)
+// 2. GENERATORS (MEJORADO PARA INCLUIR ANTECEDENTES Y EF)
 const generateText = async (prompt: string, context: string, files: FileData[]) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey! });
@@ -371,7 +371,7 @@ const App = () => {
         }
     };
 
-    // GENERATORS - USAN getAnonContext
+    // GENERATORS - USAN getAnonContext & PROMPTS MEJORADOS
     const handleGenerateSummary = async () => {
         if (!selectedPatientId) return;
         const p = patients.find(pat => pat.id === selectedPatientId);
@@ -379,7 +379,18 @@ const App = () => {
         setIsGeneratingSummary(true); setShowSummaryModal(true); setSummaryText("Generando resumen...");
         
         const context = getAnonContext(p);
-        const prompt = "Genera Resumen HC Oncológico estructurado (Motivo, AP, Estudios, Dx, Tto) en Español.";
+        // PROMPT MEJORADO: Pide explícitamente Antecedentes y Examen Físico de los documentos adjuntos
+        const prompt = `
+            Genera un RESUMEN DE HISTORIA CLÍNICA oncológico profesional en ESPAÑOL basándote en los documentos adjuntos y las notas.
+            
+            ES OBLIGATORIO INCLUIR LAS SIGUIENTES SECCIONES (Extraer datos de los archivos adjuntos):
+            1. Motivo de Consulta y Enfermedad Actual.
+            2. ANTECEDENTES PERSONALES (Indagar en los archivos: Comorbilidades, Qx, Tóxicos, Familiares). SI NO HAY DATOS, INDICAR "No constan en documentos".
+            3. EXAMEN FÍSICO (Indagar en los archivos: ECOG/PS, hallazgos positivos). SI NO HAY DATOS, INDICAR "No consta en documentos".
+            4. Estudios Complementarios (Imágenes, Labs, AP).
+            5. Diagnóstico y Estadificación.
+            6. Evolución y Tratamientos previos.
+        `;
         
         const summary = await generateText(prompt, context, historyFiles);
         setSummaryText(summary); setIsGeneratingSummary(false);
@@ -407,7 +418,18 @@ const App = () => {
         setIsGeneratingTumorBoard(true); setShowTumorBoardModal(true); setTumorBoardText("Preparando presentación...");
         
         const context = getAnonContext(p);
-        const prompt = "Genera Presentación Ateneo (Titular, Resumen, Problema, Preguntas, Biblio) en Español.";
+        // PROMPT MEJORADO PARA ATENEO
+        const prompt = `
+            Genera Presentación para Ateneo/Comité de Tumores (Tumor Board) en ESPAÑOL.
+            
+            ESTRUCTURA OBLIGATORIA:
+            1. TITULAR DEL CASO.
+            2. ANTECEDENTES RELEVANTES Y EXAMEN FÍSICO (Extraer de documentos: Comorbilidades, PS).
+            3. RESUMEN CRONOLÓGICO DEL CASO.
+            4. PROBLEMA ACTUAL / MOTIVO DE PRESENTACIÓN.
+            5. PREGUNTAS AL COMITÉ.
+            6. BIBLIOGRAFÍA SUGERIDA.
+        `;
         
         const text = await generateText(prompt, context, historyFiles);
         setTumorBoardText(text); setIsGeneratingTumorBoard(false);
@@ -425,6 +447,9 @@ const App = () => {
 
     const handleSendMessage = async () => {
         if (!chatInput.trim() || !selectedPatientId) return;
+        const p = patients.find(pat => pat.id === selectedPatientId);
+        if(!p) return;
+
         setLastError(null);
         const newUserMsg: ChatMessage = { role: 'user', text: chatInput, timestamp: Date.now() };
         const updatedUser = [...chatMessages, newUserMsg];
@@ -486,7 +511,7 @@ const App = () => {
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
             <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-sm w-full border border-gray-100 text-center">
                 <div className="inline-block bg-blue-600 p-5 rounded-3xl shadow-xl shadow-blue-100 mb-8"><Stethoscope className="text-white w-10 h-10" /></div>
-                <h1 className="text-2xl font-black text-gray-800 mb-2 tracking-tighter">OncoGuide</h1>
+                <h1 className="text-2xl font-black text-gray-800 mb-2 tracking-tighter">OncoGuide AI</h1>
                 <p className="text-gray-400 mb-8 text-xs font-medium">Herramienta de apoyo a la discusión clínica y docencia</p>
                 <div className="space-y-4">
                     <input type="text" className="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-blue-100 outline-none transition-all font-bold text-center text-base" placeholder="Nombre del profesional" onKeyDown={(e) => {if(e.key==='Enter' && (e.target as any).value && legalAccepted) setDoctorName((e.target as any).value)}} />
@@ -612,15 +637,15 @@ const App = () => {
                                             <div className="grid grid-cols-3 gap-2">
                                                 <button onClick={handleGenerateSummary} disabled={isGeneratingSummary} className="flex flex-col items-center justify-center bg-indigo-50 text-indigo-600 border border-indigo-100 py-3 rounded-xl hover:bg-indigo-100 transition-all">
                                                     {isGeneratingSummary ? <Loader2 className="animate-spin mb-1" size={14} /> : <FileOutput size={14} className="mb-1" />}
-                                                    <span className="text-[9px] font-black tracking-widest">Resumen clínico del caso</span>
+                                                    <span className="text-[10px] font-black tracking-widest uppercase">RESUMEN CLÍNICO</span>
                                                 </button>
                                                 <button onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp} className="flex flex-col items-center justify-center bg-teal-50 text-teal-600 border border-teal-100 py-3 rounded-xl hover:bg-teal-100 transition-all">
                                                     {isGeneratingFollowUp ? <Loader2 className="animate-spin mb-1" size={14} /> : <ClipboardCheck size={14} className="mb-1" />}
-                                                    <span className="text-[9px] font-black tracking-widest">Aspectos a considerar en el seguimiento</span>
+                                                    <span className="text-[10px] font-black tracking-widest uppercase">PLAN SEGUIMIENTO</span>
                                                 </button>
                                                 <button onClick={handleGenerateTumorBoard} disabled={isGeneratingTumorBoard} className="flex flex-col items-center justify-center bg-rose-50 text-rose-600 border border-rose-100 py-3 rounded-xl hover:bg-rose-100 transition-all">
                                                     {isGeneratingTumorBoard ? <Loader2 className="animate-spin mb-1" size={14} /> : <Presentation size={14} className="mb-1" />}
-                                                    <span className="text-[9px] font-black tracking-widest">Discusión en ateneo / comité</span>
+                                                    <span className="text-[10px] font-black tracking-widest uppercase">ATENEO / COMITÉ</span>
                                                 </button>
                                             </div>
                                             <FileUploader label="Guías NCCN / Protocolos" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
@@ -689,7 +714,7 @@ const App = () => {
 
                             <div className="p-6 bg-white/80 backdrop-blur-md border-t">
                                 <div className="relative flex items-center bg-gray-50 rounded-3xl border-2 border-transparent focus-within:border-blue-100 focus-within:bg-white transition-all p-3 pl-6">
-                                    <textarea className="flex-1 bg-transparent text-sm font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" placeholder="Plantear dudas o aspectos a discutir en el equipo tratante." rows={1} value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} />
+                                    <textarea className="flex-1 bg-transparent text-sm font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" placeholder="Plantear dudas / aspectos a discutir" rows={1} value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} />
                                     <button onClick={handleSendMessage} disabled={!chatInput.trim() || isTyping} className="ml-3 p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-100 disabled:opacity-50 active:scale-90 transition-all"><MessageSquare size={20} /></button>
                                 </div>
                             </div>
@@ -749,8 +774,8 @@ const App = () => {
                         </div>
                         <form onSubmit={handleCreatePatient} className="p-8 space-y-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Código del caso / Iniciales</label>
-                                <input type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: G.E. / Caso 024" value={newPatientName} onChange={e => setNewPatientName(e.target.value)} />
+                                <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Nombre completo del paciente</label>
+                                <input type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: Juan Pérez" value={newPatientName} onChange={e => setNewPatientName(e.target.value)} />
                             </div>
                             <div className="flex space-x-4">
                                 <div className="w-1/3 space-y-2">
@@ -762,7 +787,7 @@ const App = () => {
                                     <input type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: Ca Mama" value={newPatientDiagnosis} onChange={e => setNewPatientDiagnosis(e.target.value)} />
                                 </div>
                             </div>
-                            <p className="text-xs text-gray-400 mt-4 text-center">No ingresar datos identificatorios personales. Este registro no sustituye la historia clínica institucional.</p>
+                            <p className="text-xs text-gray-400 mt-4 text-center">Uso exclusivo del equipo de salud. Este registro no reemplaza la historia clínica institucional.</p>
                             <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-xl text-xs font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase tracking-widest">Crear caso clínico</button>
                         </form>
                     </div>
