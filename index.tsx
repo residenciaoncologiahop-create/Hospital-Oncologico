@@ -80,7 +80,7 @@ const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDat
 
 // --- AI FUNCTIONS (PRIVACIDAD REFORZADA & MEJORA DE DATOS) ---
 
-// 1. EXTRACT TIMELINE
+// 1. EXTRACT TIMELINE (CON FILTRO DE CALIDAD AGREGADO)
 const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
     if (!text && files.length === 0) return [];
     const apiKey = import.meta.env.VITE_API_KEY;
@@ -95,6 +95,11 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
             - NO incluyas DNI, CUIT, direcciones, teléfonos ni el nombre propio del paciente en la salida.
             - Si encuentras un DNI, ignóralo.
             
+            REGLAS DE FILTRADO (IMPORTANTE):
+            - IGNORA encabezados de página, pies de página o fechas aisladas sin contexto médico.
+            - Solo extrae eventos que contengan una ACCIÓN médica o un HALLAZGO clínico claro.
+            - Si un evento no tiene descripción, NO lo generes.
+
             REGLAS DE FORMATO:
             - Idioma: ESPAÑOL.
             - Fechas: DD/MM/YYYY.
@@ -108,7 +113,21 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
             contents: { parts },
             config: { responseMimeType: "application/json" }
         });
-        return sortTimeline(JSON.parse(res.text || "[]"));
+
+        if (res.text) {
+            const rawEvents = JSON.parse(res.text);
+            
+            // --- FILTRO DE CALIDAD (SANITIZER) ---
+            // Eliminamos eventos vacíos o "fantasmas" que la IA pueda alucinar en docs largos
+            const validEvents = rawEvents.filter((e: any) => 
+                e.date && e.date.length > 0 && 
+                e.note && e.note.trim().length > 2 && // La nota debe tener contenido real
+                e.category
+            );
+            
+            return sortTimeline(validEvents); 
+        }
+        return [];
     } catch (e) { console.error(e); return []; }
 };
 
