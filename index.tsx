@@ -80,7 +80,7 @@ const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDat
 
 // --- AI FUNCTIONS (PRIVACIDAD REFORZADA & MEJORA DE DATOS) ---
 
-// 1. EXTRACT TIMELINE (CON FILTRO DE CALIDAD AGREGADO)
+// 1. EXTRACT TIMELINE (CORREGIDO: MANEJO ROBUSTO DE JSON)
 const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
     if (!text && files.length === 0) return [];
     const apiKey = import.meta.env.VITE_API_KEY;
@@ -104,6 +104,7 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
             - Idioma: ESPAÑOL.
             - Fechas: DD/MM/YYYY.
             - Categorías: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+            - La salida debe ser un ARRAY JSON plano.
         `}];
         if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
@@ -115,10 +116,18 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
         });
 
         if (res.text) {
-            const rawEvents = JSON.parse(res.text);
+            // Limpieza de posibles bloques markdown ```json ... ```
+            const cleanText = res.text.replace(/```json|```/g, '').trim();
+            let rawEvents = JSON.parse(cleanText);
+            
+            // CORRECCIÓN: Si la IA devuelve un objeto { events: [...] } en vez de [...]
+            if (!Array.isArray(rawEvents)) {
+                // Buscamos la primera propiedad que sea un array
+                const possibleArray = Object.values(rawEvents).find(val => Array.isArray(val));
+                rawEvents = possibleArray || [];
+            }
             
             // --- FILTRO DE CALIDAD (SANITIZER) ---
-            // Eliminamos eventos vacíos o "fantasmas" que la IA pueda alucinar en docs largos
             const validEvents = rawEvents.filter((e: any) => 
                 e.date && e.date.length > 0 && 
                 e.note && e.note.trim().length > 2 && // La nota debe tener contenido real
