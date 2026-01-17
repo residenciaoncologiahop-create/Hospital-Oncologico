@@ -80,7 +80,7 @@ const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDat
 
 // --- AI FUNCTIONS (PRIVACIDAD REFORZADA & MEJORA DE DATOS) ---
 
-// 1. EXTRACT TIMELINE (CORREGIDO: EXTRACCIÓN ROBUSTA DE JSON)
+// 1. EXTRACT TIMELINE (CORREGIDO: MAPE DE CLAVES FLEXIBLE)
 const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
     if (!text && files.length === 0) return [];
     const apiKey = import.meta.env.VITE_API_KEY;
@@ -95,11 +95,16 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
             - NO incluyas DNI, CUIT, direcciones, teléfonos ni el nombre propio del paciente en la salida.
             - Si encuentras un DNI, ignóralo.
             
-            REGLAS DE FORMATO:
-            - Idioma: ESPAÑOL.
-            - Fechas: DD/MM/YYYY.
-            - Categorías: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
-            - SOLO DEVUELVE EL ARRAY JSON. NO ESCRIBAS TEXTO ADICIONAL.
+            REGLAS DE FILTRADO (IMPORTANTE):
+            - IGNORA encabezados de página, pies de página o fechas aisladas sin contexto médico.
+            - Solo extrae eventos que contengan una ACCIÓN médica o un HALLAZGO clínico claro.
+            - Si un evento no tiene descripción, NO lo generes.
+
+            REGLAS DE FORMATO JSON:
+            - Devuelve un ARRAY de objetos JSON.
+            - Usa EXACTAMENTE estas claves en el JSON: "date", "category", "note", "professional", "isKey".
+            - Idioma del contenido: ESPAÑOL.
+            - Formato de fecha: DD/MM/YYYY.
         `}];
         if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
@@ -111,36 +116,39 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
         });
 
         if (res.text) {
-            // --- CORRECCIÓN: BUSCAR EL JSON DENTRO DEL TEXTO ---
-            // A veces la IA añade texto antes o después. Buscamos el primer '[' y el último ']'.
-            const firstBracket = res.text.indexOf('[');
-            const lastBracket = res.text.lastIndexOf(']');
-            
+            const cleanText = res.text.replace(/```json|```/g, '').trim();
             let rawEvents = [];
             
-            if (firstBracket !== -1 && lastBracket !== -1) {
-                const jsonString = res.text.substring(firstBracket, lastBracket + 1);
-                rawEvents = JSON.parse(jsonString);
-            } else {
-                // Fallback si no encuentra array, intenta parsear todo (ej: si devolvió un objeto)
-                const parsed = JSON.parse(res.text);
-                // Si es un objeto { events: [...] }, extraemos el array
-                if (!Array.isArray(parsed)) {
-                    const possibleArray = Object.values(parsed).find(val => Array.isArray(val));
-                    rawEvents = possibleArray || [];
+            // Intento de parseo robusto
+            try {
+                // Buscamos array explícito
+                const firstBracket = cleanText.indexOf('[');
+                const lastBracket = cleanText.lastIndexOf(']');
+                if (firstBracket !== -1 && lastBracket !== -1) {
+                    rawEvents = JSON.parse(cleanText.substring(firstBracket, lastBracket + 1));
                 } else {
-                    rawEvents = parsed;
+                    const parsed = JSON.parse(cleanText);
+                    if (Array.isArray(parsed)) rawEvents = parsed;
+                    else if (typeof parsed === 'object') {
+                        // Si devuelve { events: [...] }
+                        const possibleArray = Object.values(parsed).find(val => Array.isArray(val));
+                        rawEvents = possibleArray || [];
+                    }
                 }
+            } catch (e) {
+                console.error("Error parsing JSON response", e);
+                return [];
             }
 
-            // --- FILTRO DE CALIDAD ---
+            // --- FILTRO DE CALIDAD Y MAPEO FLEXIBLE ---
             const validEvents = rawEvents.map((e: any) => ({
-                date: e.date || "S/F", // Fecha fallback
-                professional: e.professional || "N/A",
-                category: e.category || "General",
-                note: e.note || e.description || "Evento sin descripción", // Fallback para alucinaciones de nombre de campo
-                isKey: !!e.isKey
-            })).filter((e: any) => e.note.length > 2); // Filtro final de contenido mínimo
+                // Busca claves en inglés, español o mayúsculas para evitar "S/F" o "General" por error
+                date: e.date || e.fecha || e.Date || "S/F",
+                professional: e.professional || e.profesional || e.medico || "N/A",
+                category: e.category || e.categoria || "General",
+                note: e.note || e.nota || e.descripcion || e.description || e.event || "Evento sin descripción",
+                isKey: !!(e.isKey || e.esClave || e.importante)
+            })).filter((e: any) => e.note && e.note.length > 2 && e.note !== "Evento sin descripción"); 
             
             return sortTimeline(validEvents); 
         }
