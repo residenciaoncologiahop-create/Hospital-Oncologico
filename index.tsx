@@ -80,7 +80,7 @@ const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDat
 
 // --- AI FUNCTIONS (PRIVACIDAD REFORZADA & MEJORA DE DATOS) ---
 
-// 1. EXTRACT TIMELINE (CORREGIDO: MANEJO ROBUSTO DE JSON)
+// 1. EXTRACT TIMELINE (CORREGIDO: EXTRACCIÓN ROBUSTA DE JSON)
 const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
     if (!text && files.length === 0) return [];
     const apiKey = import.meta.env.VITE_API_KEY;
@@ -95,16 +95,11 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
             - NO incluyas DNI, CUIT, direcciones, teléfonos ni el nombre propio del paciente en la salida.
             - Si encuentras un DNI, ignóralo.
             
-            REGLAS DE FILTRADO (IMPORTANTE):
-            - IGNORA encabezados de página, pies de página o fechas aisladas sin contexto médico.
-            - Solo extrae eventos que contengan una ACCIÓN médica o un HALLAZGO clínico claro.
-            - Si un evento no tiene descripción, NO lo generes.
-
             REGLAS DE FORMATO:
             - Idioma: ESPAÑOL.
             - Fechas: DD/MM/YYYY.
             - Categorías: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
-            - La salida debe ser un ARRAY JSON plano.
+            - SOLO DEVUELVE EL ARRAY JSON. NO ESCRIBAS TEXTO ADICIONAL.
         `}];
         if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
@@ -116,23 +111,36 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
         });
 
         if (res.text) {
-            // Limpieza de posibles bloques markdown ```json ... ```
-            const cleanText = res.text.replace(/```json|```/g, '').trim();
-            let rawEvents = JSON.parse(cleanText);
+            // --- CORRECCIÓN: BUSCAR EL JSON DENTRO DEL TEXTO ---
+            // A veces la IA añade texto antes o después. Buscamos el primer '[' y el último ']'.
+            const firstBracket = res.text.indexOf('[');
+            const lastBracket = res.text.lastIndexOf(']');
             
-            // CORRECCIÓN: Si la IA devuelve un objeto { events: [...] } en vez de [...]
-            if (!Array.isArray(rawEvents)) {
-                // Buscamos la primera propiedad que sea un array
-                const possibleArray = Object.values(rawEvents).find(val => Array.isArray(val));
-                rawEvents = possibleArray || [];
+            let rawEvents = [];
+            
+            if (firstBracket !== -1 && lastBracket !== -1) {
+                const jsonString = res.text.substring(firstBracket, lastBracket + 1);
+                rawEvents = JSON.parse(jsonString);
+            } else {
+                // Fallback si no encuentra array, intenta parsear todo (ej: si devolvió un objeto)
+                const parsed = JSON.parse(res.text);
+                // Si es un objeto { events: [...] }, extraemos el array
+                if (!Array.isArray(parsed)) {
+                    const possibleArray = Object.values(parsed).find(val => Array.isArray(val));
+                    rawEvents = possibleArray || [];
+                } else {
+                    rawEvents = parsed;
+                }
             }
-            
-            // --- FILTRO DE CALIDAD (SANITIZER) ---
-            const validEvents = rawEvents.filter((e: any) => 
-                e.date && e.date.length > 0 && 
-                e.note && e.note.trim().length > 2 && // La nota debe tener contenido real
-                e.category
-            );
+
+            // --- FILTRO DE CALIDAD ---
+            const validEvents = rawEvents.map((e: any) => ({
+                date: e.date || "S/F", // Fecha fallback
+                professional: e.professional || "N/A",
+                category: e.category || "General",
+                note: e.note || e.description || "Evento sin descripción", // Fallback para alucinaciones de nombre de campo
+                isKey: !!e.isKey
+            })).filter((e: any) => e.note.length > 2); // Filtro final de contenido mínimo
             
             return sortTimeline(validEvents); 
         }
