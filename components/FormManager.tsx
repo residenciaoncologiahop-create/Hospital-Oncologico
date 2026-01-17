@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
-// CORRECCIÓN: Se agregó AlertTriangle que faltaba
-import { FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle } from 'lucide-react';
+// CORRECCIÓN: Se agregaron CheckCircle2 y Map a los imports
+import { 
+  FileText, 
+  Loader2, 
+  Wand2, 
+  UserCog, 
+  Save, 
+  X, 
+  Download, 
+  FilePlus, 
+  ExternalLink, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Map 
+} from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { GoogleGenAI } from "@google/genai";
 
@@ -308,6 +321,42 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
+  // FUNCION AUXILIAR PARA MAPEO DE DEPURACION (Mantener por si acaso)
+  const generateFieldMap = async (formDef: any) => {
+    setProcessingId('map-' + formDef.id);
+    setStatus('Generando mapa...');
+    try {
+      const formUrl = window.location.origin + formDef.file;
+      const res = await fetch(formUrl);
+      if (!res.ok) throw new Error("Archivo no encontrado");
+      const formBytes = await res.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(formBytes);
+      const form = pdfDoc.getForm();
+      const fields = form.getFields();
+      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      fields.forEach(field => {
+        const name = field.getName();
+        if (field.constructor.name === 'PDFTextField') {
+            const textField = form.getTextField(name);
+            textField.setText(name); 
+            textField.setFontSize(6);
+            textField.setFont(helveticaFont);
+            textField.setTextColor(rgb(1, 0, 0));
+        }
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `MAPA_ROJO_${formDef.name}.pdf`;
+      link.click();
+      alert("✅ Mapa descargado.");
+    } catch (e: any) { alert('Error: ' + e.message); } 
+    finally { setProcessingId(null); setStatus(''); }
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -397,7 +446,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
                 {/* Link Externo PAMI (Solo para PAMI) */}
                 {form.id === 'pami' && (
-                    <a href="https://cup.pami.org.ar/controllers/loginController.php" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center px-3 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 border border-teal-100"><ExternalLink size={14} /></a>
+                    <>
+                    <a href="https://cup.pami.org.ar/controllers/loginController.php" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center px-3 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 border border-teal-100" title="Web PAMI"><ExternalLink size={14} /></a>
+                    <button onClick={() => generateFieldMap(form)} className="flex items-center justify-center px-3 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 border border-purple-100" title="Mapa Rojo"><Map size={14} /></button>
+                    </>
                 )}
             </div>
           </div>
