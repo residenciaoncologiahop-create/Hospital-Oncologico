@@ -96,16 +96,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const parts: any[] = [
       { text: `
-        Actúa como un ONCÓLOGO EXPERTO completando una planilla oficial (PAMI) con espacio MUY LIMITADO.
+        Actúa como un ONCÓLOGO llenando un formulario oficial (PAMI) con espacio MUY LIMITADO.
         
         REGLAS DE LONGITUD Y FORMATO (ESTRICTAS):
-        1. **Diagnóstico (CIE10):** MÁXIMO 85 caracteres. Usa abreviaturas (ej: "Ca." por "Carcinoma", "MTS" por "Metástasis").
-        2. **Histopatológico:** MÁXIMO 85 caracteres. Resume (ej: "AdenoCa moderadamente diferenciado").
-        3. **Ciclos:** MÁXIMO 41 caracteres. Ej: "Hasta progresión" o "Plan 6 ciclos".
-        4. **Antecedentes Qx:** MÁXIMO 80 caracteres. Ej: "Mastectomía izq (2020)".
-        5. **Antecedentes RT:** MÁXIMO 75 caracteres. Ej: "RT mama 50Gy (2021)".
-        6. **Laboratorio:** MÁXIMO 85 caracteres. EMPIEZA DIRECTO con fecha. Formato: "14/8/25: Hb 9 / HTO 8 / GB 5300 / NS 45%". NO escribas la palabra "Laboratorio".
-        7. **Informe Clínico:** Extenso (hasta 1595 car.), detallado y técnico.
+        1. **Diagnóstico:** MÁXIMO 85 caracteres. Usa abreviaturas (ej: "Ca." por "Carcinoma").
+        2. **Histopatológico:** MÁXIMO 85 caracteres.
+        3. **Ciclos:** MÁXIMO 41 caracteres. Ej: "Hasta progresión".
+        4. **Antecedentes Qx:** MÁXIMO 80 caracteres.
+        5. **Antecedentes RT:** MÁXIMO 75 caracteres.
+        6. **Laboratorio:** MÁXIMO 85 caracteres. Formato EXACTO: "14/8/25: Hb 9 / GB 5300 / Plaq 150k".
+        7. **Informe Clínico Actual:** MÁXIMO 1400 caracteres. Resumen técnico completo: Dx, fechas clave, cirugías y justificación.
         
         Extrae este JSON exacto:
         {
@@ -124,8 +124,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "linea_tratamiento": "1ra, 2da...",
           "antecedentes_qx": "Texto < 80 chars",
           "antecedentes_radio": "Texto < 75 chars",
-          "laboratorio_formateado": "DD/MM/AA: valores... (< 85 chars)",
-          "informe_clinico_detallado": "Texto largo y detallado",
+          "laboratorio_formateado": "Texto < 85 chars con fecha",
+          "informe_clinico_detallado": "Texto < 1400 chars",
           "motivo_solicitud": "Inicio/Renovación...",
           "tipo_tratamiento": "Adyuvante/Avanzado...",
           "ciclos_planeados": "Texto < 41 chars",
@@ -155,6 +155,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
     const text = res.text || "{}";
     let cleanText = text.replace(/```json|```/g, '').trim();
+    // Limpieza de seguridad para evitar errores de parseo
     const firstBrace = cleanText.indexOf('{');
     const lastBrace = cleanText.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) {
@@ -185,15 +186,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
 
-      // HELPER CON TRUNCADO AUTOMÁTICO
       const setText = (name: string, val: string, limit?: number) => {
         try { 
             const f = form.getTextField(name); 
             if (val) {
                 let textToWrite = String(val);
-                if (limit && textToWrite.length > limit) {
-                    textToWrite = textToWrite.substring(0, limit);
-                }
+                if (limit && textToWrite.length > limit) textToWrite = textToWrite.substring(0, limit);
                 f.setText(textToWrite); 
             }
         } catch (e) {}
@@ -203,29 +201,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {}
       };
 
-      // DATOS MÉDICO
-      const cuilRaw = doctorData.cuil.replace(/[^0-9]/g, '');
-      const cuilPre = cuilRaw.substring(0, 2);
-      const cuilDni = cuilRaw.substring(2, cuilRaw.length - 1);
-      const cuilSuf = cuilRaw.substring(cuilRaw.length - 1);
-
-      const celRaw = doctorData.celular.replace(/[^0-9]/g, '');
-      let celArea = "";
-      let celNum = "";
-      if (celRaw.length >= 10) {
-          celArea = celRaw.substring(0, celRaw.length - 8); 
-          celNum = celRaw.substring(celRaw.length - 8);
-      } else {
-          celNum = celRaw;
-      }
-
+      // --- PAMI FORM LOGIC ---
       if (formDef.id === 'pami') {
         setText('Apellido y Nombre', finalName);
         setText('Beneficiario Nº', ''); 
         setText('Celular', aiData.paciente_celular);
         setText('Fecha de nacimiento', aiData.paciente_fnac);
 
-        // APLICANDO LÍMITES DE CARACTERES
+        // TEXTOS LIMITADOS
         setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10, 85);
         setText('Diagnóstico CIE 10', aiData.diagnostico_cie10, 85);
         setText('Histopatológico', aiData.histopatologico, 85);
@@ -244,16 +227,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         if (aiData.motivo_solicitud?.toLowerCase().includes('toxicidad')) setCheck('Cambio de Toxicidad', true);
         if (aiData.motivo_solicitud?.toLowerCase().includes('progresi')) setCheck('Cambio por Progresión', true);
 
-        // CICLOS LIMITADO
         setText('Ciclos', aiData.ciclos_planeados, 41);
         setText('Días', aiData.frecuencia_dias);
 
-        // ANTECEDENTES LIMITADOS
         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 80);
         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 75);
         
-        // INFORME EXTENSO + LAB LIMITADO
-        setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1595); 
+        // INFORME (1400) + LAB (85)
+        setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1400); 
         setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 85);
         
         setText('Peso', aiData.peso);
@@ -277,22 +258,46 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
         }
 
+        // --- DATOS MÉDICO (SPLIT CORRECTO) ---
         setText('Apellido y Nombre_2', doctorData.nombre);
         setText('Matricula', doctorData.matricula);
         setText('Especialidad', doctorData.especialidad);
         setText('Email_2', doctorData.email);
         setText('Provincia', doctorData.provincia);
 
-        setText('CUIL', doctorData.cuil); 
-        setText('CUIL1', cuilPre);
-        setText('CUIL2', cuilDni);
-        setText('CUIL3', cuilSuf);
-        
-        setText('Celular_2', celArea); 
-        setText('Celular1', celNum);   
-        
+        // CUIL dividido (2 - 8 - 1)
+        const cuilRaw = doctorData.cuil.replace(/[^0-9]/g, '');
+        setText('CUIL1', cuilRaw.substring(0, 2));      // Prefijo
+        setText('CUIL2', cuilRaw.substring(2, cuilRaw.length - 1)); // DNI
+        setText('CUIL3', cuilRaw.substring(cuilRaw.length - 1));    // Verificador
+        // Fallback: intentamos también "CUIT" por si el PDF usa ese nombre
+        setText('CUIT1', cuilRaw.substring(0, 2));
+        setText('CUIT2', cuilRaw.substring(2, cuilRaw.length - 1));
+        setText('CUIT3', cuilRaw.substring(cuilRaw.length - 1));
+
+        // Celular dividido (Área - Número)
+        const celRaw = doctorData.celular.replace(/[^0-9]/g, '');
+        let celArea = "";
+        let celNum = "";
+        // Lógica: Si tiene más de 8 dígitos, asumimos los últimos 8 son el número (ej: 1512345678)
+        // y lo anterior es la característica (ej: 351).
+        if (celRaw.length > 8) {
+            celNum = celRaw.substring(celRaw.length - 8);
+            celArea = celRaw.substring(0, celRaw.length - 8);
+        } else {
+            celNum = celRaw;
+        }
+
+        // Probamos nombres estándar: Celular (izq) y Celular_2 (der)
+        setText('Celular', celArea);   
+        setText('Celular_2', celNum);  
+        // Fallback
+        setText('Celular1', celArea);
+        setText('Celular2', celNum);
+
         setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
       } 
+      // ... OTROS FORMULARIOS (Misma lógica anterior) ...
       else if (formDef.id === 'admision') {
         setText('Text1', finalName);
         setText('Text3', aiData.paciente_fnac);
@@ -381,7 +386,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             </div>
             <div className="col-span-2">
               <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Celular (Área + Número)</label>
-              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.celular} onChange={e => setDoctorData({...doctorData, celular: e.target.value})} placeholder="11 12345678" />
+              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.celular} onChange={e => setDoctorData({...doctorData, celular: e.target.value})} placeholder="351 155123456" />
             </div>
           </div>
           <button onClick={saveDoctorData} className="w-full bg-blue-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 flex items-center justify-center space-x-2">
