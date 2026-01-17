@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink } from 'lucide-react';
+// CORRECCIÓN: Se agregó AlertTriangle que faltaba
+import { FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { GoogleGenAI } from "@google/genai";
 
@@ -35,6 +36,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     alert("Datos guardados.");
   };
 
+  // CONFIGURACIÓN MIXTA: PAMI (Auto) vs BANCO (Manual)
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'manual' },
@@ -58,21 +60,21 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     return "";
   };
 
-  // --- FUNCIÓN 1: DESCARGAR PLANTILLA VACÍA (Para Banco de Drogas) ---
+  // --- FUNCIÓN 1: DESCARGAR PLANTILLA VACÍA ---
   const downloadTemplate = async (formDef: any) => {
     try {
         const link = document.createElement('a');
-        link.href = formDef.file;
+        link.href = formDef.file; // Descarga el archivo local de /public
         link.download = `${formDef.name}_Plantilla.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     } catch (e) {
-        alert("Error al descargar plantilla");
+        alert("Error al descargar plantilla. Verifique que el archivo exista en la carpeta /public/forms/");
     }
   };
 
-  // --- FUNCIÓN 2: GENERAR RESUMEN CLÍNICO (Para adjuntar) ---
+  // --- FUNCIÓN 2: GENERAR RESUMEN CLÍNICO (PDF NUEVO) ---
   const generateClinicalSummary = async () => {
     if (!historyText) {
         alert("Falta historia clínica para generar el resumen.");
@@ -140,8 +142,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             page.drawText(currentLine, { x: 50, y, size: fontSize, font });
             y -= 20; // Salto de párrafo
             
-            if (y < 50) { // Nueva página si se acaba el espacio (básico)
-                 // (Omitido para simplificar, usualmente entra en 1 página)
+            if (y < 50) { 
+                 // (Simplificado: si se llena la página, corta. Idealmente agregaríamos páginas nuevas)
             }
         });
 
