@@ -53,7 +53,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const calculateAge = (dateString: string) => {
     if (!dateString) return "";
-    // Intenta parsear DD/MM/AAAA
     const parts = dateString.split(/[\/\-]/);
     if (parts.length !== 3) return "";
     const day = parseInt(parts[0], 10);
@@ -121,7 +120,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     let promptText = "";
 
-    // --- PROMPT PAMI (INTACTO - NO MODIFICAR) ---
+    // --- PROMPT PAMI (MANTENIDO INTACTO) ---
     if (formId === 'pami') {
         promptText = `
         Actúa como un ONCÓLOGO EXPERTO. Hoy es ${today}.
@@ -150,37 +149,45 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "droga_2": "Droga 2", "presentacion_2": "Presentación", "dosis_2": "Dosis"
         }`;
     } 
-    // --- PROMPT BANCO DE DROGAS (MEJORADO Y CORREGIDO) ---
-    else {
+    // --- PROMPT ADMISIÓN BANCO DE DROGAS (CORREGIDO PROFUNDAMENTE) ---
+    else if (formId === 'admision' || formId === 'renovacion') {
         promptText = `
-        Actúa como ONCÓLOGO para formulario de Banco de Drogas.
+        Actúa como ONCÓLOGO para completar el FORMULARIO DE ADMISIÓN (Banco de Drogas).
+        Analiza TODOS los documentos adjuntos, especialmente los encabezados de las evoluciones.
         
-        INSTRUCCIONES CRÍTICAS:
-        1. **Datos Personales:** Busca DNI, Profesión (ej: "Construcción", "Albañil"), Dirección exacta (Calle y Número) y Localidad.
-        2. **Institución:** "Hospital Oncológico Dr. José Miguel Urrutia".
-        3. **Diagnóstico:** Completo y detallado. CIE10 (ej: C44.6).
-        4. **TNM:** Extrae T, N y M por separado. Ej: T4, N1, M0.
-        5. **Receptores:** Si es Cáncer de Piel, Melanoma o Sarcoma -> "NO APLICA".
-        6. **Cirugías:** Detalla fecha y procedimiento (ej: "23/10/23 Resección local").
-        7. **Pembrolizumab:** Si la droga es Pembrolizumab, LA DOSIS ES FIJA: "200 mg" (No calcular por m2).
-        8. **Radioterapia:** Si dice "No realizada" o "No factible", marca NO.
+        CORRECCIONES CRÍTICAS:
+        1. **DNI vs Edad:** El DNI es un número largo (ej: 16xxxxxx). La Edad son 2 dígitos. NO LOS MEZCLES.
+        2. **Profesión/Ocupación:** Busca "Ocupación:" o "Trabajo:". Ej: "Construcción", "Albañil".
+        3. **Domicilio:** Busca en el encabezado. Ej: "Leobuco 5345".
+        4. **Diagnóstico:** DEBE ser la descripción médica completa (ej: "Carcinoma epidermoide..."). NUNCA pongas el país aquí.
+        5. **CIE10:** Busca el código específico (ej: C44.6).
+        6. **Receptores:** SI ES CÁNCER DE PIEL/EPIDERMOIDE -> "NO APLICA". NO INVENTES VALORES.
+        7. **TNM:** Extrae T, N y M exactos (ej: T4 N1 M0).
+        8. **Tratamientos Previos:** - Cirugías: Lista fechas y procedimientos.
+           - RT: Si dice "no realizada" o "no factible", es NO.
+        9. **Esquema Actual (Pembrolizumab):** - Dosis: "200 mg dosis fija" (NO usar mg/m2).
+           - Intervalo: "C/ 21 DÍAS".
+           - Ciclos: "Hasta progresión o toxicidad".
         
-        JSON REQUERIDO:
+        JSON EXACTO REQUERIDO:
         {
           "paciente_nombre": "Nombre Completo", 
           "paciente_nacionalidad": "Argentina", 
           "paciente_fnac": "DD/MM/AAAA",
-          "paciente_dni": "DNI sin puntos", 
-          "paciente_profesion": "Ocupación/Profesión", 
+          "paciente_dni": "DNI correcto", 
+          "paciente_profesion": "Ocupación encontrada", 
           "paciente_sexo": "M/F",
           "paciente_domicilio": "Calle y Altura", 
           "paciente_localidad": "Localidad", 
           "paciente_provincia": "Provincia",
           "paciente_telefono": "Teléfono", 
           "institucion_hospital": "Hospital Oncológico Dr. José Miguel Urrutia",
-          "diagnostico_texto": "Dx Completo Recidivado etc", 
+          "diagnostico_texto": "Dx Médico Completo (NO poner Argentina)", 
           "cie10": "Código CIE10", 
           "fecha_dx": "DD/MM/AAAA (Fecha Dx Inicial)",
+          "receptores_er": "Pos/Neg/No Aplica", 
+          "receptores_pr": "Pos/Neg/No Aplica", 
+          "receptores_her2": "Pos/Neg/No Aplica",
           "tnm_t": "Valor T", "tnm_n": "Valor N", "tnm_m": "Valor M", 
           "estadio": "Estadio (ej: IVA)",
           "anatomia_patologica": "Resumen Biopsias y Cirugías", 
@@ -194,8 +201,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "ciclos_programados": "Texto (ej: Hasta progresión)", 
           "intervalo_dias": "Cada X días",
           "droga_1": "Nombre Droga", 
-          "dosis_1_mg_m2": "Dosis (mg/m2 o Fija)", 
-          "dias_1": "Días",
+          "dosis_1_mg_m2": "Dosis Texto (ej: 200 mg fijos)", 
+          "dias_1": "Días (ej: D1)", "dosis_total_1": "Total mg",
           "metastasis_sitios": "Sitios MTS (Ganglios, Pulmón, etc)",
           "motivo_renovacion": "Continuidad/Toxicidad/Progresión"
         }`;
@@ -245,7 +252,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       
       const finalName = aiData.paciente_nombre_real || aiData.paciente_nombre || patient.name;
       
-      // Cálculo de Edad
       const cleanFnac = cleanDate(aiData.paciente_fnac);
       const edadCalculada = calculateAge(cleanFnac);
 
@@ -275,7 +281,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {}
       };
 
-      // --- LÓGICA PAMI (INTACTA - NO TOCAR) ---
+      // --- PAMI (INTACTO) ---
       if (formDef.id === 'pami') {
          setText('Apellido y Nombre', finalName);
          setText('Beneficiario Nº', ''); 
@@ -329,89 +335,87 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
          setText('Celular', doctorData.cel_area); setText('Celular1', doctorData.cel_num); setText('Celular_2', doctorData.cel_num); 
          setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
       } 
-      // --- LÓGICA BANCO DE DROGAS (CORREGIDA Y EXPANDIDA) ---
+      // --- ADMISIÓN Y RENOVACIÓN BANCO DE DROGAS ---
       else if (formDef.id === 'admision' || formDef.id === 'renovacion') {
-         // 1. DATOS PACIENTE
-         setText('Text1', finalName); // Nombre
-         setText('Text2', "Argentina"); // Nacionalidad forzada si es de Cba
-         setText('Text3', cleanFnac); // Fecha Nac
-         setText('Text4', aiData.paciente_dni);
+         // 1. DATOS PACIENTE CORREGIDOS
+         setText('Text1', finalName); 
+         setText('Text2', "Argentina"); // País Fijo
+         setText('Text3', cleanFnac); 
+         setText('Text4', aiData.paciente_dni); // DNI Correcto
          setText('Text5', aiData.paciente_profesion);
          
-         // Sexo (Checkboxes aproximados)
+         // Sexo
          if (aiData.paciente_sexo === 'M') setCheck('Check Box1', true);
-         if (aiData.paciente_sexo === 'F') setCheck('Check Box2', true);
+         else setCheck('Check Box2', true);
          
-         setText('Text6', edadCalculada); // Edad calculada
+         setText('Text6', edadCalculada); // EDAD en su campo
+         
          setText('Text14', aiData.paciente_domicilio);
          setText('Text15', aiData.paciente_telefono);
          setText('Text16', aiData.paciente_localidad);
          setText('Text17', aiData.paciente_provincia || "Córdoba");
          setText('Text18', "Argentina");
-         setText('Text19', "Hospital Oncológico Dr. José Miguel Urrutia"); // Nombre completo
+         setText('Text19', "Hospital Oncológico Dr. José Miguel Urrutia"); // Nombre completo fijo
 
-         // 2. DATOS CLÍNICOS
-         setText('Text20', aiData.diagnostico_texto);
+         // 2. CLÍNICA
+         setText('Text20', aiData.diagnostico_texto); // Diagnóstico real
          setText('Text21', aiData.cie10);
          
-         // RECEPTORES: Lógica para ocultar si no aplica
+         // LÓGICA RECEPTORES (Anti-Error para Piel/Melanoma)
          const dxLower = aiData.diagnostico_texto?.toLowerCase() || "";
          if (dxLower.includes('epidermoide') || dxLower.includes('piel') || dxLower.includes('escamoso')) {
-             setText('Text22', "NO APLICA (Ca. Epidermoide)"); // O dejar vacío
+             setText('Text22', "NO APLICA"); 
          } else {
              setText('Text22', `RE: ${aiData.receptores_er} RP: ${aiData.receptores_pr}`);
          }
          
-         // TNM separado
+         // TNM DETALLADO
          setText('Text28', `T: ${aiData.tnm_t}  N: ${aiData.tnm_n}  M: ${aiData.tnm_m}`); 
-         setText('Text30', aiData.estadio); // Estadio
-         setText('Text27', cleanDate(aiData.fecha_dx)); // Fecha Dx
-         setText('Text31', aiData.anatomia_patologica); // AP Completa
+         setText('Text30', aiData.estadio); 
+         setText('Text27', cleanDate(aiData.fecha_dx)); 
+         setText('Text31', aiData.anatomia_patologica); 
          
-         // 3. FÍSICO Y ECOG
+         // 3. FÍSICO
          setText('Text39', aiData.peso);
          setText('Text40', aiData.talla);
          setText('Text32', bsa);
-         if (aiData.ecog == '1') setCheck('Check Box4', true); // Check ECOG 1
+         if (aiData.ecog == '1') setCheck('Check Box4', true);
          
          // 4. TRATAMIENTOS PREVIOS
          if (aiData.tx_previo_cx_detalle) {
              setCheck('Check Box7', true); // Cirugía SI
-             setText('Text41', aiData.tx_previo_cx_detalle); // Especificar Cirugías
+             setText('Text41', aiData.tx_previo_cx_detalle);
          }
          
-         // RT
+         // RT: Si dice NO, marcar el NO (Check Box10 suele ser NO)
          if (aiData.tx_previo_rt_realizo === "SI") {
              setCheck('Check Box9', true); 
          } else {
-             setCheck('Check Box10', true); // NO RT
+             setCheck('Check Box10', true); 
          }
 
-         // Quimio previa
          if (aiData.tx_previo_quimio_detalle) {
-             setCheck('Check Box11', true); // Sistémicos SI
+             setCheck('Check Box11', true); 
              setText('Text55', aiData.tx_previo_quimio_detalle);
          }
          
-         // 5. TRATAMIENTO SOLICITADO
-         // Inmunoterapia checkbox
-         setCheck('Check Box13', true); 
-         // Avanzado checkbox
-         setCheck('Check Box17', true); 
-         setText('Text69', aiData.tx_actual_linea); // Nro Linea
+         // 5. TRATAMIENTO ACTUAL
+         setCheck('Check Box13', true); // Terapias Blanco
+         setCheck('Check Box17', true); // Avanzado
+         setText('Text69', aiData.tx_actual_linea);
          
          setText('Text70', `Esquema: ${aiData.esquema_nombre} - Intervalo: ${aiData.intervalo_dias}`);
-         setText('Text71', aiData.ciclos_programados); // "Hasta progresión"
+         setText('Text71', aiData.ciclos_programados); 
 
-         // 6. TABLA DE DROGAS (Lógica Pembrolizumab)
-         setText('Text92', aiData.droga_1); // Droga
+         // 6. TABLA DE DROGAS (Corrección Pembro Dosis Fija)
+         setText('Text92', aiData.droga_1); 
          
          if (aiData.droga_1?.toLowerCase().includes('pembrolizumab')) {
-             setText('Text93', "200 mg dosis fija");
-             setText('Text95', "200 mg"); // Dosis Total
+             setText('Text93', "200 mg dosis fija"); // Columna mg/m2
+             setText('Text95', "200 mg"); // Columna Dosis Total
          } else {
              setText('Text93', aiData.dosis_1_mg_m2);
-             // Si no es Pembro, calcular por BSA si existe
+             // Calcular dosis total solo si no es Pembro
              if (bsa && aiData.dosis_1_mg_m2) {
                  const doseVal = parseFloat(aiData.dosis_1_mg_m2);
                  if (!isNaN(doseVal)) {
@@ -421,10 +425,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
          }
          setText('Text94', aiData.dias_1);
 
-         // 7. ENFERMEDAD AVANZADA (Checkboxes estimados)
-         if (aiData.metastasis_sitios?.toLowerCase().includes('gangli')) setCheck('Check Box19', true); // Ganglios
+         // 7. ENFERMEDAD AVANZADA
+         if (aiData.metastasis_sitios?.toLowerCase().includes('gangli')) setCheck('Check Box19', true); 
          
-         // 8. FINAL
          setText('Text88', `Córdoba, ${new Date().toLocaleDateString('es-AR')}`);
          setText('Text89', "Tel: 0351-4444444"); 
       }
@@ -459,7 +462,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             <button onClick={() => setShowDocConfig(false)} className="text-blue-400 hover:text-blue-600"><X size={16}/></button>
           </div>
           <div className="grid grid-cols-2 gap-3 mb-4">
-             {/* CONFIGURACIÓN MÉDICO (CÓDIGO EXISTENTE INTACTO) */}
              <div><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Nombre</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.nombre} onChange={e=>setDoctorData({...doctorData, nombre:e.target.value})}/></div>
              <div><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Matrícula</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.matricula} onChange={e=>setDoctorData({...doctorData, matricula:e.target.value})}/></div>
              <div className="col-span-2"><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">CUIL</label><div className="flex gap-2"><input className="w-[15%] p-2 border rounded text-center text-xs" value={doctorData.cuil_prefix} onChange={e=>setDoctorData({...doctorData, cuil_prefix:e.target.value})}/><input className="w-[70%] p-2 border rounded text-center text-xs" value={doctorData.cuil_dni} onChange={e=>setDoctorData({...doctorData, cuil_dni:e.target.value})}/><input className="w-[15%] p-2 border rounded text-center text-xs" value={doctorData.cuil_suffix} onChange={e=>setDoctorData({...doctorData, cuil_suffix:e.target.value})}/></div></div>
