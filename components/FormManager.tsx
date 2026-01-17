@@ -6,7 +6,7 @@ import { GoogleGenAI } from "@google/genai";
 interface FormManagerProps {
   patient: any;
   historyText: string;
-  files: any[]; // <--- NUEVA PROPIEDAD PARA RECIBIR ARCHIVOS
+  files: any[];
 }
 
 const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }) => {
@@ -14,6 +14,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   const [status, setStatus] = useState('');
   const [debugFields, setDebugFields] = useState<string[]>([]);
 
+  // NOTA: Asegúrate de que los archivos en public/forms/ tengan ESTOS NOMBRES EXACTOS:
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf' },
     { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/banco_drogas.pdf' },
@@ -22,8 +23,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   ];
 
   const calculateBSA = (weight: string, height: string) => {
-    const w = parseFloat(weight);
-    const h = parseFloat(height);
+    const w = parseFloat(weight?.replace(',', '.'));
+    const h = parseFloat(height?.replace(',', '.'));
     if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
       return Math.sqrt((w * h) / 3600).toFixed(2);
     }
@@ -40,8 +41,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       if (!res.ok) throw new Error("Archivo no encontrado");
       const formBytes = await res.arrayBuffer();
       const pdfDoc = await PDFDocument.load(formBytes);
-      const form = pdfDoc.getForm();
-      const fields = form.getFields().map(f => f.getName());
+      const fields = pdfDoc.getForm().getFields().map(f => f.getName());
       
       if (fields.length === 0) alert("⚠️ Este PDF no tiene campos editables (es una imagen).");
       else setDebugFields(fields);
@@ -54,31 +54,37 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("Falta API Key");
     
-    // --- CAMBIO IMPORTANTE: AHORA ENVIAMOS LOS ARCHIVOS A LA IA ---
     const ai = new GoogleGenAI({ apiKey });
     
-    // Construimos el mensaje para la IA incluyendo texto Y archivos
     const parts: any[] = [
       { text: `
-        Analiza la historia clínica adjunta (archivos y texto) y extrae los datos para formularios.
-        Devuelve JSON estricto con estas claves. Si no hay dato, pon "".
+        Actúa como data entry médico. Analiza la historia clínica (PDFs adjuntos) y extrae datos para formularios.
+        
+        PRIORIDAD:
+        1. Busca el NOMBRE COMPLETO, DNI y FECHA NACIMIENTO en el encabezado del PDF adjunto.
+        2. Busca PESO y TALLA en la evolución más reciente.
+        3. Extrae DROGAS y DOSIS del plan actual.
+        
+        Responde SOLO con este JSON exacto:
         {
-          "diagnostico_cie10": "Diagnóstico CIE-10 completo",
-          "peso": "Solo el número (kg)",
-          "talla": "Solo el número (cm)",
-          "ecog": "Solo el número (0-4)",
+          "paciente_nombre_real": "Nombre completo del PDF",
+          "paciente_dni": "Solo números",
+          "paciente_fnac": "DD/MM/AAAA",
+          "diagnostico_cie10": "Diagnóstico y código",
+          "peso": "Solo número (kg)",
+          "talla": "Solo número (cm)",
+          "ecog": "0, 1, 2, 3 o 4",
           "droga_1": "Nombre genérico droga 1",
-          "dosis_1": "Dosis droga 1",
+          "dosis_1": "Dosis (ej: 200mg)",
           "droga_2": "Nombre genérico droga 2",
           "dosis_2": "Dosis droga 2",
-          "ciclos": "Número de ciclos"
+          "ciclos": "Número de ciclos (ej: 1 cada 21 días)"
         }
-        NOTAS ADICIONALES: ${historyText}
-        PACIENTE: ${patient.name}
+        
+        CONTEXTO: ${historyText}
       `}
     ];
 
-    // Adjuntamos los PDFs de la historia clínica si existen
     if (files && files.length > 0) {
         files.forEach(f => {
             parts.push({ inlineData: { mimeType: f.type, data: f.data } });
@@ -95,67 +101,105 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   };
 
   const fillAndDownloadPDF = async (formDef: any) => {
-    // Validación: Si no hay archivos ni texto, avisar
     if ((!files || files.length === 0) && !historyText) {
-        alert("⚠️ No hay historia clínica cargada. Por favor suba el PDF en la pestaña 'Documentación' primero.");
+        alert("⚠️ Suba la Historia Clínica en 'Documentación' primero.");
         return;
     }
 
     setProcessingId(formDef.id);
-    setStatus('Analizando historia...');
+    setStatus('Procesando...');
 
     try {
       const aiData = await extractDataWithAI();
       const bsa = calculateBSA(aiData.peso, aiData.talla);
+      const finalName = aiData.paciente_nombre_real || patient.name;
 
-      setStatus('Escribiendo PDF...');
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
-      
       if (!res.ok) throw new Error(`No se encontró ${formDef.file}`);
-      const contentType = res.headers.get('content-type');
-      if (contentType && !contentType.includes('pdf')) throw new Error("El archivo no es un PDF válido.");
-
+      
       const formBytes = await res.arrayBuffer();
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
-      const fields = form.getFields();
 
-      if (fields.length === 0) throw new Error("El PDF no tiene campos editables.");
+      // Función helper para escribir en un campo si existe
+      const set = (name: string, val: string) => {
+        try { const f = form.getTextField(name); if (val) f.setText(val); } catch (e) {}
+      };
 
-      // --- LOGICA DE MAPEO ---
+      // --- ESTRATEGIA DE MAPEO POR TIPO DE FORMULARIO ---
+
       if (formDef.id === 'pami') {
-        const setField = (name: string, val: string) => {
-            try { const f = form.getTextField(name); f.setText(val || ''); } catch (e) {}
-        };
-        setField('Apellido y Nombre', patient.name);
-        setField('Diagnóstico CIE 10', aiData.diagnostico_cie10);
-        setField('Peso', aiData.peso);
-        setField('Talla', aiData.talla);
-        setField('Sup Corpora', bsa);
-        setField('ECOG', aiData.ecog);
-        setField('DrogaGenéricoRow1', aiData.droga_1);
-        setField('DosisRow1', aiData.dosis_1);
-        setField('N CiclosDuración díasRow1', aiData.ciclos);
+        // Mapeo EXACTO PAMI (Según tu lista)
+        set('Apellido y Nombre', finalName);
+        set('Beneficiario Nº', aiData.paciente_dni);
+        set('beneficiario Nro', aiData.paciente_dni); // Variación detectada
+        set('Fecha de nacimiento', aiData.paciente_fnac);
+        set('Diagnóstico CIE 10', aiData.diagnostico_cie10);
+        set('Peso', aiData.peso);
+        set('Talla', aiData.talla);
+        set('Sup. Corporal', bsa);
+        set('Sup Corpora', bsa); // Variación
+        set('ECOG', aiData.ecog);
+        set('ECOG Performance Status (0-4)', aiData.ecog);
+        
+        set('DrogaGenéricoRow1', aiData.droga_1);
+        set('DosisRow1', aiData.dosis_1);
+        set('N CiclosDuración díasRow1', aiData.ciclos);
+        
         if (aiData.droga_2) {
-            setField('DrogaGenéricoRow2', aiData.droga_2);
-            setField('DosisRow2', aiData.dosis_2);
+            set('DrogaGenéricoRow2', aiData.droga_2);
+            set('DosisRow2', aiData.dosis_2);
+            set('N CiclosDuración díasRow2', aiData.ciclos);
         }
       } 
+      else if (formDef.id === 'admision') {
+        // MAPEO "ADMISION" (Campos Text1, Text2...)
+        // Basado en estructura visual estándar:
+        set('Text1', finalName);       // Nombre
+        set('Text3', aiData.paciente_fnac); // Fecha Nac
+        set('Text4', aiData.paciente_dni);  // DNI
+        set('Text14', aiData.diagnostico_cie10); // Diagnostico
+        set('Text15', aiData.diagnostico_cie10); // CIE10
+        set('Text20', aiData.peso);    // Peso
+        set('Text21', aiData.talla);   // Talla
+        set('Text19', bsa);            // Sup Corporal
+        
+        // Tabla de drogas (Estimación de inicio de tabla)
+        set('Text92', aiData.droga_1);
+        set('Text93', aiData.dosis_1);
+      }
+      else if (formDef.id === 'renovacion') {
+        // MAPEO "RENOVACION" (Campos Text1, Text2...)
+        set('Text1', finalName);       // Nombre
+        set('Text4', aiData.paciente_dni);  // DNI
+        set('Text3', aiData.paciente_fnac); // Fecha Nac (A veces es Text2, probamos Text3)
+        set('Text12', aiData.diagnostico_cie10); // Diagnóstico
+        set('Text13', aiData.diagnostico_cie10); // CIE10
+        set('Text39', bsa);            // Sup Corporal
+        set('Text40', aiData.peso);    // Peso
+        set('Text41', aiData.talla);   // Talla
+        
+        // Tabla de drogas
+        set('Text82', aiData.droga_1); // Estimación
+        set('Text83', aiData.dosis_1);
+      }
       else {
-        // Mapeo genérico para los otros
+        // DINADIC (Mapeo Genérico Inteligente)
+        const fields = form.getFields();
         fields.forEach(field => {
             if (field.constructor.name === 'PDFTextField') {
                 const name = field.getName().toLowerCase();
                 const textField = form.getTextField(field.getName());
                 
-                if (name.includes('nombre') || name.includes('paciente') || name.includes('name')) textField.setText(patient.name);
-                else if (name.includes('edad') || name.includes('age')) textField.setText(patient.age.toString());
+                if (name.includes('nombre') || name.includes('paciente')) textField.setText(finalName);
+                else if (name.includes('dni') || name.includes('doc')) textField.setText(aiData.paciente_dni);
+                else if (name.includes('nacimiento') || name.includes('nac')) textField.setText(aiData.paciente_fnac);
                 else if (name.includes('diag')) textField.setText(aiData.diagnostico_cie10);
-                else if (name.includes('peso') || name.includes('weight')) textField.setText(aiData.peso);
-                else if (name.includes('talla') || name.includes('height')) textField.setText(aiData.talla);
-                else if (name.includes('ecog')) textField.setText(aiData.ecog);
-                else if (name.includes('droga') || name.includes('drug')) textField.setText(aiData.droga_1);
+                else if (name.includes('peso')) textField.setText(aiData.peso);
+                else if (name.includes('talla')) textField.setText(aiData.talla);
+                else if (name.includes('sup') && name.includes('corp')) textField.setText(bsa);
+                else if (name.includes('droga')) textField.setText(aiData.droga_1);
             }
         });
       }
@@ -164,12 +208,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `${formDef.name}_${patient.name}.pdf`;
+      link.download = `${formDef.name}_${finalName}.pdf`;
       link.click();
       setStatus('¡Descargado!');
 
     } catch (e: any) {
-      alert(e.message);
+      alert('Error: ' + e.message);
     } finally {
       setProcessingId(null);
       setTimeout(() => setStatus(''), 3000);
@@ -184,7 +228,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         <div className="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2">
             <AlertTriangle className="text-orange-500" size={16} />
             <p className="text-[10px] text-orange-700 font-bold">
-                ⚠️ No hay documentación cargada. Vaya a la pestaña "Documentación" y suba la Historia Clínica (PDF) antes de generar trámites.
+                ⚠️ Recomendación: Suba el PDF de la historia clínica en la pestaña "Documentación" para completar todos los datos.
             </p>
         </div>
       )}
@@ -214,7 +258,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                   onClick={() => inspectPDF(form)}
                   disabled={processingId !== null}
                   className="flex items-center justify-center px-3 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 disabled:opacity-50"
-                  title="Verificar campos internos del PDF"
+                  title="Verificar campos internos"
                 >
                   <Search size={14} />
                 </button>
@@ -226,7 +270,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       {debugFields.length > 0 && (
         <div className="mt-6 p-4 bg-gray-100 rounded-xl border border-gray-200 animate-in slide-in-from-top">
             <div className="flex justify-between items-center mb-2">
-                <h4 className="text-xs font-black uppercase text-gray-500">Campos Internos ({debugFields.length})</h4>
+                <h4 className="text-xs font-black uppercase text-gray-500">Campos Detectados</h4>
                 <button onClick={() => setDebugFields([])} className="text-gray-400 hover:text-gray-600"><AlertCircle size={14}/></button>
             </div>
             <div className="max-h-32 overflow-y-auto font-mono text-[9px] bg-white p-2 rounded border text-gray-600 select-all break-words">
