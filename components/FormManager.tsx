@@ -14,25 +14,32 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   const [status, setStatus] = useState('');
   
   const [showDocConfig, setShowDocConfig] = useState(false);
+  
+  // ESTADO ACTUALIZADO: CAMPOS DIVIDIDOS
   const [doctorData, setDoctorData] = useState({
     nombre: '',
     matricula: '',
     especialidad: 'Oncología Clínica',
     email: '',
-    celular: '', 
-    cuil: '',    
-    provincia: ''
+    provincia: '',
+    // CUIL DIVIDIDO
+    cuil_prefix: '', 
+    cuil_dni: '', 
+    cuil_suffix: '',
+    // CELULAR DIVIDIDO
+    cel_area: '', 
+    cel_num: ''
   });
 
   useEffect(() => {
-    const savedDoc = localStorage.getItem('doctor_data_profile');
+    const savedDoc = localStorage.getItem('doctor_data_profile_v2'); // Nueva key versión 2
     if (savedDoc) setDoctorData(JSON.parse(savedDoc));
   }, []);
 
   const saveDoctorData = () => {
-    localStorage.setItem('doctor_data_profile', JSON.stringify(doctorData));
+    localStorage.setItem('doctor_data_profile_v2', JSON.stringify(doctorData));
     setShowDocConfig(false);
-    alert("Datos del profesional guardados.");
+    alert("Datos guardados correctamente.");
   };
 
   const forms = [
@@ -96,16 +103,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const parts: any[] = [
       { text: `
-        Actúa como un ONCÓLOGO llenando un formulario oficial (PAMI) con espacio MUY LIMITADO.
+        Actúa como un ONCÓLOGO EXPERTO completando una planilla oficial de PAMI.
         
-        REGLAS DE LONGITUD Y FORMATO (ESTRICTAS):
-        1. **Diagnóstico:** MÁXIMO 85 caracteres. Usa abreviaturas (ej: "Ca." por "Carcinoma").
+        REGLAS DE LONGITUD (ESTRICTAS):
+        1. **Diagnóstico:** MÁXIMO 85 caracteres. Usa abreviaturas (ej: "Ca.").
         2. **Histopatológico:** MÁXIMO 85 caracteres.
-        3. **Ciclos:** MÁXIMO 41 caracteres. Ej: "Hasta progresión".
+        3. **Ciclos:** MÁXIMO 41 caracteres (ej: "Hasta progresión").
         4. **Antecedentes Qx:** MÁXIMO 80 caracteres.
         5. **Antecedentes RT:** MÁXIMO 75 caracteres.
-        6. **Laboratorio:** MÁXIMO 85 caracteres. Formato EXACTO: "14/8/25: Hb 9 / GB 5300 / Plaq 150k".
-        7. **Informe Clínico Actual:** MÁXIMO 1400 caracteres. Resumen técnico completo: Dx, fechas clave, cirugías y justificación.
+        6. **Laboratorio:** MÁXIMO 85 caracteres. Formato: "14/8/25: Hb 9 / GB 5300 / Plaq 150k".
+        7. **Informe Clínico:** MÁXIMO 1400 caracteres. Resumen técnico completo.
         
         Extrae este JSON exacto:
         {
@@ -155,7 +162,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
     const text = res.text || "{}";
     let cleanText = text.replace(/```json|```/g, '').trim();
-    // Limpieza de seguridad para evitar errores de parseo
     const firstBrace = cleanText.indexOf('{');
     const lastBrace = cleanText.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) {
@@ -201,14 +207,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {}
       };
 
-      // --- PAMI FORM LOGIC ---
       if (formDef.id === 'pami') {
         setText('Apellido y Nombre', finalName);
         setText('Beneficiario Nº', ''); 
         setText('Celular', aiData.paciente_celular);
         setText('Fecha de nacimiento', aiData.paciente_fnac);
 
-        // TEXTOS LIMITADOS
         setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10, 85);
         setText('Diagnóstico CIE 10', aiData.diagnostico_cie10, 85);
         setText('Histopatológico', aiData.histopatologico, 85);
@@ -233,7 +237,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 80);
         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 75);
         
-        // INFORME (1400) + LAB (85)
         setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1400); 
         setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 85);
         
@@ -242,8 +245,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Sup. Corporal', bsa);
         setText('Sup Corpora', bsa);
 
-        if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
-        if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
+        if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Neoadyuvante', true);
         if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
 
         setText('DrogaGenéricoRow1', aiData.droga_1);
@@ -258,46 +260,31 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
         }
 
-        // --- DATOS MÉDICO (SPLIT CORRECTO) ---
+        // --- DATOS MÉDICO (MAPEO EXACTO A CONFIGURACIÓN) ---
         setText('Apellido y Nombre_2', doctorData.nombre);
         setText('Matricula', doctorData.matricula);
         setText('Especialidad', doctorData.especialidad);
         setText('Email_2', doctorData.email);
         setText('Provincia', doctorData.provincia);
 
-        // CUIL dividido (2 - 8 - 1)
-        const cuilRaw = doctorData.cuil.replace(/[^0-9]/g, '');
-        setText('CUIL1', cuilRaw.substring(0, 2));      // Prefijo
-        setText('CUIL2', cuilRaw.substring(2, cuilRaw.length - 1)); // DNI
-        setText('CUIL3', cuilRaw.substring(cuilRaw.length - 1));    // Verificador
-        // Fallback: intentamos también "CUIT" por si el PDF usa ese nombre
-        setText('CUIT1', cuilRaw.substring(0, 2));
-        setText('CUIT2', cuilRaw.substring(2, cuilRaw.length - 1));
-        setText('CUIT3', cuilRaw.substring(cuilRaw.length - 1));
+        // CUIL (Dividido en 3 campos)
+        setText('CUIL1', doctorData.cuil_prefix);
+        setText('CUIL2', doctorData.cuil_dni);
+        setText('CUIL3', doctorData.cuil_suffix);
+        // Fallback CUIT
+        setText('CUIT1', doctorData.cuil_prefix);
+        setText('CUIT2', doctorData.cuil_dni);
+        setText('CUIT3', doctorData.cuil_suffix);
 
-        // Celular dividido (Área - Número)
-        const celRaw = doctorData.celular.replace(/[^0-9]/g, '');
-        let celArea = "";
-        let celNum = "";
-        // Lógica: Si tiene más de 8 dígitos, asumimos los últimos 8 son el número (ej: 1512345678)
-        // y lo anterior es la característica (ej: 351).
-        if (celRaw.length > 8) {
-            celNum = celRaw.substring(celRaw.length - 8);
-            celArea = celRaw.substring(0, celRaw.length - 8);
-        } else {
-            celNum = celRaw;
-        }
-
-        // Probamos nombres estándar: Celular (izq) y Celular_2 (der)
-        setText('Celular', celArea);   
-        setText('Celular_2', celNum);  
-        // Fallback
-        setText('Celular1', celArea);
-        setText('Celular2', celNum);
+        // Celular (Dividido en 2 campos)
+        // Probamos los nombres más probables de las celdas izquierda/derecha
+        setText('Celular', doctorData.cel_area);   
+        setText('Celular_2', doctorData.cel_num);  
+        setText('Celular1', doctorData.cel_area);
+        setText('Celular2', doctorData.cel_num);
 
         setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
       } 
-      // ... OTROS FORMULARIOS (Misma lógica anterior) ...
       else if (formDef.id === 'admision') {
         setText('Text1', finalName);
         setText('Text3', aiData.paciente_fnac);
@@ -368,25 +355,40 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
               <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Matrícula</label>
               <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.matricula} onChange={e => setDoctorData({...doctorData, matricula: e.target.value})} placeholder="MN 12345" />
             </div>
+            
+            {/* CUIL DIVIDIDO */}
+            <div className="col-span-2">
+                <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">CUIL / CUIT (Dividido)</label>
+                <div className="flex space-x-2">
+                    <input className="w-[15%] p-2 rounded-lg border border-blue-200 text-xs font-bold text-center" value={doctorData.cuil_prefix} onChange={e => setDoctorData({...doctorData, cuil_prefix: e.target.value})} placeholder="20" maxLength={2} />
+                    <input className="w-[70%] p-2 rounded-lg border border-blue-200 text-xs font-bold text-center" value={doctorData.cuil_dni} onChange={e => setDoctorData({...doctorData, cuil_dni: e.target.value})} placeholder="12345678" maxLength={8} />
+                    <input className="w-[15%] p-2 rounded-lg border border-blue-200 text-xs font-bold text-center" value={doctorData.cuil_suffix} onChange={e => setDoctorData({...doctorData, cuil_suffix: e.target.value})} placeholder="9" maxLength={1} />
+                </div>
+            </div>
+
             <div>
               <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Especialidad</label>
               <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.especialidad} onChange={e => setDoctorData({...doctorData, especialidad: e.target.value})} />
             </div>
             <div>
-              <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">CUIL (Sin guiones)</label>
-              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.cuil} onChange={e => setDoctorData({...doctorData, cuil: e.target.value})} placeholder="20123456789" />
-            </div>
-            <div>
               <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Provincia</label>
               <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.provincia} onChange={e => setDoctorData({...doctorData, provincia: e.target.value})} />
             </div>
-            <div>
+            
+            {/* CELULAR DIVIDIDO */}
+            <div className="col-span-2">
+                <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Celular (Área sin 0 / Número sin 15)</label>
+                <div className="flex items-center space-x-2">
+                    <span className="text-gray-400 text-xs font-bold">(</span>
+                    <input className="w-[20%] p-2 rounded-lg border border-blue-200 text-xs font-bold text-center" value={doctorData.cel_area} onChange={e => setDoctorData({...doctorData, cel_area: e.target.value})} placeholder="11" />
+                    <span className="text-gray-400 text-xs font-bold">) 15 -</span>
+                    <input className="w-[60%] p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.cel_num} onChange={e => setDoctorData({...doctorData, cel_num: e.target.value})} placeholder="12345678" />
+                </div>
+            </div>
+
+            <div className="col-span-2">
               <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Email</label>
               <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.email} onChange={e => setDoctorData({...doctorData, email: e.target.value})} />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Celular (Área + Número)</label>
-              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.celular} onChange={e => setDoctorData({...doctorData, celular: e.target.value})} placeholder="351 155123456" />
             </div>
           </div>
           <button onClick={saveDoctorData} className="w-full bg-blue-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 flex items-center justify-center space-x-2">
