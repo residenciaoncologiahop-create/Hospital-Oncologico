@@ -31,7 +31,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const generateFieldMap = async (formDef: any) => {
     setProcessingId('map-' + formDef.id);
-    setStatus('Generando mapa rojo...');
+    setStatus('Generando mapa...');
     try {
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
@@ -45,7 +45,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
       fields.forEach(field => {
-        // Marcamos tanto Inputs de Texto como Checkboxes
         const name = field.getName();
         if (field.constructor.name === 'PDFTextField') {
             const textField = form.getTextField(name);
@@ -54,7 +53,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             textField.setFont(helveticaFont);
             textField.setTextColor(rgb(1, 0, 0));
         } else if (field.constructor.name === 'PDFCheckBox') {
-            // Para checkboxes es difícil escribir encima, pero intentamos loguearlo o marcarlo
             try { form.getCheckBox(name).check(); } catch(e){}
         }
       });
@@ -77,47 +75,54 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const ai = new GoogleGenAI({ apiKey });
     
-    // --- PROMPT DE ALTO NIVEL MÉDICO ---
+    // --- PROMPT MEJORADO Y DETALLADO ---
     const parts: any[] = [
       { text: `
-        Actúa como un ONCÓLOGO EXPERTO completando un formulario oficial.
+        Actúa como un ONCÓLOGO completando una planilla de solicitud de quimioterapia (PAMI).
+        Analiza la historia clínica adjunta y extrae los datos con precisión técnica.
         
-        INSTRUCCIONES ESTRICTAS:
-        1. NO inventes datos, pero SI usa tu conocimiento de guías (NCCN/ESMO) para completar dosis y esquemas estándar si no están explícitos.
-        2. PROHIBIDO poner "Según protocolo". Debes especificar la dosis exacta (ej: "200 mg" o "2 mg/kg") y la frecuencia.
-        3. En "Ciclos", especifica la duración real (ej: "Hasta progresión de enfermedad" o "Cada 21 días por 6 ciclos").
-        4. "Beneficiario Nº" déjalo VACÍO.
+        INSTRUCCIONES ESPECÍFICAS PARA CAMPOS CLAVE:
+        1. "ciclos_realizados": Indica CUÁNTOS ciclos de la droga solicitada YA realizó el paciente. Si es inicio, pon "0" o "Inicio".
+        2. "frecuencia_dias": Indica CADA CUÁNTO se administra (ej: "Día 1 cada 21 días").
+        3. "informe_clinico_detallado": Redacta un párrafo técnico que incluya OBLIGATORIAMENTE:
+           - Fecha de diagnóstico inicial.
+           - Descripción de Anatomía Patológica (tipo histológico).
+           - Cirugías realizadas (fechas y procedimientos).
+           - Breve evolución y justificación actual.
+           (Todo esto en un solo texto fluido).
+        4. "dosis_exacta": NO pongas "según protocolo". Calcula o extrae la dosis (ej: "200 mg" o "Paclitaxel 80mg/m2").
         
-        Extrae la siguiente estructura JSON:
+        Extrae este JSON exacto:
         {
           "paciente_nombre_real": "Nombre completo",
           "paciente_dni": "DNI",
-          "paciente_celular": "Celular encontrado",
+          "paciente_celular": "Celular de contacto",
           "paciente_fnac": "DD/MM/AAAA",
-          "diagnostico_cie10": "Diagnóstico completo y código",
-          "histopatologico": "Resumen histopatológico",
-          "peso": "kg (último)",
-          "talla": "cm",
-          "ecog": "0-4",
-          "estadio_inicial": "Estadio al diagnóstico",
-          "estadio_actual": "Estadio actual",
-          "linea_tratamiento": "1ra, 2da, etc",
-          "antecedentes_qx": "Cirugías previas relevantes",
-          "antecedentes_radio": "Radioterapia previa",
-          "laboratorio": "Datos positivos laboratorio (último disponible)",
-          "informe_clinico": "Resumen breve de la justificación del tratamiento",
-          "motivo_solicitud": "Elegir UNO: 'Inicio', 'Renovación', 'Cambio de Toxicidad', 'Cambio por Progresión'",
-          "tipo_tratamiento": "Elegir UNO: 'Adyuvante', 'Neoadyuvante', 'Avanzado'",
+          "diagnostico_cie10": "Diagnóstico completo + Código CIE10",
+          "histopatologico": "Resumen histopatológico corto",
+          "peso": "kg (número)",
+          "talla": "cm (número)",
+          "ecog": "0, 1, 2, 3 o 4",
+          "estadio_inicial": "Estadio al debut (ej: IIB)",
+          "estadio_actual": "Estadio actual (ej: IV)",
+          "linea_tratamiento": "1ra, 2da, Adyuvancia...",
+          "antecedentes_qx": "Cirugías previas",
+          "antecedentes_radio": "RT previa",
+          "laboratorio": "Datos laboratorio relevantes (Hb, Plaq, Neutro, Clearance)",
+          "informe_clinico_detallado": "Texto detallado según instrucciones arriba",
+          "motivo_solicitud": "Inicio, Renovación, Cambio de Toxicidad, o Cambio por Progresión",
+          "tipo_tratamiento": "Adyuvante, Neoadyuvante, o Avanzado",
+          "ciclos_realizados": "Cantidad de ciclos previos",
+          "frecuencia_dias": "Esquema de días (ej: D1 c/21 días)",
           "droga_1": "Nombre droga",
           "presentacion_1": "Presentación (ej: Amp 100mg)",
-          "dosis_1": "Dosis exacta (NO poner 'según protocolo')",
-          "ciclos": "Frecuencia y duración (ej: c/21 días hasta progresión)",
+          "dosis_1": "Dosis exacta",
           "droga_2": "Segunda droga",
           "presentacion_2": "Presentación",
           "dosis_2": "Dosis exacta"
         }
         
-        HISTORIA CLÍNICA: ${historyText}
+        CONTEXTO: ${historyText}
       `}
     ];
 
@@ -143,7 +148,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
 
     setProcessingId(formDef.id);
-    setStatus('Analizando con criterio médico...');
+    setStatus('Procesando datos médicos...');
 
     try {
       const aiData = await extractDataWithAI();
@@ -158,7 +163,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
 
-      // Helpers para escribir
       const setText = (name: string, val: string) => {
         try { 
             const f = form.getTextField(name); 
@@ -172,40 +176,42 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         } catch (e) {}
       };
 
-      // --- LÓGICA ESPECÍFICA PAMI ---
+      // --- PAMI ---
       if (formDef.id === 'pami') {
-        // 1. Datos del Afiliado
+        // Datos Afiliado
         setText('Apellido y Nombre', finalName);
-        setText('Beneficiario Nº', ''); // USUARIO PIDIÓ VACÍO
+        setText('Beneficiario Nº', ''); // Vacío por pedido
         setText('Celular', aiData.paciente_celular);
         setText('Fecha de nacimiento', aiData.paciente_fnac);
 
-        // 2. Diagnóstico
+        // Diagnóstico y Estado
         setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10);
         setText('Diagnóstico CIE 10', aiData.diagnostico_cie10);
         setText('Histopatológico', aiData.histopatologico);
         
-        // Checkboxes de Motivo (Lógica inteligente)
-        // Probamos los nombres estándar de PAMI para los checkboxes
+        setText('ECOG Performance Status (0-4)', aiData.ecog);
+        setText('ECOG', aiData.ecog);
+        setText('Estadío actual', aiData.estadio_actual);
+        setText('Estadio actual', aiData.estadio_actual);
+        setText('Estadio Inicial', aiData.estadio_inicial);
+        
+        setText('Línea de tratamiento', aiData.linea_tratamiento);
+        
+        // Motivo (Checkboxes)
         if (aiData.motivo_solicitud?.toLowerCase().includes('inicio')) setCheck('Inicio', true);
         if (aiData.motivo_solicitud?.toLowerCase().includes('renovac')) setCheck('Renovación', true);
         if (aiData.motivo_solicitud?.toLowerCase().includes('toxicidad')) setCheck('Cambio de Toxicidad', true);
         if (aiData.motivo_solicitud?.toLowerCase().includes('progresi')) setCheck('Cambio por Progresión', true);
 
-        // Datos clínicos
-        setText('ECOG Performance Status (0-4)', aiData.ecog);
-        setText('ECOG', aiData.ecog);
-        setText('Estadío actual', aiData.estadio_actual);
-        setText('Estadio Inicial', aiData.estadio_inicial);
-        setText('Línea de tratamiento', aiData.linea_tratamiento);
-        
+        // Ciclos y Días (Sección superior)
+        setText('Ciclos', aiData.ciclos_realizados);
+        setText('Días', aiData.frecuencia_dias);
+
         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx);
         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio);
         
-        // Informe clínico (En la celda de ABAJO como pidió el usuario)
-        // Probamos llenar ambos por si acaso, o priorizar Row1 que suele ser el cuerpo
-        setText('Informe Clínico ActualRow1', aiData.informe_clinico); 
-        
+        // INFORME CLÍNICO DETALLADO (En celda grande Row1)
+        setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado); 
         setText('Datos positivos Laboratorio', aiData.laboratorio);
         
         // Antropometría
@@ -214,7 +220,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Sup. Corporal', bsa);
         setText('Sup Corpora', bsa);
 
-        // 3. Tratamiento (Checkboxes)
+        // Tratamiento (Checkboxes)
         if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
         if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
         if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
@@ -223,17 +229,18 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('DrogaGenéricoRow1', aiData.droga_1);
         setText('PresentaciónRow1', aiData.presentacion_1);
         setText('DosisRow1', aiData.dosis_1);
-        setText('N CiclosDuración díasRow1', aiData.ciclos);
+        // Aquí en la tabla suele ir el esquema de ciclos también
+        setText('N CiclosDuración díasRow1', aiData.frecuencia_dias); 
         
         if (aiData.droga_2) {
             setText('DrogaGenéricoRow2', aiData.droga_2);
             setText('PresentaciónRow2', aiData.presentacion_2);
             setText('DosisRow2', aiData.dosis_2);
-            setText('N CiclosDuración díasRow2', aiData.ciclos);
+            setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
         }
       } 
+      // --- ADMISIÓN ---
       else if (formDef.id === 'admision') {
-        // Mapeo Admisión (Actualizado con lógica secuencial)
         setText('Text1', finalName);
         setText('Text3', aiData.paciente_fnac);
         setText('Text4', aiData.paciente_dni);
@@ -242,18 +249,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Text21', aiData.talla);
         setText('Text19', bsa);
         setText('Text92', aiData.droga_1);
-        // Intentar llenar motivo si hay campo
       }
+      // --- RENOVACIÓN ---
       else if (formDef.id === 'renovacion') {
-        // Mapeo Renovación
         setText('Text1', finalName);
         setText('Text4', aiData.paciente_dni);
         setText('Text12', aiData.diagnostico_cie10);
         setText('Text40', aiData.peso);
         setText('Text82', aiData.droga_1);
       }
+      // --- DINADIC ---
       else {
-        // DINADIC
         const fields = form.getFields();
         fields.forEach(field => {
             if (field.constructor.name === 'PDFTextField') {
@@ -292,7 +298,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         <div className="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2">
             <AlertTriangle className="text-orange-500" size={16} />
             <p className="text-[10px] text-orange-700 font-bold">
-                Recomendación: Suba la Historia Clínica completa para una extracción precisa de datos.
+                Cargue la Historia Clínica en "Documentación" para habilitar el autocompletado.
             </p>
         </div>
       )}
