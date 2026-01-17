@@ -54,6 +54,18 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     return '';
   };
 
+  // FUNCIÓN DE LIMPIEZA DE FECHAS (NUEVA)
+  const cleanDate = (val: string) => {
+    if (!val) return "";
+    // Busca patrón DD/MM/AAAA o DD-MM-AAAA
+    const match = val.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if (match) {
+        // Retorna normalizado DD/MM/AAAA
+        return `${match[1].padStart(2, '0')}/${match[2].padStart(2, '0')}/${match[3]}`;
+    }
+    return ""; // Si es basura (ej: "io`"), devuelve vacío.
+  };
+
   const generateFieldMap = async (formDef: any) => {
     setProcessingId('map-' + formDef.id);
     setStatus('Generando mapa...');
@@ -102,7 +114,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         Actúa como un ONCÓLOGO EXPERTO completando una planilla oficial de PAMI.
         
         REGLAS DE EXTRACCIÓN (ESTRICTAS):
-        1. **Fecha de Nacimiento:** Busca patrones numéricos como "Fecha nac.: 08/05/1963" o "FN: 12/03/1950". Extrae EXACTAMENTE el dato numérico DD/MM/AAAA.
+        1. **Fecha de Nacimiento:** Busca patrones numéricos como "08/05/1963". Ignora texto basura. Si ves "Fecha nac.:", extrae SOLO los números.
         2. **Diagnóstico:** MÁXIMO 85 caracteres. Usa abreviaturas (ej: "Ca.").
         3. **Histopatológico:** MÁXIMO 85 caracteres.
         4. **Ciclos:** MÁXIMO 41 caracteres (ej: "Hasta progresión").
@@ -208,7 +220,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Apellido y Nombre', finalName);
         setText('Beneficiario Nº', ''); 
         setText('Celular', aiData.paciente_celular);
-        setText('Fecha de nacimiento', aiData.paciente_fnac);
+        
+        // APLICAMOS FILTRO DE LIMPIEZA A LA FECHA DE NACIMIENTO
+        setText('Fecha de nacimiento', cleanDate(aiData.paciente_fnac));
 
         setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10, 85);
         setText('Diagnóstico CIE 10', aiData.diagnostico_cie10, 85);
@@ -257,24 +271,23 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
         }
 
-        // --- DATOS MÉDICO (CORRECCIÓN DESPLAZAMIENTO) ---
+        // --- DATOS MÉDICO (CORRECCIÓN FINAL) ---
         setText('Apellido y Nombre_2', doctorData.nombre);
         setText('Matricula', doctorData.matricula);
         setText('Especialidad', doctorData.especialidad);
         setText('Email_2', doctorData.email);
         setText('Provincia', doctorData.provincia);
 
-        // CUIL (DESPLAZADO A LA IZQUIERDA)
-        setText('CUIL', doctorData.cuil_prefix);      // Casilla 1
-        setText('CUIL1', doctorData.cuil_dni);        // Casilla 2
-        setText('CUIL2', doctorData.cuil_suffix);     // Casilla 3
-        
+        // CUIL
+        setText('CUIL', doctorData.cuil_prefix);      
+        setText('CUIL1', doctorData.cuil_dni);        
+        setText('CUIL2', doctorData.cuil_suffix);     
         // Fallback CUIT
         setText('CUIT', doctorData.cuil_prefix);
         setText('CUIT1', doctorData.cuil_dni);
         setText('CUIT2', doctorData.cuil_suffix);
 
-        // CELULAR (SIN REPETIR EN 2DA CASILLA)
+        // CELULAR
         setText('Celular', doctorData.cel_area);   
         setText('Celular1', doctorData.cel_num);
         setText('Celular_2', doctorData.cel_num); 
@@ -283,7 +296,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       } 
       else if (formDef.id === 'admision') {
         setText('Text1', finalName);
-        setText('Text3', aiData.paciente_fnac);
+        setText('Text3', cleanDate(aiData.paciente_fnac)); // Limpieza aquí también
         setText('Text4', aiData.paciente_dni);
         setText('Text14', aiData.diagnostico_cie10);
         setText('Text20', aiData.peso);
