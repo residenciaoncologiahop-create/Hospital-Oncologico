@@ -35,7 +35,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   const saveDoctorData = () => {
     localStorage.setItem('doctor_data_profile_v3', JSON.stringify(doctorData));
     setShowDocConfig(false);
-    alert("Datos guardados. Ahora genere el formulario.");
+    alert("Datos guardados.");
   };
 
   const forms = [
@@ -54,16 +54,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     return '';
   };
 
-  // FUNCIÓN DE LIMPIEZA DE FECHAS (NUEVA)
   const cleanDate = (val: string) => {
     if (!val) return "";
-    // Busca patrón DD/MM/AAAA o DD-MM-AAAA
     const match = val.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
     if (match) {
-        // Retorna normalizado DD/MM/AAAA
         return `${match[1].padStart(2, '0')}/${match[2].padStart(2, '0')}/${match[3]}`;
     }
-    return ""; // Si es basura (ej: "io`"), devuelve vacío.
+    return "";
   };
 
   const generateFieldMap = async (formDef: any) => {
@@ -111,17 +108,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const parts: any[] = [
       { text: `
-        Actúa como un ONCÓLOGO EXPERTO completando una planilla oficial de PAMI.
+        Actúa como un ONCÓLOGO EXPERTO.
         
-        REGLAS DE EXTRACCIÓN (ESTRICTAS):
-        1. **Fecha de Nacimiento:** Busca patrones numéricos como "08/05/1963". Ignora texto basura. Si ves "Fecha nac.:", extrae SOLO los números.
-        2. **Diagnóstico:** MÁXIMO 85 caracteres. Usa abreviaturas (ej: "Ca.").
-        3. **Histopatológico:** MÁXIMO 85 caracteres.
-        4. **Ciclos:** MÁXIMO 41 caracteres (ej: "Hasta progresión").
-        5. **Antecedentes Qx:** MÁXIMO 80 caracteres.
-        6. **Antecedentes RT:** MÁXIMO 75 caracteres.
-        7. **Laboratorio:** MÁXIMO 85 caracteres. Formato: "14/8/25: Hb 9 / GB 5300 / Plaq 150k".
-        8. **Informe Clínico:** MÁXIMO 1400 caracteres. Resumen técnico completo.
+        OBJETIVO: Completar planilla PAMI con espacio físico limitado.
+        
+        INSTRUCCIONES DE REDACCIÓN:
+        1. **Informe Clínico:** NO copies y pegues toda la historia. REDACTA un resumen sintético (máximo 900 caracteres) que incluya: Fecha de Diagnóstico, Histología, Cirugías/RT relevantes (con año) y la situación actual que justifica la droga. TERMINA LAS ORACIONES.
+        2. **Diagnóstico y Histopatología:** Sé breve. Usa abreviaturas oncológicas estándar (ej: "Ca." = Carcinoma, "MTS" = Metástasis).
+        3. **Fechas:** Extrae siempre en formato DD/MM/AAAA.
+        4. **Laboratorio:** Formato en una línea: "14/08/25: Hb 10 / GB 4500 / Plaq 150k".
         
         Extrae este JSON exacto:
         {
@@ -129,8 +124,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "paciente_dni": "DNI",
           "paciente_celular": "Celular",
           "paciente_fnac": "DD/MM/AAAA",
-          "diagnostico_cie10": "Texto < 85 chars",
-          "histopatologico": "Texto < 85 chars",
+          "diagnostico_cie10": "Texto breve (< 85 chars)",
+          "histopatologico": "Texto breve (< 85 chars)",
           "peso": "kg",
           "talla": "cm",
           "ecog": "0-4",
@@ -138,13 +133,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "estadio_actual": "Estadio actual",
           "fecha_diagnostico_inicial": "DD/MM/AAAA",
           "linea_tratamiento": "1ra, 2da...",
-          "antecedentes_qx": "Texto < 80 chars",
-          "antecedentes_radio": "Texto < 75 chars",
-          "laboratorio_formateado": "Texto < 85 chars con fecha",
-          "informe_clinico_detallado": "Texto < 1400 chars",
+          "antecedentes_qx": "Texto breve (< 80 chars)",
+          "antecedentes_radio": "Texto breve (< 75 chars)",
+          "laboratorio_formateado": "Una línea con fecha y valores clave",
+          "informe_clinico_detallado": "Resumen técnico completo pero conciso (máx 900 chars)",
           "motivo_solicitud": "Inicio/Renovación...",
           "tipo_tratamiento": "Adyuvante/Avanzado...",
-          "ciclos_planeados": "Texto < 41 chars",
+          "ciclos_planeados": "Texto breve (< 40 chars)",
           "frecuencia_dias": "Esquema (ej: D1 c/21d)",
           "droga_1": "Droga",
           "presentacion_1": "Presentación",
@@ -201,13 +196,37 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
 
-      const setText = (name: string, val: string, limit?: number) => {
+      // Función Helper Mejorada: Recorte Inteligente y Tamaño de Fuente
+      const setText = (name: string, val: string, limit?: number, fontSize?: number) => {
         try { 
             const f = form.getTextField(name); 
             if (val) {
                 let textToWrite = String(val);
-                if (limit && textToWrite.length > limit) textToWrite = textToWrite.substring(0, limit);
-                f.setText(textToWrite); 
+                
+                // Recorte inteligente: busca el último punto o espacio antes del límite
+                if (limit && textToWrite.length > limit) {
+                    const cutAttempt = textToWrite.substring(0, limit);
+                    const lastDot = cutAttempt.lastIndexOf('.');
+                    const lastSpace = cutAttempt.lastIndexOf(' ');
+                    
+                    // Si encontramos un punto cerca del final (últimos 20%), cortamos ahí.
+                    if (lastDot > limit * 0.8) {
+                        textToWrite = cutAttempt.substring(0, lastDot + 1);
+                    } else if (lastSpace > limit * 0.8) {
+                        // Si no hay punto, cortamos en espacio y agregamos "..."
+                        textToWrite = cutAttempt.substring(0, lastSpace) + "...";
+                    } else {
+                        // Si no hay ni punto ni espacio seguros, corte duro
+                        textToWrite = cutAttempt;
+                    }
+                }
+
+                f.setText(textToWrite);
+                
+                // Aplicar tamaño de letra si se especifica
+                if (fontSize) {
+                    f.setFontSize(fontSize);
+                }
             }
         } catch (e) {}
       };
@@ -221,8 +240,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Beneficiario Nº', ''); 
         setText('Celular', aiData.paciente_celular);
         
-        // APLICAMOS FILTRO DE LIMPIEZA A LA FECHA DE NACIMIENTO
-        setText('Fecha de nacimiento', cleanDate(aiData.paciente_fnac));
+        const cleanFnac = cleanDate(aiData.paciente_fnac);
+        setText('Fecha de nacimiento', cleanFnac || aiData.paciente_fnac);
 
         setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10, 85);
         setText('Diagnóstico CIE 10', aiData.diagnostico_cie10, 85);
@@ -248,7 +267,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 80);
         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 75);
         
-        setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1400); 
+        // INFORME CLÍNICO: Límite 1300 caracteres, pero con LETRA MÁS CHICA (9) para que entre.
+        setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1300, 9); 
+        
+        // Laboratorio
         setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 85);
         
         setText('Peso', aiData.peso);
@@ -256,7 +278,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Sup. Corporal', bsa);
         setText('Sup Corpora', bsa);
 
-        if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Neoadyuvante', true);
+        if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
+        if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
         if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
 
         setText('DrogaGenéricoRow1', aiData.droga_1);
@@ -271,7 +294,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
         }
 
-        // --- DATOS MÉDICO (CORRECCIÓN FINAL) ---
+        // --- DATOS MÉDICO ---
         setText('Apellido y Nombre_2', doctorData.nombre);
         setText('Matricula', doctorData.matricula);
         setText('Especialidad', doctorData.especialidad);
@@ -282,7 +305,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('CUIL', doctorData.cuil_prefix);      
         setText('CUIL1', doctorData.cuil_dni);        
         setText('CUIL2', doctorData.cuil_suffix);     
-        // Fallback CUIT
         setText('CUIT', doctorData.cuil_prefix);
         setText('CUIT1', doctorData.cuil_dni);
         setText('CUIT2', doctorData.cuil_suffix);
@@ -296,7 +318,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       } 
       else if (formDef.id === 'admision') {
         setText('Text1', finalName);
-        setText('Text3', cleanDate(aiData.paciente_fnac)); // Limpieza aquí también
+        setText('Text3', cleanDate(aiData.paciente_fnac));
         setText('Text4', aiData.paciente_dni);
         setText('Text14', aiData.diagnostico_cie10);
         setText('Text20', aiData.peso);
