@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { FileText, Loader2, Wand2, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { PDFDocument } from 'pdf-lib';
+import { FileText, Loader2, Wand2, Map, AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { GoogleGenAI } from "@google/genai";
 
 interface FormManagerProps {
@@ -29,35 +29,76 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     return '';
   };
 
+  const generateFieldMap = async (formDef: any) => {
+    setProcessingId('map-' + formDef.id);
+    setStatus('Generando mapa rojo...');
+    try {
+      const formUrl = window.location.origin + formDef.file;
+      const res = await fetch(formUrl);
+      if (!res.ok) throw new Error("Archivo no encontrado");
+      
+      const formBytes = await res.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(formBytes);
+      const form = pdfDoc.getForm();
+      const fields = form.getFields();
+      
+      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      fields.forEach(field => {
+        if (field.constructor.name === 'PDFTextField') {
+            const textField = form.getTextField(field.getName());
+            textField.setText(field.getName()); 
+            textField.setFontSize(10);
+            textField.setFont(helveticaFont);
+            textField.setTextColor(rgb(1, 0, 0));
+        }
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `MAPA_ROJO_${formDef.name}.pdf`;
+      link.click();
+      alert("✅ Mapa descargado. Use los códigos en rojo para decirme dónde poner los datos faltantes.");
+      
+    } catch (e: any) { alert('Error: ' + e.message); } 
+    finally { setProcessingId(null); setStatus(''); }
+  };
+
   const extractDataWithAI = async () => {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("Falta API Key");
     
     const ai = new GoogleGenAI({ apiKey });
     
-    // Prompt optimizado
+    // --- PROMPT EXPANDIDO CON NUEVOS CAMPOS PAMI ---
     const parts: any[] = [
       { text: `
-        Analiza la historia clínica y extrae datos para formularios oncológicos.
-        
-        SI ALGUN DATO NO ESTÁ EXPLICITO, DEDÚCELO DEL CONTEXTO (Ej: Si dice "Ciclo 1 de Pembrolizumab 200mg", la droga es Pembrolizumab y dosis 200mg).
+        Analiza la historia clínica y extrae datos EXHAUSTIVOS para formulario oncológico PAMI.
         
         Datos requeridos (JSON):
         {
-          "paciente_nombre_real": "Nombre completo encontrado",
+          "paciente_nombre_real": "Nombre completo",
           "paciente_dni": "DNI sin puntos",
           "paciente_fnac": "DD/MM/AAAA",
-          "diagnostico_cie10": "Diagnóstico completo",
+          "diagnostico_cie10": "Diagnóstico CIE-10",
           "peso": "Solo número (kg)",
           "talla": "Solo número (cm)",
-          "ecog": "0, 1, 2, 3 o 4",
+          "ecog": "0, 1, 2, 3 o 4 (Solo el número)",
+          "estadio_actual": "Estadio TNM actual (ej: IV)",
+          "estadio_inicial": "Estadio al diagnóstico",
+          "fecha_diagnostico": "Fecha del diagnóstico inicial",
+          "linea_tratamiento": "1ra, 2da, Adyuvancia, etc",
+          "informe_clinico": "Breve resumen (máx 150 caracteres) de la evolución actual y justificación",
           "droga_1": "Droga principal",
           "dosis_1": "Dosis completa",
           "droga_2": "Segunda droga",
           "dosis_2": "Dosis segunda droga",
-          "ciclos": "Detalle de ciclos (ej: cada 21 días)"
+          "ciclos": "Esquema/Ciclos (ej: Cada 21 días)"
         }
-        CONTEXTO ADICIONAL: ${historyText}
+        
+        CONTEXTO: ${historyText}
       `}
     ];
 
@@ -78,26 +119,21 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const fillAndDownloadPDF = async (formDef: any) => {
     if ((!files || files.length === 0) && !historyText) {
-        alert("⚠️ No hay documentación. Suba la Historia Clínica en 'Documentación' primero.");
+        alert("⚠️ Falta documentación. Suba la Historia Clínica primero.");
         return;
     }
 
     setProcessingId(formDef.id);
-    setStatus('Analizando datos...');
+    setStatus('Extrayendo datos clínicos...');
 
     try {
       const aiData = await extractDataWithAI();
       const bsa = calculateBSA(aiData.peso, aiData.talla);
-      
-      // Priorizar nombre del PDF, si no el del sistema
-      const finalName = aiData.paciente_nombre_real && aiData.paciente_nombre_real.length > 5 
-                        ? aiData.paciente_nombre_real 
-                        : patient.name;
+      const finalName = aiData.paciente_nombre_real || patient.name;
 
-      // DEBUG: Muestra qué encontró la IA (útil si sale vacío)
-      console.log("Datos IA:", aiData); 
+      // DEBUG: Verificamos qué trae la IA para los nuevos campos
+      console.log("Datos IA:", aiData);
 
-      setStatus('Generando PDF...');
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
       if (!res.ok) throw new Error(`No se encontró ${formDef.file}`);
@@ -106,83 +142,91 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
 
-      // Función segura para llenar
       const set = (name: string, val: string) => {
         try { 
             const f = form.getTextField(name); 
-            // Convertimos a string por seguridad
             if (val) f.setText(String(val)); 
-        } catch (e) { /* Campo no existe en este PDF */ }
+        } catch (e) {}
       };
 
-      // --- MAPEO DE CAMPOS ---
-
       if (formDef.id === 'pami') {
-        // PAMI (Mapeo por Nombre Exacto)
+        // --- MAPEO COMPLETO PAMI ---
         set('Apellido y Nombre', finalName);
         set('Beneficiario Nº', aiData.paciente_dni);
         set('beneficiario Nro', aiData.paciente_dni);
         set('Fecha de nacimiento', aiData.paciente_fnac);
-        set('Diagnóstico CIE 10', aiData.diagnostico_cie10);
+        
+        // Diagnóstico
         set('Diagnóstico (CIE 10)', aiData.diagnostico_cie10);
+        set('Diagnóstico CIE 10', aiData.diagnostico_cie10);
+        
+        // Datos Antropométricos
         set('Peso', aiData.peso);
         set('Talla', aiData.talla);
         set('Sup. Corporal', bsa);
         set('Sup Corpora', bsa);
+        
+        // Estado Clínico y Tratamiento (LOS NUEVOS CAMPOS)
         set('ECOG Performance Status (0-4)', aiData.ecog);
         set('ECOG', aiData.ecog);
+        
+        set('Estadío actual', aiData.estadio_actual);
+        set('Estadio actual', aiData.estadio_actual);
+        
+        set('Estadio Inicial', aiData.estadio_inicial);
+        
+        set('Fecha de Diagnóstico Inicial', aiData.fecha_diagnostico);
+        set('Fecha diagnostico inicial', aiData.fecha_diagnostico);
+        
+        set('Línea de tratamiento', aiData.linea_tratamiento);
+        
+        set('Informe clínico actual', aiData.informe_clinico);
+        set('Informe Clínico Actual', aiData.informe_clinico);
+        
+        // Drogas y Ciclos
+        set('Ciclos', aiData.ciclos); // Campo suelto arriba
+        set('N CiclosDuración díasRow1', aiData.ciclos); // Columna en tabla
+        
         set('DrogaGenéricoRow1', aiData.droga_1);
         set('DosisRow1', aiData.dosis_1);
-        set('N CiclosDuración díasRow1', aiData.ciclos);
-        if(aiData.droga_2) {
-             set('DrogaGenéricoRow2', aiData.droga_2);
-             set('DosisRow2', aiData.dosis_2);
+        
+        if (aiData.droga_2) {
+            set('DrogaGenéricoRow2', aiData.droga_2);
+            set('DosisRow2', aiData.dosis_2);
+            set('N CiclosDuración díasRow2', aiData.ciclos);
         }
       } 
       else if (formDef.id === 'admision') {
-        // ADMISIÓN (Mapeo Secuencial Estimado)
-        // Basado en el orden visual del formulario oficial
-        set('Text1', finalName);        // 1. Nombre
-        set('Text3', aiData.paciente_fnac);  // 3. Fecha Nac
-        set('Text4', aiData.paciente_dni);   // 4. DNI
-        set('Text14', aiData.diagnostico_cie10); // 14. Diagnóstico
-        set('Text15', aiData.diagnostico_cie10); // 15. CIE10
-        set('Text19', bsa);             // 19. Sup Corporal
-        set('Text20', aiData.peso);     // 20. Peso
-        set('Text21', aiData.talla);    // 21. Talla
-        set('Text100', aiData.droga_1); // Zona de Drogas (aprox Text90-100)
-        set('Text101', aiData.dosis_1); 
-        // Intento extra por si la tabla está antes
+        // Mapeo Provisorio Admisión (Requiere Mapa Rojo para ser exacto)
+        set('Text1', finalName);
+        set('Text3', aiData.paciente_fnac);
+        set('Text4', aiData.paciente_dni);
+        set('Text14', aiData.diagnostico_cie10);
+        set('Text20', aiData.peso);
+        set('Text19', bsa);
         set('Text92', aiData.droga_1);
-        set('Text93', aiData.dosis_1);
+        // Intentamos llenar ECOG también aquí por si coincide
+        set('Text197', aiData.ecog); // A veces ECOG tiene ID alto
       }
       else if (formDef.id === 'renovacion') {
-        // RENOVACIÓN (Mapeo Secuencial Estimado)
-        set('Text1', finalName);       // 1. Nombre
-        set('Text2', aiData.paciente_dni); // A veces DNI es el 2do o 4to
-        set('Text4', aiData.paciente_dni); 
-        set('Text3', aiData.paciente_fnac);
-        set('Text12', aiData.diagnostico_cie10); // Diagnóstico
-        set('Text39', bsa);
+        set('Text1', finalName);
+        set('Text4', aiData.paciente_dni);
+        set('Text12', aiData.diagnostico_cie10);
         set('Text40', aiData.peso);
-        set('Text41', aiData.talla);
-        set('Text82', aiData.droga_1); // Zona Drogas
-        set('Text83', aiData.dosis_1);
+        set('Text82', aiData.droga_1);
       }
       else {
-        // DINADIC / GENÉRICO (Búsqueda inteligente)
+        // DINADIC
         const fields = form.getFields();
         fields.forEach(field => {
             if (field.constructor.name === 'PDFTextField') {
                 const name = field.getName().toLowerCase();
                 const textField = form.getTextField(field.getName());
-                
                 if (name.includes('nombre') || name.includes('paciente')) textField.setText(finalName);
                 else if (name.includes('dni') || name.includes('doc')) textField.setText(aiData.paciente_dni);
-                else if (name.includes('nacimiento') || name.includes('nac')) textField.setText(aiData.paciente_fnac);
                 else if (name.includes('diag')) textField.setText(aiData.diagnostico_cie10);
+                else if (name.includes('ecog')) textField.setText(aiData.ecog);
                 else if (name.includes('peso')) textField.setText(aiData.peso);
-                else if (name.includes('talla')) textField.setText(aiData.talla);
                 else if (name.includes('droga')) textField.setText(aiData.droga_1);
             }
         });
@@ -194,7 +238,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       link.href = URL.createObjectURL(blob);
       link.download = `${formDef.name}_${finalName}.pdf`;
       link.click();
-      setStatus('¡Completado!');
+      setStatus('¡Listo!');
 
     } catch (e: any) {
       alert('Error: ' + e.message);
@@ -212,7 +256,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         <div className="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2">
             <AlertTriangle className="text-orange-500" size={16} />
             <p className="text-[10px] text-orange-700 font-bold">
-                ⚠️ Aviso: La IA necesita la Historia Clínica (PDF) en "Documentación" para llenar los datos.
+                Cargue la Historia Clínica en "Documentación" para habilitar el autocompletado.
             </p>
         </div>
       )}
@@ -228,15 +272,26 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                 {processingId === form.id ? <Loader2 className="animate-spin text-blue-600" size={18}/> : <CheckCircle2 className="text-gray-200" size={18}/>}
             </div>
             
-            <button 
-              onClick={() => fillAndDownloadPDF(form)}
-              disabled={processingId !== null}
-              className={`w-full flex items-center justify-center space-x-2 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50
-                ${processingId === form.id ? 'bg-blue-600' : 'bg-gray-900 hover:bg-black'}`}
-            >
-              <Wand2 size={14}/>
-              <span>{processingId === form.id ? 'Procesando...' : 'Generar PDF'}</span>
-            </button>
+            <div className="flex gap-2">
+                <button 
+                  onClick={() => fillAndDownloadPDF(form)}
+                  disabled={processingId !== null}
+                  className={`flex-1 flex items-center justify-center space-x-2 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50
+                    ${processingId === form.id ? 'bg-blue-600' : 'bg-gray-900 hover:bg-black'}`}
+                >
+                  {processingId === form.id && !processingId.startsWith('map-') ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>}
+                  <span>Generar</span>
+                </button>
+                
+                <button 
+                  onClick={() => generateFieldMap(form)}
+                  disabled={processingId !== null}
+                  className="flex items-center justify-center px-3 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 disabled:opacity-50 border border-purple-100"
+                  title="Ver mapa de campos (Texto Rojo)"
+                >
+                  <Map size={14} />
+                </button>
+            </div>
           </div>
         ))}
       </div>
