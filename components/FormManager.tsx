@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Download, Loader2, Wand2 } from 'lucide-react';
+import { FileText, Download, Loader2, Wand2, AlertTriangle } from 'lucide-react';
 import { PDFDocument } from 'pdf-lib';
 import { GoogleGenAI } from "@google/genai";
 
@@ -9,10 +9,10 @@ interface FormManagerProps {
 }
 
 const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
-  const [isProcessing, setIsProcessing] = useState(false);
+  // CAMBIO 1: Ahora guardamos el ID del formulario que se está procesando, no un simple true/false
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
 
-  // --- 1. CONFIGURACIÓN DE FORMULARIOS RENOMBRADOS ---
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf' },
     { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/banco_drogas.pdf' },
@@ -20,14 +20,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
     { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf' },
   ];
 
-  // --- 2. FUNCIÓN CORREGIDA (FIX DEL ERROR getGenerativeModel) ---
   const extractDataWithAI = async () => {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("Falta API Key");
     
     const ai = new GoogleGenAI({ apiKey });
     
-    // Prompt específico para sacar los datos
     const prompt = `
       Analiza la siguiente historia clínica y extrae los datos para un formulario oncológico.
       Devuelve SOLO un JSON con estas claves (si no encuentras el dato, pon "No consta"):
@@ -42,17 +40,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
         "dosis_2": "Dosis droga 2",
         "ciclos": "Nro ciclos"
       }
-      
-      HISTORIA CLÍNICA:
-      ${historyText}
-      
-      DATOS PACIENTE:
-      Nombre: ${patient.name}
-      Edad: ${patient.age}
-      Diagnóstico Base: ${patient.diagnosis}
+      HISTORIA: ${historyText}
+      PACIENTE: ${patient.name}
     `;
 
-    // CORRECCIÓN AQUÍ: Usamos la misma sintaxis que en index.tsx
     const res = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [{ text: prompt }] }
@@ -64,28 +55,43 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
   };
 
   const fillAndDownloadPDF = async (formDef: any) => {
-    setIsProcessing(true);
+    // CAMBIO 2: Seteamos el ID específico del botón presionado
+    setProcessingId(formDef.id);
     setStatus('Analizando historia...');
 
     try {
-      // A. Extraer datos con IA
       const aiData = await extractDataWithAI();
-      setStatus('Rellenando PDF...');
+      setStatus('Buscando archivo PDF...');
 
-      // B. Cargar el PDF
+      // CAMBIO 3: Verificación robusta de la ruta del archivo
       const formUrl = window.location.origin + formDef.file;
-      const formBytes = await fetch(formUrl).then(res => res.arrayBuffer());
+      console.log("Intentando descargar:", formUrl); // Para depuración
+
+      const res = await fetch(formUrl);
+      
+      // Si el archivo no existe (404), lanzamos error descriptivo
+      if (!res.ok) {
+        throw new Error(`No se encontró el archivo: ${formDef.file}. Verifique la carpeta public/forms en GitHub.`);
+      }
+
+      // Verificamos que sea un PDF real y no una página de error HTML
+      const contentType = res.headers.get('content-type');
+      if (contentType && !contentType.includes('pdf')) {
+         throw new Error(`El archivo recuperado no es un PDF (Tipo: ${contentType}).`);
+      }
+
+      const formBytes = await res.arrayBuffer();
+      setStatus('Rellenando campos...');
+
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
       const fields = form.getFields();
       
-      // C. Rellenar campos (Mapeo)
       fields.forEach(field => {
         if (field.constructor.name === 'PDFTextField') {
             const name = field.getName().toLowerCase();
             const textField = form.getTextField(field.getName());
             
-            // Lógica de autocompletado
             if (name.includes('nombre') || name.includes('paciente')) textField.setText(patient.name);
             else if (name.includes('edad')) textField.setText(patient.age.toString());
             else if (name.includes('diag')) textField.setText(aiData.diagnostico);
@@ -96,7 +102,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
         }
       });
 
-      // D. Descargar
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
@@ -104,12 +109,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
       link.download = `${formDef.name}_${patient.name}.pdf`;
       link.click();
       
-      setStatus('¡Descargado!');
+      setStatus('¡Listo!');
     } catch (e: any) {
       console.error(e);
-      alert('Error al generar: ' + e.message);
+      alert('Error: ' + e.message);
     } finally {
-      setIsProcessing(false);
+      // Liberamos el estado
+      setProcessingId(null);
       setTimeout(() => setStatus(''), 3000);
     }
   };
@@ -122,26 +128,34 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
         {forms.map(form => (
           <div key={form.id} className="bg-white border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-blue-300 transition-all shadow-sm group">
             <div className="flex items-center space-x-4">
-              <div className="p-3 bg-red-50 text-red-600 rounded-lg group-hover:bg-red-100 transition-colors">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100 transition-colors">
                 <FileText size={24} />
               </div>
               <div className="text-left">
                 <h4 className="font-bold text-gray-800 text-xs uppercase">{form.name}</h4>
-                <p className="text-[10px] text-gray-400 font-bold mt-0.5">Autocompletado con IA</p>
+                <p className="text-[10px] text-gray-400 font-bold mt-0.5">
+                    {/* Muestra la ruta del archivo para ayudar a depurar si falla */}
+                    Fuente: {form.file}
+                </p>
               </div>
             </div>
 
             <button 
               onClick={() => fillAndDownloadPDF(form)}
-              disabled={isProcessing}
-              className="flex items-center space-x-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              // Deshabilitamos TODOS si hay uno procesando, pero...
+              disabled={processingId !== null}
+              className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all 
+                ${processingId === form.id 
+                    ? 'bg-blue-600 text-white cursor-wait' 
+                    : 'bg-gray-900 text-white hover:bg-black disabled:opacity-30 disabled:cursor-not-allowed'}`}
             >
-              {isProcessing && status ? (
+              {/* ...solo mostramos el spinner en el que se clickeó */}
+              {processingId === form.id ? (
                 <Loader2 className="animate-spin" size={16} />
               ) : (
                 <Wand2 size={16} />
               )}
-              <span>{isProcessing ? 'Procesando...' : 'Generar'}</span>
+              <span>{processingId === form.id ? 'Procesando...' : 'Generar'}</span>
             </button>
           </div>
         ))}
@@ -155,8 +169,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
         </div>
       )}
       
-      <div className="mt-8 p-4 bg-yellow-50 rounded-xl border border-yellow-100 text-yellow-800 text-[10px] font-medium leading-relaxed">
-        <strong>Nota:</strong> Verifique siempre los datos del formulario descargado antes de firmar.
+      <div className="mt-8 p-4 bg-yellow-50 rounded-xl border border-yellow-100 text-yellow-800 text-[10px] font-medium leading-relaxed flex items-start gap-2">
+        <AlertTriangle size={14} className="mt-0.5 shrink-0"/>
+        <span>
+            <strong>Si recibe error "No PDF header":</strong> Verifique en GitHub (carpeta public/forms) que el nombre del archivo sea EXACTAMENTE igual al que figura arriba (ej: pami.pdf, no PAMI.pdf o pami.PDF).
+        </span>
       </div>
     </div>
   );
