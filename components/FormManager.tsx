@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// CORRECCIÓN: Se agregaron CheckCircle2 y Map a los imports
 import { 
   FileText, 
   Loader2, 
@@ -49,7 +48,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     alert("Datos guardados.");
   };
 
-  // CONFIGURACIÓN MIXTA: PAMI (Auto) vs BANCO (Manual)
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'manual' },
@@ -77,7 +75,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   const downloadTemplate = async (formDef: any) => {
     try {
         const link = document.createElement('a');
-        link.href = formDef.file; // Descarga el archivo local de /public
+        link.href = formDef.file;
         link.download = `${formDef.name}_Plantilla.pdf`;
         document.body.appendChild(link);
         link.click();
@@ -87,14 +85,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
   };
 
-  // --- FUNCIÓN 2: GENERAR RESUMEN CLÍNICO (PDF NUEVO) ---
+  // --- FUNCIÓN 2: GENERAR RESUMEN CLÍNICO (CORREGIDA) ---
   const generateClinicalSummary = async () => {
-    if (!historyText) {
-        alert("Falta historia clínica para generar el resumen.");
+    // CORRECCIÓN: Validar si hay texto O archivos (antes solo miraba texto)
+    if (!historyText && (!files || files.length === 0)) {
+        alert("⚠️ No se encontraron documentos. Por favor suba la Historia Clínica en la sección 'Documentación'.");
         return;
     }
     setProcessingId('summary');
-    setStatus('Redactando resumen...');
+    setStatus('Analizando documentos...');
 
     try {
         const apiKey = import.meta.env.VITE_API_KEY;
@@ -115,12 +114,20 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         5. SOLICITUD: Droga solicitada, dosis y esquema propuesto.
         
         No inventes datos. Usa lenguaje técnico preciso.
-        CONTEXTO: ${historyText}
+        CONTEXTO TEXTO: ${historyText || ''}
         `;
+
+        // CORRECCIÓN: Enviar archivos adjuntos a la IA
+        const parts: any[] = [{ text: prompt }];
+        if (files && files.length > 0) {
+            files.forEach(f => {
+                parts.push({ inlineData: { mimeType: f.type, data: f.data } });
+            });
+        }
 
         const res = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }] }
+            contents: { parts }
         });
 
         const summaryText = res.text || "No se pudo generar el resumen.";
@@ -139,12 +146,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         let y = height - 80;
         
         lines.forEach(line => {
-            // Dividir líneas largas (aprox 90 caracteres)
             const words = line.split(' ');
             let currentLine = '';
             
             words.forEach(word => {
                 if ((currentLine + word).length > 90) {
+                    // Nueva página si se acaba el espacio
+                    if (y < 50) {
+                        const newPage = pdfDoc.addPage();
+                        y = height - 50;
+                    }
                     page.drawText(currentLine, { x: 50, y, size: fontSize, font });
                     y -= 15;
                     currentLine = word + ' ';
@@ -152,12 +163,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                     currentLine += word + ' ';
                 }
             });
-            page.drawText(currentLine, { x: 50, y, size: fontSize, font });
-            y -= 20; // Salto de párrafo
-            
-            if (y < 50) { 
-                 // (Simplificado: si se llena la página, corta. Idealmente agregaríamos páginas nuevas)
+            if (y < 50) {
+                const newPage = pdfDoc.addPage();
+                y = height - 50;
             }
+            page.drawText(currentLine, { x: 50, y, size: fontSize, font });
+            y -= 20; 
         });
 
         const pdfBytes = await pdfDoc.save();
@@ -176,14 +187,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
   };
 
-  // --- FUNCIÓN 3: AUTOCOMPLETADO PAMI (Mantener Intacto) ---
+  // --- FUNCIÓN 3: AUTOCOMPLETADO PAMI (Intacto) ---
   const extractPamiData = async () => {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("Falta API Key");
     const ai = new GoogleGenAI({ apiKey });
     const today = new Date().toLocaleDateString('es-AR');
     
-    // PROMPT PAMI ORIGINAL APROBADO
     const promptText = `
         Actúa como un ONCÓLOGO EXPERTO. Hoy es ${today}.
         OBJETIVO: Completar planilla PAMI con rigor técnico y estilo formal.
@@ -321,7 +331,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  // FUNCION AUXILIAR PARA MAPEO DE DEPURACION (Mantener por si acaso)
+  // FUNCION AUXILIAR PARA MAPEO (Solo visible si se descomenta el botón o se agrega otro flag)
   const generateFieldMap = async (formDef: any) => {
     setProcessingId('map-' + formDef.id);
     setStatus('Generando mapa...');
@@ -446,10 +456,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
                 {/* Link Externo PAMI (Solo para PAMI) */}
                 {form.id === 'pami' && (
-                    <>
-                    <a href="https://cup.pami.org.ar/controllers/loginController.php" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center px-3 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 border border-teal-100" title="Web PAMI"><ExternalLink size={14} /></a>
-                    <button onClick={() => generateFieldMap(form)} className="flex items-center justify-center px-3 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 border border-purple-100" title="Mapa Rojo"><Map size={14} /></button>
-                    </>
+                    <a href="https://cup.pami.org.ar/controllers/loginController.php" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center px-3 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 border border-teal-100"><ExternalLink size={14} /></a>
                 )}
             </div>
           </div>
