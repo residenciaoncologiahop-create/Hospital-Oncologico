@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FileText, Loader2, Wand2, Map, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileText, Loader2, Wand2, Map, AlertTriangle, UserCog, Save, X } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { GoogleGenAI } from "@google/genai";
 
@@ -12,6 +12,28 @@ interface FormManagerProps {
 const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+  
+  // ESTADO PARA DATOS DEL MÉDICO
+  const [showDocConfig, setShowDocConfig] = useState(false);
+  const [doctorData, setDoctorData] = useState({
+    nombre: '',
+    matricula: '',
+    especialidad: 'Oncología Clínica',
+    email: '',
+    celular: ''
+  });
+
+  // Cargar datos del médico al inicio
+  useEffect(() => {
+    const savedDoc = localStorage.getItem('doctor_data_profile');
+    if (savedDoc) setDoctorData(JSON.parse(savedDoc));
+  }, []);
+
+  const saveDoctorData = () => {
+    localStorage.setItem('doctor_data_profile', JSON.stringify(doctorData));
+    setShowDocConfig(false);
+    alert("Datos del profesional guardados.");
+  };
 
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf' },
@@ -29,6 +51,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     return '';
   };
 
+  // --- MAPEO DE DEPURACIÓN ---
   const generateFieldMap = async (formDef: any) => {
     setProcessingId('map-' + formDef.id);
     setStatus('Generando mapa...');
@@ -52,8 +75,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             textField.setFontSize(8);
             textField.setFont(helveticaFont);
             textField.setTextColor(rgb(1, 0, 0));
-        } else if (field.constructor.name === 'PDFCheckBox') {
-            try { form.getCheckBox(name).check(); } catch(e){}
         }
       });
 
@@ -64,7 +85,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       link.download = `MAPA_ROJO_${formDef.name}.pdf`;
       link.click();
       alert("✅ Mapa descargado.");
-      
     } catch (e: any) { alert('Error: ' + e.message); } 
     finally { setProcessingId(null); setStatus(''); }
   };
@@ -75,48 +95,44 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const ai = new GoogleGenAI({ apiKey });
     
-    // --- PROMPT MEJORADO Y DETALLADO ---
+    // --- PROMPT CORREGIDO CON TUS INDICACIONES ---
     const parts: any[] = [
       { text: `
-        Actúa como un ONCÓLOGO completando una planilla de solicitud de quimioterapia (PAMI).
-        Analiza la historia clínica adjunta y extrae los datos con precisión técnica.
+        Actúa como un ONCÓLOGO completando una planilla oficial (PAMI).
+        Analiza la historia clínica adjunta.
         
-        INSTRUCCIONES ESPECÍFICAS PARA CAMPOS CLAVE:
-        1. "ciclos_realizados": Indica CUÁNTOS ciclos de la droga solicitada YA realizó el paciente. Si es inicio, pon "0" o "Inicio".
-        2. "frecuencia_dias": Indica CADA CUÁNTO se administra (ej: "Día 1 cada 21 días").
-        3. "informe_clinico_detallado": Redacta un párrafo técnico que incluya OBLIGATORIAMENTE:
-           - Fecha de diagnóstico inicial.
-           - Descripción de Anatomía Patológica (tipo histológico).
-           - Cirugías realizadas (fechas y procedimientos).
-           - Breve evolución y justificación actual.
-           (Todo esto en un solo texto fluido).
-        4. "dosis_exacta": NO pongas "según protocolo". Calcula o extrae la dosis (ej: "200 mg" o "Paclitaxel 80mg/m2").
+        INSTRUCCIONES CLAVE:
+        1. **Ciclos:** Indica la INTENCIÓN de tratamiento (ej: "Hasta progresión", "Hasta toxicidad", "6 ciclos planeados"). NO pongas cuántos hizo.
+        2. **Laboratorio:** Incluye la FECHA del laboratorio (ej: "Hb 12 - (15/01/24)").
+        3. **Celular/Nacimiento:** Busca exhaustivamente en encabezados de los PDF o datos demográficos.
+        4. **Estadios:** Diferencia claramente estadio INICIAL (al diagnóstico) vs ACTUAL.
         
         Extrae este JSON exacto:
         {
           "paciente_nombre_real": "Nombre completo",
           "paciente_dni": "DNI",
-          "paciente_celular": "Celular de contacto",
+          "paciente_celular": "Celular encontrado",
           "paciente_fnac": "DD/MM/AAAA",
           "diagnostico_cie10": "Diagnóstico completo + Código CIE10",
-          "histopatologico": "Resumen histopatológico corto",
+          "histopatologico": "Resumen histopatológico",
           "peso": "kg (número)",
           "talla": "cm (número)",
           "ecog": "0, 1, 2, 3 o 4",
           "estadio_inicial": "Estadio al debut (ej: IIB)",
           "estadio_actual": "Estadio actual (ej: IV)",
+          "fecha_diagnostico_inicial": "Fecha del primer diagnóstico",
           "linea_tratamiento": "1ra, 2da, Adyuvancia...",
           "antecedentes_qx": "Cirugías previas",
           "antecedentes_radio": "RT previa",
-          "laboratorio": "Datos laboratorio relevantes (Hb, Plaq, Neutro, Clearance)",
-          "informe_clinico_detallado": "Texto detallado según instrucciones arriba",
+          "laboratorio": "Datos laboratorio CON FECHA",
+          "informe_clinico_detallado": "Resumen cronológico: Diagnóstico (fecha), cirugías, evolución y justificación actual.",
           "motivo_solicitud": "Inicio, Renovación, Cambio de Toxicidad, o Cambio por Progresión",
           "tipo_tratamiento": "Adyuvante, Neoadyuvante, o Avanzado",
-          "ciclos_realizados": "Cantidad de ciclos previos",
-          "frecuencia_dias": "Esquema de días (ej: D1 c/21 días)",
+          "ciclos_planeados": "Plan de ciclos (ej: Hasta progresión)",
+          "frecuencia_dias": "Esquema de días (ej: Día 1 cada 21 días)",
           "droga_1": "Nombre droga",
           "presentacion_1": "Presentación (ej: Amp 100mg)",
-          "dosis_1": "Dosis exacta",
+          "dosis_1": "Dosis exacta calculada",
           "droga_2": "Segunda droga",
           "presentacion_2": "Presentación",
           "dosis_2": "Dosis exacta"
@@ -143,7 +159,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const fillAndDownloadPDF = async (formDef: any) => {
     if ((!files || files.length === 0) && !historyText) {
-        alert("⚠️ Falta documentación. Suba la Historia Clínica primero.");
+        alert("⚠️ Suba la Historia Clínica primero.");
         return;
     }
 
@@ -171,46 +187,46 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       };
 
       const setCheck = (name: string, shouldCheck: boolean) => {
-        try {
-            if (shouldCheck) form.getCheckBox(name).check();
-        } catch (e) {}
+        try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {}
       };
 
       // --- PAMI ---
       if (formDef.id === 'pami') {
-        // Datos Afiliado
+        // PAGINA 1: DATOS PACIENTE Y CLÍNICOS
         setText('Apellido y Nombre', finalName);
-        setText('Beneficiario Nº', ''); // Vacío por pedido
+        setText('Beneficiario Nº', ''); // Vacío a pedido
         setText('Celular', aiData.paciente_celular);
         setText('Fecha de nacimiento', aiData.paciente_fnac);
 
-        // Diagnóstico y Estado
         setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10);
         setText('Diagnóstico CIE 10', aiData.diagnostico_cie10);
         setText('Histopatológico', aiData.histopatologico);
         
+        // Estado y Estadios
         setText('ECOG Performance Status (0-4)', aiData.ecog);
         setText('ECOG', aiData.ecog);
         setText('Estadío actual', aiData.estadio_actual);
         setText('Estadio actual', aiData.estadio_actual);
         setText('Estadio Inicial', aiData.estadio_inicial);
+        setText('Fecha de Diagnóstico Inicial', aiData.fecha_diagnostico_inicial);
+        setText('Fecha diagnostico inicial', aiData.fecha_diagnostico_inicial);
         
         setText('Línea de tratamiento', aiData.linea_tratamiento);
         
-        // Motivo (Checkboxes)
+        // Motivo Checkboxes
         if (aiData.motivo_solicitud?.toLowerCase().includes('inicio')) setCheck('Inicio', true);
         if (aiData.motivo_solicitud?.toLowerCase().includes('renovac')) setCheck('Renovación', true);
         if (aiData.motivo_solicitud?.toLowerCase().includes('toxicidad')) setCheck('Cambio de Toxicidad', true);
         if (aiData.motivo_solicitud?.toLowerCase().includes('progresi')) setCheck('Cambio por Progresión', true);
 
-        // Ciclos y Días (Sección superior)
-        setText('Ciclos', aiData.ciclos_realizados);
+        // Ciclos y Días
+        setText('Ciclos', aiData.ciclos_planeados);
         setText('Días', aiData.frecuencia_dias);
 
         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx);
         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio);
         
-        // INFORME CLÍNICO DETALLADO (En celda grande Row1)
+        // Informe e Labs
         setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado); 
         setText('Datos positivos Laboratorio', aiData.laboratorio);
         
@@ -220,16 +236,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Sup. Corporal', bsa);
         setText('Sup Corpora', bsa);
 
-        // Tratamiento (Checkboxes)
+        // Tratamiento Checkboxes
         if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
         if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
         if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
 
-        // Tabla de Drogas
+        // Tabla Drogas
         setText('DrogaGenéricoRow1', aiData.droga_1);
         setText('PresentaciónRow1', aiData.presentacion_1);
         setText('DosisRow1', aiData.dosis_1);
-        // Aquí en la tabla suele ir el esquema de ciclos también
         setText('N CiclosDuración díasRow1', aiData.frecuencia_dias); 
         
         if (aiData.droga_2) {
@@ -238,6 +253,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             setText('DosisRow2', aiData.dosis_2);
             setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
         }
+
+        // PAGINA 2: DATOS DEL MÉDICO (AUTOMÁTICO)
+        // Mapeo basado en tu lista: Apellido y Nombre_2, Matricula, Email_2, etc.
+        setText('Apellido y Nombre_2', doctorData.nombre);
+        setText('Matricula', doctorData.matricula);
+        setText('Especialidad', doctorData.especialidad);
+        setText('Email_2', doctorData.email);
+        setText('Celular_2', doctorData.celular); // A veces es Celular1 o Celular2 en PAMI
+        setText('Celular1', doctorData.celular);
+        setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
       } 
       // --- ADMISIÓN ---
       else if (formDef.id === 'admision') {
@@ -281,18 +306,56 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       link.download = `${formDef.name}_${finalName}.pdf`;
       link.click();
       setStatus('¡Listo!');
-
-    } catch (e: any) {
-      alert('Error: ' + e.message);
-    } finally {
-      setProcessingId(null);
-      setTimeout(() => setStatus(''), 3000);
-    }
+    } catch (e: any) { alert('Error: ' + e.message); } 
+    finally { setProcessingId(null); setStatus(''); }
   };
 
   return (
     <div className="p-6">
-      <h3 className="text-sm font-black text-gray-700 uppercase tracking-widest mb-6">Gestión de Trámites</h3>
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-sm font-black text-gray-700 uppercase tracking-widest">Gestión de Trámites</h3>
+        <button 
+          onClick={() => setShowDocConfig(true)}
+          className="flex items-center space-x-2 text-gray-500 hover:text-blue-600 transition-colors text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-3 py-1.5 rounded-lg"
+        >
+          <UserCog size={14} /><span>Configurar Médico</span>
+        </button>
+      </div>
+
+      {/* MODAL CONFIGURACIÓN MÉDICO */}
+      {showDocConfig && (
+        <div className="mb-6 p-5 bg-blue-50 border border-blue-100 rounded-2xl animate-in slide-in-from-top">
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="font-bold text-blue-800 text-xs uppercase tracking-widest">Datos del Profesional</h4>
+            <button onClick={() => setShowDocConfig(false)} className="text-blue-400 hover:text-blue-600"><X size={16}/></button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div>
+              <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Apellido y Nombre</label>
+              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.nombre} onChange={e => setDoctorData({...doctorData, nombre: e.target.value})} placeholder="Dr. Juan Pérez" />
+            </div>
+            <div>
+              <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Matrícula</label>
+              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.matricula} onChange={e => setDoctorData({...doctorData, matricula: e.target.value})} placeholder="MN 12345" />
+            </div>
+            <div>
+              <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Especialidad</label>
+              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.especialidad} onChange={e => setDoctorData({...doctorData, especialidad: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Email</label>
+              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.email} onChange={e => setDoctorData({...doctorData, email: e.target.value})} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Celular (Para Recetas)</label>
+              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.celular} onChange={e => setDoctorData({...doctorData, celular: e.target.value})} placeholder="11-1234-5678" />
+            </div>
+          </div>
+          <button onClick={saveDoctorData} className="w-full bg-blue-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 flex items-center justify-center space-x-2">
+            <Save size={14}/><span>Guardar Datos</span>
+          </button>
+        </div>
+      )}
       
       {(!files || files.length === 0) && !historyText && (
         <div className="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2">
