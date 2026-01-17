@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Loader2, Wand2, Map, AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { FileText, Loader2, Wand2, Map, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { GoogleGenAI } from "@google/genai";
 
@@ -45,12 +45,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
       fields.forEach(field => {
+        // Marcamos tanto Inputs de Texto como Checkboxes
+        const name = field.getName();
         if (field.constructor.name === 'PDFTextField') {
-            const textField = form.getTextField(field.getName());
-            textField.setText(field.getName()); 
-            textField.setFontSize(10);
+            const textField = form.getTextField(name);
+            textField.setText(name); 
+            textField.setFontSize(8);
             textField.setFont(helveticaFont);
             textField.setTextColor(rgb(1, 0, 0));
+        } else if (field.constructor.name === 'PDFCheckBox') {
+            // Para checkboxes es difícil escribir encima, pero intentamos loguearlo o marcarlo
+            try { form.getCheckBox(name).check(); } catch(e){}
         }
       });
 
@@ -60,7 +65,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       link.href = URL.createObjectURL(blob);
       link.download = `MAPA_ROJO_${formDef.name}.pdf`;
       link.click();
-      alert("✅ Mapa descargado. Use los códigos en rojo para decirme dónde poner los datos faltantes.");
+      alert("✅ Mapa descargado.");
       
     } catch (e: any) { alert('Error: ' + e.message); } 
     finally { setProcessingId(null); setStatus(''); }
@@ -72,33 +77,47 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const ai = new GoogleGenAI({ apiKey });
     
-    // --- PROMPT EXPANDIDO CON NUEVOS CAMPOS PAMI ---
+    // --- PROMPT DE ALTO NIVEL MÉDICO ---
     const parts: any[] = [
       { text: `
-        Analiza la historia clínica y extrae datos EXHAUSTIVOS para formulario oncológico PAMI.
+        Actúa como un ONCÓLOGO EXPERTO completando un formulario oficial.
         
-        Datos requeridos (JSON):
+        INSTRUCCIONES ESTRICTAS:
+        1. NO inventes datos, pero SI usa tu conocimiento de guías (NCCN/ESMO) para completar dosis y esquemas estándar si no están explícitos.
+        2. PROHIBIDO poner "Según protocolo". Debes especificar la dosis exacta (ej: "200 mg" o "2 mg/kg") y la frecuencia.
+        3. En "Ciclos", especifica la duración real (ej: "Hasta progresión de enfermedad" o "Cada 21 días por 6 ciclos").
+        4. "Beneficiario Nº" déjalo VACÍO.
+        
+        Extrae la siguiente estructura JSON:
         {
           "paciente_nombre_real": "Nombre completo",
-          "paciente_dni": "DNI sin puntos",
+          "paciente_dni": "DNI",
+          "paciente_celular": "Celular encontrado",
           "paciente_fnac": "DD/MM/AAAA",
-          "diagnostico_cie10": "Diagnóstico CIE-10",
-          "peso": "Solo número (kg)",
-          "talla": "Solo número (cm)",
-          "ecog": "0, 1, 2, 3 o 4 (Solo el número)",
-          "estadio_actual": "Estadio TNM actual (ej: IV)",
+          "diagnostico_cie10": "Diagnóstico completo y código",
+          "histopatologico": "Resumen histopatológico",
+          "peso": "kg (último)",
+          "talla": "cm",
+          "ecog": "0-4",
           "estadio_inicial": "Estadio al diagnóstico",
-          "fecha_diagnostico": "Fecha del diagnóstico inicial",
-          "linea_tratamiento": "1ra, 2da, Adyuvancia, etc",
-          "informe_clinico": "Breve resumen (máx 150 caracteres) de la evolución actual y justificación",
-          "droga_1": "Droga principal",
-          "dosis_1": "Dosis completa",
+          "estadio_actual": "Estadio actual",
+          "linea_tratamiento": "1ra, 2da, etc",
+          "antecedentes_qx": "Cirugías previas relevantes",
+          "antecedentes_radio": "Radioterapia previa",
+          "laboratorio": "Datos positivos laboratorio (último disponible)",
+          "informe_clinico": "Resumen breve de la justificación del tratamiento",
+          "motivo_solicitud": "Elegir UNO: 'Inicio', 'Renovación', 'Cambio de Toxicidad', 'Cambio por Progresión'",
+          "tipo_tratamiento": "Elegir UNO: 'Adyuvante', 'Neoadyuvante', 'Avanzado'",
+          "droga_1": "Nombre droga",
+          "presentacion_1": "Presentación (ej: Amp 100mg)",
+          "dosis_1": "Dosis exacta (NO poner 'según protocolo')",
+          "ciclos": "Frecuencia y duración (ej: c/21 días hasta progresión)",
           "droga_2": "Segunda droga",
-          "dosis_2": "Dosis segunda droga",
-          "ciclos": "Esquema/Ciclos (ej: Cada 21 días)"
+          "presentacion_2": "Presentación",
+          "dosis_2": "Dosis exacta"
         }
         
-        CONTEXTO: ${historyText}
+        HISTORIA CLÍNICA: ${historyText}
       `}
     ];
 
@@ -124,15 +143,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
 
     setProcessingId(formDef.id);
-    setStatus('Extrayendo datos clínicos...');
+    setStatus('Analizando con criterio médico...');
 
     try {
       const aiData = await extractDataWithAI();
       const bsa = calculateBSA(aiData.peso, aiData.talla);
       const finalName = aiData.paciente_nombre_real || patient.name;
-
-      // DEBUG: Verificamos qué trae la IA para los nuevos campos
-      console.log("Datos IA:", aiData);
 
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
@@ -142,78 +158,99 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
 
-      const set = (name: string, val: string) => {
+      // Helpers para escribir
+      const setText = (name: string, val: string) => {
         try { 
             const f = form.getTextField(name); 
             if (val) f.setText(String(val)); 
         } catch (e) {}
       };
 
+      const setCheck = (name: string, shouldCheck: boolean) => {
+        try {
+            if (shouldCheck) form.getCheckBox(name).check();
+        } catch (e) {}
+      };
+
+      // --- LÓGICA ESPECÍFICA PAMI ---
       if (formDef.id === 'pami') {
-        // --- MAPEO COMPLETO PAMI ---
-        set('Apellido y Nombre', finalName);
-        set('Beneficiario Nº', aiData.paciente_dni);
-        set('beneficiario Nro', aiData.paciente_dni);
-        set('Fecha de nacimiento', aiData.paciente_fnac);
+        // 1. Datos del Afiliado
+        setText('Apellido y Nombre', finalName);
+        setText('Beneficiario Nº', ''); // USUARIO PIDIÓ VACÍO
+        setText('Celular', aiData.paciente_celular);
+        setText('Fecha de nacimiento', aiData.paciente_fnac);
+
+        // 2. Diagnóstico
+        setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10);
+        setText('Diagnóstico CIE 10', aiData.diagnostico_cie10);
+        setText('Histopatológico', aiData.histopatologico);
         
-        // Diagnóstico
-        set('Diagnóstico (CIE 10)', aiData.diagnostico_cie10);
-        set('Diagnóstico CIE 10', aiData.diagnostico_cie10);
+        // Checkboxes de Motivo (Lógica inteligente)
+        // Probamos los nombres estándar de PAMI para los checkboxes
+        if (aiData.motivo_solicitud?.toLowerCase().includes('inicio')) setCheck('Inicio', true);
+        if (aiData.motivo_solicitud?.toLowerCase().includes('renovac')) setCheck('Renovación', true);
+        if (aiData.motivo_solicitud?.toLowerCase().includes('toxicidad')) setCheck('Cambio de Toxicidad', true);
+        if (aiData.motivo_solicitud?.toLowerCase().includes('progresi')) setCheck('Cambio por Progresión', true);
+
+        // Datos clínicos
+        setText('ECOG Performance Status (0-4)', aiData.ecog);
+        setText('ECOG', aiData.ecog);
+        setText('Estadío actual', aiData.estadio_actual);
+        setText('Estadio Inicial', aiData.estadio_inicial);
+        setText('Línea de tratamiento', aiData.linea_tratamiento);
         
-        // Datos Antropométricos
-        set('Peso', aiData.peso);
-        set('Talla', aiData.talla);
-        set('Sup. Corporal', bsa);
-        set('Sup Corpora', bsa);
+        setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx);
+        setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio);
         
-        // Estado Clínico y Tratamiento (LOS NUEVOS CAMPOS)
-        set('ECOG Performance Status (0-4)', aiData.ecog);
-        set('ECOG', aiData.ecog);
+        // Informe clínico (En la celda de ABAJO como pidió el usuario)
+        // Probamos llenar ambos por si acaso, o priorizar Row1 que suele ser el cuerpo
+        setText('Informe Clínico ActualRow1', aiData.informe_clinico); 
         
-        set('Estadío actual', aiData.estadio_actual);
-        set('Estadio actual', aiData.estadio_actual);
+        setText('Datos positivos Laboratorio', aiData.laboratorio);
         
-        set('Estadio Inicial', aiData.estadio_inicial);
-        
-        set('Fecha de Diagnóstico Inicial', aiData.fecha_diagnostico);
-        set('Fecha diagnostico inicial', aiData.fecha_diagnostico);
-        
-        set('Línea de tratamiento', aiData.linea_tratamiento);
-        
-        set('Informe clínico actual', aiData.informe_clinico);
-        set('Informe Clínico Actual', aiData.informe_clinico);
-        
-        // Drogas y Ciclos
-        set('Ciclos', aiData.ciclos); // Campo suelto arriba
-        set('N CiclosDuración díasRow1', aiData.ciclos); // Columna en tabla
-        
-        set('DrogaGenéricoRow1', aiData.droga_1);
-        set('DosisRow1', aiData.dosis_1);
+        // Antropometría
+        setText('Peso', aiData.peso);
+        setText('Talla', aiData.talla);
+        setText('Sup. Corporal', bsa);
+        setText('Sup Corpora', bsa);
+
+        // 3. Tratamiento (Checkboxes)
+        if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
+        if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
+        if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
+
+        // Tabla de Drogas
+        setText('DrogaGenéricoRow1', aiData.droga_1);
+        setText('PresentaciónRow1', aiData.presentacion_1);
+        setText('DosisRow1', aiData.dosis_1);
+        setText('N CiclosDuración díasRow1', aiData.ciclos);
         
         if (aiData.droga_2) {
-            set('DrogaGenéricoRow2', aiData.droga_2);
-            set('DosisRow2', aiData.dosis_2);
-            set('N CiclosDuración díasRow2', aiData.ciclos);
+            setText('DrogaGenéricoRow2', aiData.droga_2);
+            setText('PresentaciónRow2', aiData.presentacion_2);
+            setText('DosisRow2', aiData.dosis_2);
+            setText('N CiclosDuración díasRow2', aiData.ciclos);
         }
       } 
       else if (formDef.id === 'admision') {
-        // Mapeo Provisorio Admisión (Requiere Mapa Rojo para ser exacto)
-        set('Text1', finalName);
-        set('Text3', aiData.paciente_fnac);
-        set('Text4', aiData.paciente_dni);
-        set('Text14', aiData.diagnostico_cie10);
-        set('Text20', aiData.peso);
-        set('Text19', bsa);
-        set('Text92', aiData.droga_1);
-        // Intentamos llenar ECOG también aquí por si coincide
-        set('Text197', aiData.ecog); // A veces ECOG tiene ID alto
+        // Mapeo Admisión (Actualizado con lógica secuencial)
+        setText('Text1', finalName);
+        setText('Text3', aiData.paciente_fnac);
+        setText('Text4', aiData.paciente_dni);
+        setText('Text14', aiData.diagnostico_cie10);
+        setText('Text20', aiData.peso);
+        setText('Text21', aiData.talla);
+        setText('Text19', bsa);
+        setText('Text92', aiData.droga_1);
+        // Intentar llenar motivo si hay campo
       }
       else if (formDef.id === 'renovacion') {
-        set('Text1', finalName);
-        set('Text4', aiData.paciente_dni);
-        set('Text12', aiData.diagnostico_cie10);
-        set('Text40', aiData.peso);
-        set('Text82', aiData.droga_1);
+        // Mapeo Renovación
+        setText('Text1', finalName);
+        setText('Text4', aiData.paciente_dni);
+        setText('Text12', aiData.diagnostico_cie10);
+        setText('Text40', aiData.peso);
+        setText('Text82', aiData.droga_1);
       }
       else {
         // DINADIC
@@ -225,7 +262,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                 if (name.includes('nombre') || name.includes('paciente')) textField.setText(finalName);
                 else if (name.includes('dni') || name.includes('doc')) textField.setText(aiData.paciente_dni);
                 else if (name.includes('diag')) textField.setText(aiData.diagnostico_cie10);
-                else if (name.includes('ecog')) textField.setText(aiData.ecog);
                 else if (name.includes('peso')) textField.setText(aiData.peso);
                 else if (name.includes('droga')) textField.setText(aiData.droga_1);
             }
@@ -256,7 +292,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         <div className="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2">
             <AlertTriangle className="text-orange-500" size={16} />
             <p className="text-[10px] text-orange-700 font-bold">
-                Cargue la Historia Clínica en "Documentación" para habilitar el autocompletado.
+                Recomendación: Suba la Historia Clínica completa para una extracción precisa de datos.
             </p>
         </div>
       )}
@@ -287,7 +323,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                   onClick={() => generateFieldMap(form)}
                   disabled={processingId !== null}
                   className="flex items-center justify-center px-3 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 disabled:opacity-50 border border-purple-100"
-                  title="Ver mapa de campos (Texto Rojo)"
+                  title="Mapa Rojo (Depuración)"
                 >
                   <Map size={14} />
                 </button>
