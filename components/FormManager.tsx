@@ -20,11 +20,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     especialidad: 'Oncología Clínica',
     email: '',
     provincia: '',
-    // CUIL DIVIDIDO
     cuil_prefix: '', 
     cuil_dni: '', 
     cuil_suffix: '',
-    // CELULAR DIVIDIDO
     cel_area: '', 
     cel_num: ''
   });
@@ -103,14 +101,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       { text: `
         Actúa como un ONCÓLOGO EXPERTO completando una planilla oficial de PAMI.
         
-        REGLAS DE LONGITUD (ESTRICTAS):
-        1. **Diagnóstico:** MÁXIMO 85 caracteres. Usa abreviaturas (ej: "Ca.").
-        2. **Histopatológico:** MÁXIMO 85 caracteres.
-        3. **Ciclos:** MÁXIMO 41 caracteres (ej: "Hasta progresión").
-        4. **Antecedentes Qx:** MÁXIMO 80 caracteres.
-        5. **Antecedentes RT:** MÁXIMO 75 caracteres.
-        6. **Laboratorio:** MÁXIMO 85 caracteres. Formato: "14/8/25: Hb 9 / GB 5300 / Plaq 150k".
-        7. **Informe Clínico:** MÁXIMO 1400 caracteres. Resumen técnico completo.
+        REGLAS DE EXTRACCIÓN (ESTRICTAS):
+        1. **Fecha de Nacimiento:** Busca patrones numéricos como "Fecha nac.: 08/05/1963" o "FN: 12/03/1950". Extrae EXACTAMENTE el dato numérico DD/MM/AAAA.
+        2. **Diagnóstico:** MÁXIMO 85 caracteres. Usa abreviaturas (ej: "Ca.").
+        3. **Histopatológico:** MÁXIMO 85 caracteres.
+        4. **Ciclos:** MÁXIMO 41 caracteres (ej: "Hasta progresión").
+        5. **Antecedentes Qx:** MÁXIMO 80 caracteres.
+        6. **Antecedentes RT:** MÁXIMO 75 caracteres.
+        7. **Laboratorio:** MÁXIMO 85 caracteres. Formato: "14/8/25: Hb 9 / GB 5300 / Plaq 150k".
+        8. **Informe Clínico:** MÁXIMO 1400 caracteres. Resumen técnico completo.
         
         Extrae este JSON exacto:
         {
@@ -235,7 +234,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 80);
         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 75);
         
-        // INFORME (1400) + LAB (85)
         setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1400); 
         setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 85);
         
@@ -267,31 +265,22 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Provincia', doctorData.provincia);
 
         // CUIL (DESPLAZADO A LA IZQUIERDA)
-        // Antes usamos CUIL1/CUIL2/CUIL3 (y salia en 2da, 3ra, null).
-        // Ahora usamos CUIL/CUIL1/CUIL2 (o CUIT/CUIT1/CUIT2).
         setText('CUIL', doctorData.cuil_prefix);      // Casilla 1
         setText('CUIL1', doctorData.cuil_dni);        // Casilla 2
         setText('CUIL2', doctorData.cuil_suffix);     // Casilla 3
         
-        // Fallback CUIT (mismo shift)
+        // Fallback CUIT
         setText('CUIT', doctorData.cuil_prefix);
         setText('CUIT1', doctorData.cuil_dni);
         setText('CUIT2', doctorData.cuil_suffix);
 
         // CELULAR (SIN REPETIR EN 2DA CASILLA)
-        // Casilla 1: Area
-        setText('Celular', doctorData.cel_area);
-        
-        // Casilla 2: Numero (Antes poniamos Celular1 y Celular2, ahora solo Celular1 y Celular_2)
+        setText('Celular', doctorData.cel_area);   
         setText('Celular1', doctorData.cel_num);
         setText('Celular_2', doctorData.cel_num); 
-        
-        // Limpieza de posibles superposiciones
-        // (No escribimos el area en Celular1, solo el numero)
 
         setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
       } 
-      // ... OTROS FORMULARIOS ...
       else if (formDef.id === 'admision') {
         setText('Text1', finalName);
         setText('Text3', aiData.paciente_fnac);
@@ -363,7 +352,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
               <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.matricula} onChange={e => setDoctorData({...doctorData, matricula: e.target.value})} placeholder="MN 12345" />
             </div>
             
-            {/* CUIL DIVIDIDO */}
             <div className="col-span-2">
                 <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">CUIL / CUIT (Dividido)</label>
                 <div className="flex space-x-2">
@@ -387,7 +375,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
               <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.email} onChange={e => setDoctorData({...doctorData, email: e.target.value})} />
             </div>
 
-            {/* CELULAR DIVIDIDO */}
             <div className="col-span-2">
                 <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Celular (Área sin 0 / Número sin 15)</label>
                 <div className="flex items-center space-x-2">
