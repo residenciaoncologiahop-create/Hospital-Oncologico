@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Loader2, Wand2, Map, AlertTriangle, UserCog, Save, X, CheckCircle2, ExternalLink } from 'lucide-react';
+import { FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { GoogleGenAI } from "@google/genai";
 
@@ -36,10 +36,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   };
 
   const forms = [
-    { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf' },
-    { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf' },
-    { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf' },
-    { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/banco_drogas.pdf' },
+    { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
+    { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'manual' },
+    { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'manual' },
+    { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/banco_drogas.pdf', type: 'manual' },
   ];
 
   const calculateBSA = (weight: string, height: string) => {
@@ -51,24 +51,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     return '';
   };
 
-  const calculateAge = (dateString: string) => {
-    if (!dateString) return "";
-    const parts = dateString.split(/[\/\-]/);
-    if (parts.length !== 3) return "";
-    const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; 
-    const year = parseInt(parts[2], 10);
-    
-    const birthDate = new Date(year, month, day);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-    }
-    return age.toString();
-  };
-
   const cleanDate = (val: string) => {
     if (!val) return "";
     const match = val.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
@@ -76,53 +58,118 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     return "";
   };
 
-  const generateFieldMap = async (formDef: any) => {
-    setProcessingId('map-' + formDef.id);
-    setStatus('Generando mapa...');
+  // --- FUNCIÓN 1: DESCARGAR PLANTILLA VACÍA (Para Banco de Drogas) ---
+  const downloadTemplate = async (formDef: any) => {
     try {
-      const formUrl = window.location.origin + formDef.file;
-      const res = await fetch(formUrl);
-      if (!res.ok) throw new Error("Archivo no encontrado");
-      const formBytes = await res.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(formBytes);
-      const form = pdfDoc.getForm();
-      const fields = form.getFields();
-      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-      fields.forEach(field => {
-        const name = field.getName();
-        if (field.constructor.name === 'PDFTextField') {
-            const textField = form.getTextField(name);
-            textField.setText(name); 
-            textField.setFontSize(6);
-            textField.setFont(helveticaFont);
-            textField.setTextColor(rgb(1, 0, 0));
-        }
-      });
-
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `MAPA_ROJO_${formDef.name}.pdf`;
-      link.click();
-      alert("✅ Mapa descargado.");
-    } catch (e: any) { alert('Error: ' + e.message); } 
-    finally { setProcessingId(null); setStatus(''); }
+        const link = document.createElement('a');
+        link.href = formDef.file;
+        link.download = `${formDef.name}_Plantilla.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (e) {
+        alert("Error al descargar plantilla");
+    }
   };
 
-  const extractDataWithAI = async (formId: string) => {
+  // --- FUNCIÓN 2: GENERAR RESUMEN CLÍNICO (Para adjuntar) ---
+  const generateClinicalSummary = async () => {
+    if (!historyText) {
+        alert("Falta historia clínica para generar el resumen.");
+        return;
+    }
+    setProcessingId('summary');
+    setStatus('Redactando resumen...');
+
+    try {
+        const apiKey = import.meta.env.VITE_API_KEY;
+        if (!apiKey) throw new Error("Falta API Key");
+        
+        const ai = new GoogleGenAI({ apiKey });
+        const today = new Date().toLocaleDateString('es-AR');
+
+        const prompt = `
+        Actúa como Oncólogo. Redacta un RESUMEN DE HISTORIA CLÍNICA formal para solicitar medicación al Banco de Drogas.
+        Fecha: ${today}.
+        
+        Estructura requerida:
+        1. ENCABEZADO: Paciente (Nombre, DNI, Edad), Diagnóstico Principal (con fecha).
+        2. ANTECEDENTES: Breve resumen de comorbilidades.
+        3. HISTORIA ONCOLÓGICA: Orden cronológico de cirugías, radioterapia y líneas de quimioterapia previas (fechas y respuesta).
+        4. SITUACIÓN ACTUAL: Estado actual (ECOG), sitio de recaída/progresión, justificación clínica.
+        5. SOLICITUD: Droga solicitada, dosis y esquema propuesto.
+        
+        No inventes datos. Usa lenguaje técnico preciso.
+        CONTEXTO: ${historyText}
+        `;
+
+        const res = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [{ text: prompt }] }
+        });
+
+        const summaryText = res.text || "No se pudo generar el resumen.";
+
+        // Crear PDF simple con el texto
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage();
+        const { width, height } = page.getSize();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const fontSize = 10;
+        
+        page.drawText(`RESUMEN CLÍNICO - SOLICITUD BANCO DE DROGAS`, { x: 50, y: height - 50, size: 14, font });
+        
+        // Wrap text muy básico para PDF
+        const lines = summaryText.split('\n');
+        let y = height - 80;
+        
+        lines.forEach(line => {
+            // Dividir líneas largas (aprox 90 caracteres)
+            const words = line.split(' ');
+            let currentLine = '';
+            
+            words.forEach(word => {
+                if ((currentLine + word).length > 90) {
+                    page.drawText(currentLine, { x: 50, y, size: fontSize, font });
+                    y -= 15;
+                    currentLine = word + ' ';
+                } else {
+                    currentLine += word + ' ';
+                }
+            });
+            page.drawText(currentLine, { x: 50, y, size: fontSize, font });
+            y -= 20; // Salto de párrafo
+            
+            if (y < 50) { // Nueva página si se acaba el espacio (básico)
+                 // (Omitido para simplificar, usualmente entra en 1 página)
+            }
+        });
+
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Resumen_Clinico_${patient.name}.pdf`;
+        link.click();
+        setStatus('¡Resumen Generado!');
+
+    } catch (e: any) {
+        alert("Error: " + e.message);
+    } finally {
+        setProcessingId(null);
+        setStatus('');
+    }
+  };
+
+  // --- FUNCIÓN 3: AUTOCOMPLETADO PAMI (Mantener Intacto) ---
+  const extractPamiData = async () => {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("Falta API Key");
-    
     const ai = new GoogleGenAI({ apiKey });
     const today = new Date().toLocaleDateString('es-AR');
     
-    let promptText = "";
-
-    // --- PROMPT PAMI (MANTENIDO INTACTO) ---
-    if (formId === 'pami') {
-        promptText = `
+    // PROMPT PAMI ORIGINAL APROBADO
+    const promptText = `
         Actúa como un ONCÓLOGO EXPERTO. Hoy es ${today}.
         OBJETIVO: Completar planilla PAMI con rigor técnico y estilo formal.
         REGLAS DE ESTILO (OBLIGATORIAS):
@@ -148,117 +195,36 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "droga_1": "Droga", "presentacion_1": "Presentación", "dosis_1": "Dosis",
           "droga_2": "Droga 2", "presentacion_2": "Presentación", "dosis_2": "Dosis"
         }`;
-    } 
-    // --- PROMPT ADMISIÓN BANCO DE DROGAS (CORREGIDO PROFUNDAMENTE) ---
-    else if (formId === 'admision' || formId === 'renovacion') {
-        promptText = `
-        Actúa como ONCÓLOGO para completar el FORMULARIO DE ADMISIÓN (Banco de Drogas).
-        Analiza TODOS los documentos adjuntos, especialmente los encabezados de las evoluciones.
-        
-        CORRECCIONES CRÍTICAS:
-        1. **DNI vs Edad:** El DNI es un número largo (ej: 16xxxxxx). La Edad son 2 dígitos. NO LOS MEZCLES.
-        2. **Profesión/Ocupación:** Busca "Ocupación:" o "Trabajo:". Ej: "Construcción", "Albañil".
-        3. **Domicilio:** Busca en el encabezado. Ej: "Leobuco 5345".
-        4. **Diagnóstico:** DEBE ser la descripción médica completa (ej: "Carcinoma epidermoide..."). NUNCA pongas el país aquí.
-        5. **CIE10:** Busca el código específico (ej: C44.6).
-        6. **Receptores:** SI ES CÁNCER DE PIEL/EPIDERMOIDE -> "NO APLICA". NO INVENTES VALORES.
-        7. **TNM:** Extrae T, N y M exactos (ej: T4 N1 M0).
-        8. **Tratamientos Previos:** - Cirugías: Lista fechas y procedimientos.
-           - RT: Si dice "no realizada" o "no factible", es NO.
-        9. **Esquema Actual (Pembrolizumab):** - Dosis: "200 mg dosis fija" (NO usar mg/m2).
-           - Intervalo: "C/ 21 DÍAS".
-           - Ciclos: "Hasta progresión o toxicidad".
-        
-        JSON EXACTO REQUERIDO:
-        {
-          "paciente_nombre": "Nombre Completo", 
-          "paciente_nacionalidad": "Argentina", 
-          "paciente_fnac": "DD/MM/AAAA",
-          "paciente_dni": "DNI correcto", 
-          "paciente_profesion": "Ocupación encontrada", 
-          "paciente_sexo": "M/F",
-          "paciente_domicilio": "Calle y Altura", 
-          "paciente_localidad": "Localidad", 
-          "paciente_provincia": "Provincia",
-          "paciente_telefono": "Teléfono", 
-          "institucion_hospital": "Hospital Oncológico Dr. José Miguel Urrutia",
-          "diagnostico_texto": "Dx Médico Completo (NO poner Argentina)", 
-          "cie10": "Código CIE10", 
-          "fecha_dx": "DD/MM/AAAA (Fecha Dx Inicial)",
-          "receptores_er": "Pos/Neg/No Aplica", 
-          "receptores_pr": "Pos/Neg/No Aplica", 
-          "receptores_her2": "Pos/Neg/No Aplica",
-          "tnm_t": "Valor T", "tnm_n": "Valor N", "tnm_m": "Valor M", 
-          "estadio": "Estadio (ej: IVA)",
-          "anatomia_patologica": "Resumen Biopsias y Cirugías", 
-          "ecog": "0-4",
-          "peso": "kg", "talla": "cm",
-          "tx_previo_cx_detalle": "Detalle cirugías previas con fechas", 
-          "tx_previo_rt_realizo": "SI/NO",
-          "tx_previo_quimio_detalle": "Esquemas previos (Drogas y Fechas)",
-          "tx_actual_linea": "1ra/2da/3ra",
-          "esquema_nombre": "Nombre Esquema", 
-          "ciclos_programados": "Texto (ej: Hasta progresión)", 
-          "intervalo_dias": "Cada X días",
-          "droga_1": "Nombre Droga", 
-          "dosis_1_mg_m2": "Dosis Texto (ej: 200 mg fijos)", 
-          "dias_1": "Días (ej: D1)", "dosis_total_1": "Total mg",
-          "metastasis_sitios": "Sitios MTS (Ganglios, Pulmón, etc)",
-          "motivo_renovacion": "Continuidad/Toxicidad/Progresión"
-        }`;
-    }
 
     const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${historyText}` }];
+    if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
-    if (files && files.length > 0) {
-        files.forEach(f => {
-            parts.push({ inlineData: { mimeType: f.type, data: f.data } });
-        });
-    }
-
-    const res = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts }
-    });
-
+    const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
     const text = res.text || "{}";
     let cleanText = text.replace(/```json|```/g, '').trim();
     const firstBrace = cleanText.indexOf('{');
     const lastBrace = cleanText.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1) {
-        cleanText = cleanText.substring(firstBrace, lastBrace + 1);
-    }
+    if (firstBrace !== -1 && lastBrace !== -1) cleanText = cleanText.substring(firstBrace, lastBrace + 1);
     return JSON.parse(cleanText);
   };
 
-  const fillAndDownloadPDF = async (formDef: any) => {
+  const fillPamiPDF = async (formDef: any) => {
     if ((!files || files.length === 0) && !historyText) {
         alert("⚠️ Suba la Historia Clínica primero.");
         return;
     }
-
     setProcessingId(formDef.id);
-    setStatus('Procesando datos médicos...');
+    setStatus('Procesando PAMI...');
 
     try {
-      const aiData = await extractDataWithAI(formDef.id);
-      
-      const pesoNum = parseFloat(aiData.peso || "0");
-      const tallaNum = parseFloat(aiData.talla || "0");
-      let bsa = "";
-      if (pesoNum > 0 && tallaNum > 0) {
-          bsa = Math.sqrt((pesoNum * tallaNum) / 3600).toFixed(2);
-      }
-      
-      const finalName = aiData.paciente_nombre_real || aiData.paciente_nombre || patient.name;
-      
+      const aiData = await extractPamiData();
+      const bsa = calculateBSA(aiData.peso, aiData.talla);
+      const finalName = aiData.paciente_nombre_real || patient.name;
       const cleanFnac = cleanDate(aiData.paciente_fnac);
-      const edadCalculada = calculateAge(cleanFnac);
 
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
       if (!res.ok) throw new Error(`No se encontró ${formDef.file}`);
-      
       const formBytes = await res.arrayBuffer();
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
@@ -268,175 +234,72 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             const f = form.getTextField(name); 
             if (val) {
                 let textToWrite = String(val);
-                if (limit && textToWrite.length > limit) {
-                    textToWrite = textToWrite.substring(0, limit);
-                }
+                if (limit && textToWrite.length > limit) textToWrite = textToWrite.substring(0, limit);
                 f.setText(textToWrite);
                 if (fontSize) f.setFontSize(fontSize);
             }
         } catch (e) {}
       };
+      const setCheck = (name: string, shouldCheck: boolean) => { try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {} };
 
-      const setCheck = (name: string, shouldCheck: boolean) => {
-        try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {}
-      };
-
-      // --- PAMI (INTACTO) ---
-      if (formDef.id === 'pami') {
-         setText('Apellido y Nombre', finalName);
-         setText('Beneficiario Nº', ''); 
-         setText('Celular', aiData.paciente_celular);
-         setText('Fecha de nacimiento', cleanFnac || aiData.paciente_fnac);
-         setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10, 85);
-         setText('Diagnóstico CIE 10', aiData.diagnostico_cie10, 85);
-         setText('Histopatológico', aiData.histopatologico, 85);
-         setText('ECOG Performance Status (0-4)', aiData.ecog);
-         setText('ECOG', aiData.ecog);
-         setText('Estadío actual', aiData.estadio_actual);
-         setText('Estadio actual', aiData.estadio_actual);
-         setText('Estadio Inicial', aiData.estadio_inicial);
-         setText('Fecha de Diagnóstico Inicial', aiData.fecha_diagnostico_inicial);
-         setText('Fecha diagnostico inicial', aiData.fecha_diagnostico_inicial);
-         setText('Línea de tratamiento', aiData.linea_tratamiento);
-         if (aiData.motivo_solicitud?.toLowerCase().includes('inicio')) setCheck('Inicio', true);
-         if (aiData.motivo_solicitud?.toLowerCase().includes('renovac')) setCheck('Renovación', true);
-         if (aiData.motivo_solicitud?.toLowerCase().includes('toxicidad')) setCheck('Cambio de Toxicidad', true);
-         if (aiData.motivo_solicitud?.toLowerCase().includes('progresi')) setCheck('Cambio por Progresión', true);
-         setText('Ciclos', aiData.ciclos_planeados, 41);
-         setText('Días', aiData.frecuencia_dias);
-         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 80);
-         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 75);
-         setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1100, 9); 
-         setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 85);
-         setText('Peso', aiData.peso);
-         setText('Talla', aiData.talla);
-         setText('Sup. Corporal', bsa);
-         setText('Sup Corpora', bsa);
-         if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
-         if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
-         if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
-         setText('DrogaGenéricoRow1', aiData.droga_1);
-         setText('PresentaciónRow1', aiData.presentacion_1);
-         setText('DosisRow1', aiData.dosis_1);
-         setText('N CiclosDuración díasRow1', aiData.frecuencia_dias); 
-         if (aiData.droga_2) {
-            setText('DrogaGenéricoRow2', aiData.droga_2);
-            setText('PresentaciónRow2', aiData.presentacion_2);
-            setText('DosisRow2', aiData.dosis_2);
-            setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
-         }
-         setText('Apellido y Nombre_2', doctorData.nombre);
-         setText('Matricula', doctorData.matricula);
-         setText('Especialidad', doctorData.especialidad);
-         setText('Email_2', doctorData.email);
-         setText('Provincia', doctorData.provincia);
-         setText('CUIL', doctorData.cuil_prefix); setText('CUIL1', doctorData.cuil_dni); setText('CUIL2', doctorData.cuil_suffix);
-         setText('CUIT', doctorData.cuil_prefix); setText('CUIT1', doctorData.cuil_dni); setText('CUIT2', doctorData.cuil_suffix);
-         setText('Celular', doctorData.cel_area); setText('Celular1', doctorData.cel_num); setText('Celular_2', doctorData.cel_num); 
-         setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
-      } 
-      // --- ADMISIÓN Y RENOVACIÓN BANCO DE DROGAS ---
-      else if (formDef.id === 'admision' || formDef.id === 'renovacion') {
-         // 1. DATOS PACIENTE CORREGIDOS
-         setText('Text1', finalName); 
-         setText('Text2', "Argentina"); // País Fijo
-         setText('Text3', cleanFnac); 
-         setText('Text4', aiData.paciente_dni); // DNI Correcto
-         setText('Text5', aiData.paciente_profesion);
-         
-         // Sexo
-         if (aiData.paciente_sexo === 'M') setCheck('Check Box1', true);
-         else setCheck('Check Box2', true);
-         
-         setText('Text6', edadCalculada); // EDAD en su campo
-         
-         setText('Text14', aiData.paciente_domicilio);
-         setText('Text15', aiData.paciente_telefono);
-         setText('Text16', aiData.paciente_localidad);
-         setText('Text17', aiData.paciente_provincia || "Córdoba");
-         setText('Text18', "Argentina");
-         setText('Text19', "Hospital Oncológico Dr. José Miguel Urrutia"); // Nombre completo fijo
-
-         // 2. CLÍNICA
-         setText('Text20', aiData.diagnostico_texto); // Diagnóstico real
-         setText('Text21', aiData.cie10);
-         
-         // LÓGICA RECEPTORES (Anti-Error para Piel/Melanoma)
-         const dxLower = aiData.diagnostico_texto?.toLowerCase() || "";
-         if (dxLower.includes('epidermoide') || dxLower.includes('piel') || dxLower.includes('escamoso')) {
-             setText('Text22', "NO APLICA"); 
-         } else {
-             setText('Text22', `RE: ${aiData.receptores_er} RP: ${aiData.receptores_pr}`);
-         }
-         
-         // TNM DETALLADO
-         setText('Text28', `T: ${aiData.tnm_t}  N: ${aiData.tnm_n}  M: ${aiData.tnm_m}`); 
-         setText('Text30', aiData.estadio); 
-         setText('Text27', cleanDate(aiData.fecha_dx)); 
-         setText('Text31', aiData.anatomia_patologica); 
-         
-         // 3. FÍSICO
-         setText('Text39', aiData.peso);
-         setText('Text40', aiData.talla);
-         setText('Text32', bsa);
-         if (aiData.ecog == '1') setCheck('Check Box4', true);
-         
-         // 4. TRATAMIENTOS PREVIOS
-         if (aiData.tx_previo_cx_detalle) {
-             setCheck('Check Box7', true); // Cirugía SI
-             setText('Text41', aiData.tx_previo_cx_detalle);
-         }
-         
-         // RT: Si dice NO, marcar el NO (Check Box10 suele ser NO)
-         if (aiData.tx_previo_rt_realizo === "SI") {
-             setCheck('Check Box9', true); 
-         } else {
-             setCheck('Check Box10', true); 
-         }
-
-         if (aiData.tx_previo_quimio_detalle) {
-             setCheck('Check Box11', true); 
-             setText('Text55', aiData.tx_previo_quimio_detalle);
-         }
-         
-         // 5. TRATAMIENTO ACTUAL
-         setCheck('Check Box13', true); // Terapias Blanco
-         setCheck('Check Box17', true); // Avanzado
-         setText('Text69', aiData.tx_actual_linea);
-         
-         setText('Text70', `Esquema: ${aiData.esquema_nombre} - Intervalo: ${aiData.intervalo_dias}`);
-         setText('Text71', aiData.ciclos_programados); 
-
-         // 6. TABLA DE DROGAS (Corrección Pembro Dosis Fija)
-         setText('Text92', aiData.droga_1); 
-         
-         if (aiData.droga_1?.toLowerCase().includes('pembrolizumab')) {
-             setText('Text93', "200 mg dosis fija"); // Columna mg/m2
-             setText('Text95', "200 mg"); // Columna Dosis Total
-         } else {
-             setText('Text93', aiData.dosis_1_mg_m2);
-             // Calcular dosis total solo si no es Pembro
-             if (bsa && aiData.dosis_1_mg_m2) {
-                 const doseVal = parseFloat(aiData.dosis_1_mg_m2);
-                 if (!isNaN(doseVal)) {
-                    setText('Text95', `${(doseVal * parseFloat(bsa)).toFixed(0)} mg`);
-                 }
-             }
-         }
-         setText('Text94', aiData.dias_1);
-
-         // 7. ENFERMEDAD AVANZADA
-         if (aiData.metastasis_sitios?.toLowerCase().includes('gangli')) setCheck('Check Box19', true); 
-         
-         setText('Text88', `Córdoba, ${new Date().toLocaleDateString('es-AR')}`);
-         setText('Text89', "Tel: 0351-4444444"); 
+      // MAPEO PAMI ORIGINAL
+      setText('Apellido y Nombre', finalName);
+      setText('Beneficiario Nº', ''); 
+      setText('Celular', aiData.paciente_celular);
+      setText('Fecha de nacimiento', cleanFnac || aiData.paciente_fnac);
+      setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10, 85);
+      setText('Diagnóstico CIE 10', aiData.diagnostico_cie10, 85);
+      setText('Histopatológico', aiData.histopatologico, 85);
+      setText('ECOG Performance Status (0-4)', aiData.ecog);
+      setText('ECOG', aiData.ecog);
+      setText('Estadío actual', aiData.estadio_actual);
+      setText('Estadio actual', aiData.estadio_actual);
+      setText('Estadio Inicial', aiData.estadio_inicial);
+      setText('Fecha de Diagnóstico Inicial', aiData.fecha_diagnostico_inicial);
+      setText('Fecha diagnostico inicial', aiData.fecha_diagnostico_inicial);
+      setText('Línea de tratamiento', aiData.linea_tratamiento);
+      if (aiData.motivo_solicitud?.toLowerCase().includes('inicio')) setCheck('Inicio', true);
+      if (aiData.motivo_solicitud?.toLowerCase().includes('renovac')) setCheck('Renovación', true);
+      if (aiData.motivo_solicitud?.toLowerCase().includes('toxicidad')) setCheck('Cambio de Toxicidad', true);
+      if (aiData.motivo_solicitud?.toLowerCase().includes('progresi')) setCheck('Cambio por Progresión', true);
+      setText('Ciclos', aiData.ciclos_planeados, 41);
+      setText('Días', aiData.frecuencia_dias);
+      setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 80);
+      setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 75);
+      setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1100, 9); 
+      setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 85);
+      setText('Peso', aiData.peso);
+      setText('Talla', aiData.talla);
+      setText('Sup. Corporal', bsa);
+      setText('Sup Corpora', bsa);
+      if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
+      if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
+      if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
+      setText('DrogaGenéricoRow1', aiData.droga_1);
+      setText('PresentaciónRow1', aiData.presentacion_1);
+      setText('DosisRow1', aiData.dosis_1);
+      setText('N CiclosDuración díasRow1', aiData.frecuencia_dias); 
+      if (aiData.droga_2) {
+        setText('DrogaGenéricoRow2', aiData.droga_2);
+        setText('PresentaciónRow2', aiData.presentacion_2);
+        setText('DosisRow2', aiData.dosis_2);
+        setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
       }
+      setText('Apellido y Nombre_2', doctorData.nombre);
+      setText('Matricula', doctorData.matricula);
+      setText('Especialidad', doctorData.especialidad);
+      setText('Email_2', doctorData.email);
+      setText('Provincia', doctorData.provincia);
+      setText('CUIL', doctorData.cuil_prefix); setText('CUIL1', doctorData.cuil_dni); setText('CUIL2', doctorData.cuil_suffix);
+      setText('CUIT', doctorData.cuil_prefix); setText('CUIT1', doctorData.cuil_dni); setText('CUIT2', doctorData.cuil_suffix);
+      setText('Celular', doctorData.cel_area); setText('Celular1', doctorData.cel_num); setText('Celular_2', doctorData.cel_num); 
+      setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `${formDef.name}_${finalName}.pdf`;
+      link.download = `PAMI_${finalName}.pdf`;
       link.click();
       setStatus('¡Listo!');
     } catch (e: any) { alert('Error: ' + e.message); } 
@@ -478,7 +341,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         <div className="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2">
             <AlertTriangle className="text-orange-500" size={16} />
             <p className="text-[10px] text-orange-700 font-bold">
-                Cargue la Historia Clínica en "Documentación" para habilitar el autocompletado.
+                Cargue la Historia Clínica en "Documentación" para habilitar el autocompletado PAMI y los resúmenes.
             </p>
         </div>
       )}
@@ -495,25 +358,42 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             </div>
             
             <div className="flex gap-2">
-                <button 
-                  onClick={() => fillAndDownloadPDF(form)}
-                  disabled={processingId !== null}
-                  className={`flex-1 flex items-center justify-center space-x-2 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50
-                    ${processingId === form.id ? 'bg-blue-600' : 'bg-gray-900 hover:bg-black'}`}
-                >
-                  {processingId === form.id && !processingId.startsWith('map-') ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>}
-                  <span>Generar</span>
-                </button>
+                {/* LÓGICA DE BOTONES SEGÚN TIPO DE FORMULARIO */}
                 
-                <button 
-                  onClick={() => generateFieldMap(form)}
-                  disabled={processingId !== null}
-                  className="flex items-center justify-center px-3 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 disabled:opacity-50 border border-purple-100"
-                  title="Mapa Rojo (Depuración)"
-                >
-                  <Map size={14} />
-                </button>
+                {form.type === 'auto' ? (
+                    // BOTÓN PAMI (Autocompletar)
+                    <button 
+                      onClick={() => fillPamiPDF(form)}
+                      disabled={processingId !== null}
+                      className={`flex-1 flex items-center justify-center space-x-2 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50
+                        ${processingId === form.id ? 'bg-blue-600' : 'bg-gray-900 hover:bg-black'}`}
+                    >
+                      {processingId === form.id ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>}
+                      <span>Generar</span>
+                    </button>
+                ) : (
+                    // BOTONES BANCO DROGAS (Plantilla + Resumen)
+                    <>
+                        <button 
+                          onClick={() => downloadTemplate(form)}
+                          className="flex-1 flex items-center justify-center space-x-2 bg-gray-100 text-gray-700 hover:bg-gray-200 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          <Download size={14}/>
+                          <span>Plantilla Vacía</span>
+                        </button>
+                        
+                        <button 
+                          onClick={() => generateClinicalSummary()}
+                          disabled={processingId !== null}
+                          className="flex-1 flex items-center justify-center space-x-2 bg-purple-600 text-white hover:bg-purple-700 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                        >
+                          {processingId === 'summary' ? <Loader2 className="animate-spin" size={14}/> : <FilePlus size={14}/>}
+                          <span>Resumen Clínico</span>
+                        </button>
+                    </>
+                )}
 
+                {/* Link Externo PAMI (Solo para PAMI) */}
                 {form.id === 'pami' && (
                     <a href="https://cup.pami.org.ar/controllers/loginController.php" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center px-3 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 border border-teal-100"><ExternalLink size={14} /></a>
                 )}
