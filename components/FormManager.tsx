@@ -111,23 +111,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       { text: `
         Actúa como un ONCÓLOGO EXPERTO. Hoy es ${today}.
         
-        OBJETIVO: Completar planilla PAMI con rigor técnico.
+        OBJETIVO: Completar planilla PAMI con rigor técnico y estilo formal.
         
-        REGLAS DE ORO (OBLIGATORIAS):
-        1. **Ciclos:** PROHIBIDO poner "Según protocolo".
-           - Si es tratamiento avanzado/paliativo -> Escribe: "Hasta progresión y/o toxicidad".
-           - Si es adyuvancia -> Escribe cantidad exacta (ej: "4 ciclos").
-        
-        2. **Laboratorio:** Busca el ÚLTIMO laboratorio disponible.
-           - IMPORTANTE: Si la fecha del laboratorio es anterior a hace 3 meses respecto a hoy (${today}), IGNÓRALO y deja el campo vacío (string vacío).
-           - Si es reciente (<3 meses): "DD/MM/AA: Hb X / GB X / Plaq X".
-        
-        3. **Tratamiento (Dosis/Presentación):** PROHIBIDO poner "No especificado", "A definir" o "Según protocolo".
-           - Si la H.C. no lo dice explícitamente, DEDUCE el estándar médico (NCCN/ESMO) para la droga y patología.
-           - Ejemplo: Si pide Pembrolizumab, deduce: Presentación="Viales 100mg", Dosis="200 mg fijos" (o lo que corresponda al caso).
-        
-        4. **Informe Clínico:** Resumen técnico conciso (máx 1100 chars).
-        5. **Fecha Nacimiento:** Busca patrones numéricos DD/MM/AAAA.
+        REGLAS DE ESTILO (OBLIGATORIAS):
+        1. **Idioma:** PROHIBIDO usar siglas en inglés como "SCC". Usa siempre español (ej: "Ca. Escamoso" o "Carcinoma Escamoso").
+        2. **Informe Clínico:** - Redacta un resumen técnico cronológico.
+           - NO INCLUYAS la fecha de nacimiento ni la edad en este texto (ya están en los datos del afiliado).
+           - Máximo 1100 caracteres.
+        3. **Ciclos:** - Si es avanzado/paliativo -> "Hasta progresión y/o toxicidad".
+           - NUNCA pongas "Según protocolo".
+        4. **Tratamiento:** Si falta dato de presentación/dosis, DEDUCE el estándar (NCCN/ESMO).
+        5. **Laboratorio:** Si tiene >3 meses de antigüedad, dejar VACÍO. Si es reciente: "DD/MM/AA: Hb X / GB X / Plaq X".
         
         Extrae este JSON exacto:
         {
@@ -136,7 +130,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "paciente_celular": "Celular",
           "paciente_fnac": "DD/MM/AAAA",
           "diagnostico_cie10": "Texto breve (< 85 chars)",
-          "histopatologico": "Texto breve (< 85 chars)",
+          "histopatologico": "Texto breve (< 85 chars, SIN siglas inglés)",
           "peso": "kg",
           "talla": "cm",
           "ecog": "0-4",
@@ -146,8 +140,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "linea_tratamiento": "1ra, 2da...",
           "antecedentes_qx": "Texto breve (< 80 chars)",
           "antecedentes_radio": "Texto breve (< 75 chars)",
-          "laboratorio_formateado": "Texto o vacío si es viejo",
-          "informe_clinico_detallado": "Texto < 1100 chars",
+          "laboratorio_formateado": "Texto o vacío",
+          "informe_clinico_detallado": "Texto < 1100 chars (SIN fecha nac)",
           "motivo_solicitud": "Inicio/Renovación...",
           "tipo_tratamiento": "Adyuvante/Avanzado...",
           "ciclos_planeados": "Texto 'Hasta progresión...' o cantidad",
@@ -267,6 +261,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 80);
         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 75);
         
+        // INFORME CONCISO Y LIMPIO
         setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1100, 9); 
         setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 85);
         
@@ -298,6 +293,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Email_2', doctorData.email);
         setText('Provincia', doctorData.provincia);
 
+        // CUIL
         setText('CUIL', doctorData.cuil_prefix);      
         setText('CUIL1', doctorData.cuil_dni);        
         setText('CUIL2', doctorData.cuil_suffix);     
@@ -305,6 +301,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('CUIT1', doctorData.cuil_dni);
         setText('CUIT2', doctorData.cuil_suffix);
 
+        // CELULAR
         setText('Celular', doctorData.cel_area);   
         setText('Celular1', doctorData.cel_num);
         setText('Celular_2', doctorData.cel_num); 
