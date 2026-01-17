@@ -80,7 +80,7 @@ const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDat
 
 // --- AI FUNCTIONS (PRIVACIDAD REFORZADA & MEJORA DE DATOS) ---
 
-// 1. EXTRACT TIMELINE (CORREGIDO: MAPE DE CLAVES FLEXIBLE)
+// 1. EXTRACT TIMELINE (CORREGIDO: FILTRADO ESTRICTO DE EVENTOS VACÍOS)
 const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
     if (!text && files.length === 0) return [];
     const apiKey = import.meta.env.VITE_API_KEY;
@@ -95,16 +95,11 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
             - NO incluyas DNI, CUIT, direcciones, teléfonos ni el nombre propio del paciente en la salida.
             - Si encuentras un DNI, ignóralo.
             
-            REGLAS DE FILTRADO (IMPORTANTE):
-            - IGNORA encabezados de página, pies de página o fechas aisladas sin contexto médico.
-            - Solo extrae eventos que contengan una ACCIÓN médica o un HALLAZGO clínico claro.
-            - Si un evento no tiene descripción, NO lo generes.
-
-            REGLAS DE FORMATO JSON:
-            - Devuelve un ARRAY de objetos JSON.
-            - Usa EXACTAMENTE estas claves en el JSON: "date", "category", "note", "professional", "isKey".
-            - Idioma del contenido: ESPAÑOL.
-            - Formato de fecha: DD/MM/YYYY.
+            REGLAS DE FORMATO:
+            - Idioma: ESPAÑOL.
+            - Fechas: DD/MM/YYYY.
+            - Categorías: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+            - IMPORTANTE: Solo devuelve un ARRAY JSON.
         `}];
         if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
@@ -116,12 +111,11 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
         });
 
         if (res.text) {
+            // 1. Limpieza y Parseo
             const cleanText = res.text.replace(/```json|```/g, '').trim();
             let rawEvents = [];
             
-            // Intento de parseo robusto
             try {
-                // Buscamos array explícito
                 const firstBracket = cleanText.indexOf('[');
                 const lastBracket = cleanText.lastIndexOf(']');
                 if (firstBracket !== -1 && lastBracket !== -1) {
@@ -130,25 +124,37 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
                     const parsed = JSON.parse(cleanText);
                     if (Array.isArray(parsed)) rawEvents = parsed;
                     else if (typeof parsed === 'object') {
-                        // Si devuelve { events: [...] }
                         const possibleArray = Object.values(parsed).find(val => Array.isArray(val));
                         rawEvents = possibleArray || [];
                     }
                 }
-            } catch (e) {
-                console.error("Error parsing JSON response", e);
-                return [];
-            }
+            } catch (e) { console.error("JSON Parse Error", e); return []; }
 
-            // --- FILTRO DE CALIDAD Y MAPEO FLEXIBLE ---
-            const validEvents = rawEvents.map((e: any) => ({
-                // Busca claves en inglés, español o mayúsculas para evitar "S/F" o "General" por error
+            // 2. Mapeo con valores por defecto
+            const mappedEvents = rawEvents.map((e: any) => ({
                 date: e.date || e.fecha || e.Date || "S/F",
                 professional: e.professional || e.profesional || e.medico || "N/A",
                 category: e.category || e.categoria || "General",
                 note: e.note || e.nota || e.descripcion || e.description || e.event || "Evento sin descripción",
                 isKey: !!(e.isKey || e.esClave || e.importante)
-            })).filter((e: any) => e.note && e.note.length > 2 && e.note !== "Evento sin descripción"); 
+            }));
+
+            // 3. FILTRADO ESTRICTO (AQUÍ ESTÁ LA SOLUCIÓN)
+            // Eliminamos los eventos que sean "S/F" Y "Evento sin descripción"
+            // O que tengan notas demasiado cortas.
+            const validEvents = mappedEvents.filter((e: any) => {
+                const isGarbageDate = e.date === "S/F";
+                const isGarbageNote = e.note === "Evento sin descripción" || e.note.trim().length < 3;
+                const isGarbageCategory = e.category === "General";
+
+                // Si es un evento sin fecha Y sin descripción real, lo borramos
+                if (isGarbageDate && isGarbageNote) return false;
+                
+                // Si la nota es el texto por defecto, lo borramos (incluso si tiene fecha, suele ser error)
+                if (e.note === "Evento sin descripción") return false;
+
+                return true;
+            });
             
             return sortTimeline(validEvents); 
         }
