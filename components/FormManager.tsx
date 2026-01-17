@@ -12,19 +12,22 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
 
-  // Estos nombres deben coincidir con los archivos que subas en el PASO 2
+  // --- 1. CONFIGURACIÓN DE FORMULARIOS RENOMBRADOS ---
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf' },
-    { id: 'banco', name: 'Banco de Drogas (Anexo III)', file: '/forms/banco_drogas.pdf' },
+    { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/banco_drogas.pdf' },
+    { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf' },
+    { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf' },
   ];
 
+  // --- 2. FUNCIÓN CORREGIDA (FIX DEL ERROR getGenerativeModel) ---
   const extractDataWithAI = async () => {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("Falta API Key");
     
     const ai = new GoogleGenAI({ apiKey });
-    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
+    
+    // Prompt específico para sacar los datos
     const prompt = `
       Analiza la siguiente historia clínica y extrae los datos para un formulario oncológico.
       Devuelve SOLO un JSON con estas claves (si no encuentras el dato, pon "No consta"):
@@ -35,14 +38,27 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
         "ecog": "ECOG (0-4)",
         "droga_1": "Nombre droga 1",
         "dosis_1": "Dosis droga 1",
+        "droga_2": "Nombre droga 2",
+        "dosis_2": "Dosis droga 2",
         "ciclos": "Nro ciclos"
       }
-      HISTORIA: ${historyText}
-      PACIENTE: ${patient.name}
+      
+      HISTORIA CLÍNICA:
+      ${historyText}
+      
+      DATOS PACIENTE:
+      Nombre: ${patient.name}
+      Edad: ${patient.age}
+      Diagnóstico Base: ${patient.diagnosis}
     `;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    // CORRECCIÓN AQUÍ: Usamos la misma sintaxis que en index.tsx
+    const res = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [{ text: prompt }] }
+    });
+
+    const text = res.text || "{}";
     const jsonString = text.replace(/```json|```/g, '').trim();
     return JSON.parse(jsonString);
   };
@@ -52,15 +68,18 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
     setStatus('Analizando historia...');
 
     try {
+      // A. Extraer datos con IA
       const aiData = await extractDataWithAI();
       setStatus('Rellenando PDF...');
 
+      // B. Cargar el PDF
       const formUrl = window.location.origin + formDef.file;
       const formBytes = await fetch(formUrl).then(res => res.arrayBuffer());
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
       const fields = form.getFields();
       
+      // C. Rellenar campos (Mapeo)
       fields.forEach(field => {
         if (field.constructor.name === 'PDFTextField') {
             const name = field.getName().toLowerCase();
@@ -73,20 +92,22 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
             else if (name.includes('peso')) textField.setText(aiData.peso);
             else if (name.includes('talla')) textField.setText(aiData.talla);
             else if (name.includes('ecog')) textField.setText(aiData.ecog);
-            else if (name.includes('droga')) textField.setText(aiData.droga_1);
+            else if (name.includes('droga')) textField.setText(aiData.droga_1 + (aiData.droga_2 ? ' / ' + aiData.droga_2 : ''));
         }
       });
 
+      // D. Descargar
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `Pedido_${formDef.id}_${patient.name}.pdf`;
+      link.download = `${formDef.name}_${patient.name}.pdf`;
       link.click();
       
       setStatus('¡Descargado!');
     } catch (e: any) {
-      alert('Error: ' + e.message);
+      console.error(e);
+      alert('Error al generar: ' + e.message);
     } finally {
       setIsProcessing(false);
       setTimeout(() => setStatus(''), 3000);
@@ -96,6 +117,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
   return (
     <div className="p-6">
       <h3 className="text-sm font-black text-gray-700 uppercase tracking-widest mb-6">Gestión de Trámites</h3>
+      
       <div className="grid gap-4">
         {forms.map(form => (
           <div key={form.id} className="bg-white border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-blue-300 transition-all shadow-sm group">
@@ -104,22 +126,38 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
                 <FileText size={24} />
               </div>
               <div className="text-left">
-                <h4 className="font-bold text-gray-800">{form.name}</h4>
-                <p className="text-xs text-gray-400 font-medium mt-0.5">Autocompletado con IA</p>
+                <h4 className="font-bold text-gray-800 text-xs uppercase">{form.name}</h4>
+                <p className="text-[10px] text-gray-400 font-bold mt-0.5">Autocompletado con IA</p>
               </div>
             </div>
+
             <button 
               onClick={() => fillAndDownloadPDF(form)}
               disabled={isProcessing}
-              className="flex items-center space-x-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50"
+              className="flex items-center space-x-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isProcessing && status ? <Loader2 className="animate-spin" size={16}/> : <Wand2 size={16}/>}
+              {isProcessing && status ? (
+                <Loader2 className="animate-spin" size={16} />
+              ) : (
+                <Wand2 size={16} />
+              )}
               <span>{isProcessing ? 'Procesando...' : 'Generar'}</span>
             </button>
           </div>
         ))}
       </div>
-      {status && <p className="mt-4 text-center text-xs font-bold text-blue-600 animate-pulse">{status}</p>}
+
+      {status && (
+        <div className="mt-6 text-center">
+            <span className="inline-flex items-center px-4 py-2 rounded-full bg-blue-50 text-blue-700 text-xs font-bold animate-pulse">
+                {status}
+            </span>
+        </div>
+      )}
+      
+      <div className="mt-8 p-4 bg-yellow-50 rounded-xl border border-yellow-100 text-yellow-800 text-[10px] font-medium leading-relaxed">
+        <strong>Nota:</strong> Verifique siempre los datos del formulario descargado antes de firmar.
+      </div>
     </div>
   );
 };
