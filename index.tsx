@@ -713,11 +713,11 @@ const App = () => {
                                                 </p>
                                             </div>
                                         </div>
-                                        
-                                        {/* CORRECCIÓN: Se agregó files={historyFiles} y se quitó la opacidad */}
                                         <FormManager patient={selP} historyText={historyText} files={historyFiles} />
                                     </div>
                                 )}
+                            </div>
+                        </div>
 
                         {/* Right Panel: Chat */}
                         <div className={`${showLeftPanel ? 'lg:w-1/2' : 'w-full'} flex flex-col bg-gray-50 h-full overflow-hidden relative transition-all duration-300`}>
@@ -735,7 +735,7 @@ const App = () => {
                                         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><MessageSquare size={48} className="text-blue-600" /></div>
                                         <div className="space-y-2">
                                             <p className="text-sm font-black uppercase tracking-widest">Asistente de Discusión</p>
-                                            <p className="text-xs font-bold max-w-[200px] mx-auto leading-relaxed">Las respuestas generadas son orientativas y educativas. Toda decisión clínica corresponde al equipo tratante y debe registrarse en la historia clínica institucional.</p>
+                                            <p className="text-xs font-bold max-w-[200px] mx-auto leading-relaxed">Las respuestas generadas son orientativas y educativas. Toda decisión clínica corresponde al equipo tratante.</p>
                                         </div>
                                     </div>
                                 )}
@@ -826,7 +826,7 @@ const App = () => {
                                     <input type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: Ca Mama" value={newPatientDiagnosis} onChange={e => setNewPatientDiagnosis(e.target.value)} />
                                 </div>
                             </div>
-                            <p className="text-xs text-gray-400 mt-4 text-center">Uso exclusivo del equipo de salud. Este registro no reemplaza la historia clínica institucional.</p>
+                            <p className="text-xs text-gray-400 mt-4 text-center">Uso exclusivo del equipo de salud.</p>
                             <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-xl text-xs font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase tracking-widest">Crear caso clínico</button>
                         </form>
                     </div>
