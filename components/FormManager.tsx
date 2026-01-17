@@ -14,8 +14,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   const [status, setStatus] = useState('');
   
   const [showDocConfig, setShowDocConfig] = useState(false);
-  
-  // ESTADO ACTUALIZADO: CAMPOS DIVIDIDOS
   const [doctorData, setDoctorData] = useState({
     nombre: '',
     matricula: '',
@@ -32,14 +30,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   });
 
   useEffect(() => {
-    const savedDoc = localStorage.getItem('doctor_data_profile_v2'); // Nueva key versión 2
+    const savedDoc = localStorage.getItem('doctor_data_profile_v3');
     if (savedDoc) setDoctorData(JSON.parse(savedDoc));
   }, []);
 
   const saveDoctorData = () => {
-    localStorage.setItem('doctor_data_profile_v2', JSON.stringify(doctorData));
+    localStorage.setItem('doctor_data_profile_v3', JSON.stringify(doctorData));
     setShowDocConfig(false);
-    alert("Datos guardados correctamente.");
+    alert("Datos guardados. Ahora genere el formulario.");
   };
 
   const forms = [
@@ -237,6 +235,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 80);
         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 75);
         
+        // INFORME (1400) + LAB (85)
         setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1400); 
         setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 85);
         
@@ -260,31 +259,39 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
         }
 
-        // --- DATOS MÉDICO (MAPEO EXACTO A CONFIGURACIÓN) ---
+        // --- DATOS MÉDICO (CORRECCIÓN DESPLAZAMIENTO) ---
         setText('Apellido y Nombre_2', doctorData.nombre);
         setText('Matricula', doctorData.matricula);
         setText('Especialidad', doctorData.especialidad);
         setText('Email_2', doctorData.email);
         setText('Provincia', doctorData.provincia);
 
-        // CUIL (Dividido en 3 campos)
-        setText('CUIL1', doctorData.cuil_prefix);
-        setText('CUIL2', doctorData.cuil_dni);
-        setText('CUIL3', doctorData.cuil_suffix);
-        // Fallback CUIT
-        setText('CUIT1', doctorData.cuil_prefix);
-        setText('CUIT2', doctorData.cuil_dni);
-        setText('CUIT3', doctorData.cuil_suffix);
+        // CUIL (DESPLAZADO A LA IZQUIERDA)
+        // Antes usamos CUIL1/CUIL2/CUIL3 (y salia en 2da, 3ra, null).
+        // Ahora usamos CUIL/CUIL1/CUIL2 (o CUIT/CUIT1/CUIT2).
+        setText('CUIL', doctorData.cuil_prefix);      // Casilla 1
+        setText('CUIL1', doctorData.cuil_dni);        // Casilla 2
+        setText('CUIL2', doctorData.cuil_suffix);     // Casilla 3
+        
+        // Fallback CUIT (mismo shift)
+        setText('CUIT', doctorData.cuil_prefix);
+        setText('CUIT1', doctorData.cuil_dni);
+        setText('CUIT2', doctorData.cuil_suffix);
 
-        // Celular (Dividido en 2 campos)
-        // Probamos los nombres más probables de las celdas izquierda/derecha
-        setText('Celular', doctorData.cel_area);   
-        setText('Celular_2', doctorData.cel_num);  
-        setText('Celular1', doctorData.cel_area);
-        setText('Celular2', doctorData.cel_num);
+        // CELULAR (SIN REPETIR EN 2DA CASILLA)
+        // Casilla 1: Area
+        setText('Celular', doctorData.cel_area);
+        
+        // Casilla 2: Numero (Antes poniamos Celular1 y Celular2, ahora solo Celular1 y Celular_2)
+        setText('Celular1', doctorData.cel_num);
+        setText('Celular_2', doctorData.cel_num); 
+        
+        // Limpieza de posibles superposiciones
+        // (No escribimos el area en Celular1, solo el numero)
 
         setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
       } 
+      // ... OTROS FORMULARIOS ...
       else if (formDef.id === 'admision') {
         setText('Text1', finalName);
         setText('Text3', aiData.paciente_fnac);
@@ -375,20 +382,20 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
               <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.provincia} onChange={e => setDoctorData({...doctorData, provincia: e.target.value})} />
             </div>
             
+            <div className="col-span-2">
+              <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Email</label>
+              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.email} onChange={e => setDoctorData({...doctorData, email: e.target.value})} />
+            </div>
+
             {/* CELULAR DIVIDIDO */}
             <div className="col-span-2">
                 <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Celular (Área sin 0 / Número sin 15)</label>
                 <div className="flex items-center space-x-2">
                     <span className="text-gray-400 text-xs font-bold">(</span>
-                    <input className="w-[20%] p-2 rounded-lg border border-blue-200 text-xs font-bold text-center" value={doctorData.cel_area} onChange={e => setDoctorData({...doctorData, cel_area: e.target.value})} placeholder="11" />
+                    <input className="w-[20%] p-2 rounded-lg border border-blue-200 text-xs font-bold text-center" value={doctorData.cel_area} onChange={e => setDoctorData({...doctorData, cel_area: e.target.value})} placeholder="351" />
                     <span className="text-gray-400 text-xs font-bold">) 15 -</span>
-                    <input className="w-[60%] p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.cel_num} onChange={e => setDoctorData({...doctorData, cel_num: e.target.value})} placeholder="12345678" />
+                    <input className="w-[60%] p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.cel_num} onChange={e => setDoctorData({...doctorData, cel_num: e.target.value})} placeholder="155123456" />
                 </div>
-            </div>
-
-            <div className="col-span-2">
-              <label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Email</label>
-              <input className="w-full p-2 rounded-lg border border-blue-200 text-xs font-bold" value={doctorData.email} onChange={e => setDoctorData({...doctorData, email: e.target.value})} />
             </div>
           </div>
           <button onClick={saveDoctorData} className="w-full bg-blue-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 flex items-center justify-center space-x-2">
