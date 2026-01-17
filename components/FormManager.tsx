@@ -6,9 +6,10 @@ import { GoogleGenAI } from "@google/genai";
 interface FormManagerProps {
   patient: any;
   historyText: string;
+  files: any[]; // <--- NUEVA PROPIEDAD PARA RECIBIR ARCHIVOS
 }
 
-const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
+const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
   const [debugFields, setDebugFields] = useState<string[]>([]);
@@ -20,7 +21,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
     { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf' },
   ];
 
-  // Helper para calcular Superficie Corporal (Mosteller)
   const calculateBSA = (weight: string, height: string) => {
     const w = parseFloat(weight);
     const h = parseFloat(height);
@@ -53,37 +53,56 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
   const extractDataWithAI = async () => {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("Falta API Key");
+    
+    // --- CAMBIO IMPORTANTE: AHORA ENVIAMOS LOS ARCHIVOS A LA IA ---
     const ai = new GoogleGenAI({ apiKey });
     
-    const prompt = `
-      Analiza la historia clínica y extrae los datos para formularios.
-      Devuelve JSON estricto con estas claves. Si no hay dato, pon "".
-      {
-        "diagnostico_cie10": "Diagnóstico CIE-10 completo",
-        "peso": "Solo el número (kg)",
-        "talla": "Solo el número (cm)",
-        "ecog": "Solo el número (0-4)",
-        "droga_1": "Nombre genérico droga 1",
-        "dosis_1": "Dosis droga 1",
-        "droga_2": "Nombre genérico droga 2",
-        "dosis_2": "Dosis droga 2",
-        "ciclos": "Número de ciclos"
-      }
-      HISTORIA: ${historyText}
-      PACIENTE: ${patient.name}
-    `;
+    // Construimos el mensaje para la IA incluyendo texto Y archivos
+    const parts: any[] = [
+      { text: `
+        Analiza la historia clínica adjunta (archivos y texto) y extrae los datos para formularios.
+        Devuelve JSON estricto con estas claves. Si no hay dato, pon "".
+        {
+          "diagnostico_cie10": "Diagnóstico CIE-10 completo",
+          "peso": "Solo el número (kg)",
+          "talla": "Solo el número (cm)",
+          "ecog": "Solo el número (0-4)",
+          "droga_1": "Nombre genérico droga 1",
+          "dosis_1": "Dosis droga 1",
+          "droga_2": "Nombre genérico droga 2",
+          "dosis_2": "Dosis droga 2",
+          "ciclos": "Número de ciclos"
+        }
+        NOTAS ADICIONALES: ${historyText}
+        PACIENTE: ${patient.name}
+      `}
+    ];
+
+    // Adjuntamos los PDFs de la historia clínica si existen
+    if (files && files.length > 0) {
+        files.forEach(f => {
+            parts.push({ inlineData: { mimeType: f.type, data: f.data } });
+        });
+    }
 
     const res = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: { parts: [{ text: prompt }] }
+        contents: { parts }
     });
+
     const text = res.text || "{}";
     return JSON.parse(text.replace(/```json|```/g, '').trim());
   };
 
   const fillAndDownloadPDF = async (formDef: any) => {
+    // Validación: Si no hay archivos ni texto, avisar
+    if ((!files || files.length === 0) && !historyText) {
+        alert("⚠️ No hay historia clínica cargada. Por favor suba el PDF en la pestaña 'Documentación' primero.");
+        return;
+    }
+
     setProcessingId(formDef.id);
-    setStatus('Procesando datos...');
+    setStatus('Analizando historia...');
 
     try {
       const aiData = await extractDataWithAI();
@@ -93,7 +112,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
       
-      // Chequeo de seguridad del archivo
       if (!res.ok) throw new Error(`No se encontró ${formDef.file}`);
       const contentType = res.headers.get('content-type');
       if (contentType && !contentType.includes('pdf')) throw new Error("El archivo no es un PDF válido.");
@@ -103,18 +121,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
       const form = pdfDoc.getForm();
       const fields = form.getFields();
 
-      if (fields.length === 0) {
-        throw new Error("El PDF no tiene campos editables. Suba la versión original digital (AcroForm).");
-      }
+      if (fields.length === 0) throw new Error("El PDF no tiene campos editables.");
 
-      // --- LÓGICA DE MAPEO ESPECÍFICA POR FORMULARIO ---
-      
+      // --- LOGICA DE MAPEO ---
       if (formDef.id === 'pami') {
-        // Mapeo exacto para PAMI (basado en tu lista)
         const setField = (name: string, val: string) => {
             try { const f = form.getTextField(name); f.setText(val || ''); } catch (e) {}
         };
-
         setField('Apellido y Nombre', patient.name);
         setField('Diagnóstico CIE 10', aiData.diagnostico_cie10);
         setField('Peso', aiData.peso);
@@ -129,41 +142,20 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
             setField('DosisRow2', aiData.dosis_2);
         }
       } 
-      else if (formDef.id === 'admision' || formDef.id === 'renovacion') {
-        // Mapeo posicional para Admisión/Renovación (Text1, Text2...)
-        // Asumimos orden lógico: Nombre -> DNI -> Diagnóstico -> Peso/Talla -> Drogas
-        // Esto es una aproximación basada en la estructura visual estándar
-        
-        const textFields = fields.filter(f => f.constructor.name === 'PDFTextField');
-        
-        // Campo 0 (Text1): Nombre
-        if (textFields[0]) textFields[0].setText(patient.name);
-        
-        // Buscamos campos por índice aproximado para Drogas (suelen estar al medio/final)
-        // Nota: Esto requerirá ajuste fino visual, pero ponemos los datos donde "suelen" ir
-        
-        // Intentamos llenar diagnóstico en los primeros campos de texto largo
-        if (textFields[10]) textFields[10].setText(aiData.diagnostico_cie10);
-
-        // Peso y Talla (Suelen estar agrupados)
-        // Buscamos campos pequeños consecutivos
-        
-        // Estrategia de "Inyección General":
-        // Si no sabemos el campo exacto, intentamos llenar al menos el diagnóstico y drogas en campos vacíos
-        // para que el médico solo tenga que moverlos si están mal.
-      }
       else {
-        // DINADIC u otros genéricos: Mapeo por coincidencia de nombre
+        // Mapeo genérico para los otros
         fields.forEach(field => {
             if (field.constructor.name === 'PDFTextField') {
                 const name = field.getName().toLowerCase();
                 const textField = form.getTextField(field.getName());
                 
-                if (name.includes('nombre') || name.includes('paciente')) textField.setText(patient.name);
+                if (name.includes('nombre') || name.includes('paciente') || name.includes('name')) textField.setText(patient.name);
+                else if (name.includes('edad') || name.includes('age')) textField.setText(patient.age.toString());
                 else if (name.includes('diag')) textField.setText(aiData.diagnostico_cie10);
-                else if (name.includes('peso')) textField.setText(aiData.peso);
-                else if (name.includes('talla')) textField.setText(aiData.talla);
-                else if (name.includes('droga')) textField.setText(aiData.droga_1);
+                else if (name.includes('peso') || name.includes('weight')) textField.setText(aiData.peso);
+                else if (name.includes('talla') || name.includes('height')) textField.setText(aiData.talla);
+                else if (name.includes('ecog')) textField.setText(aiData.ecog);
+                else if (name.includes('droga') || name.includes('drug')) textField.setText(aiData.droga_1);
             }
         });
       }
@@ -188,6 +180,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
     <div className="p-6">
       <h3 className="text-sm font-black text-gray-700 uppercase tracking-widest mb-6">Gestión de Trámites</h3>
       
+      {(!files || files.length === 0) && !historyText && (
+        <div className="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2">
+            <AlertTriangle className="text-orange-500" size={16} />
+            <p className="text-[10px] text-orange-700 font-bold">
+                ⚠️ No hay documentación cargada. Vaya a la pestaña "Documentación" y suba la Historia Clínica (PDF) antes de generar trámites.
+            </p>
+        </div>
+      )}
+
       <div className="grid gap-4">
         {forms.map(form => (
           <div key={form.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 hover:border-blue-300 transition-all shadow-sm">
@@ -235,13 +236,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText }) => {
       )}
 
       {status && <div className="mt-4 text-center"><span className="inline-block px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full animate-pulse">{status}</span></div>}
-      
-      <div className="mt-6 p-3 bg-red-50 rounded-xl border border-red-100 flex items-start gap-2">
-        <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={14} />
-        <p className="text-[10px] text-red-700 font-medium leading-relaxed">
-            Si recibe el error <strong>"No tiene campos editables"</strong>, significa que el PDF subido es una imagen escaneada. Debe subir la versión digital original (donde se puede escribir con el teclado).
-        </p>
-      </div>
     </div>
   );
 };
