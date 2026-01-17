@@ -94,46 +94,46 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const ai = new GoogleGenAI({ apiKey });
     
-    // --- PROMPT AJUSTADO PARA MAYOR DETALLE Y FORMATO LAB ---
     const parts: any[] = [
       { text: `
         Actúa como un ONCÓLOGO EXPERTO completando una planilla oficial de solicitud de drogas (PAMI).
+        Responde ÚNICAMENTE con el JSON solicitado, sin texto introductorio.
         
         INSTRUCCIONES CLAVE:
-        1. **Informe Clínico Actual:** Debe ser un párrafo técnico y completo (NO telegráfico, pero sin relleno). Incluye obligatoriamente: Fecha Dx, Tipo Histológico, Sitios metastásicos, Fechas de Cx/RT previas y Motivo de la solicitud actual.
-        2. **Laboratorio:** Busca el último laboratorio disponible y transcríbelo en este formato EXACTO: "Laboratorio [DD/MM/AA]: Hb X / Hto Y / GB Z / NS W% / Plaq Q / Creat R...".
-        3. **Tratamiento:** Si el texto no especifica la presentación comercial (ej: Ampollas, Viales), DEDÚCELA según el estándar oncológico para la droga y dosis solicitada. ¡No dejes campos vacíos en la tabla!
-        4. **Ciclos:** "Nº Ciclos" se refiere al plan propuesto (ej: "Hasta progresión", "x6 ciclos").
+        1. **Informe Clínico Actual:** Párrafo técnico: Fecha Dx, Histología, Sitios MTS, Fechas Cx/RT previas y Motivo solicitud.
+        2. **Laboratorio:** Formato: "Laboratorio [DD/MM/AA]: Hb X / Hto Y / GB Z / NS W% / Plaq Q...".
+        3. **Tratamiento:** Si no hay presentación, DEDÚCELA (ej: Viales). ¡No dejes celdas vacías!
+        4. **Ciclos:** Plan propuesto (ej: "Hasta progresión").
         
-        Extrae este JSON exacto:
+        JSON:
         {
-          "paciente_nombre_real": "Nombre completo",
+          "paciente_nombre_real": "Nombre",
           "paciente_dni": "DNI",
-          "paciente_celular": "Celular encontrado",
+          "paciente_celular": "Celular",
           "paciente_fnac": "DD/MM/AAAA",
-          "diagnostico_cie10": "Diagnóstico completo + Código CIE10",
-          "histopatologico": "Resumen histopatológico",
-          "peso": "kg (número)",
-          "talla": "cm (número)",
+          "diagnostico_cie10": "Dx + CIE10",
+          "histopatologico": "Histopatología",
+          "peso": "kg",
+          "talla": "cm",
           "ecog": "0-4",
           "estadio_inicial": "Estadio debut",
           "estadio_actual": "Estadio actual",
           "fecha_diagnostico_inicial": "DD/MM/AAAA",
-          "linea_tratamiento": "1ra, 2da...",
-          "antecedentes_qx": "Cirugías (con fechas)",
-          "antecedentes_radio": "RT (con fechas)",
-          "laboratorio_formateado": "String con formato Laboratorio DD/MM/AA: ...",
-          "informe_clinico_detallado": "Párrafo técnico con historia oncológica resumida pero completa.",
+          "linea_tratamiento": "Línea",
+          "antecedentes_qx": "Cx previas",
+          "antecedentes_radio": "RT previa",
+          "laboratorio_formateado": "Lab completo con fecha",
+          "informe_clinico_detallado": "Resumen oncológico completo",
           "motivo_solicitud": "Inicio/Renovación...",
           "tipo_tratamiento": "Adyuvante/Avanzado...",
-          "ciclos_planeados": "Plan (ej: Hasta progresión)",
-          "frecuencia_dias": "Esquema (ej: D1 c/21d)",
-          "droga_1": "Nombre droga",
-          "presentacion_1": "Presentación (ej: Viales 100mg)",
-          "dosis_1": "Dosis exacta (ej: 200 mg)",
+          "ciclos_planeados": "Plan",
+          "frecuencia_dias": "Esquema",
+          "droga_1": "Droga",
+          "presentacion_1": "Presentación",
+          "dosis_1": "Dosis",
           "droga_2": "Droga 2",
           "presentacion_2": "Presentación",
-          "dosis_2": "Dosis exacta"
+          "dosis_2": "Dosis"
         }
         
         CONTEXTO: ${historyText}
@@ -152,7 +152,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     });
 
     const text = res.text || "{}";
-    return JSON.parse(text.replace(/```json|```/g, '').trim());
+    
+    // --- LIMPIEZA QUIRÚRGICA DE JSON (FIX ERROR) ---
+    let cleanText = text.replace(/```json|```/g, '').trim();
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1) {
+        cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+    
+    return JSON.parse(cleanText);
   };
 
   const fillAndDownloadPDF = async (formDef: any) => {
@@ -188,7 +198,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {}
       };
 
-      // --- LOGICA DE DATOS DEL MÉDICO ---
+      // DATOS MÉDICO SPLIT
       const cuilRaw = doctorData.cuil.replace(/[^0-9]/g, '');
       const cuilPre = cuilRaw.substring(0, 2);
       const cuilDni = cuilRaw.substring(2, cuilRaw.length - 1);
@@ -204,7 +214,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           celNum = celRaw;
       }
 
-      // --- PAMI ---
       if (formDef.id === 'pami') {
         setText('Apellido y Nombre', finalName);
         setText('Beneficiario Nº', ''); 
@@ -236,9 +245,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx);
         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio);
         
-        // INFORME Y LABS FORMATEADOS
         setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado); 
-        setText('Datos positivos Laboratorio', aiData.laboratorio_formateado); // Usamos el campo formateado
+        setText('Datos positivos Laboratorio', aiData.laboratorio_formateado);
         
         setText('Peso', aiData.peso);
         setText('Talla', aiData.talla);
@@ -249,7 +257,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
         if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
 
-        // TABLA COMPLETA
         setText('DrogaGenéricoRow1', aiData.droga_1);
         setText('PresentaciónRow1', aiData.presentacion_1);
         setText('DosisRow1', aiData.dosis_1);
@@ -262,7 +269,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
         }
 
-        // DATOS MÉDICO
         setText('Apellido y Nombre_2', doctorData.nombre);
         setText('Matricula', doctorData.matricula);
         setText('Especialidad', doctorData.especialidad);
@@ -279,7 +285,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         
         setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
       } 
-      // ... OTROS FORMULARIOS (Igual que antes) ...
       else if (formDef.id === 'admision') {
         setText('Text1', finalName);
         setText('Text3', aiData.paciente_fnac);
