@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Loader2, Wand2, Map, AlertTriangle, UserCog, Save, X } from 'lucide-react';
+// CORRECCIÓN: Agregamos CheckCircle2 a los imports
+import { FileText, Loader2, Wand2, Map, AlertTriangle, UserCog, Save, X, CheckCircle2 } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { GoogleGenAI } from "@google/genai";
 
@@ -95,7 +96,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const ai = new GoogleGenAI({ apiKey });
     
-    // --- PROMPT CORREGIDO CON TUS INDICACIONES ---
     const parts: any[] = [
       { text: `
         Actúa como un ONCÓLOGO completando una planilla oficial (PAMI).
@@ -237,8 +237,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Sup Corpora', bsa);
 
         // Tratamiento Checkboxes
-        if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
-        if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
+        if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Neoadyuvante', true);
         if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
 
         // Tabla Drogas
@@ -255,7 +254,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         }
 
         // PAGINA 2: DATOS DEL MÉDICO (AUTOMÁTICO)
-        // Mapeo basado en tu lista: Apellido y Nombre_2, Matricula, Email_2, etc.
         setText('Apellido y Nombre_2', doctorData.nombre);
         setText('Matricula', doctorData.matricula);
         setText('Especialidad', doctorData.especialidad);
