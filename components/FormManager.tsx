@@ -96,38 +96,40 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const parts: any[] = [
       { text: `
-        Actúa como un ONCÓLOGO EXPERTO completando una planilla oficial de solicitud de drogas (PAMI).
-        Responde ÚNICAMENTE con el JSON solicitado, sin texto introductorio.
+        Actúa como un ONCÓLOGO EXPERTO completando una planilla oficial (PAMI) con espacio MUY LIMITADO.
         
-        INSTRUCCIONES CLAVE:
-        1. **Informe Clínico Actual:** Párrafo técnico: Fecha Dx, Histología, Sitios MTS, Fechas Cx/RT previas y Motivo solicitud.
-        2. **Laboratorio:** Formato: "Laboratorio [DD/MM/AA]: Hb X / Hto Y / GB Z / NS W% / Plaq Q...".
-        3. **Tratamiento:** Si no hay presentación, DEDÚCELA (ej: Viales). ¡No dejes celdas vacías!
-        4. **Ciclos:** Plan propuesto (ej: "Hasta progresión").
+        REGLAS DE LONGITUD Y FORMATO (ESTRICTAS):
+        1. **Diagnóstico (CIE10):** MÁXIMO 85 caracteres. Usa abreviaturas (ej: "Ca." por "Carcinoma", "MTS" por "Metástasis").
+        2. **Histopatológico:** MÁXIMO 85 caracteres. Resume (ej: "AdenoCa moderadamente diferenciado").
+        3. **Ciclos:** MÁXIMO 41 caracteres. Ej: "Hasta progresión" o "Plan 6 ciclos".
+        4. **Antecedentes Qx:** MÁXIMO 80 caracteres. Ej: "Mastectomía izq (2020)".
+        5. **Antecedentes RT:** MÁXIMO 75 caracteres. Ej: "RT mama 50Gy (2021)".
+        6. **Laboratorio:** MÁXIMO 85 caracteres. EMPIEZA DIRECTO con fecha. Formato: "14/8/25: Hb 9 / HTO 8 / GB 5300 / NS 45%". NO escribas la palabra "Laboratorio".
+        7. **Informe Clínico:** Extenso (hasta 1595 car.), detallado y técnico.
         
-        JSON:
+        Extrae este JSON exacto:
         {
           "paciente_nombre_real": "Nombre",
           "paciente_dni": "DNI",
           "paciente_celular": "Celular",
           "paciente_fnac": "DD/MM/AAAA",
-          "diagnostico_cie10": "Dx + CIE10",
-          "histopatologico": "Histopatología",
+          "diagnostico_cie10": "Texto < 85 chars",
+          "histopatologico": "Texto < 85 chars",
           "peso": "kg",
           "talla": "cm",
           "ecog": "0-4",
           "estadio_inicial": "Estadio debut",
           "estadio_actual": "Estadio actual",
           "fecha_diagnostico_inicial": "DD/MM/AAAA",
-          "linea_tratamiento": "Línea",
-          "antecedentes_qx": "Cx previas",
-          "antecedentes_radio": "RT previa",
-          "laboratorio_formateado": "Lab completo con fecha",
-          "informe_clinico_detallado": "Resumen oncológico completo",
+          "linea_tratamiento": "1ra, 2da...",
+          "antecedentes_qx": "Texto < 80 chars",
+          "antecedentes_radio": "Texto < 75 chars",
+          "laboratorio_formateado": "DD/MM/AA: valores... (< 85 chars)",
+          "informe_clinico_detallado": "Texto largo y detallado",
           "motivo_solicitud": "Inicio/Renovación...",
           "tipo_tratamiento": "Adyuvante/Avanzado...",
-          "ciclos_planeados": "Plan",
-          "frecuencia_dias": "Esquema",
+          "ciclos_planeados": "Texto < 41 chars",
+          "frecuencia_dias": "Esquema (ej: D1 c/21d)",
           "droga_1": "Droga",
           "presentacion_1": "Presentación",
           "dosis_1": "Dosis",
@@ -152,16 +154,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     });
 
     const text = res.text || "{}";
-    
-    // --- LIMPIEZA QUIRÚRGICA DE JSON (FIX ERROR) ---
     let cleanText = text.replace(/```json|```/g, '').trim();
     const firstBrace = cleanText.indexOf('{');
     const lastBrace = cleanText.lastIndexOf('}');
-    
     if (firstBrace !== -1 && lastBrace !== -1) {
         cleanText = cleanText.substring(firstBrace, lastBrace + 1);
     }
-    
     return JSON.parse(cleanText);
   };
 
@@ -187,10 +185,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
 
-      const setText = (name: string, val: string) => {
+      // HELPER CON TRUNCADO AUTOMÁTICO
+      const setText = (name: string, val: string, limit?: number) => {
         try { 
             const f = form.getTextField(name); 
-            if (val) f.setText(String(val)); 
+            if (val) {
+                let textToWrite = String(val);
+                if (limit && textToWrite.length > limit) {
+                    textToWrite = textToWrite.substring(0, limit);
+                }
+                f.setText(textToWrite); 
+            }
         } catch (e) {}
       };
 
@@ -198,7 +203,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {}
       };
 
-      // DATOS MÉDICO SPLIT
+      // DATOS MÉDICO
       const cuilRaw = doctorData.cuil.replace(/[^0-9]/g, '');
       const cuilPre = cuilRaw.substring(0, 2);
       const cuilDni = cuilRaw.substring(2, cuilRaw.length - 1);
@@ -220,9 +225,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Celular', aiData.paciente_celular);
         setText('Fecha de nacimiento', aiData.paciente_fnac);
 
-        setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10);
-        setText('Diagnóstico CIE 10', aiData.diagnostico_cie10);
-        setText('Histopatológico', aiData.histopatologico);
+        // APLICANDO LÍMITES DE CARACTERES
+        setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10, 85);
+        setText('Diagnóstico CIE 10', aiData.diagnostico_cie10, 85);
+        setText('Histopatológico', aiData.histopatologico, 85);
         
         setText('ECOG Performance Status (0-4)', aiData.ecog);
         setText('ECOG', aiData.ecog);
@@ -231,7 +237,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Estadio Inicial', aiData.estadio_inicial);
         setText('Fecha de Diagnóstico Inicial', aiData.fecha_diagnostico_inicial);
         setText('Fecha diagnostico inicial', aiData.fecha_diagnostico_inicial);
-        
         setText('Línea de tratamiento', aiData.linea_tratamiento);
         
         if (aiData.motivo_solicitud?.toLowerCase().includes('inicio')) setCheck('Inicio', true);
@@ -239,14 +244,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         if (aiData.motivo_solicitud?.toLowerCase().includes('toxicidad')) setCheck('Cambio de Toxicidad', true);
         if (aiData.motivo_solicitud?.toLowerCase().includes('progresi')) setCheck('Cambio por Progresión', true);
 
-        setText('Ciclos', aiData.ciclos_planeados);
+        // CICLOS LIMITADO
+        setText('Ciclos', aiData.ciclos_planeados, 41);
         setText('Días', aiData.frecuencia_dias);
 
-        setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx);
-        setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio);
+        // ANTECEDENTES LIMITADOS
+        setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 80);
+        setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 75);
         
-        setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado); 
-        setText('Datos positivos Laboratorio', aiData.laboratorio_formateado);
+        // INFORME EXTENSO + LAB LIMITADO
+        setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1595); 
+        setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 85);
         
         setText('Peso', aiData.peso);
         setText('Talla', aiData.talla);
