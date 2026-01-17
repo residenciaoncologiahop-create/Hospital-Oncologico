@@ -138,10 +138,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         
         INSTRUCCIONES ESPECÍFICAS:
         1. **Diagnóstico:** Completo con CIE10.
-        2. **Receptores/TNM:** Extrae valores específicos (ej: T2N1M0, ER+, HER2-).
+        2. **Receptores/TNM:** Extrae valores específicos (ej: T2N1M0, ER+, HER2-). SI ES CA DE PIEL O PULMÓN, RECEPTORES ES "NO APLICA".
         3. **Tratamientos Previos:** Detalla Cirugías (fecha, ganglios), RT (sitio) y Sistémicos.
-        4. **Esquema Solicitado:** Detalla Droga, Dosis mg/m2, Días de administración.
+        4. **Esquema Solicitado:** Detalla Droga, Dosis mg/m2, Días de administración. SI ES PEMBROLIZUMAB: Dosis 200mg FIJA (No por m2).
         5. **Renovación:** Si es renovación, busca motivo (Toxicidad/Progresión) y respuesta.
+        6. **Datos Paciente:** Nacionalidad (Asumir Argentina si vive en Córdoba), Profesión (Busca 'Ocupación').
         
         JSON REQUERIDO:
         {
@@ -150,7 +151,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "paciente_domicilio": "Domicilio", "paciente_localidad": "Loc", "paciente_provincia": "Prov",
           "paciente_telefono": "Tel", "institucion_hospital": "Hospital",
           "diagnostico_texto": "Dx completo", "cie10": "CIE10", "fecha_dx": "DD/MM/AAAA",
-          "receptores_er": "Pos/Neg", "receptores_pr": "Pos/Neg", "receptores_her2": "Pos/Neg",
+          "receptores_er": "Pos/Neg/No Aplica", "receptores_pr": "Pos/Neg/No Aplica", "receptores_her2": "Pos/Neg/No Aplica",
           "tnm_t": "T", "tnm_n": "N", "tnm_m": "M", "estadio": "I/II/III/IV",
           "anatomia_patologica": "Descripción AP", "ecog": "0-4",
           "peso": "kg", "talla": "cm",
@@ -158,8 +159,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "tx_previo_rt": "SI/NO (Sitio)", "tx_previo_sistemico": "SI/NO (Detalle)",
           "tratamiento_tipo": "Adyuvante/Neoadyuvante/Avanzado", "linea_nro": "1/2/3",
           "esquema_nombre": "Nombre Esquema", "ciclos_programados": "Nro", "intervalo_dias": "Cada X días",
-          "droga_1": "Nombre", "dosis_1_mg_m2": "Dosis num", "dias_1": "Días (ej: 1,8)",
-          "droga_2": "Nombre", "dosis_2_mg_m2": "Dosis num", "dias_2": "Días",
+          "droga_1": "Nombre", "dosis_1_mg_m2": "Dosis num", "dias_1": "Días (ej: 1,8)", "dosis_total_1": "Total mg",
+          "droga_2": "Nombre", "dosis_2_mg_m2": "Dosis num", "dias_2": "Días", "dosis_total_2": "Total mg",
           "motivo_renovacion": "Continuidad/Toxicidad/Progresión", "respuesta_tx": "Respuesta"
         }`;
     }
@@ -293,24 +294,28 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       else if (formDef.id === 'admision' || formDef.id === 'renovacion') {
          // 1. DATOS PACIENTE
          setText('Text1', finalName); // Nombre
-         setText('Text2', aiData.paciente_nacionalidad);
+         setText('Text2', aiData.paciente_nacionalidad || "Argentina");
          setText('Text3', cleanDate(aiData.paciente_fnac));
          setText('Text4', aiData.paciente_dni);
-         setText('Text5', aiData.paciente_profesion);
-         if (aiData.paciente_sexo === 'M') setCheck('Check Box1', true); // Check Masculino (ajustar nombre si necesario)
-         if (aiData.paciente_sexo === 'F') setCheck('Check Box2', true); // Check Femenino
+         setText('Text5', aiData.paciente_profesion || "No especifica");
+         // Sexo
+         if (aiData.paciente_sexo === 'M') setCheck('Check Box1', true);
+         if (aiData.paciente_sexo === 'F') setCheck('Check Box2', true);
+         
          setText('Text14', aiData.paciente_domicilio);
          setText('Text15', aiData.paciente_telefono);
-         setText('Text16', aiData.paciente_localidad);
+         setText('Text16', aiData.paciente_localidad || "Córdoba");
          setText('Text17', aiData.paciente_provincia || "Córdoba");
          setText('Text18', "Argentina");
-         setText('Text19', aiData.institucion_hospital);
+         setText('Text19', aiData.institucion_hospital || "Hospital Oncológico Urrutia");
 
          // 2. DATOS CLÍNICOS
          setText('Text20', aiData.diagnostico_texto);
          setText('Text21', aiData.cie10);
-         // Receptores (Texto libre o checkboxes si los hubiera, aquí asumimos texto en línea Receptores)
-         // Ojo: En algunos PDFs son checkboxes, aquí intentamos escribir en la zona si hay campo texto
+         
+         // Receptores (Si es ca de piel, dejar vacío o N/A)
+         if (aiData.receptores_er && !aiData.receptores_er.includes('Aplica')) setText('Text22', `RE: ${aiData.receptores_er} RP: ${aiData.receptores_pr} HER2: ${aiData.receptores_her2}`);
+         
          // TNM
          setText('Text28', `T: ${aiData.tnm_t} N: ${aiData.tnm_n} M: ${aiData.tnm_m}`); 
          setText('Text30', aiData.estadio); // Estadio
@@ -321,9 +326,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
          setText('Text39', aiData.peso);
          setText('Text40', aiData.talla);
          setText('Text32', bsa); // Sup corporal
-         // ECOG Checkboxes (Nombres hipotéticos, ajustar con mapa si falla)
-         if (aiData.ecog == '0') setCheck('Check Box3', true);
-         if (aiData.ecog == '1') setCheck('Check Box4', true);
          
          // 4. TRATAMIENTOS PREVIOS
          if (aiData.tx_previo_cx?.toUpperCase().includes('SI')) {
@@ -333,6 +335,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
          }
          
          // 5. TRATAMIENTO SOLICITADO
+         // Check de Inmunoterapia/Biologicos (Suponiendo Box12/13 por ubicación)
+         setCheck('Check Box13', true); // Terapias Blanco/Inmuno
+         
          if (aiData.tratamiento_tipo?.toLowerCase().includes('adyuvante')) setCheck('Check Box15', true);
          if (aiData.tratamiento_tipo?.toLowerCase().includes('avanzado')) setCheck('Check Box17', true);
          
@@ -342,29 +347,22 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
          // 6. TABLA DE DROGAS
          // Fila 1
          setText('Text92', aiData.droga_1); // Droga
-         setText('Text93', aiData.dosis_1_mg_m2); // Dosis mg/m2
-         setText('Text94', aiData.dias_1); // Días
-         // Cálculo Dosis Total Fila 1
-         if (bsa && aiData.dosis_1_mg_m2) {
-             const dosisTotal = (parseFloat(aiData.dosis_1_mg_m2) * parseFloat(bsa)).toFixed(0);
-             setText('Text95', `${dosisTotal} mg`);
-         }
-
-         // Fila 2
-         if (aiData.droga_2) {
-             setText('Text96', aiData.droga_2);
-             setText('Text97', aiData.dosis_2_mg_m2);
-             setText('Text98', aiData.dias_2);
-             if (bsa && aiData.dosis_2_mg_m2) {
-                 const dosisTotal2 = (parseFloat(aiData.dosis_2_mg_m2) * parseFloat(bsa)).toFixed(0);
-                 setText('Text99', `${dosisTotal2} mg`);
+         
+         // Lógica dosis fija vs sup corporal
+         if (aiData.droga_1?.toLowerCase().includes('pembrolizumab')) {
+             setText('Text93', "200 mg fijos");
+             setText('Text95', "200 mg");
+         } else {
+             setText('Text93', aiData.dosis_1_mg_m2);
+             if (bsa && aiData.dosis_1_mg_m2) {
+                 const dosisTotal = (parseFloat(aiData.dosis_1_mg_m2) * parseFloat(bsa)).toFixed(0);
+                 setText('Text95', `${dosisTotal} mg`);
              }
          }
+         setText('Text94', aiData.dias_1);
 
          // 7. DATOS ADMINISTRATIVOS
          setText('Text88', `Córdoba, ${new Date().toLocaleDateString('es-AR')}`);
-         // Contacto inst
-         setText('Text89', "Tel: 0351-4444444"); 
       }
 
       const pdfBytes = await pdfDoc.save();
