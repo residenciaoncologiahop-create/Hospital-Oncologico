@@ -701,17 +701,23 @@ const App = () => {
                                 )}
 
                                 {activeTab === 'forms' && (
-                                    <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none">
-                                        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><FileInput size={48} className="text-blue-600" /></div>
-                                        <div className="space-y-2">
-                                            <p className="text-sm font-black uppercase tracking-widest">Gestión de Trámites</p>
-                                            <p className="text-xs font-bold max-w-[200px] mx-auto leading-relaxed">Cargue las plantillas PDF en la pestaña "Documentación" para habilitar el autocompletado.</p>
-                                            <FormManager patient={selP} historyText={historyText} />
+                                    <div className="h-full overflow-y-auto">
+                                        <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
+                                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+                                                <FileInput size={40} className="text-blue-600" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-black uppercase tracking-widest text-gray-700">Gestión de Trámites</p>
+                                                <p className="text-xs font-bold text-gray-400 max-w-[250px] mx-auto leading-relaxed">
+                                                    Seleccione el formulario que desea generar automáticamente.
+                                                </p>
+                                            </div>
                                         </div>
+                                        
+                                        {/* CORRECCIÓN: Se agregó files={historyFiles} y se quitó la opacidad */}
+                                        <FormManager patient={selP} historyText={historyText} files={historyFiles} />
                                     </div>
                                 )}
-                            </div>
-                        </div>
 
                         {/* Right Panel: Chat */}
                         <div className={`${showLeftPanel ? 'lg:w-1/2' : 'w-full'} flex flex-col bg-gray-50 h-full overflow-hidden relative transition-all duration-300`}>
