@@ -10,8 +10,11 @@ import {
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
     List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal,
     Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation,
-    PanelLeftClose, PanelLeftOpen
+    PanelLeftClose, PanelLeftOpen, FileInput // <--- ICONO NUEVO AGREGADO
 } from 'lucide-react';
+
+// IMPORTAMOS EL COMPONENTE DE FORMULARIOS
+import FormManager from './components/FormManager';
 
 // --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
@@ -78,9 +81,9 @@ const parseDate = (dateStr: string) => {
 };
 const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 
-// --- AI FUNCTIONS (PRIVACIDAD REFORZADA & MEJORA DE DATOS) ---
+// --- AI FUNCTIONS (CON CORRECCIONES) ---
 
-// 1. EXTRACT TIMELINE (CORREGIDO: FILTRO AGRESIVO DE BASURA)
+// 1. EXTRACT TIMELINE (CORREGIDO Y BLINDADO)
 const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
     if (!text && files.length === 0) return [];
     const apiKey = import.meta.env.VITE_API_KEY;
@@ -109,12 +112,10 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
         });
 
         if (res.text) {
-            // Limpieza de etiquetas markdown si las hubiera
             const cleanText = res.text.replace(/```json|```/g, '').trim();
             let rawEvents = [];
             
             try {
-                // Buscamos explícitamente el inicio y fin del array
                 const firstBracket = cleanText.indexOf('[');
                 const lastBracket = cleanText.lastIndexOf(']');
                 
@@ -125,7 +126,7 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
                 }
             } catch (e) { console.error("Error parseando JSON", e); return []; }
 
-            // --- FILTRO DE CALIDAD AGRESIVO (SANITIZER) ---
+            // --- FILTRO DE CALIDAD AGRESIVO ---
             const validEvents = rawEvents.map((e: any) => ({
                 date: e.date || e.fecha || "S/F",
                 professional: e.professional || e.profesional || "N/A",
@@ -133,16 +134,10 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
                 note: e.note || e.nota || e.descripcion || "Evento sin descripción",
                 isKey: !!(e.isKey || e.esClave)
             })).filter((e: any) => {
-                // ELIMINAR SI:
-                // 1. La fecha es "S/F" (Sin Fecha)
                 if (e.date === "S/F") return false;
-                // 2. La nota es el texto por defecto o "General"
                 if (e.note === "Evento sin descripción" || e.note === "General") return false;
-                // 3. La nota es demasiado corta (basura de OCR)
                 if (e.note.trim().length < 5) return false;
-                // 4. La categoría es genérica y la nota no aporta nada
                 if (e.category === "General" && e.note.toLowerCase().includes("sin descripción")) return false;
-                
                 return true;
             });
             
@@ -152,14 +147,11 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
     } catch (e) { console.error(e); return []; }
 };
 
-// 2. GENERATORS (MEJORADO PARA INCLUIR ANTECEDENTES Y EF)
+// 2. GENERATORS
 const generateText = async (prompt: string, context: string, files: FileData[]) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey! });
-    
-    // REGLA DE PRIVACIDAD GLOBAL INYECTADA
     const privacyRule = "\n\nIMPORTANTE: Protege la privacidad. NO incluyas nombres reales, DNI, ni datos de contacto. Usa términos genéricos como 'El paciente'.";
-    
     const parts: any[] = [{ text: prompt + privacyRule }, { text: context }];
     files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
     const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
@@ -238,6 +230,8 @@ const App = () => {
 
     // NUEVO ESTADO: Panel Izquierdo Visible
     const [showLeftPanel, setShowLeftPanel] = useState(true);
+    // PESTAÑAS ACTUALIZADAS
+    const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms'>('docs');
 
     const [newPatientName, setNewPatientName] = useState('');
     const [newPatientAge, setNewPatientAge] = useState('');
@@ -253,28 +247,21 @@ const App = () => {
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
     
-    // Search
     const [searchTerm, setSearchTerm] = useState('');
-
-    // Manual Evolution
     const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
     const [manualDoctor, setManualDoctor] = useState(doctorName || '');
     const [manualNote, setManualNote] = useState('');
 
-    // Modal States
     const [showSummaryModal, setShowSummaryModal] = useState(false);
     const [summaryText, setSummaryText] = useState('');
     const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-    
     const [showFollowUpModal, setShowFollowUpModal] = useState(false);
     const [followUpText, setFollowUpText] = useState('');
     const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
-
     const [showTumorBoardModal, setShowTumorBoardModal] = useState(false); 
     const [tumorBoardText, setTumorBoardText] = useState('');
     const [isGeneratingTumorBoard, setIsGeneratingTumorBoard] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<'docs' | 'timeline'>('docs');
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -282,7 +269,6 @@ const App = () => {
         getOrInitFingerprint();
     }, []);
 
-    // Firebase Load
     useEffect(() => {
         if (!doctorName) { setPatients([]); return; }
         const q = query(collection(db, "patients"), where("doctorId", "==", doctorName));
@@ -330,16 +316,13 @@ const App = () => {
         }
     }, [selectedPatientId]);
 
-    // --- HELPER PARA ANONIMIZACIÓN (SIN SEXO, SOLO EDAD Y DX) ---
     const getAnonContext = (p: Patient) => {
         return `Paciente de ${p.age} años.
         Diagnóstico: ${p.diagnosis}.
         Historial: ${JSON.stringify(p.timeline || [])}.
         Notas Clínicas (Anónimas): ${p.historyText || ''}`;
     };
-    // ----------------------------------------
 
-    // Save Patient Details Helper
     const savePatientDetails = async () => {
         if (selectedPatientId) {
             const patientRef = doc(db, "patients", selectedPatientId);
@@ -411,7 +394,6 @@ const App = () => {
         }
     };
 
-    // GENERATORS - USAN getAnonContext & PROMPTS MEJORADOS
     const handleGenerateSummary = async () => {
         if (!selectedPatientId) return;
         const p = patients.find(pat => pat.id === selectedPatientId);
@@ -419,7 +401,6 @@ const App = () => {
         setIsGeneratingSummary(true); setShowSummaryModal(true); setSummaryText("Generando resumen...");
         
         const context = getAnonContext(p);
-        // PROMPT MEJORADO: Pide explícitamente Antecedentes y Examen Físico de los documentos adjuntos
         const prompt = `
             Genera un RESUMEN DE HISTORIA CLÍNICA oncológico profesional en ESPAÑOL basándote en los documentos adjuntos y las notas.
             
@@ -458,7 +439,6 @@ const App = () => {
         setIsGeneratingTumorBoard(true); setShowTumorBoardModal(true); setTumorBoardText("Preparando presentación...");
         
         const context = getAnonContext(p);
-        // PROMPT MEJORADO PARA ATENEO
         const prompt = `
             Genera Presentación para Ateneo/Comité de Tumores (Tumor Board) en ESPAÑOL.
             
@@ -495,7 +475,6 @@ const App = () => {
         const updatedUser = [...chatMessages, newUserMsg];
         setChatMessages(updatedUser); setChatInput(''); setIsTyping(true);
         
-        // Contexto Anonimizado para el chat
         const context = getAnonContext(p);
         
         const responseText = await getChatResponse(updatedUser, newUserMsg.text, context, [...historyFiles, ...guidelineFiles]);
@@ -541,7 +520,6 @@ const App = () => {
         }
     };
 
-    // Filter logic
     const filteredPatients = patients.filter(p => 
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
@@ -646,11 +624,13 @@ const App = () => {
                         <div className={`${showLeftPanel ? 'lg:w-1/2 border-r' : 'hidden'} flex flex-col bg-white h-full transition-all duration-300`}>
                             <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
                                 <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>1. Documentación</button>
-                                <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historial de Eventos</button>
+                                <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historial de Eventos</button>
+                                {/* PESTAÑA TRÁMITES AGREGADA */}
+                                <button onClick={() => setActiveTab('forms')} className={`flex-1 py-4 transition-all ${activeTab === 'forms' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>3. Trámites</button>
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
-                                {activeTab === 'docs' ? (
+                                {activeTab === 'docs' && (
                                     <>
                                         <section className="space-y-4">
                                             <div className="flex items-center justify-between border-b border-gray-50 pb-2"><h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Documentación del Caso</h3><button onClick={savePatientDetails} className="text-blue-600 font-bold text-[10px] hover:underline uppercase">Guardar cambios</button></div>
@@ -691,7 +671,9 @@ const App = () => {
                                             <FileUploader label="Guías NCCN / Protocolos" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
                                         </section>
                                     </>
-                                ) : (
+                                )}
+
+                                {activeTab === 'timeline' && (
                                     <div className="space-y-4 pt-2">
                                         {timeline.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center py-20 text-gray-200"><Clock size={40} className="mb-3 opacity-10" /><p className="text-xs font-black uppercase tracking-widest">Sin eventos</p></div>
@@ -715,6 +697,17 @@ const App = () => {
                                                 </div>
                                             ))
                                         )}
+                                    </div>
+                                )}
+
+                                {activeTab === 'forms' && (
+                                    <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none">
+                                        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><FileInput size={48} className="text-blue-600" /></div>
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-black uppercase tracking-widest">Gestión de Trámites</p>
+                                            <p className="text-xs font-bold max-w-[200px] mx-auto leading-relaxed">Cargue las plantillas PDF en la pestaña "Documentación" para habilitar el autocompletado.</p>
+                                            <FormManager patient={selP} historyText={historyText} />
+                                        </div>
                                     </div>
                                 )}
                             </div>
