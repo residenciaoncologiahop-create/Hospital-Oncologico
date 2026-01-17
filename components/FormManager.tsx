@@ -13,15 +13,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
   
-  // ESTADO PARA DATOS DEL MÉDICO (EXPANDIDO)
   const [showDocConfig, setShowDocConfig] = useState(false);
   const [doctorData, setDoctorData] = useState({
     nombre: '',
     matricula: '',
     especialidad: 'Oncología Clínica',
     email: '',
-    celular: '', // Formato esperado: 11 12345678
-    cuil: '',    // Formato esperado: 20123456789
+    celular: '', 
+    cuil: '',    
     provincia: ''
   });
 
@@ -52,7 +51,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     return '';
   };
 
-  // --- MAPEO DE DEPURACIÓN (Mantiene funcionalidad por si acaso) ---
   const generateFieldMap = async (formDef: any) => {
     setProcessingId('map-' + formDef.id);
     setStatus('Generando mapa...');
@@ -73,7 +71,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         if (field.constructor.name === 'PDFTextField') {
             const textField = form.getTextField(name);
             textField.setText(name); 
-            textField.setFontSize(6); // Más chico para que entre en celdas divididas
+            textField.setFontSize(6);
             textField.setFont(helveticaFont);
             textField.setTextColor(rgb(1, 0, 0));
         }
@@ -85,7 +83,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       link.href = URL.createObjectURL(blob);
       link.download = `MAPA_ROJO_${formDef.name}.pdf`;
       link.click();
-      alert("✅ Mapa descargado. Revise los códigos rojos en las celdas divididas.");
+      alert("✅ Mapa descargado.");
     } catch (e: any) { alert('Error: ' + e.message); } 
     finally { setProcessingId(null); setStatus(''); }
   };
@@ -96,25 +94,25 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const ai = new GoogleGenAI({ apiKey });
     
-    // --- PROMPT DE ALTA PRECISIÓN Y FORMATO DE FECHAS ---
+    // --- PROMPT AJUSTADO PARA MAYOR DETALLE Y FORMATO LAB ---
     const parts: any[] = [
       { text: `
-        Actúa como un ONCÓLOGO llenando un formulario físico (espacio limitado).
+        Actúa como un ONCÓLOGO EXPERTO completando una planilla oficial de solicitud de drogas (PAMI).
         
-        INSTRUCCIONES DE EXTRACCIÓN:
-        1. **Fecha de Nacimiento:** Busca formatos como "09/jun/1950" o "12-mar-80". CONVIÉRTELOS SIEMPRE a numérico "DD/MM/AAAA".
-        2. **Informe Clínico:** DEBE SER MUY BREVE (Máximo 3 líneas). Resume: "Dx (Fecha), Cirugía/RT previas. Actual: Progresión/Inicio por [Justificación]". Omitir detalles superfluos para que entre en el papel.
-        3. **Diagnóstico:** Usa abreviaturas estándar si es muy largo (ej: "Ca." en vez de "Carcinoma").
-        4. **Ciclos:** "Hasta progresión" o "x6 ciclos".
+        INSTRUCCIONES CLAVE:
+        1. **Informe Clínico Actual:** Debe ser un párrafo técnico y completo (NO telegráfico, pero sin relleno). Incluye obligatoriamente: Fecha Dx, Tipo Histológico, Sitios metastásicos, Fechas de Cx/RT previas y Motivo de la solicitud actual.
+        2. **Laboratorio:** Busca el último laboratorio disponible y transcríbelo en este formato EXACTO: "Laboratorio [DD/MM/AA]: Hb X / Hto Y / GB Z / NS W% / Plaq Q / Creat R...".
+        3. **Tratamiento:** Si el texto no especifica la presentación comercial (ej: Ampollas, Viales), DEDÚCELA según el estándar oncológico para la droga y dosis solicitada. ¡No dejes campos vacíos en la tabla!
+        4. **Ciclos:** "Nº Ciclos" se refiere al plan propuesto (ej: "Hasta progresión", "x6 ciclos").
         
         Extrae este JSON exacto:
         {
           "paciente_nombre_real": "Nombre completo",
           "paciente_dni": "DNI",
           "paciente_celular": "Celular encontrado",
-          "paciente_fnac": "DD/MM/AAAA (Convertido)",
-          "diagnostico_cie10": "Diagnóstico breve + CIE10",
-          "histopatologico": "Resumen histopatológico breve",
+          "paciente_fnac": "DD/MM/AAAA",
+          "diagnostico_cie10": "Diagnóstico completo + Código CIE10",
+          "histopatologico": "Resumen histopatológico",
           "peso": "kg (número)",
           "talla": "cm (número)",
           "ecog": "0-4",
@@ -122,17 +120,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "estadio_actual": "Estadio actual",
           "fecha_diagnostico_inicial": "DD/MM/AAAA",
           "linea_tratamiento": "1ra, 2da...",
-          "antecedentes_qx": "Cirugías (breve)",
-          "antecedentes_radio": "RT (breve)",
-          "laboratorio": "Datos + (Fecha)",
-          "informe_clinico_detallado": "Resumen MUY CONCISO (<300 caracteres)",
+          "antecedentes_qx": "Cirugías (con fechas)",
+          "antecedentes_radio": "RT (con fechas)",
+          "laboratorio_formateado": "String con formato Laboratorio DD/MM/AA: ...",
+          "informe_clinico_detallado": "Párrafo técnico con historia oncológica resumida pero completa.",
           "motivo_solicitud": "Inicio/Renovación...",
           "tipo_tratamiento": "Adyuvante/Avanzado...",
           "ciclos_planeados": "Plan (ej: Hasta progresión)",
           "frecuencia_dias": "Esquema (ej: D1 c/21d)",
-          "droga_1": "Droga",
-          "presentacion_1": "Presentación",
-          "dosis_1": "Dosis exacta",
+          "droga_1": "Nombre droga",
+          "presentacion_1": "Presentación (ej: Viales 100mg)",
+          "dosis_1": "Dosis exacta (ej: 200 mg)",
           "droga_2": "Droga 2",
           "presentacion_2": "Presentación",
           "dosis_2": "Dosis exacta"
@@ -179,7 +177,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
 
-      // Helper seguro
       const setText = (name: string, val: string) => {
         try { 
             const f = form.getTextField(name); 
@@ -191,35 +188,26 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {}
       };
 
-      // --- LÓGICA DE DATOS DEL MÉDICO (SPLIT) ---
-      // CUIL: XX - XXXXXXXX - X
+      // --- LOGICA DE DATOS DEL MÉDICO ---
       const cuilRaw = doctorData.cuil.replace(/[^0-9]/g, '');
       const cuilPre = cuilRaw.substring(0, 2);
       const cuilDni = cuilRaw.substring(2, cuilRaw.length - 1);
       const cuilSuf = cuilRaw.substring(cuilRaw.length - 1);
 
-      // CELULAR: (XXXX) 15 - XXXXXXXX
-      // Asumimos que el médico guarda "11 12345678"
       const celRaw = doctorData.celular.replace(/[^0-9]/g, '');
-      // Estimación simple: primeros 2-4 nums son area, resto es número. 
-      // Ajustable según necesidad. Por defecto tomamos 10 dígitos (2 area + 8 num o 3+7 etc)
-      // Si el usuario pone "1144445555", area=11 num=44445555
       let celArea = "";
       let celNum = "";
       if (celRaw.length >= 10) {
-          celArea = celRaw.substring(0, celRaw.length - 8); // El resto menos los ultimos 8
+          celArea = celRaw.substring(0, celRaw.length - 8); 
           celNum = celRaw.substring(celRaw.length - 8);
       } else {
           celNum = celRaw;
       }
 
-
       // --- PAMI ---
       if (formDef.id === 'pami') {
-        // PAGINA 1
         setText('Apellido y Nombre', finalName);
         setText('Beneficiario Nº', ''); 
-        // Celular paciente (Mismo problema de split, intentamos ponerlo en el campo principal si es uno solo)
         setText('Celular', aiData.paciente_celular);
         setText('Fecha de nacimiento', aiData.paciente_fnac);
 
@@ -248,17 +236,20 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx);
         setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio);
         
-        // INFORME CONCISO
+        // INFORME Y LABS FORMATEADOS
         setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado); 
-        setText('Datos positivos Laboratorio', aiData.laboratorio);
+        setText('Datos positivos Laboratorio', aiData.laboratorio_formateado); // Usamos el campo formateado
+        
         setText('Peso', aiData.peso);
         setText('Talla', aiData.talla);
         setText('Sup. Corporal', bsa);
         setText('Sup Corpora', bsa);
 
-        if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Neoadyuvante', true);
+        if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
+        if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
         if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
 
+        // TABLA COMPLETA
         setText('DrogaGenéricoRow1', aiData.droga_1);
         setText('PresentaciónRow1', aiData.presentacion_1);
         setText('DosisRow1', aiData.dosis_1);
@@ -271,29 +262,24 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
         }
 
-        // PAGINA 2: DATOS DEL MÉDICO (MAPEADOS AL DETALLE)
+        // DATOS MÉDICO
         setText('Apellido y Nombre_2', doctorData.nombre);
         setText('Matricula', doctorData.matricula);
         setText('Especialidad', doctorData.especialidad);
         setText('Email_2', doctorData.email);
         setText('Provincia', doctorData.provincia);
 
-        // Intento de llenar CUIL dividido
-        // Nombres tentativos basados en orden de formulario PAMI
-        // Si no existen, intentamos el campo único como fallback
         setText('CUIL', doctorData.cuil); 
         setText('CUIL1', cuilPre);
         setText('CUIL2', cuilDni);
-        setText('CUIL3', cuilSuf); // A veces se llaman así en formularios secuenciales
+        setText('CUIL3', cuilSuf);
         
-        // Celular dividido (Característica y Número)
-        setText('Celular_2', celArea); // A veces es la caracteristica
-        setText('Celular1', celNum);   // Y el numero al lado
-        // Si falla, probar nombres genéricos de Text si tenemos suerte
+        setText('Celular_2', celArea); 
+        setText('Celular1', celNum);   
         
         setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
       } 
-      // ... (Otros formularios igual que antes) ...
+      // ... OTROS FORMULARIOS (Igual que antes) ...
       else if (formDef.id === 'admision') {
         setText('Text1', finalName);
         setText('Text3', aiData.paciente_fnac);
@@ -349,7 +335,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         </button>
       </div>
 
-      {/* MODAL CONFIGURACIÓN MÉDICO */}
       {showDocConfig && (
         <div className="mb-6 p-5 bg-blue-50 border border-blue-100 rounded-2xl animate-in slide-in-from-top">
           <div className="flex justify-between items-center mb-4">
@@ -432,7 +417,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                   <Map size={14} />
                 </button>
 
-                {/* BOTÓN LINK PAMI AGREGADO */}
                 {form.id === 'pami' && (
                     <a 
                       href="https://cup.pami.org.ar/controllers/loginController.php" 
