@@ -84,7 +84,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
   };
 
-  // --- FUNCIÓN GENERAR RESUMEN (CORREGIDA FONDO Y FORMATO) ---
+  // --- FUNCIÓN GENERAR RESUMEN (FINAL CORREGIDA) ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
@@ -100,17 +100,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const ai = new GoogleGenAI({ apiKey });
         const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-        // PROMPT AJUSTADO: TEXTO PLANO
         const prompt = `
-        Actúa como Oncólogo. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
+        Actúa como Oncólogo del Hospital Oncológico Dr. José Miguel Urrutia.
+        Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
         
         IMPORTANTE: 
         - NO uses formato Markdown (**negritas**, *cursivas*).
-        - NO escribas los datos del médico al final (los pondré yo).
-        - Texto plano, párrafos claros.
+        - Texto plano y limpio.
         
         ESTRUCTURA:
-        1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico.
+        1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico Principal.
         2. Antecedentes: Comorbilidades y oncológicos previos.
         3. Enfermedad Actual: Estado actual, estudios recientes (fechas y hallazgos clave).
         4. Justificación (PÁRRAFO FINAL): "Por lo expuesto, se solicita [Droga]..."
@@ -132,7 +131,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
         const summaryText = res.text || "No se pudo generar el resumen.";
 
-        // --- GESTIÓN DE FONDO (MEMBRETE) ---
+        // --- GESTIÓN DE FONDO (MEMBRETE ROBUSTO) ---
         const pdfDoc = await PDFDocument.create();
         let templateDoc = null;
 
@@ -143,18 +142,25 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         );
 
         if (uploadedMembrete) {
-            // Convertir base64 a Uint8Array
-            const binaryString = atob(uploadedMembrete.data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
             try {
+                // LIMPIEZA DE BASE64 (CRÍTICO PARA QUE FUNCIONE)
+                let base64Data = uploadedMembrete.data as string;
+                if (base64Data.includes(',')) {
+                    base64Data = base64Data.split(',')[1]; // Quitar prefijo data:application/pdf...
+                }
+                
+                const binaryString = atob(base64Data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
                 templateDoc = await PDFDocument.load(bytes);
-            } catch (e) { console.error("Error cargando membrete subido", e); }
+            } catch (e) { 
+                console.error("Error cargando membrete subido", e); 
+            }
         }
 
-        // 2. Si no, buscar en carpeta public (Fallback)
+        // 2. Fallback local
         if (!templateDoc) {
             try {
                 const resLocal = await fetch(window.location.origin + '/forms/membrete.pdf');
@@ -165,7 +171,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             } catch (e) {}
         }
 
-        // Helper para agregar página con fondo
         const addPageWithBackground = async () => {
             if (templateDoc) {
                 const [templatePage] = await pdfDoc.copyPages(templateDoc, [0]);
@@ -175,17 +180,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             }
         };
 
-        // --- ESCRITURA ---
+        // --- CONFIGURACIÓN DE PÁGINA ---
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
         
         let page = await addPageWithBackground();
         const { width, height } = page.getSize();
         
-        // MÁRGENES MÁS AMPLIOS
-        const marginX = 70; // Izquierda/Derecha
-        const topStart = height - 160; // Empezar más abajo para respetar logo
-        const bottomLimit = 150; // Dejar espacio abajo para firma
+        // MÁRGENES AJUSTADOS (Más espacio abajo y costados)
+        const marginX = 70; 
+        const topStart = height - 160; 
+        const bottomLimit = 200; // Aumentado para que el texto corte mucho antes del pie
         let y = topStart;
 
         // FECHA
@@ -200,10 +205,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         page.drawText(title, { x: (width - titleWidth) / 2, y: y, size: 12, font: fontBold });
         y -= 40;
 
-        // CUERPO
-        const fontSize = 11; // Un poco más grande
+        // CUERPO DEL TEXTO
+        const fontSize = 11;
         const lineHeight = 16;
-        
         const paragraphs = summaryText.split('\n');
 
         for (const paragraph of paragraphs) {
@@ -221,12 +225,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                 const maxWidth = width - (marginX * 2);
 
                 if (textWidth > maxWidth) {
-                    // Imprimir línea
                     page.drawText(lineBuffer, { x: marginX, y: y, size: fontSize, font });
                     y -= lineHeight;
                     lineBuffer = word + ' ';
 
-                    // Chequeo de fin de página
                     if (y < bottomLimit) {
                         page = await addPageWithBackground();
                         y = topStart;
@@ -235,7 +237,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                     lineBuffer = testLine;
                 }
             }
-            // Última línea del párrafo
             if (lineBuffer) {
                 page.drawText(lineBuffer, { x: marginX, y: y, size: fontSize, font });
                 y -= (lineHeight * 1.5);
@@ -247,19 +248,19 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             }
         }
 
-        // --- FIRMA DEL MÉDICO (ABAJO DE TODO) ---
-        // Verificar si entra en esta página o necesitamos nueva
-        if (y < 120) {
+        // --- FIRMA AL PIE (FIXED BOTTOM) ---
+        // Si estamos muy cerca del borde inferior, pasamos a hoja nueva para la firma
+        if (y < 150) { 
             page = await addPageWithBackground();
-            y = topStart; // Aunque en realidad la firma va abajo, reiniciamos contexto
         }
 
-        const signatureY = 80; // Posición fija al pie
+        // Posición fija absoluta al final de la página actual
+        const signatureY = 80; 
         const centerX = width / 2;
 
         page.drawLine({
-            start: { x: centerX - 80, y: signatureY + 20 },
-            end: { x: centerX + 80, y: signatureY + 20 },
+            start: { x: centerX - 80, y: signatureY + 30 },
+            end: { x: centerX + 80, y: signatureY + 30 },
             thickness: 1,
             color: rgb(0, 0, 0),
         });
@@ -270,9 +271,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const nameWidth = fontBold.widthOfTextAtSize(docName, 11);
         const matWidth = font.widthOfTextAtSize(docMat, 10);
 
-        page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 5, size: 11, font: fontBold });
+        page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 15, size: 11, font: fontBold });
         if (docMat) {
-            page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY - 10, size: 10, font });
+            page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 10, font });
         }
 
         const pdfBytes = await pdfDoc.save();
@@ -291,7 +292,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
   };
 
-  // --- FUNCIÓN 3: AUTOCOMPLETADO PAMI (Intacto) ---
+  // --- AUTOCOMPLETADO PAMI (INTACTO) ---
   const extractPamiData = async () => {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("Falta API Key");
@@ -300,29 +301,19 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const promptText = `
         Actúa como un ONCÓLOGO EXPERTO. Hoy es ${today}.
-        OBJETIVO: Completar planilla PAMI con rigor técnico y estilo formal.
-        REGLAS DE ESTILO (OBLIGATORIAS):
-        1. **Idioma:** PROHIBIDO usar siglas en inglés como "SCC". Usa siempre español (ej: "Ca. Escamoso" o "Carcinoma Escamoso").
-        2. **Informe Clínico:** - Redacta un resumen técnico cronológico.
-           - NO INCLUYAS la fecha de nacimiento ni la edad en este texto.
-           - Máximo 1100 caracteres.
-        3. **Ciclos:** - Si es avanzado/paliativo -> "Hasta progresión y/o toxicidad".
-           - NUNCA pongas "Según protocolo".
-        4. **Tratamiento:** Si falta dato de presentación/dosis, DEDUCE el estándar (NCCN/ESMO).
-        5. **Laboratorio:** Si tiene >3 meses de antigüedad, dejar VACÍO. Si es reciente: "DD/MM/AA: Hb X / GB X / Plaq X".
+        OBJETIVO: Completar planilla PAMI.
+        REGLAS: Español, Informe conciso, Ciclos "Hasta progresión/toxicidad", Tratamiento estándar NCCN.
         
-        Extrae este JSON exacto:
-        {
+        Extrae JSON: {
           "paciente_nombre_real": "Nombre", "paciente_dni": "DNI", "paciente_celular": "Celular", "paciente_fnac": "DD/MM/AAAA",
-          "diagnostico_cie10": "Texto breve (< 85 chars)", "histopatologico": "Texto breve (< 85 chars, SIN siglas inglés)",
-          "peso": "kg", "talla": "cm", "ecog": "0-4", "estadio_inicial": "Estadio debut", "estadio_actual": "Estadio actual",
-          "fecha_diagnostico_inicial": "DD/MM/AAAA", "linea_tratamiento": "1ra, 2da...",
-          "antecedentes_qx": "Texto breve (< 80 chars)", "antecedentes_radio": "Texto breve (< 75 chars)",
-          "laboratorio_formateado": "Texto o vacío", "informe_clinico_detallado": "Texto < 1100 chars",
-          "motivo_solicitud": "Inicio/Renovación...", "tipo_tratamiento": "Adyuvante/Avanzado...",
-          "ciclos_planeados": "Texto", "frecuencia_dias": "Esquema",
-          "droga_1": "Droga", "presentacion_1": "Presentación", "dosis_1": "Dosis",
-          "droga_2": "Droga 2", "presentacion_2": "Presentación", "dosis_2": "Dosis"
+          "diagnostico_cie10": "Dx", "histopatologico": "Histo", "peso": "kg", "talla": "cm", "ecog": "0-4",
+          "estadio_inicial": "EI", "estadio_actual": "EA", "fecha_diagnostico_inicial": "DD/MM/AAAA",
+          "linea_tratamiento": "Línea", "antecedentes_qx": "Cx", "antecedentes_radio": "RT",
+          "laboratorio_formateado": "Lab", "informe_clinico_detallado": "Informe",
+          "motivo_solicitud": "Inicio...", "tipo_tratamiento": "Adyuvante...",
+          "ciclos_planeados": "Ciclos", "frecuencia_dias": "D1",
+          "droga_1": "D1", "presentacion_1": "P1", "dosis_1": "Dosis1",
+          "droga_2": "D2", "presentacion_2": "P2", "dosis_2": "Dosis2"
         }`;
 
     const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${historyText}` }];
@@ -435,6 +426,41 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
+  const generateFieldMap = async (formDef: any) => {
+    setProcessingId('map-' + formDef.id);
+    setStatus('Generando mapa...');
+    try {
+      const formUrl = window.location.origin + formDef.file;
+      const res = await fetch(formUrl);
+      if (!res.ok) throw new Error("Archivo no encontrado");
+      const formBytes = await res.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(formBytes);
+      const form = pdfDoc.getForm();
+      const fields = form.getFields();
+      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      fields.forEach(field => {
+        const name = field.getName();
+        if (field.constructor.name === 'PDFTextField') {
+            const textField = form.getTextField(name);
+            textField.setText(name); 
+            textField.setFontSize(6);
+            textField.setFont(helveticaFont);
+            textField.setTextColor(rgb(1, 0, 0));
+        }
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `MAPA_ROJO_${formDef.name}.pdf`;
+      link.click();
+      alert("✅ Mapa descargado.");
+    } catch (e: any) { alert('Error: ' + e.message); } 
+    finally { setProcessingId(null); setStatus(''); }
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -487,10 +513,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             </div>
             
             <div className="flex gap-2">
-                {/* LÓGICA DE BOTONES SEGÚN TIPO DE FORMULARIO */}
-                
                 {form.type === 'auto' ? (
-                    // BOTÓN PAMI (Autocompletar)
                     <button 
                       onClick={() => fillPamiPDF(form)}
                       disabled={processingId !== null}
@@ -501,7 +524,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                       <span>Generar</span>
                     </button>
                 ) : (
-                    // BOTONES BANCO DROGAS (Plantilla + Resumen)
                     <>
                         <button 
                           onClick={() => downloadTemplate(form)}
@@ -522,7 +544,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                     </>
                 )}
 
-                {/* Link Externo PAMI (Solo para PAMI) */}
                 {form.id === 'pami' && (
                     <a href="https://cup.pami.org.ar/controllers/loginController.php" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center px-3 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 border border-teal-100"><ExternalLink size={14} /></a>
                 )}
