@@ -33,12 +33,18 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     alert("Datos guardados.");
   };
 
+  // ------------------------------------------------------------------
+  // CONFIGURACIÓN DE FORMULARIOS
+  // ------------------------------------------------------------------
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'manual', context: 'ADMISIÓN' },
     { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'manual', context: 'RENOVACIÓN' },
+    
+    // 👇 AQUÍ ESTÁ EL CAMBIO SOLICITADO:
     { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/nuevo_dinadic.pdf', type: 'manual', context: 'SOLICITUD' },
   ];
+  // ------------------------------------------------------------------
 
   const calculateBSA = (weight: string, height: string) => {
     const w = parseFloat(weight?.toString().replace(',', '.'));
@@ -62,17 +68,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    } catch (e) { alert("Error al descargar plantilla."); }
+    } catch (e) { alert("Error al descargar plantilla. Verifica que el archivo exista en public/forms/."); }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO (100% CÓDIGO - SIN ARCHIVOS EXTERNOS) ---
+  // --- GENERADOR DE RESUMEN CLÍNICO (DISEÑO LIMPIO) ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
         return;
     }
     setProcessingId('summary');
-    setStatus('Generando PDF...');
+    setStatus('Redactando resumen...');
 
     try {
         const apiKey = import.meta.env.VITE_API_KEY;
@@ -82,18 +88,19 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
         const prompt = `
-        Actúa como Oncólogo. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
+        Actúa como Oncólogo del Hospital Oncológico Dr. José Miguel Urrutia.
+        Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
         
         IMPORTANTE: 
-        - Texto plano, profesional y directo. No uses Markdown.
-        - Sé detallado en la historia oncológica pero sintético en la redacción.
+        - Formato de texto plano profesional.
+        - NO uses negritas (markdown) ni símbolos extraños.
+        - Sé conciso y directo.
         
         ESTRUCTURA:
-        1. ENCABEZADO: Paciente (Nombre, DNI, Edad). Diagnóstico (con fecha inicial).
-        2. ANTECEDENTES: Breve.
-        3. HISTORIA ONCOLÓGICA (Cronológica): Cirugías, tratamientos previos (drogas, fechas, respuestas).
-        4. SITUACIÓN ACTUAL: ECOG, estudios de imagen recientes con sus fechas y hallazgos.
-        5. JUSTIFICACIÓN (Párrafo final): "Por lo expuesto, se solicita [Droga + Esquema]..."
+        1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico.
+        2. Antecedentes: Comorbilidades y oncológicos previos.
+        3. Enfermedad Actual: Estado actual, estudios recientes (fechas y hallazgos clave).
+        4. Justificación (PÁRRAFO FINAL): "Por lo expuesto, se solicita [Droga]..."
         
         CONTEXTO: ${historyText || ''}
         `;
@@ -104,52 +111,54 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         }
 
         const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
-        const summaryText = res.text || "Error al generar texto.";
+        const summaryText = res.text || "No se pudo generar el resumen.";
 
         // --- CREACIÓN DEL PDF ---
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
         
-        let page = pdfDoc.addPage(); // Hoja A4 por defecto (595 x 842 puntos)
+        let page = pdfDoc.addPage();
         const { width, height } = page.getSize();
         
-        // --- MÁRGENES ESTRECHOS (ARMÓNICOS) ---
+        // MÁRGENES ESTRECHOS (OPTIMIZADOS)
         const marginX = 50; 
-        const marginTop = 40;     // Empieza bien arriba
-        const marginBottom = 80;  // Termina bien abajo (dejando lugar a firma)
-        
+        const marginTop = 50;
+        const marginBottom = 100; // Espacio para firma
         let y = height - marginTop;
 
         // 1. ENCABEZADO INSTITUCIONAL
         const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
-        const headerWidth = fontBold.widthOfTextAtSize(headerText, 12);
-        page.drawText(headerText, { x: (width - headerWidth) / 2, y: y, size: 12, font: fontBold });
-        y -= 15;
+        const headerWidth = fontBold.widthOfTextAtSize(headerText, 14);
+        page.drawText(headerText, { x: (width - headerWidth) / 2, y: y, size: 14, font: fontBold });
+        y -= 20;
         
-        // Línea divisoria
-        page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
-        y -= 25;
+        page.drawLine({
+            start: { x: marginX, y: y },
+            end: { x: width - marginX, y: y },
+            thickness: 1,
+            color: rgb(0, 0, 0),
+        });
+        y -= 30;
 
-        // 2. FECHA (Derecha)
+        // 2. FECHA Y TÍTULO
         const dateText = `Córdoba, ${today}`;
-        const dateWidth = font.widthOfTextAtSize(dateText, 10);
-        page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 10, font });
+        const dateWidth = font.widthOfTextAtSize(dateText, 11);
+        page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 11, font });
+        y -= 40;
+
+        const title = `RESUMEN DE HISTORIA CLÍNICA - ${context}`;
+        const titleWidth = fontBold.widthOfTextAtSize(title, 12);
+        page.drawText(title, { x: (width - titleWidth) / 2, y: y, size: 12, font: fontBold });
         y -= 30;
 
-        // 3. TÍTULO (Centrado)
-        const title = `RESUMEN CLÍNICO - ${context}`;
-        const titleWidth = fontBold.widthOfTextAtSize(title, 11);
-        page.drawText(title, { x: (width - titleWidth) / 2, y: y, size: 11, font: fontBold });
-        y -= 30;
-
-        // 4. CUERPO DEL TEXTO
-        const fontSize = 10;
-        const lineHeight = 14;
+        // 3. CUERPO DEL TEXTO
+        const fontSize = 11;
+        const lineHeight = 15;
         const paragraphs = summaryText.split('\n');
 
         for (const paragraph of paragraphs) {
-            if (!paragraph.trim()) { y -= 6; continue; } // Espacio pequeño entre párrafos
+            if (!paragraph.trim()) { y -= 8; continue; }
 
             const words = paragraph.split(' ');
             let lineBuffer = '';
@@ -164,7 +173,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                     y -= lineHeight;
                     lineBuffer = word + ' ';
 
-                    // SALTO DE PÁGINA
                     if (y < marginBottom) {
                         page = pdfDoc.addPage();
                         y = height - marginTop;
@@ -184,16 +192,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             }
         }
 
-        // 5. FIRMA AL PIE (FIXED BOTTOM)
-        // Si el texto terminó muy cerca del final, agregamos página para que la firma no quede pegada o cortada
-        if (y < 100) { page = pdfDoc.addPage(); }
+        // 4. FIRMA DEL MÉDICO (AL PIE)
+        if (y < 120) { page = pdfDoc.addPage(); }
 
-        const signatureY = 50; // Posición fija desde abajo
+        const signatureY = 60; 
         const centerX = width / 2;
 
         page.drawLine({
-            start: { x: centerX - 70, y: signatureY + 25 },
-            end: { x: centerX + 70, y: signatureY + 25 },
+            start: { x: centerX - 70, y: signatureY + 30 },
+            end: { x: centerX + 70, y: signatureY + 30 },
             thickness: 1,
             color: rgb(0, 0, 0),
         });
@@ -201,12 +208,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const docName = doctorData.nombre || "Firma Médico";
         const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : "";
         
-        const nameWidth = fontBold.widthOfTextAtSize(docName, 10);
-        page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 12, size: 10, font: fontBold });
+        const nameWidth = fontBold.widthOfTextAtSize(docName, 11);
+        page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 15, size: 11, font: fontBold });
         
         if (docMat) {
-            const matWidth = font.widthOfTextAtSize(docMat, 9);
-            page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 9, font });
+            const matWidth = font.widthOfTextAtSize(docMat, 10);
+            page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 10, font });
         }
 
         const pdfBytes = await pdfDoc.save();
@@ -214,10 +221,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `Resumen_${context}_${patient.name}.pdf`;
-        document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
-        
         setStatus('¡Listo!');
 
     } catch (e: any) { alert("Error: " + e.message); } 
