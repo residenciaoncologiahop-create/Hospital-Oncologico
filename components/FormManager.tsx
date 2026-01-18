@@ -33,18 +33,18 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     alert("Datos guardados.");
   };
 
-  // --------------------------------------------------------------------------------
-  // 👇 AQUÍ ES DONDE CAMBIAS EL ARCHIVO DE DINADIC
-  // --------------------------------------------------------------------------------
+  // ------------------------------------------------------------------
+  // CONFIGURACIÓN DE FORMULARIOS
+  // ------------------------------------------------------------------
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'manual', context: 'ADMISIÓN' },
     { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'manual', context: 'RENOVACIÓN' },
     
-    // CAMBIA '/forms/banco_drogas.pdf' POR EL NOMBRE DE TU NUEVO ARCHIVO (EJ: '/forms/dinadic_2026.pdf')
-    { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/banco_drogas.pdf', type: 'manual', context: 'SOLICITUD' },
+    // 👇 AQUÍ ESTÁ EL CAMBIO SOLICITADO:
+    { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/nuevo_dinadic.pdf', type: 'manual', context: 'SOLICITUD' },
   ];
-  // --------------------------------------------------------------------------------
+  // ------------------------------------------------------------------
 
   const calculateBSA = (weight: string, height: string) => {
     const w = parseFloat(weight?.toString().replace(',', '.'));
@@ -68,10 +68,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    } catch (e) { alert("Error al descargar plantilla. Verifica que el archivo exista en la carpeta /public/forms/"); }
+    } catch (e) { alert("Error al descargar plantilla. Verifica que el archivo exista en public/forms/."); }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO ---
+  // --- GENERADOR DE RESUMEN CLÍNICO (DISEÑO LIMPIO) ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
@@ -121,10 +121,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         let page = pdfDoc.addPage();
         const { width, height } = page.getSize();
         
-        // MÁRGENES ESTRECHOS Y ARMÓNICOS
+        // MÁRGENES ESTRECHOS (OPTIMIZADOS)
         const marginX = 50; 
         const marginTop = 50;
-        const marginBottom = 100; // Espacio reservado para firma al pie
+        const marginBottom = 100; // Espacio para firma
         let y = height - marginTop;
 
         // 1. ENCABEZADO INSTITUCIONAL
@@ -173,7 +173,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                     y -= lineHeight;
                     lineBuffer = word + ' ';
 
-                    // SALTO DE PÁGINA
                     if (y < marginBottom) {
                         page = pdfDoc.addPage();
                         y = height - marginTop;
@@ -193,10 +192,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             }
         }
 
-        // 4. FIRMA DEL MÉDICO (SIEMPRE AL PIE)
+        // 4. FIRMA DEL MÉDICO (AL PIE)
         if (y < 120) { page = pdfDoc.addPage(); }
 
-        const signatureY = 60; // Fija abajo
+        const signatureY = 60; 
         const centerX = width / 2;
 
         page.drawLine({
