@@ -65,6 +65,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     } catch (e) { alert("Error al descargar plantilla."); }
   };
 
+  // --- GENERADOR DE RESUMEN CLÍNICO (MANUAL) ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
@@ -118,6 +119,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const marginBottom = 100;
         let y = height - marginTop;
 
+        // Encabezado
         const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
         const headerWidth = fontBold.widthOfTextAtSize(headerText, 14);
         page.drawText(headerText, { x: (width - headerWidth) / 2, y: y, size: 14, font: fontBold });
@@ -126,16 +128,19 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
         y -= 30;
 
+        // Fecha
         const dateText = `Córdoba, ${today}`;
         const dateWidth = font.widthOfTextAtSize(dateText, 11);
         page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 11, font });
         y -= 40;
 
+        // Título
         const title = `RESUMEN DE HISTORIA CLÍNICA - ${context}`;
         const titleWidth = fontBold.widthOfTextAtSize(title, 12);
         page.drawText(title, { x: (width - titleWidth) / 2, y: y, size: 12, font: fontBold });
         y -= 30;
 
+        // Cuerpo
         const fontSize = 11;
         const lineHeight = 15;
         const paragraphs = summaryText.split('\n');
@@ -173,6 +178,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             }
         }
 
+        // Firma
         if (y < 120) { page = pdfDoc.addPage(); }
 
         const signatureY = 60; 
@@ -202,6 +208,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
+  // --- PAMI LOGIC (AUTO) ---
   const extractPamiData = async () => {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) throw new Error("Falta API Key");
@@ -372,4 +379,104 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         <h3 className="text-sm font-black text-gray-700 uppercase tracking-widest">Gestión de Trámites</h3>
         <button 
           onClick={() => setShowDocConfig(true)}
-          className="flex items-center space-x-2 text-gray-500 hover:text-blue-600 transition-colors
+          className="flex items-center space-x-2 text-gray-500 hover:text-blue-600 transition-colors text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-3 py-1.5 rounded-lg"
+        >
+          <UserCog size={14} /><span>Configurar Médico</span>
+        </button>
+      </div>
+
+      {showDocConfig && (
+        <div className="mb-6 p-5 bg-blue-50 border border-blue-100 rounded-2xl animate-in slide-in-from-top">
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="font-bold text-blue-800 text-xs uppercase tracking-widest">Datos del Profesional</h4>
+            <button onClick={() => setShowDocConfig(false)} className="text-blue-400 hover:text-blue-600"><X size={16}/></button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+             <div><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Nombre</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.nombre} onChange={e=>setDoctorData({...doctorData, nombre:e.target.value})}/></div>
+             <div><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Matrícula</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.matricula} onChange={e=>setDoctorData({...doctorData, matricula:e.target.value})}/></div>
+             <div className="col-span-2"><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">CUIL</label><div className="flex gap-2"><input className="w-[15%] p-2 border rounded text-center text-xs" value={doctorData.cuil_prefix} onChange={e=>setDoctorData({...doctorData, cuil_prefix:e.target.value})}/><input className="w-[70%] p-2 border rounded text-center text-xs" value={doctorData.cuil_dni} onChange={e=>setDoctorData({...doctorData, cuil_dni:e.target.value})}/><input className="w-[15%] p-2 border rounded text-center text-xs" value={doctorData.cuil_suffix} onChange={e=>setDoctorData({...doctorData, cuil_suffix:e.target.value})}/></div></div>
+             <div><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Especialidad</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.especialidad} onChange={e=>setDoctorData({...doctorData, especialidad:e.target.value})}/></div>
+             <div><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Provincia</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.provincia} onChange={e=>setDoctorData({...doctorData, provincia:e.target.value})}/></div>
+             <div className="col-span-2"><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Email</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.email} onChange={e=>setDoctorData({...doctorData, email:e.target.value})}/></div>
+             <div className="col-span-2"><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Celular</label><div className="flex gap-2"><input className="w-[20%] p-2 border rounded text-center text-xs" value={doctorData.cel_area} onChange={e=>setDoctorData({...doctorData, cel_area:e.target.value})}/><input className="w-[80%] p-2 border rounded text-center text-xs" value={doctorData.cel_num} onChange={e=>setDoctorData({...doctorData, cel_num:e.target.value})}/></div></div>
+          </div>
+          <button onClick={saveDoctorData} className="w-full bg-blue-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 flex items-center justify-center space-x-2"><Save size={14}/><span>Guardar</span></button>
+        </div>
+      )}
+      
+      {(!files || files.length === 0) && !historyText && (
+        <div className="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2">
+            <AlertTriangle className="text-orange-500" size={16} />
+            <p className="text-[10px] text-orange-700 font-bold">
+                Cargue la Historia Clínica en "Documentación" para habilitar el autocompletado PAMI y los resúmenes.
+            </p>
+        </div>
+      )}
+
+      <div className="grid gap-4">
+        {forms.map(form => (
+          <div key={form.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 hover:border-blue-300 transition-all shadow-sm">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><FileText size={20} /></div>
+                    <h4 className="font-bold text-gray-800 text-xs uppercase">{form.name}</h4>
+                </div>
+                {processingId === form.id ? <Loader2 className="animate-spin text-blue-600" size={18}/> : <CheckCircle2 className="text-gray-200" size={18}/>}
+            </div>
+            
+            <div className="flex gap-2">
+                {form.type === 'auto' ? (
+                    <div className="flex-1 flex flex-col gap-2">
+                        <button 
+                          onClick={() => fillPamiPDF(form)}
+                          disabled={processingId !== null}
+                          className={`flex-1 flex items-center justify-center space-x-2 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50
+                            ${processingId === form.id ? 'bg-blue-600' : 'bg-gray-900 hover:bg-black'}`}
+                        >
+                          {processingId === form.id ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>}
+                          <span>Generar</span>
+                        </button>
+                        {/* DISCLAIMER PAMI */}
+                        <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-100 rounded text-[9px] text-yellow-700">
+                            <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
+                            <p>IMPORTANTE: Formulario generado por IA. Revise dosis y fechas antes de presentar.</p>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <button 
+                          onClick={() => downloadTemplate(form)}
+                          className="flex-1 flex items-center justify-center space-x-2 bg-gray-100 text-gray-700 hover:bg-gray-200 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          <Download size={14}/>
+                          <span>Plantilla Vacía</span>
+                        </button>
+                        
+                        <button 
+                          onClick={() => generateClinicalSummary(form.context || 'SOLICITUD')}
+                          disabled={processingId !== null}
+                          className="flex-1 flex items-center justify-center space-x-2 bg-purple-600 text-white hover:bg-purple-700 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                        >
+                          {processingId === 'summary' ? <Loader2 className="animate-spin" size={14}/> : <FilePlus size={14}/>}
+                          <span>Resumen Clínico</span>
+                        </button>
+                    </>
+                )}
+
+                {form.id === 'pami' && (
+                    <div className="flex flex-col gap-1 justify-start">
+                        <a href="https://cup.pami.org.ar/controllers/loginController.php" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center px-3 py-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 border border-teal-100 h-[34px]" title="Ir a PAMI Web"><ExternalLink size={14} /></a>
+                        <button onClick={() => generateFieldMap(form)} className="flex items-center justify-center px-3 py-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 border border-purple-100 h-[34px]" title="Mapa Rojo"><Map size={14} /></button>
+                    </div>
+                )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {status && <div className="mt-4 text-center"><span className="inline-block px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full animate-pulse">{status}</span></div>}
+    </div>
+  );
+};
+
+export default FormManager;
