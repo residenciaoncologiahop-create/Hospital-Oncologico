@@ -33,12 +33,18 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     alert("Datos guardados.");
   };
 
+  // --------------------------------------------------------------------------------
+  // 👇 AQUÍ ES DONDE CAMBIAS EL ARCHIVO DE DINADIC
+  // --------------------------------------------------------------------------------
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'manual', context: 'ADMISIÓN' },
     { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'manual', context: 'RENOVACIÓN' },
+    
+    // CAMBIA '/forms/banco_drogas.pdf' POR EL NOMBRE DE TU NUEVO ARCHIVO (EJ: '/forms/dinadic_2026.pdf')
     { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/banco_drogas.pdf', type: 'manual', context: 'SOLICITUD' },
   ];
+  // --------------------------------------------------------------------------------
 
   const calculateBSA = (weight: string, height: string) => {
     const w = parseFloat(weight?.toString().replace(',', '.'));
@@ -62,10 +68,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    } catch (e) { alert("Error al descargar plantilla."); }
+    } catch (e) { alert("Error al descargar plantilla. Verifica que el archivo exista en la carpeta /public/forms/"); }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO (VERSIÓN LIMPIA Y ARMÓNICA) ---
+  // --- GENERADOR DE RESUMEN CLÍNICO ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
@@ -121,7 +127,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const marginBottom = 100; // Espacio reservado para firma al pie
         let y = height - marginTop;
 
-        // 1. ENCABEZADO INSTITUCIONAL (Simulado)
+        // 1. ENCABEZADO INSTITUCIONAL
         const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
         const headerWidth = fontBold.widthOfTextAtSize(headerText, 14);
         page.drawText(headerText, { x: (width - headerWidth) / 2, y: y, size: 14, font: fontBold });
@@ -152,7 +158,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const paragraphs = summaryText.split('\n');
 
         for (const paragraph of paragraphs) {
-            if (!paragraph.trim()) { y -= 8; continue; } // Espacio entre párrafos más pequeño
+            if (!paragraph.trim()) { y -= 8; continue; }
 
             const words = paragraph.split(' ');
             let lineBuffer = '';
@@ -188,7 +194,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         }
 
         // 4. FIRMA DEL MÉDICO (SIEMPRE AL PIE)
-        // Si el texto terminó muy cerca del final, nueva página para la firma
         if (y < 120) { page = pdfDoc.addPage(); }
 
         const signatureY = 60; // Fija abajo
@@ -351,6 +356,41 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       link.download = `PAMI_${finalName}.pdf`;
       link.click();
       setStatus('¡Listo!');
+    } catch (e: any) { alert('Error: ' + e.message); } 
+    finally { setProcessingId(null); setStatus(''); }
+  };
+
+  const generateFieldMap = async (formDef: any) => {
+    setProcessingId('map-' + formDef.id);
+    setStatus('Generando mapa...');
+    try {
+      const formUrl = window.location.origin + formDef.file;
+      const res = await fetch(formUrl);
+      if (!res.ok) throw new Error("Archivo no encontrado");
+      const formBytes = await res.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(formBytes);
+      const form = pdfDoc.getForm();
+      const fields = form.getFields();
+      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      fields.forEach(field => {
+        const name = field.getName();
+        if (field.constructor.name === 'PDFTextField') {
+            const textField = form.getTextField(name);
+            textField.setText(name); 
+            textField.setFontSize(6);
+            textField.setFont(helveticaFont);
+            textField.setTextColor(rgb(1, 0, 0));
+        }
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `MAPA_ROJO_${formDef.name}.pdf`;
+      link.click();
+      alert("✅ Mapa descargado.");
     } catch (e: any) { alert('Error: ' + e.message); } 
     finally { setProcessingId(null); setStatus(''); }
   };
