@@ -70,19 +70,18 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO ---
+  // --- GENERADOR DE RESUMEN CLÍNICO (PRECISIÓN CLÍNICA MEJORADA) ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
         return;
     }
 
-    // 1. PREGUNTAR LA DROGA
     const drugName = window.prompt(`Ingrese el nombre de la droga/medicación para el trámite de ${context}:`);
     if (!drugName || drugName.trim() === "") return; 
 
     setProcessingId('summary');
-    setStatus('Analizando estrategia...');
+    setStatus('Analizando historia clínica...');
 
     try {
         const apiKey = import.meta.env.VITE_API_KEY;
@@ -91,46 +90,49 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const ai = new GoogleGenAI({ apiKey });
         const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-        // --- DEFINICIÓN DE ESTRATEGIA ---
+        // --- ESTRATEGIA ADMINISTRATIVA ---
         let strategyPrompt = "";
-
         if (context === 'RENOVACIÓN') {
             strategyPrompt = `
-            ESTRATEGIA DE REDACCIÓN: **RENOVACIÓN DE ${drugName.toUpperCase()}**
-            OBJETIVO: Demostrar beneficio clínico.
-            INSTRUCCIONES CLAVE:
-            1. Enfócate en la **Tolerancia** a ${drugName} y la **Respuesta Clínica**.
-            2. Justificación Final: "Dada la buena tolerancia y el beneficio clínico observado, se solicita renovar ${drugName}..."
+            ESTRATEGIA ADMINISTRATIVA: **RENOVACIÓN DE ${drugName.toUpperCase()}**
+            - Objetivo: Demostrar beneficio clínico/tolerancia.
+            - Frase Final: "Dada la buena tolerancia y el beneficio clínico observado, se solicita renovar ${drugName}..."
             `;
         } else {
             strategyPrompt = `
-            ESTRATEGIA DE REDACCIÓN: **ADMISIÓN / SOLICITUD PARA ${drugName.toUpperCase()}**
-            OBJETIVO: Justificar la **INDICACIÓN** de **${drugName}**.
-            INSTRUCCIONES CLAVE:
-            1. **IGNORA LA CONTINUIDAD:** Si la historia clínica dice que ya tomó ${drugName}, NO lo redactes como continuidad. Redáctalo como una **SOLICITUD DE INGRESO**.
-            2. **JUSTIFICACIÓN:** Explica por qué ${drugName} es la droga correcta (fallo de líneas previas, estadio, guías).
-            3. Frase final obligatoria: "Por lo expuesto, se solicita ADMISIÓN para el tratamiento con ${drugName}..."
+            ESTRATEGIA ADMINISTRATIVA: **ADMISIÓN / SOLICITUD PARA ${drugName.toUpperCase()}**
+            - Objetivo: Justificar la INDICACIÓN de inicio.
+            - CRÍTICO: Si ya la tomó, ignora la continuidad y redáctalo como SOLICITUD DE INGRESO/ADMISIÓN.
+            - Frase Final: "Por lo expuesto, se solicita ADMISIÓN para el tratamiento con ${drugName}..."
             `;
         }
 
         const prompt = `
-        Actúa como Oncólogo del Hospital Oncológico Dr. José Miguel Urrutia.
+        Actúa como un Oncólogo Experto y Meticuloso.
         Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
         
         ${strategyPrompt}
         
-        REGLAS DE FORMATO:
-        - Texto plano profesional (sin Markdown).
-        - Sé conciso.
-        - **IMPORTANTE:** NO incluyas ninguna firma, ni nombre de médico, ni "Dr. [Nombre]", ni pie de página al final del texto. Termina el documento estrictamente con el punto final de la justificación.
+        REGLAS DE PRECISIÓN CLÍNICA (OBLIGATORIAS):
+        1. **CRONOLOGÍA EXACTA:** Cada evento mencionado debe tener su FECHA (dd/mm/aaaa) si está disponible en el texto.
+        2. **CIRUGÍAS:** Debes mencionar explícitamente todas las cirugías realizadas, especialmente **AMPUTACIONES**, resecciones o vaciamientos ganglionares, con sus fechas.
+        3. **ANATOMÍA PATOLÓGICA:** Cita los resultados de las biopsias o piezas quirúrgicas (tipo histológico, márgenes, ganglios positivos/totales).
+        4. **ESTUDIOS:** Menciona fecha y conclusión de Tomografías, PET-TC o Resonancias clave.
         
         ESTRUCTURA DEL DOCUMENTO:
-        1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico.
-        2. Antecedentes: Breve.
-        3. Enfermedad Actual: Estado actual, estudios.
-        4. Justificación (PÁRRAFO FINAL): Redactar según la ESTRATEGIA definida para ${drugName}.
+        1. **Identificación:** Paciente (Nombre, DNI, Edad) y Diagnóstico Completo (TNM si está disponible).
+        2. **Antecedentes Oncológicos (Detallado):** - Fecha de diagnóstico inicial.
+           - Cirugías previas (Incluir amputaciones si las hubo).
+           - Tratamientos previos (Qmt/Rt) con fechas de inicio/fin y respuesta (progresión/estabilidad).
+        3. **Enfermedad Actual:** - Estado clínico actual (ECOG/PS).
+           - Descripción de la lesión actual o sitios de metástasis.
+           - Últimos estudios de imagen con fecha y hallazgos.
+        4. **Justificación:** Redactar según la ESTRATEGIA ADMINISTRATIVA definida arriba para ${drugName}.
         
-        CONTEXTO: ${historyText || ''}
+        **IMPORTANTE:** NO incluyas ninguna firma, ni nombre de médico, ni pie de página al final. Termina con el punto final de la justificación.
+        
+        CONTEXTO CLÍNICO DEL PACIENTE: 
+        ${historyText || ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
@@ -156,25 +158,21 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const marginBottom = 50; 
         let y = height - marginTop;
 
-        // 1. CARGA DEL LOGO (HEADER)
+        // 1. HEADER LOGO
         let logoLoaded = false;
         try {
             const logoUrl = window.location.origin + '/img/header_logo.png';
             const logoRes = await fetch(logoUrl);
-            
             if (logoRes.ok) {
                 const logoBytes = await logoRes.arrayBuffer();
                 const pngImage = await pdfDoc.embedPng(logoBytes);
-                // --- CAMBIO AQUÍ: AUMENTO DE ESCALA DEL LOGO ---
-                const pngDims = pngImage.scale(0.35); // Aumentado de 0.25 a 0.35
-                
+                const pngDims = pngImage.scale(0.35);
                 page.drawImage(pngImage, {
                     x: (width - pngDims.width) / 2,
                     y: y - pngDims.height,
                     width: pngDims.width,
                     height: pngDims.height,
                 });
-                
                 y -= (pngDims.height + 20); 
                 logoLoaded = true;
             }
@@ -192,7 +190,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
              y -= 30;
         }
 
-        // 2. FECHA Y TÍTULO
+        // 2. TÍTULO Y FECHA
         const dateText = `Córdoba, ${today}`;
         const dateWidth = font.widthOfTextAtSize(dateText, 11);
         page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 11, font });
@@ -203,9 +201,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         page.drawText(title, { x: (width - titleWidth) / 2, y: y, size: 12, font: fontBold });
         y -= 30;
 
-        // 3. CUERPO DEL TEXTO
-        const fontSize = 11;
-        const lineHeight = 15;
+        // 3. CUERPO
+        const fontSize = 10; // Letra un poco más chica para que entre más detalle
+        const lineHeight = 14;
         const paragraphs = summaryText.split('\n');
 
         for (const paragraph of paragraphs) {
@@ -243,7 +241,29 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             }
         }
 
-        // 4. (ELIMINADO) FIRMA DEL MÉDICO
+        // 4. FIRMA (AL PIE)
+        if (y < 120) { page = pdfDoc.addPage(); }
+
+        const signatureY = 60; 
+        const centerX = width / 2;
+
+        page.drawLine({
+            start: { x: centerX - 70, y: signatureY + 30 },
+            end: { x: centerX + 70, y: signatureY + 30 },
+            thickness: 1,
+            color: rgb(0, 0, 0),
+        });
+
+        const docName = doctorData.nombre || "Firma Médico";
+        const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : "";
+        
+        const nameWidth = fontBold.widthOfTextAtSize(docName, 11);
+        page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 15, size: 11, font: fontBold });
+        
+        if (docMat) {
+            const matWidth = font.widthOfTextAtSize(docMat, 10);
+            page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 10, font });
+        }
 
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
