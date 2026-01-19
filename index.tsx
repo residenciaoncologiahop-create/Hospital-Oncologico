@@ -29,205 +29,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- ESTILOS CSS PERSONALIZADOS (DISEÑO MÉDICO) ---
-const RESUMEN_CSS = `
-/* ============================================
-   ESTILOS PARA RESUMEN DE HISTORIA CLÍNICA
-   ============================================ */
-
-.resumen-clinico-container {
-  font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-  padding: 32px;
-  max-width: 900px;
-  margin: 0 auto;
-  color: #2c3e50;
-  line-height: 1.7;
-}
-
-/* Títulos */
-.resumen-titulo-principal {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  line-height: 1.3;
-  margin-bottom: 24px;
-  color: #1a202c;
-  text-align: center;
-  padding-bottom: 12px;
-  border-bottom: 3px solid #4299e1;
-}
-
-.resumen-subtitulo {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-  margin-top: 28px;
-  margin-bottom: 16px;
-  color: #1a202c;
-  border-bottom: 2px solid #4299e1;
-  padding-bottom: 6px;
-}
-
-.resumen-subsubtitulo {
-  font-size: 13px;
-  font-weight: 600;
-  color: #2d3748;
-  margin-top: 16px;
-  margin-bottom: 8px;
-}
-
-/* Texto */
-.resumen-texto {
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.7;
-  color: #2c3e50;
-  margin-bottom: 12px;
-}
-
-.resumen-label {
-  font-weight: 600;
-  color: #2c5282;
-  display: inline-block;
-  margin-right: 8px;
-}
-
-/* Valores destacados */
-.resumen-fecha {
-  font-weight: 500;
-  color: #2b6cb0;
-  white-space: nowrap;
-}
-
-.resumen-diagnostico {
-  font-weight: 600;
-  color: #c53030;
-}
-
-.resumen-valor-clinico {
-  font-weight: 500;
-  color: #2d3748;
-  font-family: 'Consolas', 'Monaco', monospace;
-}
-
-/* Secciones */
-.resumen-seccion {
-  margin-bottom: 28px;
-}
-
-.resumen-subseccion {
-  margin-left: 20px;
-  margin-bottom: 16px;
-}
-
-.resumen-separador {
-  border-top: 1px solid #e0e0e0;
-  margin: 32px 0;
-}
-
-/* Listas */
-.resumen-lista {
-  list-style: none;
-  padding-left: 0;
-  margin: 12px 0;
-}
-
-.resumen-item {
-  margin-bottom: 10px;
-  padding-left: 0;
-}
-
-.resumen-sublista {
-  list-style-type: disc;
-  padding-left: 28px;
-  margin-top: 8px;
-}
-
-.resumen-sublista li {
-  margin-bottom: 6px;
-  line-height: 1.6;
-  color: #4a5568;
-}
-
-/* Estudios */
-.resumen-estudio {
-  background-color: #f7fafc;
-  border-left: 3px solid #4299e1;
-  padding: 12px 16px;
-  margin-bottom: 12px;
-  border-radius: 4px;
-}
-
-.resumen-resultado {
-  margin-top: 6px;
-  margin-bottom: 0;
-  padding-left: 12px;
-  color: #2d3748;
-  font-size: 12.5px;
-  line-height: 1.6;
-}
-
-/* Timeline */
-.resumen-timeline {
-  position: relative;
-  padding-left: 32px;
-  margin-top: 20px;
-}
-
-.resumen-timeline::before {
-  content: '';
-  position: absolute;
-  left: 8px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: linear-gradient(to bottom, #4299e1, #9ae6b4);
-}
-
-.resumen-timeline-item {
-  position: relative;
-  margin-bottom: 24px;
-  padding-left: 24px;
-}
-
-.resumen-timeline-item::before {
-  content: '';
-  position: absolute;
-  left: -28px;
-  top: 4px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background-color: #4299e1;
-  border: 3px solid white;
-  box-shadow: 0 0 0 2px #4299e1;
-}
-
-.resumen-timeline-fecha {
-  font-weight: 600;
-  color: #2c5282;
-  font-size: 13px;
-  display: block;
-  margin-bottom: 6px;
-}
-
-/* Modal Scrollbar */
-.resumen-modal-content::-webkit-scrollbar {
-  width: 10px;
-}
-.resumen-modal-content::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 10px;
-}
-.resumen-modal-content::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
-  border-radius: 10px;
-}
-.resumen-modal-content::-webkit-scrollbar-thumb:hover {
-  background: #a0aec0;
-}
-`;
-
 // --- AUDIT SYSTEM ---
 const getOrInitFingerprint = () => {
     let fp = localStorage.getItem('doctor_fingerprint');
@@ -291,7 +92,9 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
         const ai = new GoogleGenAI({ apiKey });
         const parts: any[] = [{ text: `
             Analiza los documentos y extrae la cronología clínica.
+            
             REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales.
+            
             REGLAS DE FORMATO:
             - Idioma: ESPAÑOL.
             - Fechas: DD/MM/YYYY.
@@ -310,9 +113,11 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
         if (res.text) {
             const cleanText = res.text.replace(/```json|```/g, '').trim();
             let rawEvents = [];
+            
             try {
                 const firstBracket = cleanText.indexOf('[');
                 const lastBracket = cleanText.lastIndexOf(']');
+                
                 if (firstBracket !== -1 && lastBracket !== -1) {
                     rawEvents = JSON.parse(cleanText.substring(firstBracket, lastBracket + 1));
                 } else {
@@ -320,6 +125,7 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
                 }
             } catch (e) { console.error("Error parseando JSON", e); return []; }
 
+            // --- FILTRO DE CALIDAD AGRESIVO ---
             const validEvents = rawEvents.map((e: any) => ({
                 date: e.date || e.fecha || "S/F",
                 professional: e.professional || e.profesional || "N/A",
@@ -497,10 +303,8 @@ const App = () => {
                 setChatMessages(p.chatHistory || []);
                 setHistoryFiles([]); setGuidelineFiles([]);
                 setLastError(null);
-                
-                // CORRECCIÓN: Siempre abrir en 'docs' al seleccionar paciente
+                // CORRECCIÓN: Siempre abrir en 'docs' primero
                 setActiveTab('docs'); 
-                
                 setManualDate(new Date().toISOString().split('T')[0]); 
                 setManualDoctor(doctorName || '');
                 setShowLeftPanel(true);
@@ -593,50 +397,20 @@ const App = () => {
         setIsGeneratingSummary(true); setShowSummaryModal(true); setSummaryText("Generando resumen...");
         
         const context = getAnonContext(p);
-        // NUEVO PROMPT PARA GENERAR HTML ESTRUCTURADO Y VISUALMENTE RICO
         const prompt = `
             Genera un RESUMEN DE HISTORIA CLÍNICA oncológico profesional en ESPAÑOL basándote en los documentos adjuntos y las notas.
             
-            FORMATO DE SALIDA: **HTML COMPLETO** (sin etiquetas de código markdown).
-            Debes usar EXCLUSIVAMENTE las siguientes clases CSS para dar estilo al documento (NO uses asteriscos, usa etiquetas HTML):
-            
-            - Contenedor principal: <div class="resumen-clinico-container">
-            - Título del hospital y doc: <h1 class="resumen-titulo-principal">
-            - Títulos de sección (1., 2...): <h2 class="resumen-subtitulo">
-            - Subtítulos interiores: <h3 class="resumen-subsubtitulo">
-            - Texto normal: <p class="resumen-texto">
-            - Etiquetas de dato (ej: "Paciente:"): <span class="resumen-label">
-            - Fechas destacadas: <span class="resumen-fecha">
-            - Diagnósticos/Valores clave: <span class="resumen-diagnostico">
-            - Listas: <ul class="resumen-lista"> y <li class="resumen-item">
-            - Separadores: <div class="resumen-separador"></div>
-            - Estudios: <div class="resumen-estudio"> con <p class="resumen-resultado">
-            - Timeline: <div class="resumen-timeline"> con <div class="resumen-timeline-item"> y <span class="resumen-timeline-fecha">
-            
-            ESTRUCTURA OBLIGATORIA:
-            
-            1. ENCABEZADO: 
-               Hospital Oncológico Dr. José Miguel Urrutia
-               Córdoba, Argentina
-               RESUMEN DE HISTORIA CLÍNICA
-               Fecha de emisión: ${new Date().toLocaleDateString('es-AR')}
-            
-            2. SECCIONES:
-               1. IDENTIFICACIÓN (Paciente, DNI, Edad, Dx, Estadio, ECOG)
-               2. ANTECEDENTES ONCOLÓGICOS (Fecha dx inicial, método, cirugías previas en lista, tratamientos previos)
-               3. ENFERMEDAD ACTUAL (Estado actual, síntomas, sitios de enfermedad)
-               4. ESTUDIOS COMPLEMENTARIOS (Anatomía patológica e Imágenes en cuadros destacados .resumen-estudio)
-               5. EVOLUCIÓN CRONOLÓGICA (Usa la estructura .resumen-timeline para los hitos clave)
-               6. JUSTIFICACIÓN / PLAN (Párrafo final)
-            
-            IMPORTANTE: Sé muy profesional. No inventes datos. Si falta info, pon "No consta".
+            ES OBLIGATORIO INCLUIR LAS SIGUIENTES SECCIONES (Extraer datos de los archivos adjuntos):
+            1. Motivo de Consulta y Enfermedad Actual.
+            2. ANTECEDENTES PERSONALES (Indagar en los archivos: Comorbilidades, Qx, Tóxicos, Familiares). SI NO HAY DATOS, INDICAR "No constan en documentos".
+            3. EXAMEN FÍSICO (Indagar en los archivos: ECOG/PS, hallazgos positivos). SI NO HAY DATOS, INDICAR "No consta en documentos".
+            4. Estudios Complementarios (Imágenes, Labs, AP).
+            5. Diagnóstico y Estadificación.
+            6. Evolución y Tratamientos previos.
         `;
         
         const summary = await generateText(prompt, context, historyFiles);
-        // Limpiar bloques de código si la IA los pone por error
-        const cleanSummary = summary.replace(/```html/g, '').replace(/```/g, '');
-        setSummaryText(cleanSummary); 
-        setIsGeneratingSummary(false);
+        setSummaryText(summary); setIsGeneratingSummary(false);
         logAction("GENERATE_SUMMARY", selectedPatientId, doctorName);
     };
 
@@ -647,13 +421,10 @@ const App = () => {
         setIsGeneratingFollowUp(true); setShowFollowUpModal(true); setFollowUpText("Analizando guías...");
         
         const context = getAnonContext(p);
-        const prompt = `Sugiere PLAN DE SEGUIMIENTO (Follow-up) detallado basado en NCCN/ESMO en Español.
-        Formato de salida: HTML limpio usando clases: resumen-titulo-principal, resumen-subtitulo, resumen-lista, resumen-item.`;
+        const prompt = "Sugiere PLAN DE SEGUIMIENTO (Follow-up) detallado basado en NCCN/ESMO (Estado, Estudios prox, Consultas) en Español.";
         
         const advice = await generateText(prompt, context, guidelineFiles);
-        const cleanAdvice = advice.replace(/```html/g, '').replace(/```/g, '');
-        setFollowUpText(cleanAdvice); 
-        setIsGeneratingFollowUp(false);
+        setFollowUpText(advice); setIsGeneratingFollowUp(false);
         logAction("GENERATE_FOLLOWUP", selectedPatientId, doctorName);
     };
 
@@ -666,44 +437,27 @@ const App = () => {
         const context = getAnonContext(p);
         const prompt = `
             Genera Presentación para Ateneo/Comité de Tumores (Tumor Board) en ESPAÑOL.
-            Formato de salida: HTML limpio usando clases: resumen-titulo-principal, resumen-subtitulo, resumen-texto, resumen-lista.
             
-            ESTRUCTURA:
+            ESTRUCTURA OBLIGATORIA:
             1. TITULAR DEL CASO.
-            2. ANTECEDENTES Y EXAMEN FÍSICO.
-            3. RESUMEN CRONOLÓGICO (.resumen-timeline).
-            4. PROBLEMA ACTUAL.
+            2. ANTECEDENTES RELEVANTES Y EXAMEN FÍSICO (Extraer de documentos: Comorbilidades, PS).
+            3. RESUMEN CRONOLÓGICO DEL CASO.
+            4. PROBLEMA ACTUAL / MOTIVO DE PRESENTACIÓN.
             5. PREGUNTAS AL COMITÉ.
             6. BIBLIOGRAFÍA SUGERIDA.
         `;
         
         const text = await generateText(prompt, context, historyFiles);
-        const cleanText = text.replace(/```html/g, '').replace(/```/g, '');
-        setTumorBoardText(cleanText); 
-        setIsGeneratingTumorBoard(false);
+        setTumorBoardText(text); setIsGeneratingTumorBoard(false);
         logAction("GENERATE_TUMOR_BOARD", selectedPatientId, doctorName);
     };
 
-    const handlePrintPDF = () => {
+    const handlePrintPDF = (content: string) => {
         const printWindow = window.open('', '_blank');
         if (printWindow) {
-            const content = showSummaryModal ? summaryText : showFollowUpModal ? followUpText : tumorBoardText;
-            printWindow.document.write(`
-                <html>
-                <head>
-                    <title>OncoGuide Doc</title>
-                    <style>
-                        ${RESUMEN_CSS}
-                        body { padding: 40px; }
-                    </style>
-                </head>
-                <body>
-                    ${content}
-                    <script>window.print();</script>
-                </body>
-                </html>
-            `);
+            printWindow.document.write(`<html><head><title>OncoGuide Doc</title><style>body { font-family: monospace; padding: 40px; white-space: pre-wrap; font-size: 13px; line-height: 1.5; } h1 { font-family: sans-serif; font-size: 18px; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;}</style></head><body><h1>OncoGuide - Documento Clínico</h1>${content}</body></html>`);
             printWindow.document.close();
+            printWindow.print();
         }
     };
 
@@ -793,9 +547,6 @@ const App = () => {
 
     return (
         <div className="flex h-screen bg-white text-gray-800 font-medium text-xs overflow-hidden">
-            {/* INYECCIÓN DE ESTILOS CSS */}
-            <style>{RESUMEN_CSS}</style>
-
             {/* Sidebar */}
             <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
                 <div className="p-6 border-b flex items-center justify-between bg-white">
@@ -923,6 +674,7 @@ const App = () => {
                                         {timeline.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center py-20 text-gray-200"><Clock size={40} className="mb-3 opacity-10" /><p className="text-xs font-black uppercase tracking-widest">Sin eventos</p></div>
                                         ) : (
+                                            /* CORRECCIÓN: FILTRADO ESTRICTO DE EVENTOS */
                                             timeline
                                             .filter(ev => 
                                                 ev.category !== 'General' && 
@@ -1012,7 +764,7 @@ const App = () => {
                 )}
             </main>
 
-            {/* SHARED MODAL COMPONENT (VISUALMENTE MEJORADO) */}
+            {/* SHARED MODAL COMPONENT */}
             {(showSummaryModal || showFollowUpModal || showTumorBoardModal) && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-6">
                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
@@ -1024,29 +776,21 @@ const App = () => {
                             </div>
                             <button onClick={() => {setShowSummaryModal(false); setShowFollowUpModal(false); setShowTumorBoardModal(false);}} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                         </div>
-                        
-                        {/* CONTENEDOR DEL TEXTO ENRIQUECIDO HTML */}
-                        <div className="resumen-modal-content flex-1 p-0 overflow-y-auto bg-white relative">
+                        <div className="flex-1 p-8 overflow-y-auto bg-gray-50/50">
                             {(isGeneratingSummary || isGeneratingFollowUp || isGeneratingTumorBoard) ? (
                                 <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4">
                                     <Loader2 size={40} className="animate-spin" />
                                     <p className="text-xs font-black uppercase tracking-widest">Generando análisis experto...</p>
                                 </div>
                             ) : (
-                                <div 
-                                    className="p-8" 
-                                    dangerouslySetInnerHTML={{ 
-                                        __html: showSummaryModal ? summaryText : showFollowUpModal ? followUpText : tumorBoardText 
-                                    }} 
-                                />
+                                <textarea className="w-full h-full bg-white p-8 rounded-2xl border border-gray-100 text-sm font-mono leading-relaxed resize-none focus:outline-none" value={showSummaryModal ? summaryText : showFollowUpModal ? followUpText : tumorBoardText} readOnly />
                             )}
                         </div>
-
                         <div className="p-6 border-t bg-white flex justify-end space-x-3">
-                            <button onClick={handlePrintPDF} className="flex items-center space-x-2 bg-gray-800 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all">
+                            <button onClick={() => handlePrintPDF(showSummaryModal ? summaryText : showFollowUpModal ? followUpText : tumorBoardText)} className="flex items-center space-x-2 bg-gray-800 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all">
                                 <FileDown size={14} /><span>Descargar PDF</span>
                             </button>
-                            <button onClick={() => {navigator.clipboard.writeText(showSummaryModal ? summaryText.replace(/<[^>]*>?/gm, '') : showFollowUpModal ? followUpText.replace(/<[^>]*>?/gm, '') : tumorBoardText.replace(/<[^>]*>?/gm, '')); alert("Texto copiado (sin formato)");}} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all">Copiar Texto</button>
+                            <button onClick={() => {navigator.clipboard.writeText(showSummaryModal ? summaryText : showFollowUpModal ? followUpText : tumorBoardText); alert("Copiado");}} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all">Copiar</button>
                         </div>
                     </div>
                 </div>
