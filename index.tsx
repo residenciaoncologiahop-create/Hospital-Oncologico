@@ -566,10 +566,10 @@ const App = () => {
                             {filteredPatients.length === 0 && <p className="text-center text-[10px] text-gray-400 py-4">Sin resultados.</p>}
                             {filteredPatients.map(p => (
                                 <div key={p.id} onClick={() => {setSelectedPatientId(p.id); setMobileMenuOpen(false);}} className={`group w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer ${selectedPatientId === p.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'hover:bg-white border border-transparent hover:border-gray-100'}`}>
-                                    <div className="flex flex-col truncate pr-2">
-                                        <span className="font-bold text-xs truncate">{p.name}</span>
-                                        <span className={`text-[10px] font-semibold truncate ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
-                                    </div>
+                                    <div className="flex flex-col pr-2 flex-1 min-w-0"> {/* Agregado flex-1 y min-w-0 para manejo correcto del ancho */}
+    <span className="font-bold text-xs break-words">{p.name}</span> {/* Cambiado truncate por break-words para mostrar nombre completo */}
+    <span className={`text-[10px] font-semibold truncate ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
+</div>
                                     <button onClick={(e) => handleDeletePatient(p.id, e)} className={`p-1.5 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedPatientId === p.id ? 'text-blue-200 hover:text-white hover:bg-blue-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}><Trash2 size={12} /></button>
                                 </div>
                             ))}
