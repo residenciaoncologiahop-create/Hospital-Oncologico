@@ -33,16 +33,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     alert("Datos guardados.");
   };
 
-  // ------------------------------------------------------------------
-  // CONFIGURACIÓN DE FORMULARIOS
-  // ------------------------------------------------------------------
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'manual', context: 'ADMISIÓN' },
     { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'manual', context: 'RENOVACIÓN' },
     { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/nuevo_dinadic.pdf', type: 'manual', context: 'SOLICITUD' },
   ];
-  // ------------------------------------------------------------------
 
   const calculateBSA = (weight: string, height: string) => {
     const w = parseFloat(weight?.toString().replace(',', '.'));
@@ -74,14 +70,19 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO (LOGICA ADMISION/RENOVACION MEJORADA) ---
+  // --- GENERADOR DE RESUMEN CLÍNICO (INTERACTIVO CON DROGA) ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
         return;
     }
+
+    // 1. PREGUNTAR LA DROGA AL MÉDICO
+    const drugName = window.prompt(`Ingrese el nombre de la droga/medicación para el trámite de ${context}:`);
+    if (!drugName || drugName.trim() === "") return; // Cancelar si no ingresa nada
+
     setProcessingId('summary');
-    setStatus('Redactando resumen...');
+    setStatus('Analizando estrategia...');
 
     try {
         const apiKey = import.meta.env.VITE_API_KEY;
@@ -90,27 +91,31 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const ai = new GoogleGenAI({ apiKey });
         const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-        // --- LÓGICA DE NEGOCIO PARA EL PROMPT ---
-        let instruccionesContexto = "";
-        
+        // --- DEFINICIÓN DE ESTRATEGIA SEGÚN TIPO Y DROGA ---
+        let strategyPrompt = "";
+
         if (context === 'RENOVACIÓN') {
-            instruccionesContexto = `
-            CONTEXTO: RENOVACIÓN DE TRATAMIENTO.
-            OBJETIVO: Justificar la CONTINUIDAD de la droga actual.
-            ENFOQUE OBLIGATORIO:
-            - Destacar la buena tolerancia y la respuesta clínica (Estable, Parcial o Completa).
-            - NO hablar de introducir droga nueva, sino de MANTENER la actual.
-            - Justificación Final: "Se solicita RENOVACIÓN de [Droga] dado el beneficio clínico y la ausencia de progresión..."
+            strategyPrompt = `
+            ESTRATEGIA DE REDACCIÓN: **RENOVACIÓN DE ${drugName.toUpperCase()}**
+            
+            OBJETIVO: Demostrar que el paciente se beneficia de continuar con **${drugName}**.
+            
+            INSTRUCCIONES CLAVE:
+            1. Enfócate en la **Tolerancia** a ${drugName} y la **Respuesta Clínica**.
+            2. Menciona explícitamente "Se solicita RENOVACIÓN de ${drugName}".
+            3. Justificación Final: "Dada la buena tolerancia y el beneficio clínico observado, se solicita renovar ${drugName}..."
             `;
         } else {
-            // Admisión o Solicitud (DINADIC)
-            instruccionesContexto = `
-            CONTEXTO: ADMISIÓN / SOLICITUD DE INICIO.
-            OBJETIVO: Justificar la INTRODUCCIÓN de una NUEVA línea de tratamiento o droga.
-            ENFOQUE OBLIGATORIO:
-            - Explicar el fracaso/progresión con tratamientos previos o la indicación de primera línea.
-            - Aunque el paciente haya recibido una dosis reciente (ej: urgencia), el tono es de SOLICITUD DE INGRESO al tratamiento.
-            - Justificación Final: "Se solicita ADMISIÓN para el tratamiento con [Droga] en base a la evidencia/guías para este estadio..."
+            // Caso ADMISIÓN o SOLICITUD
+            strategyPrompt = `
+            ESTRATEGIA DE REDACCIÓN: **ADMISIÓN / SOLICITUD DE INICIO PARA ${drugName.toUpperCase()}**
+            
+            OBJETIVO: Justificar la **INDICACIÓN** de **${drugName}** basándose en la evidencia.
+            
+            INSTRUCCIONES CRÍTICAS (PARA TRÁMITE ADMINISTRATIVO):
+            1. **IGNORA LA CONTINUIDAD:** Si la historia clínica dice que ya tomó ${drugName} (por muestras/urgencia), NO lo redactes como una continuidad. Redáctalo como una **SOLICITUD DE INGRESO/ADMISIÓN**.
+            2. **JUSTIFICACIÓN:** Explica por qué ${drugName} es la droga correcta ahora (fallo de líneas previas, estadio, guías).
+            3. Frase final obligatoria: "Por lo expuesto, se solicita ADMISIÓN para el tratamiento con ${drugName}..."
             `;
         }
 
@@ -118,20 +123,19 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         Actúa como Oncólogo del Hospital Oncológico Dr. José Miguel Urrutia.
         Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
         
-        ${instruccionesContexto}
+        ${strategyPrompt}
         
-        REGLAS DE FORMATO: 
-        - Formato de texto plano profesional.
-        - NO uses negritas (markdown) ni símbolos extraños.
-        - Sé conciso y directo.
+        REGLAS DE FORMATO:
+        - Texto plano profesional (sin Markdown).
+        - Sé conciso.
         
         ESTRUCTURA DEL DOCUMENTO:
-        1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico Principal.
-        2. Antecedentes: Breve resumen de comorbilidades y oncológicos previos.
-        3. Enfermedad Actual: Estado actual, estudios recientes (fechas y hallazgos clave).
-        4. Justificación (PÁRRAFO FINAL): Redactar según el ENFOQUE OBLIGATORIO definido arriba.
+        1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico.
+        2. Antecedentes: Breve.
+        3. Enfermedad Actual: Estado actual, estudios.
+        4. Justificación (PÁRRAFO FINAL): Redactar según la ESTRATEGIA definida para ${drugName}.
         
-        DATOS DEL PACIENTE: ${historyText || ''}
+        CONTEXTO: ${historyText || ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
@@ -142,6 +146,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
         const summaryText = res.text || "No se pudo generar el resumen.";
 
+        setStatus('Generando PDF...');
+
         // --- CREACIÓN DEL PDF ---
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -151,11 +157,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const { width, height } = page.getSize();
         
         const marginX = 50; 
-        const marginTop = 30; // Margen superior reducido para el logo
+        const marginTop = 30;
         const marginBottom = 100;
         let y = height - marginTop;
 
-        // 1. INTENTO DE CARGA DE IMAGEN (LOGO)
+        // 1. CARGA DEL LOGO
         let logoLoaded = false;
         try {
             const logoUrl = window.location.origin + '/img/header_logo.png';
@@ -176,9 +182,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                 y -= (pngDims.height + 20); 
                 logoLoaded = true;
             }
-        } catch (e) {
-            console.warn("No se pudo cargar el logo, usando texto.", e);
-        }
+        } catch (e) {}
 
         if (!logoLoaded) {
             const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
@@ -226,7 +230,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
                     if (y < marginBottom) {
                         page = pdfDoc.addPage();
-                        y = height - marginTop - 40; 
+                        y = height - marginTop - 40;
                     }
                 } else {
                     lineBuffer = testLine;
@@ -296,7 +300,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           "laboratorio_formateado": "Lab", "informe_clinico_detallado": "Informe",
           "motivo_solicitud": "Inicio...", "tipo_tratamiento": "Adyuvante...",
           "ciclos_planeados": "Ciclos", "frecuencia_dias": "D1",
-          "droga_1": "D1", "presentacion_1": "P1", "dosis_1": "Dosis1", "droga_2": "D2", "presentacion_2": "P2", "dosis_2": "Dosis2"
+          "droga_1": "D1", "presentacion_1": "P1", "dosis_1": "Dosis1",
+          "droga_2": "D2", "presentacion_2": "P2", "dosis_2": "Dosis2"
         }`;
 
     const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${historyText}` }];
