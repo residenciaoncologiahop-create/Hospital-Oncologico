@@ -69,7 +69,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     } catch (e) { alert(`No se encontró el archivo "${formDef.file}". Verifique la carpeta public/forms/`); }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO (FORMATO FINAL CORREGIDO) ---
+  // --- GENERADOR DE RESUMEN CLÍNICO ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
@@ -87,7 +87,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         if (!apiKey) throw new Error("Falta API Key");
         
         const ai = new GoogleGenAI({ apiKey });
-        // FECHA NUMÉRICA: dd/mm/aaaa
         const today = new Date().toLocaleDateString('es-AR'); 
 
         // --- ESTRATEGIA ---
@@ -176,8 +175,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         // TÍTULO
         const docTitle = "RESUMEN DE HISTORIA CLÍNICA";
         const docSubTitle = `${context} - BANCO DE DROGAS`;
-        // CORRECCIÓN: FECHA FORMATO CÓRDOBA, DD/MM/AAAA
-        const dateText = `Córdoba, ${today}`;
+        // --- CAMBIO: CÓRDOBA CAPITAL ---
+        const dateText = `Córdoba Capital, ${today}`;
 
         const titleWidth = fontBold.widthOfTextAtSize(docTitle, 14);
         page.drawText(docTitle, { x: (width - titleWidth) / 2, y: y, size: 14, font: fontBold });
@@ -187,7 +186,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         page.drawText(docSubTitle, { x: (width - subTitleWidth) / 2, y: y, size: 12, font: fontBold });
         y -= 20;
 
-        // FECHA ALINEADA DERECHA
+        // FECHA
         const dateWidth = font.widthOfTextAtSize(dateText, 10);
         page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 10, font });
         y -= 20;
@@ -206,8 +205,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             const paragraph = paragraphs[i].trim();
             if (!paragraph) { y -= 5; continue; }
 
-            // DETECCIÓN TÍTULOS (1. IDENTIFICACIÓN)
-            const isSectionHeader = /^\d+\.\s+[A-ZÁÉÍÓÚÑ\s]+$/.test(paragraph);
+            // --- CAMBIO: DETECCIÓN DE TÍTULOS ROBUSTA (Con o sin número) ---
+            // Detecta líneas que contienen los títulos clave y son cortas (para evitar falsos positivos en párrafos)
+            const upperPara = paragraph.toUpperCase();
+            const isSectionHeader = (
+                upperPara.includes("IDENTIFICACIÓN") || 
+                upperPara.includes("IDENTIFICACION") ||
+                upperPara.includes("RESUMEN CLÍNICO") ||
+                upperPara.includes("RESUMEN CLINICO") ||
+                upperPara.includes("JUSTIFICACIÓN") ||
+                upperPara.includes("JUSTIFICACION")
+            ) && paragraph.length < 50;
             
             if (isSectionHeader) {
                 y -= 15;
@@ -225,7 +233,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             let lineBuffer = '';
 
             for (const word of words) {
-                const cleanWord = word.replace(/\*/g, ''); // Limpieza extra
+                const cleanWord = word.replace(/\*/g, '');
                 const testLine = lineBuffer + cleanWord + ' ';
                 const textWidth = font.widthOfTextAtSize(testLine, fontSizeBody);
                 const maxWidth = width - (marginX * 2);
@@ -252,8 +260,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                 y = height - marginTop - 40;
             }
         }
-
-        // 4. SIN PIE DE PÁGINA (ELIMINADO)
 
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
