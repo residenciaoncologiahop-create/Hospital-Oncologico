@@ -31,14 +31,16 @@ const db = getFirestore(app);
 
 // --- ESTILOS CSS ---
 const RESUMEN_CSS = `
-/* ... (Estilos previos se mantienen, agrego para las nuevas herramientas) ... */
 .resumen-clinico-container { font-family: 'Inter', sans-serif; padding: 32px; color: #2c3e50; line-height: 1.7; }
 .resumen-titulo-principal { font-size: 18px; font-weight: 700; margin-bottom: 24px; text-align: center; border-bottom: 3px solid #4299e1; padding-bottom: 12px; }
 .resumen-subtitulo { font-size: 14px; font-weight: 600; margin-top: 28px; margin-bottom: 16px; border-bottom: 2px solid #4299e1; padding-bottom: 6px; }
+.resumen-subsubtitulo { font-size: 13px; font-weight: 600; margin-top: 16px; margin-bottom: 8px; color: #2d3748; }
 .resumen-texto { font-size: 13px; margin-bottom: 12px; }
 .resumen-label { font-weight: 600; color: #2c5282; margin-right: 8px; }
 .resumen-lista { list-style: none; padding-left: 0; margin: 12px 0; }
 .resumen-item { margin-bottom: 10px; }
+.resumen-estudio { background-color: #f7fafc; border-left: 3px solid #4299e1; padding: 12px; margin-bottom: 12px; border-radius: 4px; }
+.resumen-resultado { margin-top: 6px; font-size: 12.5px; }
 .resumen-timeline { position: relative; padding-left: 32px; margin-top: 20px; }
 .resumen-timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: #4299e1; }
 .resumen-timeline-item { position: relative; margin-bottom: 24px; }
@@ -145,6 +147,81 @@ const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/
     );
 };
 
+// --- AI FUNCTIONS (RESTAURADA LOGICA CRONOLOGICA) ---
+const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
+    if (!text && files.length === 0) return [];
+    const apiKey = import.meta.env.VITE_API_KEY;
+    if (!apiKey) throw new Error("API Key Missing");
+    
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        const parts: any[] = [{ text: `
+            Analiza los documentos y extrae la cronología clínica.
+            REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales.
+            REGLAS DE FORMATO:
+            - Idioma: ESPAÑOL.
+            - Fechas: DD/MM/YYYY.
+            - Categorías: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+            - SALIDA: ÚNICAMENTE UN ARRAY JSON.
+        `}];
+        if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
+        files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+
+        const res = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts },
+            config: { responseMimeType: "application/json" }
+        });
+
+        if (res.text) {
+            const cleanText = res.text.replace(/```json|```/g, '').trim();
+            let rawEvents = [];
+            try {
+                const firstBracket = cleanText.indexOf('[');
+                const lastBracket = cleanText.lastIndexOf(']');
+                if (firstBracket !== -1 && lastBracket !== -1) {
+                    rawEvents = JSON.parse(cleanText.substring(firstBracket, lastBracket + 1));
+                } else {
+                    rawEvents = JSON.parse(cleanText);
+                }
+            } catch (e) { console.error("Error parseando JSON", e); return []; }
+
+            const validEvents = rawEvents.map((e: any) => ({
+                date: e.date || e.fecha || "S/F",
+                professional: e.professional || e.profesional || "N/A",
+                category: e.category || e.categoria || "General",
+                note: e.note || e.nota || e.descripcion || "Evento sin descripción",
+                isKey: !!(e.isKey || e.esClave)
+            })).filter((e: any) => {
+                if (e.date === "S/F") return false;
+                if (e.note === "Evento sin descripción" || e.note === "General") return false;
+                if (e.note.trim().length < 5) return false;
+                if (e.category === "General" && e.note.toLowerCase().includes("sin descripción")) return false;
+                return true;
+            });
+            
+            return sortTimeline(validEvents); 
+        }
+        return [];
+    } catch (e) { console.error(e); return []; }
+};
+
+const getChatResponse = async (msgs: ChatMessage[], newMsg: string, context: string, files: FileData[]) => {
+    const apiKey = import.meta.env.VITE_API_KEY;
+    const ai = new GoogleGenAI({ apiKey: apiKey! });
+    const parts: any[] = [{ text: `Contexto Anónimo:\n${context}` }];
+    files.slice(0, 3).forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+    msgs.slice(-5).forEach(m => parts.push({ text: `${m.role}: ${m.text}` }));
+    parts.push({ text: newMsg });
+    
+    const res = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts },
+        config: { systemInstruction: "Eres un oncólogo experto. Responde en español técnico. NUNCA menciones nombres reales, DNI o datos de contacto." }
+    });
+    return res.text || "Error.";
+};
+
 const App = () => {
     const [doctorName, setDoctorName] = useState<string | null>(localStorage.getItem('doctor_name'));
     const [isResidentMode, setIsResidentMode] = useState<boolean>(false);
@@ -200,9 +277,18 @@ const App = () => {
     const [manualDoctor, setManualDoctor] = useState(doctorName || '');
     const [manualNote, setManualNote] = useState('');
 
+    const [summaryText, setSummaryText] = useState('');
+    const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+    const [showSummaryModal, setShowSummaryModal] = useState(false);
+    const [showFollowUpModal, setShowFollowUpModal] = useState(false);
+    const [followUpText, setFollowUpText] = useState('');
+    const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
+    const [showTumorBoardModal, setShowTumorBoardModal] = useState(false); 
+    const [tumorBoardText, setTumorBoardText] = useState('');
+    const [isGeneratingTumorBoard, setIsGeneratingTumorBoard] = useState(false);
+
     const chatEndRef = useRef<HTMLDivElement>(null);
 
-    // ... (EFECTOS DE INICIALIZACIÓN IGUAL QUE ANTES) ...
     useEffect(() => { setApiKeyExists(!!import.meta.env.VITE_API_KEY); getOrInitFingerprint(); }, []);
     useEffect(() => { if (isResidentMode) return; if (!doctorName) { setPatients([]); return; } const q = query(collection(db, "patients"), where("doctorId", "==", doctorName)); const unsubscribe = onSnapshot(q, (snapshot) => { const list = snapshot.docs.map(doc => { const data = doc.data(); return { id: doc.id, ...data, name: data.name || '', diagnosis: data.diagnosis || '' } as Patient; }); list.sort((a, b) => b.lastUpdated - a.lastUpdated); setPatients(list); }); return () => unsubscribe(); }, [doctorName, isResidentMode]);
     useEffect(() => { if (doctorName && !isResidentMode) { localStorage.setItem('doctor_name', doctorName); setManualDoctor(doctorName); } else if (isResidentMode) { setManualDoctor('Residente'); } }, [doctorName, isResidentMode]);
@@ -299,10 +385,24 @@ const App = () => {
         setIsGeneratingLearning(false);
     };
 
-    // --- FUNCIONES PREVIAS (RESUMIDAS PARA NO REPETIR TODO) ---
-    // (Mantienen la misma lógica exacta que tu código "restore", solo las invoco en el render)
-    const handleProcessDocumentsWrapper = async () => { /* ... Lógica existente ... */ setIsProcessingDocs(true); try { const events = await extractTimelineFromDocs(historyText, historyFiles); const currentTimeline = timeline || []; const combinedTimeline = sortTimeline([...currentTimeline, ...events]); setTimeline(combinedTimeline); await updatePatientData({ timeline: combinedTimeline, historyText, lastUpdated: Date.now() }); setActiveTab('timeline'); } catch(e:any){setLastError(e.message)} setIsProcessingDocs(false); };
-    const handleSendMsgWrapper = async () => { /* ... Lógica existente ... */ if(!chatInput.trim() || !selectedPatientId) return; const p = patients.find(pt=>pt.id===selectedPatientId); if(!p)return; const userMsg:ChatMessage={role:'user',text:chatInput,timestamp:Date.now()}; const newHist=[...chatMessages, userMsg]; setChatMessages(newHist); setChatInput(''); setIsTyping(true); const context=getAnonContext(p); const ans = await getChatResponse(newHist, userMsg.text, context, [...historyFiles, ...guidelineFiles]); const aiMsg:ChatMessage={role:'model',text:ans,timestamp:Date.now()}; setChatMessages([...newHist, aiMsg]); setIsTyping(false); await updatePatientData({chatHistory:[...newHist, aiMsg], lastUpdated:Date.now()}); };
+    const handleProcessDocumentsWrapper = async () => { if(!historyText && historyFiles.length===0) return; setIsProcessingDocs(true); try { const events = await extractTimelineFromDocs(historyText, historyFiles); const currentTimeline = timeline || []; const combinedTimeline = sortTimeline([...currentTimeline, ...events]); setTimeline(combinedTimeline); await updatePatientData({ timeline: combinedTimeline, historyText, lastUpdated: Date.now() }); setActiveTab('timeline'); } catch(e:any){setLastError(e.message)} setIsProcessingDocs(false); };
+    const handleSendMsgWrapper = async () => { if(!chatInput.trim() || !selectedPatientId) return; const p = patients.find(pt=>pt.id===selectedPatientId); if(!p)return; const userMsg:ChatMessage={role:'user',text:chatInput,timestamp:Date.now()}; const newHist=[...chatMessages, userMsg]; setChatMessages(newHist); setChatInput(''); setIsTyping(true); const context=getAnonContext(p); const ans = await getChatResponse(newHist, userMsg.text, context, [...historyFiles, ...guidelineFiles]); const aiMsg:ChatMessage={role:'model',text:ans,timestamp:Date.now()}; setChatMessages([...newHist, aiMsg]); setIsTyping(false); await updatePatientData({chatHistory:[...newHist, aiMsg], lastUpdated:Date.now()}); };
+    const getAnonContext = (p: Patient) => { return `Paciente de ${p.age} años. Diagnóstico: ${p.diagnosis}. Historial: ${JSON.stringify(p.timeline || [])}. Notas Clínicas (Anónimas): ${p.historyText || ''}`; };
+
+    const savePatientDetails = async () => { await updatePatientData({ historyText, lastUpdated: Date.now() }); };
+    const handleAddManualEvolution = async () => { if (!manualNote.trim() || !selectedPatientId) return; const [y, m, d] = manualDate.split('-'); const formattedDate = `${d}/${m}/${y}`; const newEvent: ClinicalEvent = { date: formattedDate, professional: manualDoctor, category: "Evolución Manual", note: manualNote, isKey: false }; const updatedTimeline = sortTimeline([...timeline, newEvent]); setTimeline(updatedTimeline); setManualNote(''); await updatePatientData({ timeline: updatedTimeline, lastUpdated: Date.now() }); logAction("ADD_MANUAL_EVOLUTION", selectedPatientId, doctorName); };
+    const handleDeleteEvent = async (indexToDelete: number) => { if (!selectedPatientId || !timeline) return; if (confirm("¿Eliminar este evento?")) { const updatedTimeline = timeline.filter((_, index) => index !== indexToDelete); setTimeline(updatedTimeline); await updatePatientData({ timeline: updatedTimeline, lastUpdated: Date.now() }); logAction("DELETE_TIMELINE_EVENT", selectedPatientId, doctorName); } };
+
+    const handleGenerateSummary = async () => { if (!selectedPatientId) return; const p = patients.find(pat => pat.id === selectedPatientId); if (!p) return; setIsGeneratingSummary(true); setShowSummaryModal(true); setSummaryText("Generando resumen..."); const context = getAnonContext(p); const prompt = `Genera un RESUMEN DE HISTORIA CLÍNICA oncológico profesional en ESPAÑOL basándote en los documentos adjuntos y las notas. FORMATO DE SALIDA: **HTML COMPLETO**. Usa clases CSS: resumen-clinico-container, resumen-titulo-principal, resumen-subtitulo, resumen-texto, resumen-lista, resumen-item. ESTRUCTURA OBLIGATORIA: 1. ENCABEZADO (Hospital, Córdoba, Fecha). 2. IDENTIFICACIÓN. 3. ANTECEDENTES. 4. ENFERMEDAD ACTUAL. 5. JUSTIFICACIÓN.`; const summary = await generateText(prompt, context, historyFiles); const cleanSummary = summary.replace(/```html/g, '').replace(/```/g, ''); setSummaryText(cleanSummary); setIsGeneratingSummary(false); logAction("GENERATE_SUMMARY", selectedPatientId, doctorName); };
+    const handleGenerateFollowUp = async () => { if (!selectedPatientId) return; const p = patients.find(pat => pat.id === selectedPatientId); if (!p) return; setIsGeneratingFollowUp(true); setShowFollowUpModal(true); setFollowUpText("Analizando guías..."); const context = getAnonContext(p); const prompt = `Sugiere PLAN DE SEGUIMIENTO (Follow-up) detallado basado en NCCN/ESMO en Español. HTML limpio.`; const advice = await generateText(prompt, context, guidelineFiles); const cleanAdvice = advice.replace(/```html/g, '').replace(/```/g, ''); setFollowUpText(cleanAdvice); setIsGeneratingFollowUp(false); logAction("GENERATE_FOLLOWUP", selectedPatientId, doctorName); };
+    const handleGenerateTumorBoard = async () => { if (!selectedPatientId) return; const p = patients.find(pat => pat.id === selectedPatientId); if (!p) return; setIsGeneratingTumorBoard(true); setShowTumorBoardModal(true); setTumorBoardText("Preparando presentación..."); const context = getAnonContext(p); const prompt = `Genera Presentación para Ateneo/Comité de Tumores (Tumor Board) en ESPAÑOL. HTML limpio.`; const text = await generateText(prompt, context, historyFiles); const cleanText = text.replace(/```html/g, '').replace(/```/g, ''); setTumorBoardText(cleanText); setIsGeneratingTumorBoard(false); logAction("GENERATE_TUMOR_BOARD", selectedPatientId, doctorName); };
+    const handlePrintPDF = () => { const printWindow = window.open('', '_blank'); if (printWindow) { const content = showSummaryModal ? summaryText : showFollowUpModal ? followUpText : tumorBoardText; printWindow.document.write(`<html><head><title>Documento</title><style>${RESUMEN_CSS} body { padding: 40px; }</style></head><body>${content}<script>window.print();</script></body></html>`); printWindow.document.close(); } };
+
+    // --- CORRECCIÓN CRÍTICA: FILTRO DE PACIENTES ---
+    const filteredPatients = patients.filter(p => 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     // --- RENDER ---
     if (!doctorName) return (
@@ -402,7 +502,7 @@ const App = () => {
                                     </>
                                 )}
                                 {activeTab === 'timeline' && (
-                                    <div className="space-y-4 pt-2">{timeline.length === 0 ? <p className="text-center text-xs text-gray-300 font-bold py-10">Sin eventos</p> : timeline.filter(ev=>ev.note && ev.note.trim().length > 3).map((ev, i) => (<div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8"><div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md ${ev.isKey ? 'bg-red-500' : 'bg-blue-400'}`}></div><div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm"><span className="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-1 rounded-lg">{ev.date}</span><p className="mt-2 text-xs text-gray-600">{ev.note}</p></div></div>))}</div>
+                                    <div className="space-y-4 pt-2">{timeline.length === 0 ? <p className="text-center text-xs text-gray-300 font-bold py-10">Sin eventos</p> : timeline.filter(ev=>ev.category!=='General'&&ev.note&&!ev.note.toLowerCase().includes('sin descripción')).map((ev, i) => (<div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8"><div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md ${ev.isKey ? 'bg-red-500' : 'bg-blue-400'}`}></div><div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm"><span className="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-1 rounded-lg">{ev.date}</span><p className="mt-2 text-xs text-gray-600">{ev.note}</p></div></div>))}</div>
                                 )}
                                 {activeTab === 'forms' && <div className="h-full overflow-y-auto"><FormManager patient={selP} historyText={historyText} files={historyFiles} /></div>}
                                 
@@ -442,6 +542,31 @@ const App = () => {
                     </div>
                 )}
             </main>
+
+            {/* SHARED MODAL (Resume, FollowUp, TumorBoard) */}
+            {(showSummaryModal || showFollowUpModal || showTumorBoardModal) && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-6">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+                            <div className="flex items-center space-x-3 text-gray-800 font-black text-xs uppercase tracking-widest">
+                                {showSummaryModal ? <><FileOutput size={18} className="text-indigo-600"/><span>Resumen Clínico</span></> : showFollowUpModal ? <><ClipboardCheck size={18} className="text-teal-600"/><span>Seguimiento</span></> : <><Presentation size={18} className="text-rose-600"/><span>Ateneo / Tumor Board</span></>}
+                            </div>
+                            <button onClick={() => {setShowSummaryModal(false); setShowFollowUpModal(false); setShowTumorBoardModal(false);}} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                        </div>
+                        <div className="resumen-modal-content flex-1 p-0 overflow-y-auto bg-white relative">
+                            {(isGeneratingSummary || isGeneratingFollowUp || isGeneratingTumorBoard) ? (
+                                <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4"><Loader2 size={40} className="animate-spin" /><p className="text-xs font-black uppercase tracking-widest">Generando análisis experto...</p></div>
+                            ) : (
+                                <div className="p-8" dangerouslySetInnerHTML={{ __html: showSummaryModal ? summaryText : showFollowUpModal ? followUpText : tumorBoardText }} />
+                            )}
+                        </div>
+                        <div className="p-6 border-t bg-white flex justify-end space-x-3">
+                            <button onClick={handlePrintPDF} className="flex items-center space-x-2 bg-gray-800 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all"><FileDown size={14} /><span>Descargar PDF</span></button>
+                            <button onClick={() => {navigator.clipboard.writeText(showSummaryModal ? summaryText.replace(/<[^>]*>?/gm, '') : showFollowUpModal ? followUpText.replace(/<[^>]*>?/gm, '') : tumorBoardText.replace(/<[^>]*>?/gm, '')); alert("Copiado");}} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all">Copiar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* MODAL CALCULADORAS */}
             {showCalcModal && (
