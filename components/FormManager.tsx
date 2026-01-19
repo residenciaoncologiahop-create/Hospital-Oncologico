@@ -70,16 +70,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO (INTERACTIVO CON DROGA) ---
+  // --- GENERADOR DE RESUMEN CLÍNICO (SIN FIRMA NI PLACEHOLDERS) ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
         return;
     }
 
-    // 1. PREGUNTAR LA DROGA AL MÉDICO
+    // 1. PREGUNTAR LA DROGA
     const drugName = window.prompt(`Ingrese el nombre de la droga/medicación para el trámite de ${context}:`);
-    if (!drugName || drugName.trim() === "") return; // Cancelar si no ingresa nada
+    if (!drugName || drugName.trim() === "") return; 
 
     setProcessingId('summary');
     setStatus('Analizando estrategia...');
@@ -91,30 +91,24 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const ai = new GoogleGenAI({ apiKey });
         const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-        // --- DEFINICIÓN DE ESTRATEGIA SEGÚN TIPO Y DROGA ---
+        // --- DEFINICIÓN DE ESTRATEGIA ---
         let strategyPrompt = "";
 
         if (context === 'RENOVACIÓN') {
             strategyPrompt = `
             ESTRATEGIA DE REDACCIÓN: **RENOVACIÓN DE ${drugName.toUpperCase()}**
-            
-            OBJETIVO: Demostrar que el paciente se beneficia de continuar con **${drugName}**.
-            
+            OBJETIVO: Demostrar beneficio clínico.
             INSTRUCCIONES CLAVE:
             1. Enfócate en la **Tolerancia** a ${drugName} y la **Respuesta Clínica**.
-            2. Menciona explícitamente "Se solicita RENOVACIÓN de ${drugName}".
-            3. Justificación Final: "Dada la buena tolerancia y el beneficio clínico observado, se solicita renovar ${drugName}..."
+            2. Justificación Final: "Dada la buena tolerancia y el beneficio clínico observado, se solicita renovar ${drugName}..."
             `;
         } else {
-            // Caso ADMISIÓN o SOLICITUD
             strategyPrompt = `
-            ESTRATEGIA DE REDACCIÓN: **ADMISIÓN / SOLICITUD DE INICIO PARA ${drugName.toUpperCase()}**
-            
-            OBJETIVO: Justificar la **INDICACIÓN** de **${drugName}** basándose en la evidencia.
-            
-            INSTRUCCIONES CRÍTICAS (PARA TRÁMITE ADMINISTRATIVO):
-            1. **IGNORA LA CONTINUIDAD:** Si la historia clínica dice que ya tomó ${drugName} (por muestras/urgencia), NO lo redactes como una continuidad. Redáctalo como una **SOLICITUD DE INGRESO/ADMISIÓN**.
-            2. **JUSTIFICACIÓN:** Explica por qué ${drugName} es la droga correcta ahora (fallo de líneas previas, estadio, guías).
+            ESTRATEGIA DE REDACCIÓN: **ADMISIÓN / SOLICITUD PARA ${drugName.toUpperCase()}**
+            OBJETIVO: Justificar la **INDICACIÓN** de **${drugName}**.
+            INSTRUCCIONES CLAVE:
+            1. **IGNORA LA CONTINUIDAD:** Si la historia clínica dice que ya tomó ${drugName}, NO lo redactes como continuidad. Redáctalo como una **SOLICITUD DE INGRESO**.
+            2. **JUSTIFICACIÓN:** Explica por qué ${drugName} es la droga correcta (fallo de líneas previas, estadio, guías).
             3. Frase final obligatoria: "Por lo expuesto, se solicita ADMISIÓN para el tratamiento con ${drugName}..."
             `;
         }
@@ -128,6 +122,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         REGLAS DE FORMATO:
         - Texto plano profesional (sin Markdown).
         - Sé conciso.
+        - **IMPORTANTE:** NO incluyas ninguna firma, ni nombre de médico, ni "Dr. [Nombre]", ni pie de página al final del texto. Termina el documento estrictamente con el punto final de la justificación.
         
         ESTRUCTURA DEL DOCUMENTO:
         1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico.
@@ -158,10 +153,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         
         const marginX = 50; 
         const marginTop = 30;
-        const marginBottom = 100;
+        const marginBottom = 50; // Menos margen abajo ya que no hay firma
         let y = height - marginTop;
 
-        // 1. CARGA DEL LOGO
+        // 1. CARGA DEL LOGO (HEADER)
         let logoLoaded = false;
         try {
             const logoUrl = window.location.origin + '/img/header_logo.png';
@@ -247,29 +242,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             }
         }
 
-        // 4. FIRMA DEL MÉDICO
-        if (y < 120) { page = pdfDoc.addPage(); }
-
-        const signatureY = 60; 
-        const centerX = width / 2;
-
-        page.drawLine({
-            start: { x: centerX - 70, y: signatureY + 30 },
-            end: { x: centerX + 70, y: signatureY + 30 },
-            thickness: 1,
-            color: rgb(0, 0, 0),
-        });
-
-        const docName = doctorData.nombre || "Firma Médico";
-        const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : "";
-        
-        const nameWidth = fontBold.widthOfTextAtSize(docName, 11);
-        page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 15, size: 11, font: fontBold });
-        
-        if (docMat) {
-            const matWidth = font.widthOfTextAtSize(docMat, 10);
-            page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 10, font });
-        }
+        // 4. (ELIMINADO) FIRMA DEL MÉDICO
+        // Ya no se dibuja nada al pie de la página.
 
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
