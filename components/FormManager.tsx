@@ -22,14 +22,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     cel_area: '', cel_num: ''
   });
 
-  // Carga segura de datos locales
   useEffect(() => {
-    try {
-      const savedDoc = localStorage.getItem('doctor_data_profile_v3');
-      if (savedDoc) setDoctorData(JSON.parse(savedDoc));
-    } catch (e) {
-      console.error("Error cargando perfil médico", e);
-    }
+    const savedDoc = localStorage.getItem('doctor_data_profile_v3');
+    if (savedDoc) setDoctorData(JSON.parse(savedDoc));
   }, []);
 
   const saveDoctorData = () => {
@@ -61,75 +56,57 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const downloadTemplate = async (formDef: any) => {
     try {
-        const response = await fetch(formDef.file, { method: 'HEAD' });
-        if (!response.ok) throw new Error("Archivo no encontrado");
-
         const link = document.createElement('a');
         link.href = formDef.file;
         link.download = `${formDef.name}_Plantilla.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    } catch (e) { 
-        alert(`No se encontró el archivo "${formDef.file}". Verifique la carpeta public/forms/`);
-    }
+    } catch (e) { alert("Error al descargar plantilla."); }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO (BLINDADO) ---
   const generateClinicalSummary = async (context: string) => {
-    // 1. Validación inicial
     if (!historyText && (!files || files.length === 0)) {
-        alert("⚠️ Falta documentación.\nPor favor cargue archivos en la pestaña 'Documentación' antes de generar el resumen.");
+        alert("⚠️ Falta documentación para generar el resumen.");
         return;
     }
-
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) {
-        alert("⚠️ Error de Configuración: Falta la API Key.");
-        return;
-    }
-
     setProcessingId('summary');
-    setStatus('Analizando datos...');
+    setStatus('Generando PDF...');
 
     try {
-        // 2. Llamada a la IA
+        const apiKey = import.meta.env.VITE_API_KEY;
+        if (!apiKey) throw new Error("Falta API Key");
+        
         const ai = new GoogleGenAI({ apiKey });
         const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
         const prompt = `
-        Actúa como Oncólogo. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
-        IMPORTANTE: Texto plano, profesional, sin markdown.
+        Actúa como Oncólogo del Hospital Oncológico Dr. José Miguel Urrutia.
+        Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
+        
+        IMPORTANTE: 
+        - Formato de texto plano profesional.
+        - NO uses negritas (markdown) ni símbolos extraños.
+        - Sé conciso y directo.
+        
         ESTRUCTURA:
         1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico.
         2. Antecedentes: Breve.
-        3. Enfermedad Actual: Estado actual, estudios recientes.
-        4. Justificación (Final): "Por lo expuesto, se solicita [Droga]..."
+        3. Enfermedad Actual: Estado actual, estudios recientes (fechas y hallazgos clave).
+        4. Justificación (PÁRRAFO FINAL): "Por lo expuesto, se solicita [Droga]..."
+        
         CONTEXTO: ${historyText || ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
-        if (files && files.length > 0) {
-            files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
-        }
+        if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
         const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
-        const summaryText = res.text || "No se pudo generar el texto.";
+        const summaryText = res.text || "Error al generar texto.";
 
-        setStatus('Creando PDF...');
-
-        // 3. Generación del PDF (Paso crítico)
         const pdfDoc = await PDFDocument.create();
-        
-        // Carga de fuentes segura
-        let font, fontBold;
-        try {
-            font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-            fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        } catch (fontError) {
-            console.error("Error cargando fuentes PDF", fontError);
-            throw new Error("Error interno al cargar fuentes PDF.");
-        }
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
         
         let page = pdfDoc.addPage();
         const { width, height } = page.getSize();
@@ -139,7 +116,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const marginBottom = 80;  
         let y = height - marginTop;
 
-        // Encabezado
         const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
         const headerWidth = fontBold.widthOfTextAtSize(headerText, 12);
         page.drawText(headerText, { x: (width - headerWidth) / 2, y: y, size: 12, font: fontBold });
@@ -147,7 +123,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
         y -= 25;
 
-        // Fecha y Título
         const dateText = `Córdoba, ${today}`;
         const dateWidth = font.widthOfTextAtSize(dateText, 10);
         page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 10, font });
@@ -158,7 +133,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         page.drawText(title, { x: (width - titleWidth) / 2, y: y, size: 11, font: fontBold });
         y -= 30;
 
-        // Cuerpo
         const fontSize = 10;
         const lineHeight = 14;
         const paragraphs = summaryText.split('\n');
@@ -182,7 +156,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             if (y < marginBottom) { page = pdfDoc.addPage(); y = height - marginTop; }
         }
 
-        // Firma
         if (y < 100) page = pdfDoc.addPage();
         const signatureY = 50; 
         const centerX = width / 2;
@@ -190,16 +163,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         
         const docName = doctorData.nombre || "Firma Médico";
         const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : "";
-        
-        try {
-            const nameWidth = fontBold.widthOfTextAtSize(docName, 10);
-            page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 12, size: 10, font: fontBold });
-            if (docMat) {
-                const matWidth = font.widthOfTextAtSize(docMat, 9);
-                page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 9, font });
-            }
-        } catch (textError) {
-            console.error("Error dibujando firma", textError);
+        const nameWidth = fontBold.widthOfTextAtSize(docName, 10);
+        page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 12, size: 10, font: fontBold });
+        if (docMat) {
+            const matWidth = font.widthOfTextAtSize(docMat, 9);
+            page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 9, font });
         }
 
         const pdfBytes = await pdfDoc.save();
@@ -209,14 +177,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         link.download = `Resumen_${context}_${patient.name}.pdf`;
         link.click();
         setStatus('¡Listo!');
-
-    } catch (e: any) { 
-        console.error(e);
-        alert("❌ Error generando el resumen: " + (e.message || "Error desconocido.")); 
-    } finally { 
-        setProcessingId(null); 
-        setStatus(''); 
-    }
+    } catch (e: any) { alert("Error: " + e.message); } 
+    finally { setProcessingId(null); setStatus(''); }
   };
 
   const extractPamiData = async () => {
@@ -313,8 +275,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   };
 
   const generateFieldMap = async (formDef: any) => {
-    setProcessingId('map-' + formDef.id);
-    setStatus('Generando mapa...');
     try {
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
@@ -324,7 +284,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const form = pdfDoc.getForm();
       const fields = form.getFields();
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
       fields.forEach(field => {
         const name = field.getName();
         if (field.constructor.name === 'PDFTextField') {
@@ -333,3 +292,121 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             textField.setFontSize(6);
             textField.setFont(helveticaFont);
             textField.setTextColor(rgb(1, 0, 0));
+        }
+      });
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `MAPA_ROJO_${formDef.name}.pdf`;
+      link.click();
+    } catch (e: any) { alert('Error: ' + e.message); }
+  };
+
+  return (
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-sm font-black text-gray-700 uppercase tracking-widest">Gestión de Trámites</h3>
+        <button 
+          onClick={() => setShowDocConfig(true)}
+          className="flex items-center space-x-2 text-gray-500 hover:text-blue-600 transition-colors text-[10px] font-bold uppercase tracking-widest bg-gray-100 px-3 py-1.5 rounded-lg"
+        >
+          <UserCog size={14} /><span>Configurar Médico</span>
+        </button>
+      </div>
+
+      {showDocConfig && (
+        <div className="mb-6 p-5 bg-blue-50 border border-blue-100 rounded-2xl animate-in slide-in-from-top">
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="font-bold text-blue-800 text-xs uppercase tracking-widest">Datos del Profesional</h4>
+            <button onClick={() => setShowDocConfig(false)} className="text-blue-400 hover:text-blue-600"><X size={16}/></button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+             <div><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Nombre</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.nombre} onChange={e=>setDoctorData({...doctorData, nombre:e.target.value})}/></div>
+             <div><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Matrícula</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.matricula} onChange={e=>setDoctorData({...doctorData, matricula:e.target.value})}/></div>
+             <div className="col-span-2"><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">CUIL</label><div className="flex gap-2"><input className="w-[15%] p-2 border rounded text-center text-xs" value={doctorData.cuil_prefix} onChange={e=>setDoctorData({...doctorData, cuil_prefix:e.target.value})}/><input className="w-[70%] p-2 border rounded text-center text-xs" value={doctorData.cuil_dni} onChange={e=>setDoctorData({...doctorData, cuil_dni:e.target.value})}/><input className="w-[15%] p-2 border rounded text-center text-xs" value={doctorData.cuil_suffix} onChange={e=>setDoctorData({...doctorData, cuil_suffix:e.target.value})}/></div></div>
+             <div><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Especialidad</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.especialidad} onChange={e=>setDoctorData({...doctorData, especialidad:e.target.value})}/></div>
+             <div><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Provincia</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.provincia} onChange={e=>setDoctorData({...doctorData, provincia:e.target.value})}/></div>
+             <div className="col-span-2"><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Email</label><input className="w-full p-2 border rounded-lg text-xs" value={doctorData.email} onChange={e=>setDoctorData({...doctorData, email:e.target.value})}/></div>
+             <div className="col-span-2"><label className="block text-[9px] font-bold text-blue-400 uppercase mb-1">Celular</label><div className="flex gap-2"><input className="w-[20%] p-2 border rounded text-center text-xs" value={doctorData.cel_area} onChange={e=>setDoctorData({...doctorData, cel_area:e.target.value})}/><input className="w-[80%] p-2 border rounded text-center text-xs" value={doctorData.cel_num} onChange={e=>setDoctorData({...doctorData, cel_num:e.target.value})}/></div></div>
+          </div>
+          <button onClick={saveDoctorData} className="w-full bg-blue-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 flex items-center justify-center space-x-2"><Save size={14}/><span>Guardar</span></button>
+        </div>
+      )}
+      
+      {(!files || files.length === 0) && !historyText && (
+        <div className="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2">
+            <AlertTriangle className="text-orange-500" size={16} />
+            <p className="text-[10px] text-orange-700 font-bold">
+                Cargue la Historia Clínica en "Documentación" para habilitar el autocompletado PAMI y los resúmenes.
+            </p>
+        </div>
+      )}
+
+      <div className="grid gap-4">
+        {forms.map(form => (
+          <div key={form.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 hover:border-blue-300 transition-all shadow-sm">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><FileText size={20} /></div>
+                    <h4 className="font-bold text-gray-800 text-xs uppercase">{form.name}</h4>
+                </div>
+                {processingId === form.id ? <Loader2 className="animate-spin text-blue-600" size={18}/> : <CheckCircle2 className="text-gray-200" size={18}/>}
+            </div>
+            
+            <div className="flex gap-2">
+                {form.type === 'auto' ? (
+                    <div className="flex-1 flex flex-col gap-2">
+                        <button 
+                          onClick={() => fillPamiPDF(form)}
+                          disabled={processingId !== null}
+                          className={`flex-1 flex items-center justify-center space-x-2 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50
+                            ${processingId === form.id ? 'bg-blue-600' : 'bg-gray-900 hover:bg-black'}`}
+                        >
+                          {processingId === form.id ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>}
+                          <span>Generar</span>
+                        </button>
+                        {/* DISCLAIMER PAMI */}
+                        <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-100 rounded text-[9px] text-yellow-700">
+                            <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
+                            <p>IMPORTANTE: Formulario generado por IA. Revise dosis y fechas antes de presentar.</p>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <button 
+                          onClick={() => downloadTemplate(form)}
+                          className="flex-1 flex items-center justify-center space-x-2 bg-gray-100 text-gray-700 hover:bg-gray-200 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          <Download size={14}/>
+                          <span>Plantilla Vacía</span>
+                        </button>
+                        
+                        <button 
+                          onClick={() => generateClinicalSummary(form.context || 'SOLICITUD')}
+                          disabled={processingId !== null}
+                          className="flex-1 flex items-center justify-center space-x-2 bg-purple-600 text-white hover:bg-purple-700 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                        >
+                          {processingId === 'summary' ? <Loader2 className="animate-spin" size={14}/> : <FilePlus size={14}/>}
+                          <span>Resumen Clínico</span>
+                        </button>
+                    </>
+                )}
+
+                {form.id === 'pami' && (
+                    <div className="flex flex-col gap-1 justify-start">
+                        <a href="https://cup.pami.org.ar/controllers/loginController.php" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center px-3 py-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 border border-teal-100 h-[34px]" title="Ir a PAMI Web"><ExternalLink size={14} /></a>
+                        <button onClick={() => generateFieldMap(form)} className="flex items-center justify-center px-3 py-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 border border-purple-100 h-[34px]" title="Mapa Rojo"><Map size={14} /></button>
+                    </div>
+                )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {status && <div className="mt-4 text-center"><span className="inline-block px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full animate-pulse">{status}</span></div>}
+    </div>
+  );
+};
+
+export default FormManager;
