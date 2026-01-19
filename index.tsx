@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
@@ -10,7 +10,7 @@ import {
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
     List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal,
     Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation,
-    PanelLeftClose, PanelLeftOpen, FileInput // <--- ICONO NUEVO AGREGADO
+    PanelLeftClose, PanelLeftOpen, FileInput 
 } from 'lucide-react';
 
 // IMPORTAMOS EL COMPONENTE DE FORMULARIOS
@@ -81,9 +81,8 @@ const parseDate = (dateStr: string) => {
 };
 const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 
-// --- AI FUNCTIONS (CON CORRECCIONES) ---
+// --- AI FUNCTIONS ---
 
-// 1. EXTRACT TIMELINE (CORREGIDO Y BLINDADO)
 const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
     if (!text && files.length === 0) return [];
     const apiKey = import.meta.env.VITE_API_KEY;
@@ -147,7 +146,6 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
     } catch (e) { console.error(e); return []; }
 };
 
-// 2. GENERATORS
 const generateText = async (prompt: string, context: string, files: FileData[]) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey! });
@@ -158,7 +156,6 @@ const generateText = async (prompt: string, context: string, files: FileData[]) 
     return res.text || "Error.";
 };
 
-// 3. CHAT
 const getChatResponse = async (msgs: ChatMessage[], newMsg: string, context: string, files: FileData[]) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey! });
@@ -228,9 +225,7 @@ const App = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!import.meta.env.VITE_API_KEY);
 
-    // NUEVO ESTADO: Panel Izquierdo Visible
     const [showLeftPanel, setShowLeftPanel] = useState(true);
-    // PESTAÑAS ACTUALIZADAS
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms'>('docs');
 
     const [newPatientName, setNewPatientName] = useState('');
@@ -308,10 +303,11 @@ const App = () => {
                 setChatMessages(p.chatHistory || []);
                 setHistoryFiles([]); setGuidelineFiles([]);
                 setLastError(null);
-                setActiveTab(p.timeline && p.timeline.length > 0 ? 'timeline' : 'docs');
+                // CORRECCIÓN: Siempre abrir en 'docs' primero
+                setActiveTab('docs'); 
                 setManualDate(new Date().toISOString().split('T')[0]); 
                 setManualDoctor(doctorName || '');
-                setShowLeftPanel(true); // Restablecer vista
+                setShowLeftPanel(true);
             }
         }
     }, [selectedPatientId]);
@@ -678,7 +674,15 @@ const App = () => {
                                         {timeline.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center py-20 text-gray-200"><Clock size={40} className="mb-3 opacity-10" /><p className="text-xs font-black uppercase tracking-widest">Sin eventos</p></div>
                                         ) : (
-                                            timeline.map((ev, i) => (
+                                            /* CORRECCIÓN: FILTRADO ESTRICTO DE EVENTOS */
+                                            timeline
+                                            .filter(ev => 
+                                                ev.category !== 'General' && 
+                                                ev.note && 
+                                                !ev.note.toLowerCase().includes('sin descripción') &&
+                                                ev.note.trim() !== ''
+                                            )
+                                            .map((ev, i) => (
                                                 <div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8 group">
                                                     <div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md transition-all group-hover:scale-110 flex items-center justify-center ${ev.isKey ? 'bg-red-500 text-white' : 'bg-blue-400 text-white'}`}>
                                                         {ev.isKey ? <AlertCircle size={10}/> : <Info size={10}/>}
@@ -702,17 +706,6 @@ const App = () => {
 
                                 {activeTab === 'forms' && (
                                     <div className="h-full overflow-y-auto">
-                                        <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
-                                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
-                                                <FileInput size={40} className="text-blue-600" />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <p className="text-sm font-black uppercase tracking-widest text-gray-700">Gestión de Trámites</p>
-                                                <p className="text-xs font-bold text-gray-400 max-w-[250px] mx-auto leading-relaxed">
-                                                    Seleccione el formulario que desea generar automáticamente.
-                                                </p>
-                                            </div>
-                                        </div>
                                         <FormManager patient={selP} historyText={historyText} files={historyFiles} />
                                     </div>
                                 )}
@@ -741,10 +734,10 @@ const App = () => {
                                 )}
                                 {chatMessages.map((m, i) => (
                                     <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[85%] p-6 rounded-[2rem] text-sm shadow-md leading-relaxed font-medium ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-blue-100' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}`}>
-                                            <div className="whitespace-pre-wrap">{m.text}</div>
-                                            <div className={`text-[10px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>{new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                        </div>
+                                            <div className={`max-w-[85%] p-6 rounded-[2rem] text-sm shadow-md leading-relaxed font-medium ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-blue-100' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}`}>
+                                                <div className="whitespace-pre-wrap">{m.text}</div>
+                                                <div className={`text-[10px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>{new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                            </div>
                                     </div>
                                 ))}
                                 {isTyping && <div className="flex justify-start"><div className="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm animate-pulse text-[10px] font-black text-blue-600 tracking-[0.2em] uppercase">IA Razonando...</div></div>}
