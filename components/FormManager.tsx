@@ -22,9 +22,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     cel_area: '', cel_num: ''
   });
 
+  // Carga segura de datos locales
   useEffect(() => {
-    const savedDoc = localStorage.getItem('doctor_data_profile_v3');
-    if (savedDoc) setDoctorData(JSON.parse(savedDoc));
+    try {
+      const savedDoc = localStorage.getItem('doctor_data_profile_v3');
+      if (savedDoc) setDoctorData(JSON.parse(savedDoc));
+    } catch (e) {
+      console.error("Error cargando perfil médico", e);
+    }
   }, []);
 
   const saveDoctorData = () => {
@@ -56,83 +61,135 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const downloadTemplate = async (formDef: any) => {
     try {
+        const response = await fetch(formDef.file, { method: 'HEAD' });
+        if (!response.ok) throw new Error("Archivo no encontrado");
+
         const link = document.createElement('a');
         link.href = formDef.file;
         link.download = `${formDef.name}_Plantilla.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    } catch (e) { alert("Error al descargar plantilla."); }
+    } catch (e) { 
+        alert(`No se encontró el archivo "${formDef.file}". Verifique la carpeta public/forms/`);
+    }
   };
 
+  // --- GENERADOR DE RESUMEN CLÍNICO (BLINDADO Y CON LOGO) ---
   const generateClinicalSummary = async (context: string) => {
+    // 1. Validación inicial
     if (!historyText && (!files || files.length === 0)) {
-        alert("⚠️ Falta documentación para generar el resumen.");
+        alert("⚠️ Falta documentación.\nPor favor cargue archivos en la pestaña 'Documentación' antes de generar el resumen.");
         return;
     }
+
+    const apiKey = import.meta.env.VITE_API_KEY;
+    if (!apiKey) {
+        alert("⚠️ Error de Configuración: Falta la API Key.");
+        return;
+    }
+
     setProcessingId('summary');
-    setStatus('Generando PDF...');
+    setStatus('Analizando datos...');
 
     try {
-        const apiKey = import.meta.env.VITE_API_KEY;
-        if (!apiKey) throw new Error("Falta API Key");
-        
+        // 2. Llamada a la IA
         const ai = new GoogleGenAI({ apiKey });
         const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
         const prompt = `
-        Actúa como Oncólogo del Hospital Oncológico Dr. José Miguel Urrutia.
-        Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
-        
-        IMPORTANTE: 
-        - Formato de texto plano profesional.
-        - NO uses negritas (markdown) ni símbolos extraños.
-        - Sé conciso y directo.
-        
+        Actúa como Oncólogo. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
+        IMPORTANTE: Texto plano, profesional, sin markdown.
         ESTRUCTURA:
         1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico.
         2. Antecedentes: Breve.
-        3. Enfermedad Actual: Estado actual, estudios recientes (fechas y hallazgos clave).
-        4. Justificación (PÁRRAFO FINAL): "Por lo expuesto, se solicita [Droga]..."
-        
+        3. Enfermedad Actual: Estado actual, estudios recientes.
+        4. Justificación (Final): "Por lo expuesto, se solicita [Droga]..."
         CONTEXTO: ${historyText || ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
-        if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+        if (files && files.length > 0) {
+            files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+        }
 
         const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
-        const summaryText = res.text || "Error al generar texto.";
+        const summaryText = res.text || "No se pudo generar el texto.";
 
+        setStatus('Creando PDF...');
+
+        // 3. Generación del PDF (Paso crítico)
         const pdfDoc = await PDFDocument.create();
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        
+        // Carga de fuentes segura
+        let font, fontBold;
+        try {
+            font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        } catch (fontError) {
+            console.error("Error cargando fuentes PDF", fontError);
+            throw new Error("Error interno al cargar fuentes PDF.");
+        }
         
         let page = pdfDoc.addPage();
         const { width, height } = page.getSize();
         
         const marginX = 50; 
-        const marginTop = 40;     
+        const marginTop = 30; // Margen superior reducido para dar espacio al logo    
         const marginBottom = 80;  
         let y = height - marginTop;
 
-        const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
-        const headerWidth = fontBold.widthOfTextAtSize(headerText, 12);
-        page.drawText(headerText, { x: (width - headerWidth) / 2, y: y, size: 12, font: fontBold });
-        y -= 15;
-        page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
-        y -= 25;
+        // --- NUEVO: INTENTAR CARGAR IMAGEN DE CABECERA ---
+        try {
+            const imageUrl = window.location.origin + '/img/header_logo.png';
+            const imageRes = await fetch(imageUrl);
+            if (imageRes.ok) {
+                const imageBytes = await imageRes.arrayBuffer();
+                // Asumimos PNG. Si usas JPG cambia embedPng por embedJpg
+                const headerImage = await pdfDoc.embedPng(imageBytes);
+                
+                // Ajusta este factor de escala (0.4) si el logo es muy grande o muy chico
+                const imgScaleFactor = 0.4; 
+                const imgDims = headerImage.scale(imgScaleFactor); 
 
+                // Centrar imagen en la parte superior
+                page.drawImage(headerImage, {
+                    x: (width - imgDims.width) / 2,
+                    y: y - imgDims.height, // Dibujar hacia abajo desde el margen superior
+                    width: imgDims.width,
+                    height: imgDims.height,
+                });
+                // Ajustar 'y' para que el texto empiece debajo de la imagen con un margen
+                y -= (imgDims.height + 25);
+            } else {
+                 throw new Error("Imagen no encontrada, usando texto fallback");
+            }
+        } catch (imgErr) {
+            // Fallback al encabezado de texto antiguo si falla la imagen o no existe
+            console.warn("No se pudo cargar logo, usando texto.", imgErr);
+            const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
+            const headerWidth = fontBold.widthOfTextAtSize(headerText, 12);
+            page.drawText(headerText, { x: (width - headerWidth) / 2, y: y, size: 12, font: fontBold });
+            y -= 15;
+            page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
+            y -= 25;
+        }
+        // --------------------------------------------------
+
+        // Fecha y Título
         const dateText = `Córdoba, ${today}`;
         const dateWidth = font.widthOfTextAtSize(dateText, 10);
         page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 10, font });
         y -= 30;
 
-        const title = `RESUMEN CLÍNICO - ${context}`;
+        // --- MODIFICADO: TÍTULO SOLICITADO ---
+        const title = `RESUMEN DE HISTORIA CLÍNICA - ${context} BANCO DE DROGAS`;
+        // -------------------------------------
         const titleWidth = fontBold.widthOfTextAtSize(title, 11);
         page.drawText(title, { x: (width - titleWidth) / 2, y: y, size: 11, font: fontBold });
         y -= 30;
 
+        // Cuerpo
         const fontSize = 10;
         const lineHeight = 14;
         const paragraphs = summaryText.split('\n');
@@ -149,13 +206,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                     page.drawText(lineBuffer, { x: marginX, y: y, size: fontSize, font });
                     y -= lineHeight;
                     lineBuffer = word + ' ';
-                    if (y < marginBottom) { page = pdfDoc.addPage(); y = height - marginTop; }
+                    if (y < marginBottom) { page = pdfDoc.addPage(); y = height - marginTop - 40; } // Margen extra en páginas siguientes
                 } else { lineBuffer = testLine; }
             }
             if (lineBuffer) { page.drawText(lineBuffer, { x: marginX, y: y, size: fontSize, font }); y -= (lineHeight * 1.5); }
-            if (y < marginBottom) { page = pdfDoc.addPage(); y = height - marginTop; }
+            if (y < marginBottom) { page = pdfDoc.addPage(); y = height - marginTop - 40; }
         }
 
+        // Firma
         if (y < 100) page = pdfDoc.addPage();
         const signatureY = 50; 
         const centerX = width / 2;
@@ -163,11 +221,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         
         const docName = doctorData.nombre || "Firma Médico";
         const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : "";
-        const nameWidth = fontBold.widthOfTextAtSize(docName, 10);
-        page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 12, size: 10, font: fontBold });
-        if (docMat) {
-            const matWidth = font.widthOfTextAtSize(docMat, 9);
-            page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 9, font });
+        
+        try {
+            const nameWidth = fontBold.widthOfTextAtSize(docName, 10);
+            page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 12, size: 10, font: fontBold });
+            if (docMat) {
+                const matWidth = font.widthOfTextAtSize(docMat, 9);
+                page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 9, font });
+            }
+        } catch (textError) {
+            console.error("Error dibujando firma", textError);
         }
 
         const pdfBytes = await pdfDoc.save();
@@ -177,8 +240,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         link.download = `Resumen_${context}_${patient.name}.pdf`;
         link.click();
         setStatus('¡Listo!');
-    } catch (e: any) { alert("Error: " + e.message); } 
-    finally { setProcessingId(null); setStatus(''); }
+
+    } catch (e: any) { 
+        console.error(e);
+        alert("❌ Error generando el resumen: " + (e.message || "Error desconocido.")); 
+    } finally { 
+        setProcessingId(null); 
+        setStatus(''); 
+    }
   };
 
   const extractPamiData = async () => {
@@ -275,6 +344,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   };
 
   const generateFieldMap = async (formDef: any) => {
+    setProcessingId('map-' + formDef.id);
+    setStatus('Generando mapa...');
     try {
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
@@ -284,6 +355,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const form = pdfDoc.getForm();
       const fields = form.getFields();
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
       fields.forEach(field => {
         const name = field.getName();
         if (field.constructor.name === 'PDFTextField') {
@@ -294,13 +366,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             textField.setTextColor(rgb(1, 0, 0));
         }
       });
+
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `MAPA_ROJO_${formDef.name}.pdf`;
       link.click();
-    } catch (e: any) { alert('Error: ' + e.message); }
+      alert("✅ Mapa descargado.");
+    } catch (e: any) { alert('Error: ' + e.message); } 
+    finally { setProcessingId(null); setStatus(''); }
   };
 
   return (
