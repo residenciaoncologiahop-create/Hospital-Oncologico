@@ -70,7 +70,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO (SIN FIRMA NI PLACEHOLDERS) ---
+  // --- GENERADOR DE RESUMEN CLÍNICO ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
@@ -153,7 +153,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         
         const marginX = 50; 
         const marginTop = 30;
-        const marginBottom = 50; // Menos margen abajo ya que no hay firma
+        const marginBottom = 50; 
         let y = height - marginTop;
 
         // 1. CARGA DEL LOGO (HEADER)
@@ -165,7 +165,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             if (logoRes.ok) {
                 const logoBytes = await logoRes.arrayBuffer();
                 const pngImage = await pdfDoc.embedPng(logoBytes);
-                const pngDims = pngImage.scale(0.25);
+                // --- CAMBIO AQUÍ: AUMENTO DE ESCALA DEL LOGO ---
+                const pngDims = pngImage.scale(0.35); // Aumentado de 0.25 a 0.35
                 
                 page.drawImage(pngImage, {
                     x: (width - pngDims.width) / 2,
@@ -243,7 +244,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         }
 
         // 4. (ELIMINADO) FIRMA DEL MÉDICO
-        // Ya no se dibuja nada al pie de la página.
 
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
