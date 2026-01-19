@@ -23,8 +23,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   });
 
   useEffect(() => {
-    const savedDoc = localStorage.getItem('doctor_data_profile_v3');
-    if (savedDoc) setDoctorData(JSON.parse(savedDoc));
+    try {
+      const savedDoc = localStorage.getItem('doctor_data_profile_v3');
+      if (savedDoc) setDoctorData(JSON.parse(savedDoc));
+    } catch (e) { console.error(e); }
   }, []);
 
   const saveDoctorData = () => {
@@ -58,19 +60,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     try {
         const response = await fetch(formDef.file, { method: 'HEAD' });
         if (!response.ok) throw new Error("Archivo no encontrado");
-
         const link = document.createElement('a');
         link.href = formDef.file;
         link.download = `${formDef.name}_Plantilla.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    } catch (e) { 
-        alert(`No se encontró el archivo "${formDef.file}". Verifique la carpeta public/forms/`);
-    }
+    } catch (e) { alert(`No se encontró el archivo "${formDef.file}". Verifique la carpeta public/forms/`); }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO (PRECISIÓN CLÍNICA MEJORADA) ---
+  // --- GENERADOR DE RESUMEN CLÍNICO (FORMATO VISUAL MEJORADO) ---
   const generateClinicalSummary = async (context: string) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
@@ -90,49 +89,38 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const ai = new GoogleGenAI({ apiKey });
         const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-        // --- ESTRATEGIA ADMINISTRATIVA ---
+        // --- ESTRATEGIA Y PROMPT ESTRICTO DE FORMATO ---
         let strategyPrompt = "";
         if (context === 'RENOVACIÓN') {
-            strategyPrompt = `
-            ESTRATEGIA ADMINISTRATIVA: **RENOVACIÓN DE ${drugName.toUpperCase()}**
-            - Objetivo: Demostrar beneficio clínico/tolerancia.
-            - Frase Final: "Dada la buena tolerancia y el beneficio clínico observado, se solicita renovar ${drugName}..."
-            `;
+            strategyPrompt = `ESTRATEGIA: RENOVACIÓN DE ${drugName.toUpperCase()}. Objetivo: Demostrar beneficio clínico y tolerancia.`;
         } else {
-            strategyPrompt = `
-            ESTRATEGIA ADMINISTRATIVA: **ADMISIÓN / SOLICITUD PARA ${drugName.toUpperCase()}**
-            - Objetivo: Justificar la INDICACIÓN de inicio.
-            - CRÍTICO: Si ya la tomó, ignora la continuidad y redáctalo como SOLICITUD DE INGRESO/ADMISIÓN.
-            - Frase Final: "Por lo expuesto, se solicita ADMISIÓN para el tratamiento con ${drugName}..."
-            `;
+            strategyPrompt = `ESTRATEGIA: ADMISIÓN / SOLICITUD DE ${drugName.toUpperCase()}. Objetivo: Justificar indicación inicial (ignorar continuidad si ya la tomó).`;
         }
 
         const prompt = `
-        Actúa como un Oncólogo Experto y Meticuloso.
-        Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
+        Actúa como un Oncólogo Experto. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
         
         ${strategyPrompt}
         
-        REGLAS DE PRECISIÓN CLÍNICA (OBLIGATORIAS):
-        1. **CRONOLOGÍA EXACTA:** Cada evento mencionado debe tener su FECHA (dd/mm/aaaa) si está disponible en el texto.
-        2. **CIRUGÍAS:** Debes mencionar explícitamente todas las cirugías realizadas, especialmente **AMPUTACIONES**, resecciones o vaciamientos ganglionares, con sus fechas.
-        3. **ANATOMÍA PATOLÓGICA:** Cita los resultados de las biopsias o piezas quirúrgicas (tipo histológico, márgenes, ganglios positivos/totales).
-        4. **ESTUDIOS:** Menciona fecha y conclusión de Tomografías, PET-TC o Resonancias clave.
+        REGLAS DE FORMATO VISUAL (ESTRICTAS - SIN MARKDOWN):
+        1. ❌ PROHIBIDO usar asteriscos (**negrita** o *cursiva*). El texto debe ser plano.
+        2. ❌ PROHIBIDO usar viñetas de asterisco (*). Usa guiones (-) para listas.
+        3. TÍTULOS DE SECCIÓN: Deben estar numerados, en MAYÚSCULAS y solos en su línea. Ejemplo exacto:
+           1. IDENTIFICACIÓN
+           2. ANTECEDENTES ONCOLÓGICOS
+           3. ENFERMEDAD ACTUAL
+           4. JUSTIFICACIÓN
+        4. SUBTÍTULOS: Escribirlos seguidos de dos puntos (ej: "Cirugías previas:").
+        5. DATOS DEL PACIENTE: Formato "Campo: Valor" (ej: "Paciente: JUAN PEREZ").
         
-        ESTRUCTURA DEL DOCUMENTO:
-        1. **Identificación:** Paciente (Nombre, DNI, Edad) y Diagnóstico Completo (TNM si está disponible).
-        2. **Antecedentes Oncológicos (Detallado):** - Fecha de diagnóstico inicial.
-           - Cirugías previas (Incluir amputaciones si las hubo).
-           - Tratamientos previos (Qmt/Rt) con fechas de inicio/fin y respuesta (progresión/estabilidad).
-        3. **Enfermedad Actual:** - Estado clínico actual (ECOG/PS).
-           - Descripción de la lesión actual o sitios de metástasis.
-           - Últimos estudios de imagen con fecha y hallazgos.
-        4. **Justificación:** Redactar según la ESTRATEGIA ADMINISTRATIVA definida arriba para ${drugName}.
+        CONTENIDO REQUERIDO:
+        - Fechas exactas de todo evento (DD/MM/AAAA).
+        - Detalle de cirugías (especialmente amputaciones) y anatomía patológica.
+        - Resultados de estudios de imagen con medidas.
         
-        **IMPORTANTE:** NO incluyas ninguna firma, ni nombre de médico, ni pie de página al final. Termina con el punto final de la justificación.
+        **IMPORTANTE:** NO incluyas ninguna firma ni pie de página al final.
         
-        CONTEXTO CLÍNICO DEL PACIENTE: 
-        ${historyText || ''}
+        CONTEXTO: ${historyText || ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
@@ -141,11 +129,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         }
 
         const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
-        const summaryText = res.text || "No se pudo generar el resumen.";
+        const summaryText = res.text || "No se pudo generar el texto.";
 
         setStatus('Generando PDF...');
 
-        // --- CREACIÓN DEL PDF ---
+        // --- CREACIÓN DEL PDF CON ESTILOS PERSONALIZADOS ---
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -155,10 +143,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         
         const marginX = 50; 
         const marginTop = 30;
-        const marginBottom = 50; 
+        const marginBottom = 60; 
         let y = height - marginTop;
 
-        // 1. HEADER LOGO
+        // 1. LOGO E INSTITUCIÓN
         let logoLoaded = false;
         try {
             const logoUrl = window.location.origin + '/img/header_logo.png';
@@ -180,47 +168,92 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
         if (!logoLoaded) {
             const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
+            const subHeaderText = "Córdoba, Argentina";
+            
             const headerWidth = fontBold.widthOfTextAtSize(headerText, 14);
             page.drawText(headerText, { x: (width - headerWidth) / 2, y: y, size: 14, font: fontBold });
-            y -= 20;
-            page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
-            y -= 30;
-        } else {
-             page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
-             y -= 30;
+            y -= 15;
+            
+            const subHeaderWidth = font.widthOfTextAtSize(subHeaderText, 10);
+            page.drawText(subHeaderText, { x: (width - subHeaderWidth) / 2, y: y, size: 10, font });
+            y -= 15;
         }
 
-        // 2. TÍTULO Y FECHA
-        const dateText = `Córdoba, ${today}`;
-        const dateWidth = font.widthOfTextAtSize(dateText, 11);
-        page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 11, font });
-        y -= 40;
+        // SEPARADOR PRINCIPAL
+        page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1.5, color: rgb(0, 0, 0) });
+        y -= 25;
 
-        const title = `RESUMEN DE HISTORIA CLÍNICA - ${context} BANCO DE DROGAS`;
-        const titleWidth = fontBold.widthOfTextAtSize(title, 12);
-        page.drawText(title, { x: (width - titleWidth) / 2, y: y, size: 12, font: fontBold });
+        // TÍTULO DEL DOCUMENTO
+        const docTitle = "RESUMEN DE HISTORIA CLÍNICA";
+        const docSubTitle = `${context} - BANCO DE DROGAS`;
+        const dateText = `Fecha de emisión: ${today}`;
+
+        const titleWidth = fontBold.widthOfTextAtSize(docTitle, 14);
+        page.drawText(docTitle, { x: (width - titleWidth) / 2, y: y, size: 14, font: fontBold });
+        y -= 18;
+
+        const subTitleWidth = fontBold.widthOfTextAtSize(docSubTitle, 12);
+        page.drawText(docSubTitle, { x: (width - subTitleWidth) / 2, y: y, size: 12, font: fontBold });
+        y -= 20;
+
+        // FECHA ALINEADA A LA DERECHA
+        const dateWidth = font.widthOfTextAtSize(dateText, 10);
+        page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 10, font });
+        y -= 20;
+
+        // SEPARADOR SECUNDARIO
+        page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 0.5, color: rgb(0.5, 0.5, 0.5) });
         y -= 30;
 
-        // 3. CUERPO
-        const fontSize = 10; // Letra un poco más chica para que entre más detalle
+        // 3. CUERPO DEL TEXTO (PARSEO INTELIGENTE)
+        const fontSizeBody = 10;
+        const fontSizeHeader = 11;
         const lineHeight = 14;
         const paragraphs = summaryText.split('\n');
 
-        for (const paragraph of paragraphs) {
-            if (!paragraph.trim()) { y -= 8; continue; }
+        for (let i = 0; i < paragraphs.length; i++) {
+            const paragraph = paragraphs[i].trim();
+            if (!paragraph) { 
+                y -= 5; // Espacio pequeño por línea vacía
+                continue; 
+            }
 
+            // DETECCIÓN DE TÍTULOS DE SECCIÓN (Ej: "1. IDENTIFICACIÓN")
+            const isSectionHeader = /^\d+\.\s+[A-ZÁÉÍÓÚÑ\s]+$/.test(paragraph);
+            
+            if (isSectionHeader) {
+                y -= 15; // Espacio extra antes de sección
+                
+                // Verificar salto de página para título
+                if (y < marginBottom + 40) { 
+                    page = pdfDoc.addPage(); 
+                    y = height - marginTop - 20; 
+                }
+
+                page.drawText(paragraph, { x: marginX, y: y, size: fontSizeHeader, font: fontBold });
+                y -= 5;
+                // Línea decorativa bajo el título
+                page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 0.5, color: rgb(0, 0, 0) });
+                y -= 20; // Espacio después del título
+                continue;
+            }
+
+            // PROCESAMIENTO DE PÁRRAFO NORMAL
             const words = paragraph.split(' ');
             let lineBuffer = '';
 
             for (const word of words) {
-                const testLine = lineBuffer + word + ' ';
-                const textWidth = font.widthOfTextAtSize(testLine, fontSize);
+                // Filtro extra de asteriscos por si acaso
+                const cleanWord = word.replace(/\*/g, '');
+                
+                const testLine = lineBuffer + cleanWord + ' ';
+                const textWidth = font.widthOfTextAtSize(testLine, fontSizeBody);
                 const maxWidth = width - (marginX * 2);
 
                 if (textWidth > maxWidth) {
-                    page.drawText(lineBuffer, { x: marginX, y: y, size: fontSize, font });
+                    page.drawText(lineBuffer, { x: marginX, y: y, size: fontSizeBody, font });
                     y -= lineHeight;
-                    lineBuffer = word + ' ';
+                    lineBuffer = cleanWord + ' ';
 
                     if (y < marginBottom) {
                         page = pdfDoc.addPage();
@@ -231,8 +264,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                 }
             }
             if (lineBuffer) {
-                page.drawText(lineBuffer, { x: marginX, y: y, size: fontSize, font });
-                y -= (lineHeight * 1.5);
+                page.drawText(lineBuffer, { x: marginX, y: y, size: fontSizeBody, font });
+                y -= (lineHeight * 1.2); // Espacio entre párrafos
             }
             
             if (y < marginBottom) {
@@ -241,29 +274,23 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             }
         }
 
-        // 4. FIRMA (AL PIE)
-        if (y < 120) { page = pdfDoc.addPage(); }
+        // 4. DATOS DEL MÉDICO AL PIE (SOLO NOMBRE Y MATRÍCULA, SIN FIRMA DIBUJADA)
+        if (y < 100) { page = pdfDoc.addPage(); y = height - marginBottom; }
+        
+        y -= 30; // Espacio final
+        
+        // Línea de cierre opcional
+        page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
+        y -= 15;
 
-        const signatureY = 60; 
-        const centerX = width / 2;
-
-        page.drawLine({
-            start: { x: centerX - 70, y: signatureY + 30 },
-            end: { x: centerX + 70, y: signatureY + 30 },
-            thickness: 1,
-            color: rgb(0, 0, 0),
-        });
-
-        const docName = doctorData.nombre || "Firma Médico";
+        const docName = doctorData.nombre;
         const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : "";
-        
-        const nameWidth = fontBold.widthOfTextAtSize(docName, 11);
-        page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 15, size: 11, font: fontBold });
-        
-        if (docMat) {
-            const matWidth = font.widthOfTextAtSize(docMat, 10);
-            page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 10, font });
-        }
+        const docInfo = `${docName} - ${docMat}`;
+        const hospitalInfo = "Hospital Oncológico Dr. José Miguel Urrutia - Servicio de Oncología";
+
+        page.drawText(docInfo, { x: marginX, y: y, size: 10, font: fontBold });
+        y -= 12;
+        page.drawText(hospitalInfo, { x: marginX, y: y, size: 9, font });
 
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
