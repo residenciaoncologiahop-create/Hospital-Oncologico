@@ -56,9 +56,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const downloadTemplate = async (formDef: any) => {
     try {
-        const response = await fetch(formDef.file, { method: 'HEAD' });
-        if (!response.ok) throw new Error("Archivo no encontrado");
-
         const link = document.createElement('a');
         link.href = formDef.file;
         link.download = `${formDef.name}_Plantilla.pdf`;
