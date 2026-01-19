@@ -22,14 +22,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     cel_area: '', cel_num: ''
   });
 
-  // Carga segura de datos locales
   useEffect(() => {
-    try {
-      const savedDoc = localStorage.getItem('doctor_data_profile_v3');
-      if (savedDoc) setDoctorData(JSON.parse(savedDoc));
-    } catch (e) {
-      console.error("Error cargando perfil médico", e);
-    }
+    const savedDoc = localStorage.getItem('doctor_data_profile_v3');
+    if (savedDoc) setDoctorData(JSON.parse(savedDoc));
   }, []);
 
   const saveDoctorData = () => {
@@ -38,12 +33,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     alert("Datos guardados.");
   };
 
+  // ------------------------------------------------------------------
+  // CONFIGURACIÓN DE FORMULARIOS
+  // ------------------------------------------------------------------
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'manual', context: 'ADMISIÓN' },
     { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'manual', context: 'RENOVACIÓN' },
     { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/nuevo_dinadic.pdf', type: 'manual', context: 'SOLICITUD' },
   ];
+  // ------------------------------------------------------------------
 
   const calculateBSA = (weight: string, height: string) => {
     const w = parseFloat(weight?.toString().replace(',', '.'));
@@ -75,37 +74,64 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     }
   };
 
-  // --- GENERADOR DE RESUMEN CLÍNICO (BLINDADO Y CON LOGO) ---
+  // --- GENERADOR DE RESUMEN CLÍNICO (LOGICA ADMISION/RENOVACION MEJORADA) ---
   const generateClinicalSummary = async (context: string) => {
-    // 1. Validación inicial
     if (!historyText && (!files || files.length === 0)) {
-        alert("⚠️ Falta documentación.\nPor favor cargue archivos en la pestaña 'Documentación' antes de generar el resumen.");
+        alert("⚠️ Falta documentación para generar el resumen.");
         return;
     }
-
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) {
-        alert("⚠️ Error de Configuración: Falta la API Key.");
-        return;
-    }
-
     setProcessingId('summary');
-    setStatus('Analizando datos...');
+    setStatus('Redactando resumen...');
 
     try {
-        // 2. Llamada a la IA
+        const apiKey = import.meta.env.VITE_API_KEY;
+        if (!apiKey) throw new Error("Falta API Key");
+        
         const ai = new GoogleGenAI({ apiKey });
         const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
+        // --- LÓGICA DE NEGOCIO PARA EL PROMPT ---
+        let instruccionesContexto = "";
+        
+        if (context === 'RENOVACIÓN') {
+            instruccionesContexto = `
+            CONTEXTO: RENOVACIÓN DE TRATAMIENTO.
+            OBJETIVO: Justificar la CONTINUIDAD de la droga actual.
+            ENFOQUE OBLIGATORIO:
+            - Destacar la buena tolerancia y la respuesta clínica (Estable, Parcial o Completa).
+            - NO hablar de introducir droga nueva, sino de MANTENER la actual.
+            - Justificación Final: "Se solicita RENOVACIÓN de [Droga] dado el beneficio clínico y la ausencia de progresión..."
+            `;
+        } else {
+            // Admisión o Solicitud (DINADIC)
+            instruccionesContexto = `
+            CONTEXTO: ADMISIÓN / SOLICITUD DE INICIO.
+            OBJETIVO: Justificar la INTRODUCCIÓN de una NUEVA línea de tratamiento o droga.
+            ENFOQUE OBLIGATORIO:
+            - Explicar el fracaso/progresión con tratamientos previos o la indicación de primera línea.
+            - Aunque el paciente haya recibido una dosis reciente (ej: urgencia), el tono es de SOLICITUD DE INGRESO al tratamiento.
+            - Justificación Final: "Se solicita ADMISIÓN para el tratamiento con [Droga] en base a la evidencia/guías para este estadio..."
+            `;
+        }
+
         const prompt = `
-        Actúa como Oncólogo. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
-        IMPORTANTE: Texto plano, profesional, sin markdown.
-        ESTRUCTURA:
-        1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico.
-        2. Antecedentes: Breve.
-        3. Enfermedad Actual: Estado actual, estudios recientes.
-        4. Justificación (Final): "Por lo expuesto, se solicita [Droga]..."
-        CONTEXTO: ${historyText || ''}
+        Actúa como Oncólogo del Hospital Oncológico Dr. José Miguel Urrutia.
+        Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
+        
+        ${instruccionesContexto}
+        
+        REGLAS DE FORMATO: 
+        - Formato de texto plano profesional.
+        - NO uses negritas (markdown) ni símbolos extraños.
+        - Sé conciso y directo.
+        
+        ESTRUCTURA DEL DOCUMENTO:
+        1. Identificación: Paciente (Nombre, DNI, Edad) y Diagnóstico Principal.
+        2. Antecedentes: Breve resumen de comorbilidades y oncológicos previos.
+        3. Enfermedad Actual: Estado actual, estudios recientes (fechas y hallazgos clave).
+        4. Justificación (PÁRRAFO FINAL): Redactar según el ENFOQUE OBLIGATORIO definido arriba.
+        
+        DATOS DEL PACIENTE: ${historyText || ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
@@ -114,123 +140,131 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         }
 
         const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
-        const summaryText = res.text || "No se pudo generar el texto.";
+        const summaryText = res.text || "No se pudo generar el resumen.";
 
-        setStatus('Creando PDF...');
-
-        // 3. Generación del PDF (Paso crítico)
+        // --- CREACIÓN DEL PDF ---
         const pdfDoc = await PDFDocument.create();
-        
-        // Carga de fuentes segura
-        let font, fontBold;
-        try {
-            font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-            fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        } catch (fontError) {
-            console.error("Error cargando fuentes PDF", fontError);
-            throw new Error("Error interno al cargar fuentes PDF.");
-        }
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
         
         let page = pdfDoc.addPage();
         const { width, height } = page.getSize();
         
         const marginX = 50; 
-        const marginTop = 30; // Margen superior reducido para dar espacio al logo    
-        const marginBottom = 80;  
+        const marginTop = 30; // Margen superior reducido para el logo
+        const marginBottom = 100;
         let y = height - marginTop;
 
-        // --- NUEVO: INTENTAR CARGAR IMAGEN DE CABECERA ---
+        // 1. INTENTO DE CARGA DE IMAGEN (LOGO)
+        let logoLoaded = false;
         try {
-            const imageUrl = window.location.origin + '/img/header_logo.png';
-            const imageRes = await fetch(imageUrl);
-            if (imageRes.ok) {
-                const imageBytes = await imageRes.arrayBuffer();
-                // Asumimos PNG. Si usas JPG cambia embedPng por embedJpg
-                const headerImage = await pdfDoc.embedPng(imageBytes);
+            const logoUrl = window.location.origin + '/img/header_logo.png';
+            const logoRes = await fetch(logoUrl);
+            
+            if (logoRes.ok) {
+                const logoBytes = await logoRes.arrayBuffer();
+                const pngImage = await pdfDoc.embedPng(logoBytes);
+                const pngDims = pngImage.scale(0.25);
                 
-                // Ajusta este factor de escala (0.4) si el logo es muy grande o muy chico
-                const imgScaleFactor = 0.4; 
-                const imgDims = headerImage.scale(imgScaleFactor); 
-
-                // Centrar imagen en la parte superior
-                page.drawImage(headerImage, {
-                    x: (width - imgDims.width) / 2,
-                    y: y - imgDims.height, // Dibujar hacia abajo desde el margen superior
-                    width: imgDims.width,
-                    height: imgDims.height,
+                page.drawImage(pngImage, {
+                    x: (width - pngDims.width) / 2,
+                    y: y - pngDims.height,
+                    width: pngDims.width,
+                    height: pngDims.height,
                 });
-                // Ajustar 'y' para que el texto empiece debajo de la imagen con un margen
-                y -= (imgDims.height + 25);
-            } else {
-                 throw new Error("Imagen no encontrada, usando texto fallback");
+                
+                y -= (pngDims.height + 20); 
+                logoLoaded = true;
             }
-        } catch (imgErr) {
-            // Fallback al encabezado de texto antiguo si falla la imagen o no existe
-            console.warn("No se pudo cargar logo, usando texto.", imgErr);
-            const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
-            const headerWidth = fontBold.widthOfTextAtSize(headerText, 12);
-            page.drawText(headerText, { x: (width - headerWidth) / 2, y: y, size: 12, font: fontBold });
-            y -= 15;
-            page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
-            y -= 25;
+        } catch (e) {
+            console.warn("No se pudo cargar el logo, usando texto.", e);
         }
-        // --------------------------------------------------
 
-        // Fecha y Título
+        if (!logoLoaded) {
+            const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
+            const headerWidth = fontBold.widthOfTextAtSize(headerText, 14);
+            page.drawText(headerText, { x: (width - headerWidth) / 2, y: y, size: 14, font: fontBold });
+            y -= 20;
+            page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
+            y -= 30;
+        } else {
+             page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1, color: rgb(0, 0, 0) });
+             y -= 30;
+        }
+
+        // 2. FECHA Y TÍTULO
         const dateText = `Córdoba, ${today}`;
-        const dateWidth = font.widthOfTextAtSize(dateText, 10);
-        page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 10, font });
-        y -= 30;
+        const dateWidth = font.widthOfTextAtSize(dateText, 11);
+        page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 11, font });
+        y -= 40;
 
-        // --- MODIFICADO: TÍTULO SOLICITADO ---
         const title = `RESUMEN DE HISTORIA CLÍNICA - ${context} BANCO DE DROGAS`;
-        // -------------------------------------
-        const titleWidth = fontBold.widthOfTextAtSize(title, 11);
-        page.drawText(title, { x: (width - titleWidth) / 2, y: y, size: 11, font: fontBold });
+        const titleWidth = fontBold.widthOfTextAtSize(title, 12);
+        page.drawText(title, { x: (width - titleWidth) / 2, y: y, size: 12, font: fontBold });
         y -= 30;
 
-        // Cuerpo
-        const fontSize = 10;
-        const lineHeight = 14;
+        // 3. CUERPO DEL TEXTO
+        const fontSize = 11;
+        const lineHeight = 15;
         const paragraphs = summaryText.split('\n');
 
         for (const paragraph of paragraphs) {
-            if (!paragraph.trim()) { y -= 6; continue; }
+            if (!paragraph.trim()) { y -= 8; continue; }
+
             const words = paragraph.split(' ');
             let lineBuffer = '';
+
             for (const word of words) {
                 const testLine = lineBuffer + word + ' ';
                 const textWidth = font.widthOfTextAtSize(testLine, fontSize);
                 const maxWidth = width - (marginX * 2);
+
                 if (textWidth > maxWidth) {
                     page.drawText(lineBuffer, { x: marginX, y: y, size: fontSize, font });
                     y -= lineHeight;
                     lineBuffer = word + ' ';
-                    if (y < marginBottom) { page = pdfDoc.addPage(); y = height - marginTop - 40; } // Margen extra en páginas siguientes
-                } else { lineBuffer = testLine; }
+
+                    if (y < marginBottom) {
+                        page = pdfDoc.addPage();
+                        y = height - marginTop - 40; 
+                    }
+                } else {
+                    lineBuffer = testLine;
+                }
             }
-            if (lineBuffer) { page.drawText(lineBuffer, { x: marginX, y: y, size: fontSize, font }); y -= (lineHeight * 1.5); }
-            if (y < marginBottom) { page = pdfDoc.addPage(); y = height - marginTop - 40; }
+            if (lineBuffer) {
+                page.drawText(lineBuffer, { x: marginX, y: y, size: fontSize, font });
+                y -= (lineHeight * 1.5);
+            }
+            
+            if (y < marginBottom) {
+                page = pdfDoc.addPage();
+                y = height - marginTop - 40;
+            }
         }
 
-        // Firma
-        if (y < 100) page = pdfDoc.addPage();
-        const signatureY = 50; 
+        // 4. FIRMA DEL MÉDICO
+        if (y < 120) { page = pdfDoc.addPage(); }
+
+        const signatureY = 60; 
         const centerX = width / 2;
-        page.drawLine({ start: { x: centerX - 70, y: signatureY + 25 }, end: { x: centerX + 70, y: signatureY + 25 }, thickness: 1, color: rgb(0, 0, 0) });
-        
+
+        page.drawLine({
+            start: { x: centerX - 70, y: signatureY + 30 },
+            end: { x: centerX + 70, y: signatureY + 30 },
+            thickness: 1,
+            color: rgb(0, 0, 0),
+        });
+
         const docName = doctorData.nombre || "Firma Médico";
         const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : "";
         
-        try {
-            const nameWidth = fontBold.widthOfTextAtSize(docName, 10);
-            page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 12, size: 10, font: fontBold });
-            if (docMat) {
-                const matWidth = font.widthOfTextAtSize(docMat, 9);
-                page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 9, font });
-            }
-        } catch (textError) {
-            console.error("Error dibujando firma", textError);
+        const nameWidth = fontBold.widthOfTextAtSize(docName, 11);
+        page.drawText(docName, { x: centerX - (nameWidth / 2), y: signatureY + 15, size: 11, font: fontBold });
+        
+        if (docMat) {
+            const matWidth = font.widthOfTextAtSize(docMat, 10);
+            page.drawText(docMat, { x: centerX - (matWidth / 2), y: signatureY, size: 10, font });
         }
 
         const pdfBytes = await pdfDoc.save();
@@ -241,13 +275,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         link.click();
         setStatus('¡Listo!');
 
-    } catch (e: any) { 
-        console.error(e);
-        alert("❌ Error generando el resumen: " + (e.message || "Error desconocido.")); 
-    } finally { 
-        setProcessingId(null); 
-        setStatus(''); 
-    }
+    } catch (e: any) { alert("Error: " + e.message); } 
+    finally { setProcessingId(null); setStatus(''); }
   };
 
   const extractPamiData = async () => {
@@ -255,9 +284,24 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     if (!apiKey) throw new Error("Falta API Key");
     const ai = new GoogleGenAI({ apiKey });
     const today = new Date().toLocaleDateString('es-AR');
-    const promptText = `Actúa como ONCÓLOGO. Completa planilla PAMI. JSON: {"paciente_nombre_real": "Nombre", "paciente_dni": "DNI", "paciente_celular": "Celular", "paciente_fnac": "DD/MM/AAAA", "diagnostico_cie10": "Dx", "histopatologico": "Histo", "peso": "kg", "talla": "cm", "ecog": "0-4", "estadio_inicial": "EI", "estadio_actual": "EA", "fecha_diagnostico_inicial": "DD/MM/AAAA", "linea_tratamiento": "Línea", "antecedentes_qx": "Cx", "antecedentes_radio": "RT", "laboratorio_formateado": "Lab", "informe_clinico_detallado": "Informe", "motivo_solicitud": "Inicio...", "tipo_tratamiento": "Adyuvante...", "ciclos_planeados": "Ciclos", "frecuencia_dias": "D1", "droga_1": "D1", "presentacion_1": "P1", "dosis_1": "Dosis1", "droga_2": "D2", "presentacion_2": "P2", "dosis_2": "Dosis2"}`;
+    
+    const promptText = `
+        Actúa como un ONCÓLOGO EXPERTO. Hoy es ${today}.
+        OBJETIVO: Completar planilla PAMI. REGLAS: Español, Informe conciso, Ciclos "Hasta progresión", Tratamiento estándar NCCN.
+        Extrae JSON: {
+          "paciente_nombre_real": "Nombre", "paciente_dni": "DNI", "paciente_celular": "Celular", "paciente_fnac": "DD/MM/AAAA",
+          "diagnostico_cie10": "Dx", "histopatologico": "Histo", "peso": "kg", "talla": "cm", "ecog": "0-4",
+          "estadio_inicial": "EI", "estadio_actual": "EA", "fecha_diagnostico_inicial": "DD/MM/AAAA",
+          "linea_tratamiento": "Línea", "antecedentes_qx": "Cx", "antecedentes_radio": "RT",
+          "laboratorio_formateado": "Lab", "informe_clinico_detallado": "Informe",
+          "motivo_solicitud": "Inicio...", "tipo_tratamiento": "Adyuvante...",
+          "ciclos_planeados": "Ciclos", "frecuencia_dias": "D1",
+          "droga_1": "D1", "presentacion_1": "P1", "dosis_1": "Dosis1", "droga_2": "D2", "presentacion_2": "P2", "dosis_2": "Dosis2"
+        }`;
+
     const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${historyText}` }];
     if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+
     const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
     const text = res.text || "{}";
     let cleanText = text.replace(/```json|```/g, '').trim();
@@ -268,23 +312,40 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   };
 
   const fillPamiPDF = async (formDef: any) => {
-    if ((!files || files.length === 0) && !historyText) { alert("⚠️ Suba la Historia Clínica primero."); return; }
+    if ((!files || files.length === 0) && !historyText) {
+        alert("⚠️ Suba la Historia Clínica primero.");
+        return;
+    }
     setProcessingId(formDef.id);
     setStatus('Procesando PAMI...');
+
     try {
       const aiData = await extractPamiData();
       const bsa = calculateBSA(aiData.peso, aiData.talla);
       const finalName = aiData.paciente_nombre_real || patient.name;
       const cleanFnac = cleanDate(aiData.paciente_fnac);
+
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
       if (!res.ok) throw new Error(`No se encontró ${formDef.file}`);
       const formBytes = await res.arrayBuffer();
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
-      const setText = (name: string, val: string, limit?: number, fontSize?: number) => { try { const f = form.getTextField(name); if (val) { let textToWrite = String(val); if (limit && textToWrite.length > limit) textToWrite = textToWrite.substring(0, limit); f.setText(textToWrite); if (fontSize) f.setFontSize(fontSize); } } catch (e) {} };
+
+      const setText = (name: string, val: string, limit?: number, fontSize?: number) => {
+        try { 
+            const f = form.getTextField(name); 
+            if (val) {
+                let textToWrite = String(val);
+                if (limit && textToWrite.length > limit) textToWrite = textToWrite.substring(0, limit);
+                f.setText(textToWrite);
+                if (fontSize) f.setFontSize(fontSize);
+            }
+        } catch (e) {}
+      };
       const setCheck = (name: string, shouldCheck: boolean) => { try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {} };
 
+      // MAPEO PAMI ORIGINAL
       setText('Apellido y Nombre', finalName);
       setText('Beneficiario Nº', ''); 
       setText('Celular', aiData.paciente_celular);
@@ -321,7 +382,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       setText('PresentaciónRow1', aiData.presentacion_1);
       setText('DosisRow1', aiData.dosis_1);
       setText('N CiclosDuración díasRow1', aiData.frecuencia_dias); 
-      if (aiData.droga_2) { setText('DrogaGenéricoRow2', aiData.droga_2); setText('PresentaciónRow2', aiData.presentacion_2); setText('DosisRow2', aiData.dosis_2); setText('N CiclosDuración díasRow2', aiData.frecuencia_dias); }
+      if (aiData.droga_2) {
+        setText('DrogaGenéricoRow2', aiData.droga_2);
+        setText('PresentaciónRow2', aiData.presentacion_2);
+        setText('DosisRow2', aiData.dosis_2);
+        setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
+      }
       setText('Apellido y Nombre_2', doctorData.nombre);
       setText('Matricula', doctorData.matricula);
       setText('Especialidad', doctorData.especialidad);
