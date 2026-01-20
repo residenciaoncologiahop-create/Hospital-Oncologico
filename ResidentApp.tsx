@@ -124,7 +124,7 @@ const ResidentApp = () => {
     const events = await extractResidentTimeline(selectedPatient.historyText, selectedPatient.files);
     updateCurrentPatient({ timeline: events });
     setIsProcessingDocs(false);
-    setActiveTab('timeline');
+    setActiveTab(prev => prev === 'learning' ? prev : 'timeline');
   };
 
   const handleExit = () => { if (window.confirm("Se borrarán los datos. ¿Salir?")) window.location.reload(); };
