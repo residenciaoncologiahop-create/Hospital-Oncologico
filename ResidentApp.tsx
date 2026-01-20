@@ -318,10 +318,9 @@ const [showDrugs, setShowDrugs] = useState(false);
         </div>
       )}
 {/* --- MODALES DE HERRAMIENTAS --- */}
-  {showCalc && <OncoCalculator onClose={() => setShowCalc(false)} />}
-  {showDrugs && <DrugReference onClose={() => setShowDrugs(false)} />}
+      {showCalc && <OncoCalculator onClose={() => setShowCalc(false)} />}
+      {showDrugs && <DrugReference onClose={() => setShowDrugs(false)} />}
 
-</div> // Cierre del div principal de ResidentApp
     </div>
   );
 };
