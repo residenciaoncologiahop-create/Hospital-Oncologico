@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Activity, Plus, Search, Trash2, LogOut, Menu, X, 
   FileText, Clock, FileOutput, GraduationCap, Calculator, Pill, 
-  Stethoscope, User, ChevronRight, PanelLeftClose, PanelLeftOpen, MessageSquare, Loader2, AlertCircle 
+  Stethoscope, User, ChevronRight, PanelLeftClose, PanelLeftOpen, MessageSquare, Loader2, AlertCircle, Sparkles 
 } from 'lucide-react';
 
 // --- IMPORTS ---
@@ -11,7 +11,7 @@ import OncoCalculator from './components/OncoCalculator';
 import DrugReference from './components/DrugReference';
 import FileUploader from './components/FileUploader';
 import ResidentLearningModule from './components/ResidentLearningModule';
-import { getResidentChatResponse, extractResidentTimeline } from './utils/residentAI';
+import { getResidentChatResponse, extractResidentTimeline, generateResidentClinicalSummary } from './utils/residentAI'; // <--- Import actualizado
 
 // --- TIPOS ---
 interface ResidentPatient {
@@ -45,8 +45,9 @@ const ResidentApp = () => {
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Timeline Processing State
+  // Processing States
   const [isProcessingDocs, setIsProcessingDocs] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false); // <--- Nuevo estado
 
   // New Patient Form
   const [newName, setNewName] = useState('');
@@ -124,13 +125,28 @@ const ResidentApp = () => {
     const events = await extractResidentTimeline(selectedPatient.historyText, selectedPatient.files);
     updateCurrentPatient({ timeline: events });
     setIsProcessingDocs(false);
-    setActiveTab(prev => prev === 'learning' ? prev : 'timeline');
+    setActiveTab('timeline');
+  };
+
+  // --- NUEVA FUNCIÓN: Generar Resumen ---
+  const handleGenerateSummary = async () => {
+    if (!selectedPatient) return;
+    
+    setIsGeneratingSummary(true);
+    const summary = await generateResidentClinicalSummary(selectedPatient.historyText, selectedPatient.files);
+    
+    // Agregamos el resumen al texto existente o lo reemplazamos
+    const newHistory = selectedPatient.historyText 
+      ? selectedPatient.historyText + "\n\n--- RESUMEN GENERADO POR IA ---\n" + summary 
+      : summary;
+
+    updateCurrentPatient({ historyText: newHistory });
+    setIsGeneratingSummary(false);
   };
 
   const handleExit = () => { if (window.confirm("Se borrarán los datos. ¿Salir?")) window.location.reload(); };
 
   return (
-    // CAMBIO 1: Revertido a text-xs para letra más compacta
     <div className="flex h-screen bg-white text-gray-800 font-sans text-xs overflow-hidden">
       
       {/* SIDEBAR */}
@@ -191,15 +207,27 @@ const ResidentApp = () => {
               <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
                 {activeTab === 'docs' && (
                   <div className="space-y-6">
-                    {/* CAMBIO 3: Eliminado el cartel de advertencia amarillo */}
-                    
                     <FileUploader label="Documentos del Caso" files={selectedPatient.files} setFiles={(newFiles) => updateCurrentPatient({ files: newFiles })} />
+                    
+                    {/* BOTÓN DE GENERAR RESUMEN */}
+                    <div className="flex justify-end">
+                      <button 
+                        onClick={handleGenerateSummary} 
+                        disabled={isGeneratingSummary || (selectedPatient.files.length === 0 && !selectedPatient.historyText)}
+                        className="flex items-center gap-2 bg-indigo-100 text-indigo-600 hover:bg-indigo-600 hover:text-white px-3 py-2 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all disabled:opacity-50"
+                      >
+                        {isGeneratingSummary ? <Loader2 className="animate-spin" size={14}/> : <Sparkles size={14} />}
+                        Generar Resumen con IA
+                      </button>
+                    </div>
+
                     <textarea 
-                      className="w-full h-32 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-indigo-200 transition-all outline-none resize-none shadow-inner" 
-                      placeholder="Notas del caso, resumen manual..." 
+                      className="w-full h-64 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-indigo-200 transition-all outline-none resize-none shadow-inner leading-relaxed" 
+                      placeholder="Notas del caso, resumen manual o generado por IA..." 
                       value={selectedPatient.historyText}
                       onChange={(e) => updateCurrentPatient({ historyText: e.target.value })}
                     />
+                    
                     <button onClick={handleProcessTimeline} disabled={isProcessingDocs} className="w-full bg-indigo-600 text-white py-4 rounded-xl text-[10px] font-black tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50 hover:bg-indigo-700 transition-all uppercase">
                       {isProcessingDocs ? <><Loader2 className="animate-spin inline mr-2" size={14}/>Analizando...</> : "Procesar Historia Clínica"}
                     </button>
@@ -243,7 +271,6 @@ const ResidentApp = () => {
                  {selectedPatient.chatHistory.length === 0 && (
                    <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none">
                      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><MessageSquare size={48} className="text-indigo-600" /></div>
-                     {/* CAMBIO 2: Texto por defecto ajustado al profesional */}
                      <p className="text-xs font-black uppercase tracking-widest">Asistente Oncológico</p>
                    </div>
                  )}
@@ -259,7 +286,6 @@ const ResidentApp = () => {
                </div>
                <div className="p-6 bg-white/80 backdrop-blur-md border-t">
                  <div className="relative flex items-center bg-gray-50 rounded-3xl border-2 border-transparent focus-within:border-indigo-100 focus-within:bg-white transition-all p-3 pl-6">
-                   {/* CAMBIO 2: Placeholder ajustado */}
                    <textarea className="flex-1 bg-transparent text-xs font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" placeholder="Escriba su consulta..." rows={1} value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} />
                    <button onClick={handleSendMessage} disabled={!chatInput.trim()} className="ml-3 p-3 bg-indigo-600 text-white rounded-2xl shadow-lg disabled:opacity-50"><MessageSquare size={20} /></button>
                  </div>
