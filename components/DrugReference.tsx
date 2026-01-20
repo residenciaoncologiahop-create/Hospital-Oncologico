@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pill, X, Search, Loader2, AlertTriangle } from 'lucide-react';
-import { generateText } from '../lib/ai';
+import { GoogleGenAI } from "@google/genai";
 
 interface DrugReferenceProps {
   onClose: () => void;
@@ -22,7 +22,9 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
       const apiKey = import.meta.env.VITE_API_KEY;
       if (!apiKey) throw new Error("API Key no configurada.");
 
+      // Instancia local para evitar dependencias externas
       const ai = new GoogleGenAI({ apiKey });
+      
       const prompt = `
         Actúa como Farmacólogo Oncológico Experto.
         Genera una ficha técnica concisa y estructurada para la droga: "${query}".
@@ -36,8 +38,15 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
         </div>
       `;
 
-      const res = await generateText(prompt);
-      setData(res);
+      const res = await ai.models.generateContent({ 
+        model: 'gemini-2.5-flash', 
+        contents: { parts: [{ text: prompt }] } 
+      });
+      
+      const text = res.text || "Sin respuesta.";
+      // Limpieza de seguridad por si la IA devuelve markdown
+      setData(text.replace(/```html|```/g, ''));
+
     } catch (e: any) {
       setError(e.message || "Error de conexión.");
     } finally {
