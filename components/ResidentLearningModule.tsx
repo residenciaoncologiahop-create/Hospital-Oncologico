@@ -55,8 +55,14 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
         contents: { parts } 
       });
       
-      const text = res.text || "No se pudo generar la lección.";
-      setContent(text.replace(/```html|```/g, ''));
+      const rawText = res.text || "";
+const cleanText = rawText.replace(/```html|```/g, '').trim();
+      
+if (!cleanText) {
+  throw new Error("La IA no generó contenido educativo válido.");
+}
+      
+setContent(cleanText);
       
     } catch (e: any) {
       setError(e.message || "Error de conexión con el servicio docente.");
