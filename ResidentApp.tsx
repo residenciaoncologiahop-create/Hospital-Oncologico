@@ -130,7 +130,7 @@ const ResidentApp = () => {
   const handleExit = () => { if (window.confirm("Se borrarán los datos. ¿Salir?")) window.location.reload(); };
 
   return (
-    // CAMBIO 1: text-sm (14px) en lugar de text-xs (12px) como base para mayor legibilidad
+    // AUMENTO DE FUENTE BASE: text-sm (14px) en lugar de text-xs
     <div className="flex h-screen bg-white text-gray-800 font-sans text-sm overflow-hidden">
       
       {/* SIDEBAR */}
@@ -143,7 +143,7 @@ const ResidentApp = () => {
         </div>
 
         <div className="px-4 py-4 border-b border-gray-100 bg-indigo-50/30">
-          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2 px-2">Herramientas</p>
+          <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-2 px-2">Herramientas</p>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => setShowCalc(true)} className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-xl hover:border-indigo-400 hover:text-indigo-600 transition-all text-xs font-bold text-gray-500"><Calculator size={16} className="mb-1"/>Calculadoras</button>
             <button onClick={() => setShowDrugs(true)} className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-xl hover:border-purple-400 hover:text-purple-600 transition-all text-xs font-bold text-gray-500"><Pill size={16} className="mb-1"/>Fármacos</button>
@@ -151,7 +151,7 @@ const ResidentApp = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div className="flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-2"><span>Casos en memoria</span><button onClick={() => setShowNewPatientModal(true)} className="text-indigo-600 bg-indigo-50 p-1.5 rounded-lg hover:bg-indigo-100 transition-colors"><Plus size={14}/></button></div>
+          <div className="flex items-center justify-between text-xs font-black text-gray-400 uppercase tracking-widest px-2 mb-2"><span>Casos en memoria</span><button onClick={() => setShowNewPatientModal(true)} className="text-indigo-600 bg-indigo-50 p-1.5 rounded-lg hover:bg-indigo-100 transition-colors"><Plus size={14}/></button></div>
           <div className="px-2 mb-3"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} /><input type="text" placeholder="Filtrar..." className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-indigo-300 transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/></div></div>
           
           <div className="space-y-1.5">
@@ -164,7 +164,7 @@ const ResidentApp = () => {
             ))}
           </div>
         </div>
-        <div className="p-4 border-t bg-white"><button onClick={handleExit} className="w-full flex items-center justify-center space-x-2 text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"><LogOut size={14} /><span className="text-[10px] font-bold uppercase tracking-widest">Salir</span></button></div>
+        <div className="p-4 border-t bg-white"><button onClick={handleExit} className="w-full flex items-center justify-center space-x-2 text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"><LogOut size={14} /><span className="text-xs font-bold uppercase tracking-widest">Salir</span></button></div>
       </aside>
 
       {/* MAIN */}
@@ -175,13 +175,13 @@ const ResidentApp = () => {
             {selectedPatient && <button onClick={() => setShowLeftPanel(!showLeftPanel)} className="hidden lg:block text-gray-400 hover:text-indigo-600 transition-colors">{showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}</button>}
             <div className="flex flex-col"><h1 className="font-black text-gray-800 text-xl tracking-tight leading-none truncate max-w-md">{selectedPatient ? selectedPatient.name : 'Bienvenido, Residente'}</h1>{selectedPatient && <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{selectedPatient.diagnosis}</span>}</div>
           </div>
-          <div className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase"><div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div><span>Sesión Volátil</span></div>
+          <div className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl flex items-center space-x-2 text-xs font-bold tracking-widest uppercase"><div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div><span>Sesión Volátil</span></div>
         </header>
 
         {selectedPatient ? (
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             <div className={`${showLeftPanel ? 'lg:w-1/2 border-r' : 'hidden'} flex flex-col bg-white h-full transition-all duration-300`}>
-              <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
+              <div className="flex border-b text-xs font-black uppercase tracking-[0.2em] bg-gray-50/50">
                 <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-indigo-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>1. Datos</button>
                 <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-indigo-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historia</button>
                 <button onClick={() => setActiveTab('forms')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'forms' ? 'text-indigo-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>3. Trámites</button>
@@ -229,7 +229,6 @@ const ResidentApp = () => {
                 {activeTab === 'forms' && <FormManager patient={selectedPatient as any} historyText={selectedPatient.historyText} files={selectedPatient.files} />}
                 
                 {activeTab === 'learning' && (
-                   // CAMBIO 3: Pasamos los archivos al módulo de aprendizaje
                    <ResidentLearningModule 
                      caseContext={`
                        PACIENTE: ${selectedPatient.name}. EDAD: ${selectedPatient.age}. DIAGNÓSTICO: ${selectedPatient.diagnosis}.
@@ -272,7 +271,7 @@ const ResidentApp = () => {
             <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-gray-100 max-w-sm">
               <GraduationCap size={64} className="mb-6 text-indigo-500 mx-auto" />
               <h2 className="text-2xl font-black text-gray-800 tracking-tight">Espacio de Formación</h2>
-              <p className="text-gray-400 text-sm mt-4 font-bold leading-relaxed">Cree un caso temporal para comenzar a trabajar, estudiar y practicar.</p>
+              <p className="text-sm text-gray-400 font-bold leading-relaxed mt-4">Cree un caso temporal para comenzar a trabajar, estudiar y practicar.</p>
               <button onClick={() => setShowNewPatientModal(true)} className="mt-8 bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 uppercase">Iniciar Caso</button>
             </div>
           </div>
@@ -287,10 +286,10 @@ const ResidentApp = () => {
               <button onClick={() => setShowNewPatientModal(false)} className="text-gray-400 hover:text-indigo-600"><X size={24} /></button>
             </div>
             <form onSubmit={handleCreatePatient} className="p-8 space-y-6">
-              <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-1">Identificación</label><input autoFocus type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all" placeholder="Ej: Paciente A.B." value={newName} onChange={e => setNewName(e.target.value)} /></div>
+              <div className="space-y-2"><label className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] px-1">Identificación</label><input autoFocus type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all" placeholder="Ej: Paciente A.B." value={newName} onChange={e => setNewName(e.target.value)} /></div>
               <div className="flex space-x-4">
-                <div className="w-1/3 space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-1">Edad</label><input type="number" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all" placeholder="--" value={newAge} onChange={e => setNewAge(e.target.value)} /></div>
-                <div className="w-2/3 space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-1">Diagnóstico</label><input type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all" placeholder="Ej: Ca Pulmón" value={newDx} onChange={e => setNewDx(e.target.value)} /></div>
+                <div className="w-1/3 space-y-2"><label className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] px-1">Edad</label><input type="number" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all" placeholder="--" value={newAge} onChange={e => setNewAge(e.target.value)} /></div>
+                <div className="w-2/3 space-y-2"><label className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] px-1">Diagnóstico</label><input type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-indigo-200 outline-none transition-all" placeholder="Ej: Ca Pulmón" value={newDx} onChange={e => setNewDx(e.target.value)} /></div>
               </div>
               <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl text-xs font-black shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all uppercase tracking-widest">Crear Caso Temporal</button>
             </form>
