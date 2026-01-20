@@ -4,7 +4,6 @@ interface FileData { name: string; type: string; data: string; }
 interface ChatMessage { role: 'user' | 'model'; text: string; timestamp: number; }
 interface ClinicalEvent { date: string; professional: string; category: string; note: string; isKey: boolean; }
 
-// Helper para ordenar fechas
 const parseDate = (dateStr: string) => {
     if (!dateStr) return 0;
     const parts = dateStr.split('/');
@@ -19,20 +18,14 @@ export const getResidentChatResponse = async (msgs: ChatMessage[], newMsg: strin
     try {
         const ai = new GoogleGenAI({ apiKey });
         const parts: any[] = [{ text: `CONTEXTO DEL CASO (Modo Residente):\n${context}` }];
-        
-        // Adjuntar archivos si existen
         files.slice(0, 3).forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
-        
-        // Historial previo
         msgs.slice(-5).forEach(m => parts.push({ text: `${m.role}: ${m.text}` }));
-        
-        // Nuevo mensaje
         parts.push({ text: newMsg });
         
         const res = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts },
-            config: { systemInstruction: "Eres un oncólogo docente guiando a un residente. Responde con rigor científico pero enfoque educativo. Responde SIEMPRE en ESPAÑOL." }
+            config: { systemInstruction: "Eres un oncólogo docente. Responde en español." }
         });
         return res.text || "Error en respuesta.";
     } catch (e: any) {
@@ -48,26 +41,28 @@ export const extractResidentTimeline = async (text: string, files: FileData[]): 
     try {
         const ai = new GoogleGenAI({ apiKey });
         const parts: any[] = [{ text: `
-            Analiza los documentos adjuntos y las notas proporcionadas.
-            Tu tarea es extraer una cronología clínica precisa.
+            ACTÚA COMO UN TRADUCTOR Y ANALISTA CLÍNICO EXPERTO.
+            
+            TAREA:
+            1. Analiza los documentos y notas adjuntas.
+            2. Extrae la cronología de eventos clínicos relevantes.
+            
+            REGLA DE ORO (IDIOMA):
+            - SI EL TEXTO ORIGINAL ESTÁ EN INGLÉS, DEBES TRADUCIRLO AL ESPAÑOL PERFECTO.
+            - La salida final debe estar 100% en ESPAÑOL.
+            - No dejes términos médicos en inglés (ej: "Surgery" -> "Cirugía", "Chemotherapy" -> "Quimioterapia").
 
-            REGLAS DE IDIOMA (OBLIGATORIO):
-            - TODO el contenido (descripciones, categorías, notas) debe estar en ESPAÑOL.
-            - Si el documento original está en inglés, TRADÚCELO.
-
-            FORMATO DE SALIDA (JSON ARRAY ÚNICAMENTE):
+            FORMATO DE SALIDA (JSON ARRAY):
             [{ 
                 "date": "DD/MM/YYYY", 
-                "professional": "Nombre o Especialidad", 
-                "category": "Una de: Consulta, Imagen, Lab, Cirugía, Quimio, Radio", 
-                "note": "Descripción breve del evento en ESPAÑOL", 
-                "isKey": boolean (true si es recaída, cirugía mayor o cambio de tratamiento)
+                "professional": "Dr/a... o Especialidad", 
+                "category": "Consulta, Imagen, Lab, Cirugía, Quimio, Radio", 
+                "note": "Descripción del evento en ESPAÑOL", 
+                "isKey": boolean 
             }]
         `}];
         
-        if (text) parts.push({ text: `Notas clínicas: ${text}` });
-        
-        // Enviamos los archivos para que la IA los lea
+        if (text) parts.push({ text: `Notas: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
         const res = await ai.models.generateContent({
