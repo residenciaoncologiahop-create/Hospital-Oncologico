@@ -32,7 +32,7 @@ export const getResidentChatResponse = async (msgs: ChatMessage[], newMsg: strin
         const res = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts },
-            config: { systemInstruction: "Eres un oncólogo docente guiando a un residente. Responde con rigor científico pero enfoque educativo." }
+            config: { systemInstruction: "Eres un oncólogo docente guiando a un residente. Responde con rigor científico pero enfoque educativo. Responde SIEMPRE en ESPAÑOL." }
         });
         return res.text || "Error en respuesta.";
     } catch (e: any) {
@@ -48,11 +48,26 @@ export const extractResidentTimeline = async (text: string, files: FileData[]): 
     try {
         const ai = new GoogleGenAI({ apiKey });
         const parts: any[] = [{ text: `
-            Analiza los documentos y notas. Extrae la cronología clínica.
-            FORMATO JSON ARRAY: [{ "date": "DD/MM/YYYY", "professional": "...", "category": "...", "note": "...", "isKey": boolean }]
-            Categorías: Consulta, Imagen, Lab, Cirugía, Quimio, Radio.
+            Analiza los documentos adjuntos y las notas proporcionadas.
+            Tu tarea es extraer una cronología clínica precisa.
+
+            REGLAS DE IDIOMA (OBLIGATORIO):
+            - TODO el contenido (descripciones, categorías, notas) debe estar en ESPAÑOL.
+            - Si el documento original está en inglés, TRADÚCELO.
+
+            FORMATO DE SALIDA (JSON ARRAY ÚNICAMENTE):
+            [{ 
+                "date": "DD/MM/YYYY", 
+                "professional": "Nombre o Especialidad", 
+                "category": "Una de: Consulta, Imagen, Lab, Cirugía, Quimio, Radio", 
+                "note": "Descripción breve del evento en ESPAÑOL", 
+                "isKey": boolean (true si es recaída, cirugía mayor o cambio de tratamiento)
+            }]
         `}];
-        if (text) parts.push({ text: `Notas: ${text}` });
+        
+        if (text) parts.push({ text: `Notas clínicas: ${text}` });
+        
+        // Enviamos los archivos para que la IA los lea
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
         const res = await ai.models.generateContent({
