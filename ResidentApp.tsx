@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Activity, Plus, Search, Trash2, LogOut, Menu, X, 
   FileText, Clock, FileOutput, GraduationCap, Calculator, Pill, 
-  Stethoscope, User, ChevronRight, PanelLeftClose, PanelLeftOpen 
+  Stethoscope, User, ChevronRight, PanelLeftClose, PanelLeftOpen, MessageSquare, Loader2, AlertCircle 
 } from 'lucide-react';
 
-// --- IMPORTS DE COMPONENTES ---
+// --- IMPORTS ---
 import FormManager from './components/FormManager';
 import OncoCalculator from './components/OncoCalculator';
 import DrugReference from './components/DrugReference';
-import FileUploader from './components/FileUploader'; // <--- NUEVO IMPORT
-import ResidentLearningModule from './components/ResidentLearningModule'; // Asegúrate de tener este del paso anterior
+import FileUploader from './components/FileUploader';
+import ResidentLearningModule from './components/ResidentLearningModule';
+import { getResidentChatResponse, extractResidentTimeline } from './utils/residentAI'; // <--- NUEVO IMPORT
 
-// --- TIPOS LOCALES ---
+// --- TIPOS ---
 interface ResidentPatient {
   id: string;
   name: string;
@@ -20,18 +21,18 @@ interface ResidentPatient {
   diagnosis: string;
   historyText: string;
   files: { name: string; type: string; data: string }[];
-  timeline: any[];
+  timeline: any[]; 
   chatHistory: { role: 'user' | 'model'; text: string; timestamp: number }[];
   lastUpdated: number;
 }
 
 const ResidentApp = () => {
-  // --- ESTADO VOLÁTIL ---
+  // --- ESTADOS ---
   const [patients, setPatients] = useState<ResidentPatient[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms' | 'learning'>('docs');
   
-  // UI State
+  // UI & Modals
   const [showCalc, setShowCalc] = useState(false);
   const [showDrugs, setShowDrugs] = useState(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
@@ -39,18 +40,34 @@ const ResidentApp = () => {
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Form State
+  // Chat State
+  const [chatInput, setChatInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Timeline Processing State
+  const [isProcessingDocs, setIsProcessingDocs] = useState(false);
+
+  // New Patient Form
   const [newName, setNewName] = useState('');
   const [newAge, setNewAge] = useState('');
   const [newDx, setNewDx] = useState('');
 
+  // --- DERIVED STATE ---
+  const selectedPatient = patients.find(p => p.id === selectedId);
+  const filteredPatients = patients.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [selectedPatient?.chatHistory, isTyping]);
+
   // --- HANDLERS ---
 
-  // Función auxiliar para actualizar el paciente seleccionado en memoria
   const updateCurrentPatient = (updates: Partial<ResidentPatient>) => {
-    setPatients(prev => prev.map(p => 
-      p.id === selectedId ? { ...p, ...updates, lastUpdated: Date.now() } : p
-    ));
+    setPatients(prev => prev.map(p => p.id === selectedId ? { ...p, ...updates, lastUpdated: Date.now() } : p));
   };
 
   const handleCreatePatient = (e: React.FormEvent) => {
@@ -80,15 +97,39 @@ const ResidentApp = () => {
     }
   };
 
-  const handleExit = () => {
-    if (window.confirm("Se borrarán los datos de sesión. ¿Salir?")) window.location.reload();
+  // --- FUNCIONALIDAD: CHAT ---
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || !selectedPatient) return;
+    
+    const newMsg = { role: 'user' as const, text: chatInput, timestamp: Date.now() };
+    const updatedHistory = [...selectedPatient.chatHistory, newMsg];
+    
+    updateCurrentPatient({ chatHistory: updatedHistory });
+    setChatInput('');
+    setIsTyping(true);
+
+    const context = `Paciente: ${selectedPatient.name}, ${selectedPatient.age} años. Dx: ${selectedPatient.diagnosis}.\nHistoria: ${selectedPatient.historyText}`;
+    
+    const response = await getResidentChatResponse(updatedHistory, newMsg.text, context, selectedPatient.files);
+    
+    const aiMsg = { role: 'model' as const, text: response, timestamp: Date.now() };
+    updateCurrentPatient({ chatHistory: [...updatedHistory, aiMsg] });
+    setIsTyping(false);
   };
 
-  const selectedPatient = patients.find(p => p.id === selectedId);
-  const filteredPatients = patients.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // --- FUNCIONALIDAD: TIMELINE ---
+  const handleProcessTimeline = async () => {
+    if (!selectedPatient) return;
+    if (!selectedPatient.historyText && selectedPatient.files.length === 0) return;
+    
+    setIsProcessingDocs(true);
+    const events = await extractResidentTimeline(selectedPatient.historyText, selectedPatient.files);
+    updateCurrentPatient({ timeline: events });
+    setIsProcessingDocs(false);
+    setActiveTab('timeline');
+  };
+
+  const handleExit = () => { if (window.confirm("Se borrarán los datos. ¿Salir?")) window.location.reload(); };
 
   return (
     <div className="flex h-screen bg-white text-gray-800 font-sans text-xs overflow-hidden">
@@ -155,36 +196,78 @@ const ResidentApp = () => {
                       <p className="font-bold mb-1">⚠️ Modo Sin Persistencia</p>
                       <p>Los datos se perderán al cerrar la pestaña.</p>
                     </div>
-                    {/* --- AQUI ESTA LA CORRECCIÓN: FileUploader REAL --- */}
-                    <FileUploader 
-                      label="Documentos del Caso" 
-                      files={selectedPatient.files} 
-                      setFiles={(newFiles) => updateCurrentPatient({ files: newFiles })} 
-                    />
+                    <FileUploader label="Documentos del Caso" files={selectedPatient.files} setFiles={(newFiles) => updateCurrentPatient({ files: newFiles })} />
                     <textarea 
                       className="w-full h-32 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-indigo-200 transition-all outline-none resize-none shadow-inner" 
                       placeholder="Notas del caso, resumen manual..." 
                       value={selectedPatient.historyText}
                       onChange={(e) => updateCurrentPatient({ historyText: e.target.value })}
                     />
+                    <button onClick={handleProcessTimeline} disabled={isProcessingDocs} className="w-full bg-indigo-600 text-white py-4 rounded-xl text-xs font-black tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50 hover:bg-indigo-700 transition-all uppercase">
+                      {isProcessingDocs ? <><Loader2 className="animate-spin inline mr-2" size={14}/>Analizando...</> : "Procesar Historia Clínica"}
+                    </button>
                   </div>
                 )}
 
-                {activeTab === 'timeline' && <div className="text-center py-10 text-gray-400 font-bold text-xs uppercase">[Línea de Tiempo - Próximamente]</div>}
+                {activeTab === 'timeline' && (
+                   <div className="space-y-4">
+                     {selectedPatient.timeline.length === 0 ? (
+                       <div className="text-center py-10 text-gray-400 font-bold text-xs uppercase opacity-60">Sin eventos. Procese documentos en la pestaña 1.</div>
+                     ) : (
+                       selectedPatient.timeline.map((ev, i) => (
+                         <div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8">
+                           <div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md ${ev.isKey ? 'bg-red-500' : 'bg-indigo-400'}`}></div>
+                           <div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                             <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg">{ev.date}</span>
+                             <p className="mt-2 text-xs text-gray-600">{ev.note}</p>
+                           </div>
+                         </div>
+                       ))
+                     )}
+                   </div>
+                )}
                 
                 {activeTab === 'forms' && <FormManager patient={selectedPatient as any} historyText={selectedPatient.historyText} files={selectedPatient.files} />}
                 
                 {activeTab === 'learning' && (
                    <ResidentLearningModule 
-                     caseContext={`PACIENTE: ${selectedPatient.name}. EDAD: ${selectedPatient.age}. DIAGNÓSTICO: ${selectedPatient.diagnosis}. HISTORIA: ${selectedPatient.historyText}`} 
+                     caseContext={`
+                       PACIENTE: ${selectedPatient.name}. EDAD: ${selectedPatient.age}. DIAGNÓSTICO: ${selectedPatient.diagnosis}.
+                       
+                       NOTAS CLÍNICAS:
+                       ${selectedPatient.historyText || "No hay notas cargadas."}
+                       
+                       (El residente confirma que ha cargado esta información para análisis educativo)
+                     `} 
                    />
                 )}
               </div>
             </div>
 
-            <div className={`${showLeftPanel ? 'lg:w-1/2' : 'w-full'} flex flex-col bg-gray-50 h-full overflow-hidden`}>
-               <div className="flex-1 flex items-center justify-center text-gray-300 font-bold text-xs uppercase tracking-widest">[Chat Clínico de Residente]</div>
-               <div className="p-6 border-t bg-white"><div className="h-12 bg-gray-100 rounded-xl"></div></div>
+            <div className={`${showLeftPanel ? 'lg:w-1/2' : 'w-full'} flex flex-col bg-gray-50 h-full overflow-hidden relative`}>
+               <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
+                 {selectedPatient.chatHistory.length === 0 && (
+                   <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none">
+                     <div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><MessageSquare size={48} className="text-indigo-600" /></div>
+                     <p className="text-sm font-black uppercase tracking-widest">Chat Docente</p>
+                   </div>
+                 )}
+                 {selectedPatient.chatHistory.map((m, i) => (
+                   <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                     <div className={`max-w-[85%] p-5 rounded-[2rem] text-sm shadow-md font-medium ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none'}`}>
+                       <div className="whitespace-pre-wrap">{m.text}</div>
+                     </div>
+                   </div>
+                 ))}
+                 {isTyping && <div className="text-xs text-gray-400 font-bold animate-pulse pl-4">Analizando...</div>}
+                 <div ref={chatEndRef} />
+               </div>
+               <div className="p-6 bg-white/80 backdrop-blur-md border-t">
+                 <div className="relative flex items-center bg-gray-50 rounded-3xl border-2 border-transparent focus-within:border-indigo-100 focus-within:bg-white transition-all p-3 pl-6">
+                   <textarea className="flex-1 bg-transparent text-sm font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" placeholder="Consultar duda al docente IA..." rows={1} value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} />
+                   <button onClick={handleSendMessage} disabled={!chatInput.trim()} className="ml-3 p-3 bg-indigo-600 text-white rounded-2xl shadow-lg disabled:opacity-50"><MessageSquare size={20} /></button>
+                 </div>
+               </div>
             </div>
           </div>
         ) : (
