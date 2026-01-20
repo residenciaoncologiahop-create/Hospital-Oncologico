@@ -1,6 +1,6 @@
-import ResidentApp from './ResidentApp';
 import React, { useState } from 'react';
 import { Stethoscope, GraduationCap, ChevronRight } from 'lucide-react';
+import ResidentApp from './ResidentApp';
 
 // --- COMPONENTES AUXILIARES DEL ORQUESTADOR ---
 
