@@ -5,7 +5,7 @@ import { BookOpen, GraduationCap, Loader2, Sparkles, AlertCircle, RefreshCw } fr
 interface FileData { name: string; type: string; data: string; }
 
 // --- LÓGICA (HOOK) ---
-const useResidentLearning = (caseContext: string, files: FileData[]) => {
+const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
   const [loading, setLoading] = useState(false);
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +41,12 @@ const useResidentLearning = (caseContext: string, files: FileData[]) => {
         4. 💡 PERLAS CLÍNICAS: Puntos clave de aprendizaje.
       `;
 
-      // Construimos el payload con texto y archivos
       const parts: any[] = [{ text: prompt }];
       
-      // Adjuntamos hasta 5 archivos para no saturar el contexto, priorizando imágenes/pdf
-      files.slice(0, 5).forEach(f => {
+      // PROTECCIÓN CONTRA CRASH: Aseguramos que files sea un array
+      const safeFiles = Array.isArray(files) ? files : [];
+      
+      safeFiles.slice(0, 5).forEach(f => {
           parts.push({ inlineData: { mimeType: f.type, data: f.data } });
       });
 
@@ -75,7 +76,7 @@ const useResidentLearning = (caseContext: string, files: FileData[]) => {
 // --- UI (COMPONENTE) ---
 interface Props {
   caseContext: string;
-  files: FileData[]; // Nueva prop
+  files: FileData[]; 
 }
 
 const ResidentLearningModule: React.FC<Props> = ({ caseContext, files }) => {
