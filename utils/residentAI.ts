@@ -29,7 +29,7 @@ export const getResidentChatResponse = async (msgs: ChatMessage[], newMsg: strin
         parts.push({ text: newMsg });
         
         const res = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.5-flash',
             contents: { parts },
             config: { systemInstruction: "Eres un oncólogo docente. Responde SIEMPRE en ESPAÑOL. Sé breve y educativo." }
         });
@@ -57,7 +57,7 @@ export const extractResidentTimeline = async (text: string, files: FileData[]): 
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
         const res = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.5-flash',
             contents: { parts },
             config: { responseMimeType: "application/json" }
         });
@@ -112,7 +112,7 @@ export const generateResidentClinicalSummary = async (text: string, files: FileD
         }
 
         const res = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.5-flash',
             contents: { parts }
         });
 
