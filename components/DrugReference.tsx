@@ -25,10 +25,13 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
       const ai = new GoogleGenAI({ apiKey });
       
       const prompt = `
-        Actúa como Farmacólogo Oncológico Experto.
-        Genera una ficha técnica DETALLADA para la droga: "${query}".
+        Actúa como una base de datos farmacológica oncológica estricta.
+        Genera una ficha técnica para la droga: "${query}".
         
-        FORMATO OBLIGATORIO (HTML simple, limpio, usar clases Tailwind para títulos):
+        REGLA CRÍTICA: Devuelve ÚNICAMENTE el código HTML dentro del div principal.
+        NO incluyas saludos, introducciones ("Aquí tienes...", "Claro..."), ni texto fuera del HTML.
+        
+        FORMATO OBLIGATORIO (HTML):
         
         <div class="space-y-4 text-sm text-gray-700 leading-relaxed">
           
@@ -46,17 +49,13 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
 
           <div class="bg-purple-50 p-3 rounded-lg border border-purple-100">
             <h4 class="font-black text-purple-900 uppercase text-xs mb-2">3. Administración y Dosis Habituales</h4>
-            <p><strong>Vía:</strong> [Ej: Endovenosa / Oral]</p>
-            <p><strong>Tiempo de Infusión:</strong> [Ej: 30-60 minutos] (Si aplica)</p>
-            <p><strong>Dosis Estándar:</strong> [Ej: 100 mg/m2 o AUC 5]</p>
-            <p><strong>Esquemas Comunes:</strong> [Ej: Cada 21 días, Semanal, etc.]</p>
-            <p class="text-[10px] text-gray-500 mt-1 italic">*Verificar siempre según protocolo específico y función orgánica.</p>
+            <p><strong>Vía:</strong> ...</p>
+            <p><strong>Dosis/Esquema:</strong> ...</p>
           </div>
 
           <div>
             <h4 class="font-black text-purple-800 uppercase text-xs mb-1 border-b border-purple-200 pb-1">4. Reacciones Adversas (RAM)</h4>
-            <p><strong>Frecuentes:</strong> ...</p>
-            <p><strong>Graves/Limitantes:</strong> ...</p>
+            <p>...</p>
           </div>
 
           <div>
@@ -73,7 +72,15 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
       });
       
       const text = res.text || "Sin respuesta.";
-      setData(text.replace(/```html|```/g, ''));
+      
+      // Limpieza adicional por seguridad (elimina bloques ```html y texto previo al primer div)
+      let cleanText = text.replace(/```html|```/g, '').trim();
+      const firstDivIndex = cleanText.indexOf('<div');
+      if (firstDivIndex > 0) {
+          cleanText = cleanText.substring(firstDivIndex);
+      }
+      
+      setData(cleanText);
 
     } catch (e: any) {
       setError(e.message || "Error de conexión.");
@@ -97,7 +104,7 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
             <input 
               type="text" 
               className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent focus:bg-white focus:border-purple-200 rounded-xl text-sm font-bold outline-none transition-all"
-              placeholder="Ej: Pembrolizumab, Carboplatino..."
+              placeholder="Ej: Imatinib, Pembrolizumab..."
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
@@ -111,6 +118,9 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
           {error && <div className="flex flex-col items-center justify-center h-full text-red-400 space-y-2"><AlertTriangle size={32} /><p className="text-xs font-bold">{error}</p></div>}
           {!data && !loading && !error && <div className="flex flex-col items-center justify-center h-full text-gray-300 space-y-4 opacity-50"><Pill size={64} /><p className="text-xs font-black uppercase tracking-widest">Ingrese una droga para consultar</p></div>}
           {data && <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: data }} />}
+        </div>
+        <div className="p-3 bg-gray-50 border-t text-[9px] text-center text-gray-400 font-medium">
+          Información generada por IA. Verificar con bibliografía oficial.
         </div>
       </div>
     </div>
