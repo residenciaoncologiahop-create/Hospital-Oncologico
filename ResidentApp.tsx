@@ -1,3 +1,4 @@
+import ResidentLearningModule from './components/ResidentLearningModule';
 import OncoCalculator from './components/OncoCalculator';
 import DrugReference from './components/DrugReference';
 import React, { useState } from 'react';
@@ -246,14 +247,17 @@ const [showDrugs, setShowDrugs] = useState(false);
                 )}
 
                 {activeTab === 'learning' && (
-                   <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-6 opacity-60">
-                      <GraduationCap size={48} className="text-indigo-300"/>
-                      <div>
-                        <h3 className="text-lg font-black text-gray-700">Módulo de Aprendizaje</h3>
-                        <p className="text-xs text-gray-400 mt-2">Próximamente: Análisis del caso con guías NCCN/ESMO.</p>
-                      </div>
-                   </div>
-                )}
+   <ResidentLearningModule 
+     caseContext={`
+       PACIENTE: ${selectedPatient.name}
+       EDAD: ${selectedPatient.age}
+       DIAGNÓSTICO BASE: ${selectedPatient.diagnosis}
+
+       NOTAS CLÍNICAS / HISTORIA CARGADA:
+       ${selectedPatient.historyText || "Sin notas adicionales cargadas."}
+     `} 
+   />
+)}
               </div>
             </div>
 
