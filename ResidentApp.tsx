@@ -11,7 +11,7 @@ import OncoCalculator from './components/OncoCalculator';
 import DrugReference from './components/DrugReference';
 import FileUploader from './components/FileUploader';
 import ResidentLearningModule from './components/ResidentLearningModule';
-import { getResidentChatResponse, extractResidentTimeline } from './utils/residentAI'; // <--- NUEVO IMPORT
+import { getResidentChatResponse, extractResidentTimeline } from './utils/residentAI';
 
 // --- TIPOS ---
 interface ResidentPatient {
@@ -97,7 +97,6 @@ const ResidentApp = () => {
     }
   };
 
-  // --- FUNCIONALIDAD: CHAT ---
   const handleSendMessage = async () => {
     if (!chatInput.trim() || !selectedPatient) return;
     
@@ -117,7 +116,6 @@ const ResidentApp = () => {
     setIsTyping(false);
   };
 
-  // --- FUNCIONALIDAD: TIMELINE ---
   const handleProcessTimeline = async () => {
     if (!selectedPatient) return;
     if (!selectedPatient.historyText && selectedPatient.files.length === 0) return;
@@ -132,7 +130,8 @@ const ResidentApp = () => {
   const handleExit = () => { if (window.confirm("Se borrarán los datos. ¿Salir?")) window.location.reload(); };
 
   return (
-    <div className="flex h-screen bg-white text-gray-800 font-sans text-xs overflow-hidden">
+    // CAMBIO 1: text-sm (14px) en lugar de text-xs (12px) como base para mayor legibilidad
+    <div className="flex h-screen bg-white text-gray-800 font-sans text-sm overflow-hidden">
       
       {/* SIDEBAR */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -146,20 +145,20 @@ const ResidentApp = () => {
         <div className="px-4 py-4 border-b border-gray-100 bg-indigo-50/30">
           <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2 px-2">Herramientas</p>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setShowCalc(true)} className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-xl hover:border-indigo-400 hover:text-indigo-600 transition-all text-[10px] font-bold text-gray-500"><Calculator size={16} className="mb-1"/>Calculadoras</button>
-            <button onClick={() => setShowDrugs(true)} className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-xl hover:border-purple-400 hover:text-purple-600 transition-all text-[10px] font-bold text-gray-500"><Pill size={16} className="mb-1"/>Fármacos</button>
+            <button onClick={() => setShowCalc(true)} className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-xl hover:border-indigo-400 hover:text-indigo-600 transition-all text-xs font-bold text-gray-500"><Calculator size={16} className="mb-1"/>Calculadoras</button>
+            <button onClick={() => setShowDrugs(true)} className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-xl hover:border-purple-400 hover:text-purple-600 transition-all text-xs font-bold text-gray-500"><Pill size={16} className="mb-1"/>Fármacos</button>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-2"><span>Casos en memoria</span><button onClick={() => setShowNewPatientModal(true)} className="text-indigo-600 bg-indigo-50 p-1.5 rounded-lg hover:bg-indigo-100 transition-colors"><Plus size={14}/></button></div>
-          <div className="px-2 mb-3"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} /><input type="text" placeholder="Filtrar..." className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-[11px] outline-none focus:border-indigo-300 transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/></div></div>
+          <div className="px-2 mb-3"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} /><input type="text" placeholder="Filtrar..." className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-indigo-300 transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/></div></div>
           
           <div className="space-y-1.5">
-            {filteredPatients.length === 0 && <div className="text-center py-8 opacity-40"><p className="text-[10px] font-bold text-gray-400">Sin casos activos</p></div>}
+            {filteredPatients.length === 0 && <div className="text-center py-8 opacity-40"><p className="text-xs font-bold text-gray-400">Sin casos activos</p></div>}
             {filteredPatients.map(p => (
               <div key={p.id} onClick={() => { setSelectedId(p.id); setMobileMenuOpen(false); }} className={`group w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer ${selectedId === p.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'hover:bg-white border border-transparent hover:border-gray-100'}`}>
-                <div className="flex flex-col pr-2 flex-1 min-w-0"><span className="font-bold text-xs break-words">{p.name}</span><span className={`text-[10px] font-semibold truncate ${selectedId === p.id ? 'text-indigo-200' : 'text-gray-400'}`}>{p.diagnosis}</span></div>
+                <div className="flex flex-col pr-2 flex-1 min-w-0"><span className="font-bold text-sm break-words">{p.name}</span><span className={`text-xs font-semibold truncate ${selectedId === p.id ? 'text-indigo-200' : 'text-gray-400'}`}>{p.diagnosis}</span></div>
                 <button onClick={(e) => handleDeletePatient(p.id, e)} className={`p-1.5 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedId === p.id ? 'text-indigo-300 hover:text-white hover:bg-indigo-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}><Trash2 size={12} /></button>
               </div>
             ))}
@@ -174,7 +173,7 @@ const ResidentApp = () => {
           <div className="flex items-center space-x-4">
             <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={24} /></button>
             {selectedPatient && <button onClick={() => setShowLeftPanel(!showLeftPanel)} className="hidden lg:block text-gray-400 hover:text-indigo-600 transition-colors">{showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}</button>}
-            <div className="flex flex-col"><h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">{selectedPatient ? selectedPatient.name : 'Bienvenido, Residente'}</h1>{selectedPatient && <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{selectedPatient.diagnosis}</span>}</div>
+            <div className="flex flex-col"><h1 className="font-black text-gray-800 text-xl tracking-tight leading-none truncate max-w-md">{selectedPatient ? selectedPatient.name : 'Bienvenido, Residente'}</h1>{selectedPatient && <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{selectedPatient.diagnosis}</span>}</div>
           </div>
           <div className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase"><div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div><span>Sesión Volátil</span></div>
         </header>
@@ -198,7 +197,7 @@ const ResidentApp = () => {
                     </div>
                     <FileUploader label="Documentos del Caso" files={selectedPatient.files} setFiles={(newFiles) => updateCurrentPatient({ files: newFiles })} />
                     <textarea 
-                      className="w-full h-32 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-indigo-200 transition-all outline-none resize-none shadow-inner" 
+                      className="w-full h-32 p-4 border-2 border-gray-100 rounded-2xl text-sm font-medium bg-gray-50 focus:bg-white focus:border-indigo-200 transition-all outline-none resize-none shadow-inner" 
                       placeholder="Notas del caso, resumen manual..." 
                       value={selectedPatient.historyText}
                       onChange={(e) => updateCurrentPatient({ historyText: e.target.value })}
@@ -219,7 +218,7 @@ const ResidentApp = () => {
                            <div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md ${ev.isKey ? 'bg-red-500' : 'bg-indigo-400'}`}></div>
                            <div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
                              <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg">{ev.date}</span>
-                             <p className="mt-2 text-xs text-gray-600">{ev.note}</p>
+                             <p className="mt-2 text-sm text-gray-600">{ev.note}</p>
                            </div>
                          </div>
                        ))
@@ -230,15 +229,13 @@ const ResidentApp = () => {
                 {activeTab === 'forms' && <FormManager patient={selectedPatient as any} historyText={selectedPatient.historyText} files={selectedPatient.files} />}
                 
                 {activeTab === 'learning' && (
+                   // CAMBIO 3: Pasamos los archivos al módulo de aprendizaje
                    <ResidentLearningModule 
                      caseContext={`
                        PACIENTE: ${selectedPatient.name}. EDAD: ${selectedPatient.age}. DIAGNÓSTICO: ${selectedPatient.diagnosis}.
-                       
-                       NOTAS CLÍNICAS:
-                       ${selectedPatient.historyText || "No hay notas cargadas."}
-                       
-                       (El residente confirma que ha cargado esta información para análisis educativo)
+                       NOTAS CLÍNICAS: ${selectedPatient.historyText || "No hay notas cargadas."}
                      `} 
+                     files={selectedPatient.files}
                    />
                 )}
               </div>
@@ -274,8 +271,8 @@ const ResidentApp = () => {
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center opacity-80">
             <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-gray-100 max-w-sm">
               <GraduationCap size={64} className="mb-6 text-indigo-500 mx-auto" />
-              <h2 className="text-xl font-black text-gray-800 tracking-tight">Espacio de Formación</h2>
-              <p className="text-gray-400 text-xs mt-4 font-bold leading-relaxed">Cree un caso temporal para comenzar a trabajar, estudiar y practicar.</p>
+              <h2 className="text-2xl font-black text-gray-800 tracking-tight">Espacio de Formación</h2>
+              <p className="text-gray-400 text-sm mt-4 font-bold leading-relaxed">Cree un caso temporal para comenzar a trabajar, estudiar y practicar.</p>
               <button onClick={() => setShowNewPatientModal(true)} className="mt-8 bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 uppercase">Iniciar Caso</button>
             </div>
           </div>
