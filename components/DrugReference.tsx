@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pill, X, Search, Loader2, AlertTriangle } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { generateText } from '../lib/ai';
 
 interface DrugReferenceProps {
   onClose: () => void;
@@ -36,8 +36,8 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
         </div>
       `;
 
-      const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts: [{ text: prompt }] } });
-      setData(res.text || "Sin respuesta.");
+      const res = await generateText(prompt);
+      setData(res);
     } catch (e: any) {
       setError(e.message || "Error de conexión.");
     } finally {
