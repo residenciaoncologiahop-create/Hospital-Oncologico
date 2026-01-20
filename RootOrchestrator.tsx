@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Stethoscope, GraduationCap, ChevronRight } from 'lucide-react';
+import { Stethoscope, GraduationCap, ChevronRight, Calculator, Pill, X } from 'lucide-react';
 import ResidentApp from './ResidentApp';
+import OncoCalculator from './components/OncoCalculator';
+import DrugReference from './components/DrugReference';
 
-// --- COMPONENTES AUXILIARES DEL ORQUESTADOR ---
+// --- COMPONENTES AUXILIARES ---
 
 /**
  * PANTALLA DE SELECCIÓN DE MODO
- * Responsabilidad: Permitir al usuario elegir entre flujo Profesional o Residente.
  */
 const ModeSelector = ({ onSelect }: { onSelect: (mode: 'doctor' | 'resident') => void }) => {
   return (
@@ -62,18 +63,20 @@ const ModeSelector = ({ onSelect }: { onSelect: (mode: 'doctor' | 'resident') =>
   );
 };
 
-// --- COMPONENTE PRINCIPAL ---
+// --- ORQUESTADOR PRINCIPAL ---
 
 interface RootOrchestratorProps {
   DoctorApp: React.ComponentType;
 }
 
-/**
- * ROOT ORCHESTRATOR
- * Responsabilidad: Gestionar el estado global del modo de aplicación e inyectar la dependencia.
- */
 const RootOrchestrator: React.FC<RootOrchestratorProps> = ({ DoctorApp }) => {
   const [appMode, setAppMode] = useState<'selection' | 'doctor' | 'resident'>('selection');
+  
+  // Estados para herramientas globales (Modo Profesional)
+  const [showDocCalc, setShowDocCalc] = useState(false);
+  const [showDocDrugs, setShowDocDrugs] = useState(false);
+
+  // --- RENDERIZADO ---
 
   if (appMode === 'selection') {
     return <ModeSelector onSelect={setAppMode} />;
@@ -83,8 +86,42 @@ const RootOrchestrator: React.FC<RootOrchestratorProps> = ({ DoctorApp }) => {
     return <ResidentApp />;
   }
 
-  // Renderiza la App original (inyectada) sin tocar su código interno
-  return <DoctorApp />;
+  // MODO DOCTOR + OVERLAY DE HERRAMIENTAS
+  return (
+    <div className="relative">
+      {/* 1. La App original (intacta) */}
+      <DoctorApp />
+
+      {/* 2. Botones Flotantes (Solo visibles en modo Doctor) */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+        <button 
+          onClick={() => setShowDocCalc(true)}
+          className="flex items-center gap-2 bg-white text-gray-600 p-3 rounded-full shadow-lg border border-gray-100 hover:text-blue-600 hover:border-blue-200 transition-all group"
+          title="Calculadora Oncológica"
+        >
+          <Calculator size={20} />
+          <span className="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:px-2 transition-all duration-300 text-xs font-bold uppercase tracking-wider whitespace-nowrap">
+            Calculadora
+          </span>
+        </button>
+        
+        <button 
+          onClick={() => setShowDocDrugs(true)}
+          className="flex items-center gap-2 bg-white text-gray-600 p-3 rounded-full shadow-lg border border-gray-100 hover:text-purple-600 hover:border-purple-200 transition-all group"
+          title="Vademécum"
+        >
+          <Pill size={20} />
+          <span className="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:px-2 transition-all duration-300 text-xs font-bold uppercase tracking-wider whitespace-nowrap">
+            Fármacos
+          </span>
+        </button>
+      </div>
+
+      {/* 3. Modales Globales */}
+      {showDocCalc && <OncoCalculator onClose={() => setShowDocCalc(false)} />}
+      {showDocDrugs && <DrugReference onClose={() => setShowDocDrugs(false)} />}
+    </div>
+  );
 };
 
 export default RootOrchestrator;
