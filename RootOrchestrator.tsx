@@ -92,8 +92,9 @@ const RootOrchestrator: React.FC<RootOrchestratorProps> = ({ DoctorApp }) => {
       {/* 1. La App original (intacta) */}
       <DoctorApp />
 
-      {/* 2. Botones Flotantes (Solo visibles en modo Doctor) */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+      {/* 2. Botones Flotantes (REUBICADOS ARRIBA A LA DERECHA) */}
+      {/* Cambiado de 'bottom-6' a 'top-24' para no tapar el chat */}
+      <div className="fixed top-24 right-6 z-50 flex flex-col gap-3 animate-in fade-in slide-in-from-right-8 duration-500">
         <button 
           onClick={() => setShowDocCalc(true)}
           className="flex items-center gap-2 bg-white text-gray-600 p-3 rounded-full shadow-lg border border-gray-100 hover:text-blue-600 hover:border-blue-200 transition-all group"
