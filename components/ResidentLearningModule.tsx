@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { generateText } from '../lib/ai';
+import { GoogleGenAI } from "@google/genai";
 import { BookOpen, GraduationCap, Loader2, Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
 
 // --- LÓGICA (HOOK) ---
@@ -12,45 +12,12 @@ const useResidentLearning = (caseContext: string) => {
     setLoading(true);
     setError(null);
     try {
-     const generateLesson = async () => {
-  setLoading(true);
-  setError(null);
-  try {
-    const prompt = `
-      ROL: Profesor Titular de Oncología Clínica (Mentor Académico).
-      AUDIENCIA: Médicos Residentes en formación.
-      OBJETIVO: Realizar un análisis teórico-académico basado en el caso presentado.
+      const apiKey = import.meta.env.VITE_API_KEY;
+      if (!apiKey) throw new Error("API Key no configurada.");
 
-      CONTEXTO DEL CASO (EDUCATIVO/FICTICIO):
-      ${caseContext}
-
-      INSTRUCCIONES DE SEGURIDAD:
-      - NO emitas órdenes médicas ni recetas.
-      - NO uses lenguaje directivo ("Haga esto", "Recete aquello").
-      - Usa lenguaje reflexivo ("Las guías sugieren...", "La evidencia apoya...").
-      - Enfócate en el razonamiento clínico y la fisiopatología.
-
-      FORMATO DE SALIDA (HTML LIMPIO, SIN MARKDOWN):
-      Usa etiquetas <h3>, <p>, <ul>, <li> y clases de Tailwind básicas.
-
-      ESTRUCTURA DE LA CLASE:
-      1. 🧬 Fisiopatología y biología molecular
-      2. 📊 Estadificación y factores pronósticos
-      3. 📚 Discusión terapéutica (NCCN/ESMO)
-      4. 💡 Perlas clínicas
-    `;
-
-    const text = await generateText(prompt, { mode: 'learning' });
-    setContent(text);
-
-  } catch (e: any) {
-    setError(e.message || "Error de conexión con el servicio docente.");
-  } finally {
-    setLoading(false);
-  }
-};
+      // Instancia local para no depender de archivos externos
+      const ai = new GoogleGenAI({ apiKey });
       
-      // PROMPT ESTRICTAMENTE EDUCATIVO
       const prompt = `
         ROL: Profesor Titular de Oncología Clínica (Mentor Académico).
         AUDIENCIA: Médicos Residentes en formación.
@@ -75,8 +42,13 @@ const useResidentLearning = (caseContext: string) => {
         4. 💡 PERLAS CLÍNICAS: 3 conceptos clave o errores comunes a evitar.
       `;
 
-      const text = await generateText(prompt, { mode: 'learning' });
-setContent(text);
+      const res = await ai.models.generateContent({ 
+        model: 'gemini-2.5-flash', 
+        contents: { parts: [{ text: prompt }] } 
+      });
+      
+      const text = res.text || "No se pudo generar la lección.";
+      setContent(text.replace(/```html|```/g, '')); // Limpieza de seguridad
       
     } catch (e: any) {
       setError(e.message || "Error de conexión con el servicio docente.");
@@ -101,7 +73,7 @@ interface Props {
 const ResidentLearningModule: React.FC<Props> = ({ caseContext }) => {
   const { loading, content, error, generateLesson, clearContent } = useResidentLearning(caseContext);
 
-  // Estado Inicial: Invitación a generar
+  // Estado Inicial
   if (!content && !loading) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-6 animate-in fade-in zoom-in duration-300">
@@ -133,7 +105,7 @@ const ResidentLearningModule: React.FC<Props> = ({ caseContext }) => {
     );
   }
 
-  // Estado de Carga: Animación educativa
+  // Estado de Carga
   if (loading) {
     return (
       <div className="h-full flex flex-col items-center justify-center space-y-8">
@@ -151,10 +123,9 @@ const ResidentLearningModule: React.FC<Props> = ({ caseContext }) => {
     );
   }
 
-  // Estado de Contenido: Clase Renderizada
+  // Estado de Contenido
   return (
     <div className="h-full flex flex-col overflow-hidden bg-white animate-in slide-in-from-bottom-4 duration-500">
-      {/* Header Fijo */}
       <div className="p-6 border-b bg-white/95 backdrop-blur-md flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="bg-indigo-100 p-2 rounded-lg text-indigo-700">
@@ -177,14 +148,11 @@ const ResidentLearningModule: React.FC<Props> = ({ caseContext }) => {
         </button>
       </div>
 
-      {/* Contenido Scrollable */}
       <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
         <div className="max-w-3xl mx-auto prose prose-indigo prose-sm text-gray-600 leading-relaxed">
-          {/* Inyección segura del HTML generado */}
           <div dangerouslySetInnerHTML={{ __html: content || '' }} />
         </div>
         
-        {/* Disclaimer Final */}
         <div className="mt-12 pt-6 border-t border-dashed border-gray-200 text-center">
           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
             Material generado con IA para fines exclusivamente educativos. <br/>
