@@ -1,3 +1,5 @@
+import OncoCalculator from './components/OncoCalculator';
+import DrugReference from './components/DrugReference';
 import React, { useState } from 'react';
 import { 
   Activity, Plus, Search, Trash2, LogOut, Menu, X, 
@@ -24,6 +26,8 @@ const ResidentApp = () => {
   const [patients, setPatients] = useState<ResidentPatient[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms' | 'learning'>('docs');
+  const [showCalc, setShowCalc] = useState(false);
+const [showDrugs, setShowDrugs] = useState(false);
   
   // UI State
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
@@ -98,20 +102,26 @@ const ResidentApp = () => {
           <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-300"><X size={24}/></button>
         </div>
 
-        {/* Accesos Directos a Herramientas (Placeholders para Paso 3 y 4) */}
-        <div className="px-4 py-4 border-b border-gray-100 bg-indigo-50/30">
-          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2 px-2">Herramientas de Apoyo</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-xl hover:border-indigo-400 hover:text-indigo-600 transition-all text-[10px] font-bold text-gray-500">
-              <Calculator size={16} className="mb-1"/>
-              Calculadoras
-            </button>
-            <button className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-xl hover:border-purple-400 hover:text-purple-600 transition-all text-[10px] font-bold text-gray-500">
-              <Pill size={16} className="mb-1"/>
-              Fármacos
-            </button>
-          </div>
-        </div>
+        {/* Accesos Directos a Herramientas */}
+<div className="px-4 py-4 border-b border-gray-100 bg-indigo-50/30">
+  <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2 px-2">Herramientas de Apoyo</p>
+  <div className="grid grid-cols-2 gap-2">
+    <button 
+      onClick={() => setShowCalc(true)}
+      className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-xl hover:border-indigo-400 hover:text-indigo-600 transition-all text-[10px] font-bold text-gray-500"
+    >
+      <Calculator size={16} className="mb-1"/>
+      Calculadoras
+    </button>
+    <button 
+      onClick={() => setShowDrugs(true)}
+      className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-xl hover:border-purple-400 hover:text-purple-600 transition-all text-[10px] font-bold text-gray-500"
+    >
+      <Pill size={16} className="mb-1"/>
+      Fármacos
+    </button>
+  </div>
+</div>
 
         {/* Lista de Pacientes */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -303,7 +313,11 @@ const ResidentApp = () => {
           </div>
         </div>
       )}
+{/* --- MODALES DE HERRAMIENTAS --- */}
+  {showCalc && <OncoCalculator onClose={() => setShowCalc(false)} />}
+  {showDrugs && <DrugReference onClose={() => setShowDrugs(false)} />}
 
+</div> // Cierre del div principal de ResidentApp
     </div>
   );
 };
