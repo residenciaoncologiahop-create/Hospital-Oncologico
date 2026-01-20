@@ -22,19 +22,48 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
       const apiKey = import.meta.env.VITE_API_KEY;
       if (!apiKey) throw new Error("API Key no configurada.");
 
-      // Instancia local para evitar dependencias externas
       const ai = new GoogleGenAI({ apiKey });
       
       const prompt = `
         Actúa como Farmacólogo Oncológico Experto.
-        Genera una ficha técnica concisa y estructurada para la droga: "${query}".
+        Genera una ficha técnica DETALLADA para la droga: "${query}".
         
-        FORMATO OBLIGATORIO (HTML simple sin markdown):
-        <div class="space-y-4">
-          <div><h4 class="font-bold text-indigo-700 uppercase text-xs mb-1">Mecanismo de Acción</h4><p class="text-xs text-gray-600">...</p></div>
-          <div><h4 class="font-bold text-indigo-700 uppercase text-xs mb-1">Indicaciones Principales</h4><p class="text-xs text-gray-600">...</p></div>
-          <div><h4 class="font-bold text-indigo-700 uppercase text-xs mb-1">Efectos Adversos (RAM)</h4><p class="text-xs text-gray-600">...</p></div>
-          <div><h4 class="font-bold text-indigo-700 uppercase text-xs mb-1">Contraindicaciones e Interacciones</h4><p class="text-xs text-gray-600">...</p></div>
+        FORMATO OBLIGATORIO (HTML simple, limpio, usar clases Tailwind para títulos):
+        
+        <div class="space-y-4 text-sm text-gray-700 leading-relaxed">
+          
+          <div>
+            <h4 class="font-black text-purple-800 uppercase text-xs mb-1 border-b border-purple-200 pb-1">1. Mecanismo de Acción</h4>
+            <p>...</p>
+          </div>
+
+          <div>
+            <h4 class="font-black text-purple-800 uppercase text-xs mb-1 border-b border-purple-200 pb-1">2. Indicaciones Principales</h4>
+            <ul class="list-disc pl-4 space-y-1">
+               <li>...</li>
+            </ul>
+          </div>
+
+          <div class="bg-purple-50 p-3 rounded-lg border border-purple-100">
+            <h4 class="font-black text-purple-900 uppercase text-xs mb-2">3. Administración y Dosis Habituales</h4>
+            <p><strong>Vía:</strong> [Ej: Endovenosa / Oral]</p>
+            <p><strong>Tiempo de Infusión:</strong> [Ej: 30-60 minutos] (Si aplica)</p>
+            <p><strong>Dosis Estándar:</strong> [Ej: 100 mg/m2 o AUC 5]</p>
+            <p><strong>Esquemas Comunes:</strong> [Ej: Cada 21 días, Semanal, etc.]</p>
+            <p class="text-[10px] text-gray-500 mt-1 italic">*Verificar siempre según protocolo específico y función orgánica.</p>
+          </div>
+
+          <div>
+            <h4 class="font-black text-purple-800 uppercase text-xs mb-1 border-b border-purple-200 pb-1">4. Reacciones Adversas (RAM)</h4>
+            <p><strong>Frecuentes:</strong> ...</p>
+            <p><strong>Graves/Limitantes:</strong> ...</p>
+          </div>
+
+          <div>
+            <h4 class="font-black text-purple-800 uppercase text-xs mb-1 border-b border-purple-200 pb-1">5. Ajustes e Interacciones</h4>
+            <p>...</p>
+          </div>
+
         </div>
       `;
 
@@ -44,7 +73,6 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
       });
       
       const text = res.text || "Sin respuesta.";
-      // Limpieza de seguridad por si la IA devuelve markdown
       setData(text.replace(/```html|```/g, ''));
 
     } catch (e: any) {
@@ -56,18 +84,13 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 animate-in fade-in zoom-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg h-[80vh] flex flex-col overflow-hidden">
-        
-        {/* Header */}
-        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-          <div className="flex items-center gap-2 text-purple-700 font-black text-xs uppercase tracking-widest">
-            <Pill size={16} />
-            <span>Vademécum Oncológico</span>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[85vh] flex flex-col overflow-hidden">
+        <div className="p-4 border-b flex justify-between items-center bg-purple-50">
+          <div className="flex items-center gap-2 text-purple-800 font-black text-xs uppercase tracking-widest">
+            <Pill size={16} /><span>Vademécum Oncológico</span>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-purple-600"><X size={20}/></button>
         </div>
-
-        {/* Search Bar */}
         <div className="p-4 border-b bg-white">
           <div className="relative flex items-center">
             <Search className="absolute left-3 text-gray-400" size={16} />
@@ -79,39 +102,15 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
             />
-            <button 
-              onClick={handleSearch}
-              disabled={loading || !query}
-              className="absolute right-2 bg-purple-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50"
-            >
+            <button onClick={handleSearch} disabled={loading || !query} className="absolute right-2 bg-purple-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50">
               {loading ? <Loader2 className="animate-spin" size={14}/> : 'Buscar'}
             </button>
           </div>
         </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
-          {error && (
-            <div className="flex flex-col items-center justify-center h-full text-red-400 space-y-2">
-              <AlertTriangle size={32} />
-              <p className="text-xs font-bold">{error}</p>
-            </div>
-          )}
-          
-          {!data && !loading && !error && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-300 space-y-4 opacity-50">
-              <Pill size={64} />
-              <p className="text-xs font-black uppercase tracking-widest">Ingrese una droga para consultar</p>
-            </div>
-          )}
-
-          {data && (
-            <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: data }} />
-          )}
-        </div>
-
-        <div className="p-3 bg-gray-50 border-t text-[9px] text-center text-gray-400 font-medium">
-          Información generada por IA. Verificar con bibliografía oficial.
+        <div className="flex-1 overflow-y-auto p-8 scrollbar-hide">
+          {error && <div className="flex flex-col items-center justify-center h-full text-red-400 space-y-2"><AlertTriangle size={32} /><p className="text-xs font-bold">{error}</p></div>}
+          {!data && !loading && !error && <div className="flex flex-col items-center justify-center h-full text-gray-300 space-y-4 opacity-50"><Pill size={64} /><p className="text-xs font-black uppercase tracking-widest">Ingrese una droga para consultar</p></div>}
+          {data && <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: data }} />}
         </div>
       </div>
     </div>
