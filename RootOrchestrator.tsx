@@ -1,3 +1,4 @@
+import ResidentApp from './ResidentApp';
 import React, { useState } from 'react';
 import { Stethoscope, GraduationCap, ChevronRight } from 'lucide-react';
 
@@ -57,20 +58,6 @@ const ModeSelector = ({ onSelect }: { onSelect: (mode: 'doctor' | 'resident') =>
         </button>
 
       </div>
-    </div>
-  );
-};
-
-/**
- * RESIDENT APP (PLACEHOLDER)
- * Responsabilidad: Contener la futura lógica del modo residente.
- */
-const ResidentApp = () => {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-gray-400 font-bold space-y-4">
-      <GraduationCap size={48} className="text-indigo-300" />
-      <p>[Modo Residente: Estructura base lista]</p>
-      <p className="text-xs font-normal">Esperando implementación de lógica...</p>
     </div>
   );
 };
