@@ -11,20 +11,56 @@ export const generateClinicalAudit = async (text: string, files: FileData[]) => 
 
     // PROMPT UNIFICADO (Single String Strategy)
     // Diseñado para actuar como un "Data Extractor" estricto.
-    const auditPrompt = `
-      ACTÚA COMO: Auditor de Calidad de Registros Médicos Oncológicos.
-      TU OBJETIVO: Escanear el texto y los archivos adjuntos para estructurar la información existente y señalar explícitamente qué datos obligatorios faltan.
-      
-      REGLAS DE SEGURIDAD (CERO TOLERANCIA):
-      1. NO emitas opiniones clínicas ni sugerencias de tratamiento.
-      2. NO interpretes "silencios" (si el dato no está escrito, clasifícalo como AUSENTE).
-      3. NO uses Markdown. Genera SOLAMENTE HTML limpio y estilizado con clases Tailwind (text-sm, font-bold, p-2, border, etc.).
+const auditPrompt = `
+ACTUÁ COMO:
+Extractor y auditor de registros clínicos oncológicos.
 
-      ENTRADA DE DATOS:
-      - Notas Clínicas: "${text}"
-      - Archivos Adjuntos: (Analiza el contenido de los documentos provistos).
+OBJETIVO:
+Organizar la información clínica existente, detectar datos faltantes y señalar inconsistencias documentales.
+NO realizar interpretación clínica ni sugerir decisiones.
 
-      ESTRUCTURA DE SALIDA REQUERIDA (HTML):
+REGLAS DE SEGURIDAD (CERO TOLERANCIA):
+1. NO emitas opiniones clínicas ni sugerencias terapéuticas.
+2. NO infieras datos no escritos.
+3. Si un dato no está explícito, usar "NO DOCUMENTADO".
+4. NO usar Markdown. SOLO HTML limpio con clases Tailwind.
+
+ENTRADA DE DATOS:
+- Notas clínicas: "${text}"
+- Archivos adjuntos: analizar solo su contenido explícito.
+
+TAREAS A REALIZAR:
+
+1) EXTRAER DATOS CLÍNICOS ESTRUCTURADOS:
+- Edad
+- Sexo
+- Diagnóstico principal exacto
+- Fecha de diagnóstico
+- Hallazgos patológicos
+- Biomarcadores
+- Estadio TNM/FIGO
+- Performance Status (ECOG/WHO)
+- Estudios de extensión con fechas
+- Tratamientos previos con fechas
+
+2) GENERAR CHECKLIST DE COMPLETITUD:
+Para cada ítem, marcar ✔ si existe o ⚠ si falta:
+- Estadio completo
+- Performance status
+- Informe de biopsia
+- Biomarcadores
+- Imágenes relevantes (TAC, PET, RM)
+- Tratamientos previos documentados
+
+3) DETECTAR INCONSISTENCIAS DOCUMENTALES:
+Ejemplos:
+- Fecha de diagnóstico posterior a estudios
+- Estadio que no concuerda con patología
+Presentar como:
+- “Inconsistencias encontradas” o
+- “Sin inconsistencias detectadas”
+
+FORMATO DE SALIDA OBLIGATORIO (HTML):
 
       <div class="space-y-4 font-sans text-gray-800">
         
@@ -41,10 +77,10 @@ export const generateClinicalAudit = async (text: string, files: FileData[]) => 
         <div class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
           <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b pb-1">2. Perfil Biológico</h3>
           <p class="text-xs text-gray-500 mb-2">Biomarcadores / Mutaciones / Inmunohistoquímica detectada:</p>
-          <ul class="list-disc pl-5 text-sm text-gray-700">
-            <li>[Ej: HER2, PD-L1, BRAF, etc.]</li>
-          </ul>
-        </div>
+          <div class="text-sm text-gray-700 space-y-1">
+  <div>• HER2</div>
+  <div>• PD-L1</div>
+</div>
 
         <div class="bg-red-50 p-4 rounded-lg border border-red-100">
           <h3 class="text-xs font-black text-red-800 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -60,6 +96,11 @@ export const generateClinicalAudit = async (text: string, files: FileData[]) => 
         <div class="text-[10px] text-gray-400 text-center pt-2">
           Reporte generado por algoritmo de auditoría. Verifica la completitud del registro médico.
         </div>
+        
+<div class="mt-4 p-3 bg-amber-50 border border-amber-200 text-[10px] text-amber-800 rounded-lg">
+  Este reporte organiza información documentada. 
+  No constituye recomendación clínica ni reemplaza la revisión médica profesional.
+</div>
 
       </div>
     `;
