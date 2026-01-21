@@ -89,6 +89,27 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
              </div>
            </div>
 
+           REGLA CRÍTICA DE ORDEN DE SALIDA (OBLIGATORIA):
+
+1. El PRIMER bloque de la respuesta DEBE ser siempre el inicio del caso clínico
+   o el feedback inicial si no es el primer turno.
+
+2. ESTÁ PROHIBIDO comenzar la respuesta con:
+   - La decisión clínica
+   - La pregunta
+   - Las opciones A/B/C
+   - Un bloque destacado
+   - Un mensaje de cierre o conclusión
+
+3. La pregunta y las opciones A/B/C DEBEN aparecer
+   ÚNICAMENTE DESPUÉS del contexto clínico completo y la evolución.
+
+4. El primer carácter del output debe pertenecer
+   al texto introductorio del caso.
+
+Esta regla tiene prioridad sobre cualquier otra instrucción.
+
+
         HISTORIAL PREVIO:
         ${historyContext}
 
@@ -205,6 +226,21 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
                <h4 class="text-emerald-900 font-bold uppercase text-xs tracking-widest mb-4">🎯 Metas Alcanzadas</h4>
                [Lista de verificación en primera persona para el residente]
              </div>
+
+             REGLA DE LECTURA INICIAL (OBLIGATORIA):
+
+1. El documento DEBE iniciar siempre con el encabezado de:
+   "FISIOPATOLOGÍA RELEVANTE".
+
+2. ESTÁ PROHIBIDO iniciar con:
+   - Perlas clínicas
+   - Cajas destacadas
+   - Checklists
+   - Conclusiones
+
+3. Todo bloque visual destacado debe aparecer
+   solo después de que el concepto haya sido explicado en texto normal.
+
       `;
 
       const parts: any[] = [{ text: fullPrompt }];
