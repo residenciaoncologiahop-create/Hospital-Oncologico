@@ -90,7 +90,7 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
           });
       }
 
-      const res = await ai.models.generateContent({ model: 'gemini-1.5-flash', contents: { parts } });
+      const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
       const rawText = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "Error.";
       
       // Limpieza post-procesamiento para asegurar que no queden asteriscos
@@ -151,7 +151,7 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
           });
       }
 
-      const res = await ai.models.generateContent({ model: 'gemini-1.5-flash', contents: { parts } });
+      const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
       const rawText = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
       
       setTheoryContent(cleanAndFormat(rawText));
