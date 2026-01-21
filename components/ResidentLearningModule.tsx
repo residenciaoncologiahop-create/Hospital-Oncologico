@@ -88,7 +88,7 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
       }
 
       const res = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         contents: { parts }
       });
 
@@ -177,7 +177,7 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
       }
 
       const res = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         contents: { parts },
         config: { temperature: 0.3 },
       });
