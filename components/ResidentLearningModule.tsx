@@ -25,7 +25,7 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
 
   const apiKey = import.meta.env.VITE_API_KEY;
 
-  // 1. LÓGICA DE SIMULACIÓN (CONEXIÓN MEJORADA CON ARCHIVOS)
+  // 1. LÓGICA DE SIMULACIÓN (GUIADA)
   const runSimulationTurn = async (selectedOption?: string) => {
     if (!apiKey) { setError("API Key faltante"); return; }
     
@@ -33,13 +33,11 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
     try {
       const ai = new GoogleGenAI({ apiKey });
       
-      // Historial
       let historyContext = "";
       simMessages.forEach(m => {
         historyContext += `${m.role === 'model' ? 'MENTOR' : 'RESIDENTE'}: ${m.text}\n`;
       });
 
-      // Control de turnos
       const isLastTurn = turnCount >= 3;
 
       const simPrompt = `
@@ -57,23 +55,8 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
         
         REGLAS DE INTERACCIÓN:
         1. El usuario selecciona opciones (A, B, C).
-        2. FORMATO OBLIGATORIO DE OPCIONES (CRÍTICO):
-- Debes presentar EXACTAMENTE 3 opciones al final de tu respuesta.
-- Usa SIEMPRE este formato literal, sin variaciones:
-
-A) [Conducta clínica completa y concreta]
-B) [Conducta clínica completa y concreta]
-C) [Conducta clínica completa y concreta]
-
-- No incluyas texto después de las opciones.
-- Cada opción debe representar un enfoque distinto:
-  • estándar/conservador
-  • más agresivo/intervencionista
-  • alternativa o evaluación adicional
-
+        2. PRESENTA SIEMPRE 3 OPCIONES al final, etiquetadas A), B), C).
         3. Usa lenguaje educativo.
-        4. NO finalices la simulación antes del Turno 4, incluso si una respuesta es incorrecta.
-        5. PROHIBIDO explicar fisiopatología, estadificación o guías completas durante la simulación. Solo feedback breve y contextual.
 
         HISTORIAL PREVIO:
         ${historyContext}
@@ -96,7 +79,6 @@ C) [Conducta clínica completa y concreta]
 
       const parts: any[] = [{ text: simPrompt }];
       
-      // --- CORRECCIÓN: INYECCIÓN ROBUSTA DE ARCHIVOS ---
       if (files && Array.isArray(files) && files.length > 0) {
           files.slice(0, 5).forEach(f => {
               if (f.data && f.type) {
@@ -106,7 +88,7 @@ C) [Conducta clínica completa y concreta]
       }
 
       const res = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents: { parts }
       });
 
@@ -129,7 +111,7 @@ C) [Conducta clínica completa y concreta]
     }
   };
 
-  // 2. GENERAR TEORÍA (CONEXIÓN MEJORADA CON ARCHIVOS)
+  // 2. GENERAR TEORÍA (REFINE: ESTRUCTURA, LEGIBILIDAD Y PEDAGOGÍA)
   const generateTheory = async () => {
     setTheoryLoading(true);
     setError(null);
@@ -138,24 +120,54 @@ C) [Conducta clínica completa y concreta]
       const ai = new GoogleGenAI({ apiKey });
       
       const fullPrompt = `
-        ROL: Profesor Titular de Oncología.
-        TAREA: Generar el MARCO TEÓRICO COMPLETO del caso.
+        ROL: Profesor Titular de Oncología Clínica.
+        TAREA: Generar el MARCO TEÓRICO FINAL del caso clínico analizado.
         
-        FUENTE DE DATOS:
-        Basa tu análisis en los ARCHIVOS ADJUNTOS (Historia, Estudios) y el contexto proporcionado:
+        CONTEXTO Y DATOS:
+        Basa tu explicación EXCLUSIVAMENTE en los datos de los ARCHIVOS ADJUNTOS y el contexto:
         ${caseContext}
         
-        ESTRUCTURA HTML OBLIGATORIA (h3, p, ul, li):
-        1. 🧬 FISIOPATOLOGÍA RELEVANTE (Específica del tumor hallado en los archivos).
-        2. 📊 ESTADIFICACIÓN REAL Y PRONÓSTICO (Según TNM vigente).
-        3. 📚 DISCUSIÓN TERAPÉUTICA (Base NCCN/ESMO aplicada a este paciente).
-        4. 💡 PERLAS CLÍNICAS.
-        5. ❓ AUTOEVALUACIÓN FINAL.
+        INSTRUCCIONES DE FORMATO (ESTRICTAS):
+        1. SALIDA: ÚNICAMENTE HTML LIMPIO. 
+           - NO uses Markdown (**negritas**, ## títulos).
+           - NO uses bloques de código (\`\`\`).
+        2. ESTRUCTURA VISUAL:
+           - Usa <h3> con clase "text-xl font-bold text-indigo-700 mt-8 mb-4 border-b border-indigo-100 pb-2" para títulos principales.
+           - Usa <h4> con clase "font-bold text-gray-800 mt-4 mb-2" para subtítulos.
+           - Usa <p> con clase "mb-3 leading-relaxed text-gray-600" para párrafos.
+           - Usa <ul> con clase "list-disc pl-5 space-y-2 text-gray-600 mb-4" para listas.
+           - Usa <li> para ítems.
+        3. REDACCIÓN:
+           - Párrafos cortos (máximo 4-5 líneas).
+           - Lenguaje afirmativo y explicativo (NO interactivo, NO preguntas abiertas).
+           - Separa conceptos claramente.
+
+        CONTENIDO OBLIGATORIO:
+        
+        1. 🧬 FISIOPATOLOGÍA RELEVANTE
+           - Explica la biología molecular y celular específica del tumor del caso.
+           - Menciona marcadores (p16, HPV, receptores, etc.) si aplican.
+        
+        2. 📊 ESTADIFICACIÓN Y PRONÓSTICO
+           - Define el estadio (TNM / FIGO) según los hallazgos descritos en los archivos.
+           - Explica brevemente el racional de esta clasificación.
+        
+        3. 📚 DISCUSIÓN TERAPÉUTICA (Standard of Care)
+           - Desarrolla el manejo estándar según NCCN/ESMO.
+           - Explica las líneas de tratamiento indicadas.
+           - NO preguntes "¿Qué harías?". EXPLICA lo que la evidencia dicta.
+        
+        4. 💡 PERLAS CLÍNICAS
+           - 3 a 5 puntos clave ("Take-home messages") o errores comunes a evitar.
+        
+        5. ✅ CHECKLIST DE CONCEPTOS ADQUIRIDOS (Autoevaluación)
+           - Una lista de verificación mental para el residente.
+           - Ejemplo: "Capacidad para identificar factores de riesgo de recaída", "Comprensión del rol de la inmunoterapia en este estadio".
+           - NO evalúes la calidad de la IA. NO hagas preguntas que requieran input.
       `;
 
       const parts: any[] = [{ text: fullPrompt }];
       
-      // --- CORRECCIÓN: INYECCIÓN ROBUSTA DE ARCHIVOS ---
       if (files && Array.isArray(files) && files.length > 0) {
           files.slice(0, 5).forEach(f => {
               if (f.data && f.type) {
@@ -165,12 +177,13 @@ C) [Conducta clínica completa y concreta]
       }
 
       const res = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents: { parts },
         config: { temperature: 0.3 },
       });
 
       const rawText = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
+      // Limpieza extra por seguridad
       const cleanText = rawText.replace(/```html|```/g, '').trim();
       
       if (!cleanText) throw new Error("Error generando teoría.");
@@ -278,7 +291,6 @@ const ResidentLearningModule: React.FC<Props> = ({ caseContext, files }) => {
           </div>
           
           <div className="flex items-center gap-2">
-            {/* BOTÓN FULLSCREEN CORREGIDO */}
             <button 
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
@@ -371,7 +383,6 @@ const ResidentLearningModule: React.FC<Props> = ({ caseContext, files }) => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-            {/* BOTÓN FULLSCREEN CORREGIDO */}
             <button 
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
