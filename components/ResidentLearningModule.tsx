@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { BookOpen, GraduationCap, Loader2, Sparkles, AlertCircle, RefreshCw, Maximize2, Minimize2, MessageCircle, Play, User, CheckCircle2, MousePointerClick } from 'lucide-react';
+import { BookOpen, GraduationCap, Loader2, Sparkles, AlertCircle, RefreshCw, Maximize2, Minimize2, Play, User, CheckCircle2, MousePointerClick } from 'lucide-react';
 
 interface FileData { name: string; type: string; data: string; }
 interface SimMessage { role: 'model' | 'user'; text: string; }
@@ -24,12 +24,13 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
 
   const apiKey = import.meta.env.VITE_API_KEY;
 
-  // Helper para limpiar texto (elimina asteriscos y aplica formato HTML seguro)
+  // Helper de limpieza (Red de seguridad para formato)
   const cleanAndFormat = (text: string) => {
     return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Convierte **texto** en negrita
-      .replace(/^\* /gm, '• ') // Convierte * lista en bullets
-      .replace(/\*/g, '') // Elimina asteriscos sueltos
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Markdown bold -> HTML bold
+      .replace(/^\* /gm, '') // Listas markdown -> nada (usamos HTML)
+      .replace(/\*/g, '') // Eliminar asteriscos residuales
+      .replace(/```html|```/g, '') // Eliminar bloques de código
       .trim();
   };
 
@@ -51,34 +52,62 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
       const simPrompt = `
         ACTÚA COMO: Mentor Docente de Oncología (Senior).
         
-        CONTEXTO DEL CASO Y ARCHIVOS ADJUNTOS:
+        CONTEXTO DEL CASO Y ARCHIVOS:
         ${caseContext}
-        (Prioriza siempre los datos de los archivos adjuntos sobre el resumen).
+        (IMPORTANTE: Analiza primero los ARCHIVOS ADJUNTOS para extraer estadiaje real, biología y antecedentes).
         
         OBJETIVO: Simulación clínica (Turno ${turnCount + 1}/4).
         
-        REGLAS DE FORMATO VISUAL (CRÍTICO):
-        1. NUNCA uses Markdown ni asteriscos (**texto**). El sistema no los lee bien.
-        2. Para resaltar conceptos clave, usa la etiqueta <strong>...</strong>.
-        3. LA PREGUNTA FINAL O CONDUCTA A TOMAR debe estar muy destacada. Enciérrala SIEMPRE en este bloque HTML exacto:
-           <div class="bg-indigo-50 p-4 rounded-xl border-l-4 border-indigo-500 mt-4 mb-2 shadow-sm"><p class="font-bold text-indigo-900 text-base">PREGUNTA: [Tu pregunta aquí]</p></div>
-        4. Usa párrafos cortos. <br> para saltos de línea.
+        REGLAS DE FORMATO VISUAL (ESTRICTO - HTML PURO):
+        1. NO USES MARKDOWN. NO USES ASTERISCOS (*).
+        2. ESTRUCTURA TU RESPUESTA DE ARRIBA A ABAJO (Lectura lineal):
+           - Primero: El contexto clínico o feedback de la acción anterior.
+           - Segundo: La evolución o nueva información.
+           - Al Final (Separado): La pregunta o decisión clínica.
+        3. PARA LA PREGUNTA FINAL, USA ESTE CONTENEDOR EXACTO:
+           <br>
+           <div class="p-5 bg-indigo-50 rounded-xl border-l-4 border-indigo-500 shadow-sm mt-2">
+             <p class="font-bold text-indigo-900 text-sm uppercase tracking-wide mb-1">🛑 Decisión Clínica</p>
+             <p class="text-indigo-800 text-lg font-medium leading-snug">[TU PREGUNTA AQUÍ]</p>
+           </div>
+        4. Usa <strong class="text-gray-900">negrita</strong> para datos duros (fechas, dosis, estadio).
+        5. Separa párrafos con <br><br>.
 
-        HISTORIAL:
+        HISTORIAL PREVIO:
         ${historyContext}
 
-        ACCIÓN RECIENTE: "${selectedOption || '(Inicio)'}"
+        ACCIÓN DEL RESIDENTE: "${selectedOption || '(Inicio de simulación)'}"
 
-        TU RESPUESTA:
+        TU RESPUESTA (HTML):
         ${selectedOption 
-          ? `1. FEEDBACK: <p class="mb-2">Evalúa la opción elegida con claridad.</p>
-             2. EVOLUCIÓN: <p class="mb-2">Relata qué sucede después (resultado de estudios, evolución clínica) basándote en los datos reales del caso.</p>` 
-          : `1. ESCENARIO INICIAL: <p class="mb-2">Presenta el caso clínico de forma narrativa y atrapante.</p>`
+          ? `
+             <p class="text-gray-700 leading-relaxed">
+               <strong>FEEDBACK:</strong> Evalúa la opción elegida (${selectedOption}). Sé directo sobre si fue adecuada o no.
+             </p>
+             <br>
+             <div class="pl-4 border-l-2 border-gray-200">
+               <p class="text-gray-600 italic">
+                 <strong>EVOLUCIÓN:</strong> Relata qué sucede después (ej: toxicidad, resultado de TAC, progresión) basándote en el caso real.
+               </p>
+             </div>
+            ` 
+          : `
+             <p class="text-lg text-gray-800 leading-relaxed font-medium">
+               Bienvenido, doctor. Iniciemos el análisis del caso.
+             </p>
+             <br>
+             <div class="text-gray-700 leading-relaxed">
+               Presenta el caso clínico de forma narrativa, destacando antecedentes y enfermedad actual según los documentos.
+             </div>
+            `
         }
         
         ${!isLastTurn 
-          ? `3. PLANTEAMIENTO: Cierra con el bloque de PREGUNTA destacado.`
-          : `3. CIERRE: Felicita al residente y pídele revisar la teoría completa.`
+          ? `[AQUÍ INSERTA EL BLOQUE DE PREGUNTA FINAL DESTACADO]`
+          : `<br><div class="p-5 bg-green-50 rounded-xl border border-green-200 text-center">
+               <p class="font-bold text-green-800 text-lg">¡Simulación Finalizada!</p>
+               <p class="text-green-700 mt-2">Hemos recorrido los puntos críticos. Ahora revisemos el análisis teórico completo.</p>
+             </div>`
         }
       `;
 
@@ -93,7 +122,6 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
       const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
       const rawText = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "Error.";
       
-      // Limpieza post-procesamiento para asegurar que no queden asteriscos
       const aiText = cleanAndFormat(rawText);
 
       const newMsgs = [...simMessages];
@@ -126,22 +154,41 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
         TAREA: Generar el MARCO TEÓRICO FINAL.
         CONTEXTO: ${caseContext}
         
-        INSTRUCCIONES DE FORMATO (ESTRICTAS - SIN ASTERISCOS):
-        1. SALIDA: HTML LIMPIO. 
-           - NO uses Markdown. NO uses asteriscos (**). 
-           - Usa <strong> para negritas.
-        2. ESTRUCTURA VISUAL:
-           - Títulos: <h3> con clase "text-lg font-bold text-indigo-700 mt-6 mb-3 border-b border-indigo-100 pb-1".
-           - Subtítulos: <h4> con clase "font-bold text-gray-800 mt-3 mb-1".
-           - Texto: <p> con clase "mb-2 leading-relaxed text-gray-700".
-           - Listas: <ul> con clase "list-disc pl-5 space-y-1 text-gray-700 mb-4".
+        INSTRUCCIONES DE FORMATO (SOLO HTML LIMPIO - SIN ASTERISCOS):
+        1. NO uses Markdown. NO uses asteriscos (**). 
+        2. Usa <strong class="text-indigo-900"> para resaltar conceptos.
+        3. ESTRUCTURA VISUAL:
+           - Títulos (h3): <h3 class="text-xl font-bold text-indigo-800 mt-10 mb-4 pb-2 border-b border-indigo-100">
+           - Subtítulos (h4): <h4 class="text-lg font-bold text-gray-800 mt-6 mb-2">
+           - Párrafos (p): <p class="mb-4 text-gray-700 leading-7 text-justify">
+           - Listas (ul): <ul class="space-y-2 mb-6 ml-1">
+           - Ítems (li): <li class="flex gap-3 bg-gray-50 p-3 rounded-lg text-gray-700 text-sm"><span class="text-indigo-500 font-bold">•</span><span>...</span></li>
         
-        CONTENIDO:
-        1. 🧬 FISIOPATOLOGÍA RELEVANTE (Mecanismos moleculares del caso).
-        2. 📊 ESTADIFICACIÓN Y PRONÓSTICO (TNM/FIGO explicado).
-        3. 📚 DISCUSIÓN TERAPÉUTICA (Standard of Care NCCN/ESMO).
-        4. 💡 PERLAS CLÍNICAS (Puntos clave).
-        5. ✅ CHECKLIST DE CONCEPTOS (Lista de verificación para el residente).
+        CONTENIDO REQUERIDO:
+        
+        1. 🧬 FISIOPATOLOGÍA RELEVANTE
+           - Explica mecanismos moleculares. Sé claro.
+        
+        2. 📊 ESTADIFICACIÓN Y PRONÓSTICO
+           - <div class="bg-gray-50 p-4 rounded-lg border-l-4 border-gray-400 mb-4">
+               Define el estadio TNM/FIGO del caso y el pronóstico asociado.
+             </div>
+        
+        3. 📚 DISCUSIÓN TERAPÉUTICA (Standard of Care)
+           - Explica el manejo estándar (NCCN/ESMO).
+           - Usa lenguaje afirmativo y explicativo.
+        
+        4. 💡 PERLAS CLÍNICAS
+           - <div class="bg-amber-50 p-6 rounded-2xl border border-amber-100 my-8">
+               <h4 class="text-amber-900 font-bold uppercase text-xs tracking-widest mb-4">⚠️ Puntos Clave</h4>
+               [Lista de 3-4 conceptos clave]
+             </div>
+        
+        5. ✅ CHECKLIST DE APRENDIZAJE
+           - <div class="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 my-8">
+               <h4 class="text-emerald-900 font-bold uppercase text-xs tracking-widest mb-4">🎯 Metas Alcanzadas</h4>
+               [Lista de verificación en primera persona para el residente]
+             </div>
       `;
 
       const parts: any[] = [{ text: fullPrompt }];
@@ -182,30 +229,29 @@ const ResidentLearningModule: React.FC<Props> = ({ caseContext, files }) => {
   const { phase, error, simMessages, simLoading, runSimulationTurn, theoryContent, theoryLoading, generateTheory, resetModule } = useResidentLearning(caseContext, files);
   const [isFullScreen, setIsFullScreen] = useState(false);
   
-  // Refs para control de scroll
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
 
-  // EFECTO DE SCROLL: SIMULACIÓN
+  // SCROLL: SIMULACIÓN (Al inicio del mensaje nuevo)
   useEffect(() => {
     if (simMessages.length > 0) {
       const lastMsg = simMessages[simMessages.length - 1];
-      // Si el mensaje es del modelo (docente), scrolleamos para que el INICIO del mensaje quede visible arriba
       if (lastMsg.role === 'model') {
         setTimeout(() => {
           lastMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
       } else {
-        // Si es el usuario, scrolleamos al fondo normal
         scrollContainerRef.current?.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: 'smooth' });
       }
     }
   }, [simMessages]);
 
-  // EFECTO DE SCROLL: TEORÍA
+  // SCROLL: TEORÍA (Siempre arriba al cargar)
   useEffect(() => {
     if (phase === 'THEORY' && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => {
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
     }
   }, [phase, theoryContent]);
 
@@ -266,14 +312,13 @@ const ResidentLearningModule: React.FC<Props> = ({ caseContext, files }) => {
           {simMessages.map((msg, idx) => (
             <div 
               key={idx} 
-              // Referencia al último mensaje para el scroll
               ref={idx === simMessages.length - 1 ? lastMsgRef : null}
               className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-4 duration-500`}
             >
               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm ${msg.role === 'model' ? 'bg-white text-indigo-600 border border-indigo-100' : 'bg-indigo-600 text-white'}`}>
                 {msg.role === 'model' ? <GraduationCap size={20}/> : <User size={20}/>}
               </div>
-              <div className={`p-5 rounded-2xl text-sm leading-relaxed shadow-sm max-w-[90%] ${msg.role === 'model' ? 'bg-white text-gray-700 rounded-tl-none border border-gray-100' : 'bg-indigo-600 text-white rounded-tr-none font-medium'}`}>
+              <div className={`p-6 rounded-2xl text-sm leading-relaxed shadow-sm max-w-[90%] ${msg.role === 'model' ? 'bg-white text-gray-700 rounded-tl-none border border-gray-100' : 'bg-indigo-600 text-white rounded-tr-none font-medium'}`}>
                 <div dangerouslySetInnerHTML={{ __html: msg.text }} />
               </div>
             </div>
@@ -286,7 +331,6 @@ const ResidentLearningModule: React.FC<Props> = ({ caseContext, files }) => {
                </div>
             </div>
           )}
-          {/* Espaciador final para que no quede pegado */}
           <div className="h-4"></div>
         </div>
 
