@@ -12,6 +12,9 @@ import DrugReference from './components/DrugReference';
 import FileUploader from './components/FileUploader';
 import ResidentLearningModule from './components/ResidentLearningModule';
 import { getResidentChatResponse, extractResidentTimeline, generateResidentClinicalSummary } from './utils/residentAI';
+import { ClipboardList } from 'lucide-react'; 
+import ClinicalAuditModal from './components/ClinicalAuditModal';
+import { generateClinicalAudit } from './utils/clinicalAuditAI';
 
 // --- TIPOS ---
 interface ResidentPatient {
@@ -31,6 +34,9 @@ const ResidentApp = () => {
   const [patients, setPatients] = useState<ResidentPatient[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms' | 'learning'>('docs');
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [auditContent, setAuditContent] = useState<string | null>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
   
   // UI & Modals
   const [showCalc, setShowCalc] = useState(false);
@@ -144,6 +150,26 @@ const ResidentApp = () => {
 
   const handleExit = () => { if (window.confirm("Se borrarán los datos. ¿Salir?")) window.location.reload(); };
 
+  const handleRunAudit = async () => {
+    if (!selectedPatient) return;
+    
+    // Validación básica
+    if (!selectedPatient.historyText && selectedPatient.files.length === 0) {
+      alert("No hay datos para auditar. Cargue archivos o escriba notas.");
+      return;
+    }
+
+    setShowAuditModal(true);
+    setIsAuditing(true);
+    setAuditContent(null);
+
+    // Llamada aislada al nuevo servicio
+    const result = await generateClinicalAudit(selectedPatient.historyText, selectedPatient.files);
+    
+    setAuditContent(result);
+    setIsAuditing(false);
+  };
+
   return (
     <div className="flex h-screen bg-white text-gray-800 font-sans text-xs overflow-hidden">
       
@@ -214,6 +240,24 @@ const ResidentApp = () => {
                 {activeTab === 'docs' && (
                   <div className="space-y-6">
                     <FileUploader label="Documentos del Caso" files={selectedPatient.files} setFiles={(newFiles) => updateCurrentPatient({ files: newFiles })} />
+                    
+                    {/* ZONA DE BOTONES */}
+         <div className="flex justify-end gap-2 flex-wrap">
+            
+            {/* BOTÓN NUEVO: AUDITORÍA CLÍNICA */}
+            <button 
+              onClick={handleRunAudit}
+              disabled={isAuditing}
+              className="flex items-center gap-2 bg-gray-800 text-white hover:bg-gray-700 px-3 py-2 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all disabled:opacity-50 shadow-lg"
+            >
+              <ClipboardList size={14} />
+              Auditoría de Registro Clínico
+            </button>
+
+            {/* BOTONES EXISTENTES (NO TOCAR) */}
+            {/* ... botón ShieldCheck ... */}
+            {/* ... botón Sparkles ... */}
+         </div>
                     <div className="flex justify-end">
                       <button 
                         onClick={handleGenerateSummary} 
@@ -329,6 +373,13 @@ const ResidentApp = () => {
 
       {showCalc && <OncoCalculator onClose={() => setShowCalc(false)} />}
       {showDrugs && <DrugReference onClose={() => setShowDrugs(false)} />}
+      <ClinicalAuditModal 
+      isOpen={showAuditModal} 
+      onClose={() => setShowAuditModal(false)} 
+      content={auditContent} 
+      isLoading={isAuditing} 
+    />
+
     </div>
   );
 };
