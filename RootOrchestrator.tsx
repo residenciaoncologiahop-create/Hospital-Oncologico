@@ -36,6 +36,14 @@ const ModeSelector = ({ onSelect }: { onSelect: (mode: 'doctor' | 'resident') =>
           </div>
         </button>
 
+<ClinicalAuditModal 
+  isOpen={showQCModal} 
+  onClose={() => setShowQCModal(false)} 
+  content={qcContent} 
+  isLoading={isQCProcessing}
+  mode="professional"
+/>
+
         {/* OPCIÓN 2: MODO RESIDENTE */}
         <button 
           onClick={() => onSelect('resident')}
