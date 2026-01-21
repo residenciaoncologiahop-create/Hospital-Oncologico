@@ -11,7 +11,7 @@ import OncoCalculator from './components/OncoCalculator';
 import DrugReference from './components/DrugReference';
 import FileUploader from './components/FileUploader';
 import ResidentLearningModule from './components/ResidentLearningModule';
-import { getResidentChatResponse, extractResidentTimeline, generateResidentClinicalSummary } from './utils/residentAI'; // <--- Import actualizado
+import { getResidentChatResponse, extractResidentTimeline, generateResidentClinicalSummary } from './utils/residentAI';
 
 // --- TIPOS ---
 interface ResidentPatient {
@@ -47,7 +47,7 @@ const ResidentApp = () => {
 
   // Processing States
   const [isProcessingDocs, setIsProcessingDocs] = useState(false);
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false); // <--- Nuevo estado
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   // New Patient Form
   const [newName, setNewName] = useState('');
@@ -60,6 +60,9 @@ const ResidentApp = () => {
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  
+  // DETECCIÓN DE MODO APRENDER PARA UI
+  const isLearningMode = activeTab === 'learning';
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -128,18 +131,13 @@ const ResidentApp = () => {
     setActiveTab('timeline');
   };
 
-  // --- NUEVA FUNCIÓN: Generar Resumen ---
   const handleGenerateSummary = async () => {
     if (!selectedPatient) return;
-    
     setIsGeneratingSummary(true);
     const summary = await generateResidentClinicalSummary(selectedPatient.historyText, selectedPatient.files);
-    
-    // Agregamos el resumen al texto existente o lo reemplazamos
     const newHistory = selectedPatient.historyText 
       ? selectedPatient.historyText + "\n\n--- RESUMEN GENERADO POR IA ---\n" + summary 
       : summary;
-
     updateCurrentPatient({ historyText: newHistory });
     setIsGeneratingSummary(false);
   };
@@ -188,7 +186,12 @@ const ResidentApp = () => {
         <header className="bg-white/80 backdrop-blur-md border-b h-16 flex items-center px-6 justify-between z-20">
           <div className="flex items-center space-x-4">
             <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={24} /></button>
-            {selectedPatient && <button onClick={() => setShowLeftPanel(!showLeftPanel)} className="hidden lg:block text-gray-400 hover:text-indigo-600 transition-colors">{showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}</button>}
+            {/* Ocultar botón de toggle panel si estamos en modo aprender (porque ya es full width) */}
+            {selectedPatient && !isLearningMode && (
+              <button onClick={() => setShowLeftPanel(!showLeftPanel)} className="hidden lg:block text-gray-400 hover:text-indigo-600 transition-colors">
+                {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+              </button>
+            )}
             <div className="flex flex-col"><h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">{selectedPatient ? selectedPatient.name : 'Bienvenido, Residente'}</h1>{selectedPatient && <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{selectedPatient.diagnosis}</span>}</div>
           </div>
           <div className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase"><div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div><span>Sesión Volátil</span></div>
@@ -196,7 +199,10 @@ const ResidentApp = () => {
 
         {selectedPatient ? (
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-            <div className={`${showLeftPanel ? 'lg:w-1/2 border-r' : 'hidden'} flex flex-col bg-white h-full transition-all duration-300`}>
+            
+            {/* PANEL IZQUIERDO (CONTENIDO PRINCIPAL) */}
+            {/* CAMBIO: Si isLearningMode es true, usa w-full y oculta el borde derecho */}
+            <div className={`${isLearningMode ? 'w-full' : (showLeftPanel ? 'lg:w-1/2 border-r' : 'hidden')} flex flex-col bg-white h-full transition-all duration-300`}>
               <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
                 <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-indigo-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>1. Datos</button>
                 <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-indigo-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historia</button>
@@ -208,8 +214,6 @@ const ResidentApp = () => {
                 {activeTab === 'docs' && (
                   <div className="space-y-6">
                     <FileUploader label="Documentos del Caso" files={selectedPatient.files} setFiles={(newFiles) => updateCurrentPatient({ files: newFiles })} />
-                    
-                    {/* BOTÓN DE GENERAR RESUMEN */}
                     <div className="flex justify-end">
                       <button 
                         onClick={handleGenerateSummary} 
@@ -220,14 +224,12 @@ const ResidentApp = () => {
                         Generar Resumen con IA
                       </button>
                     </div>
-
                     <textarea 
                       className="w-full h-64 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-indigo-200 transition-all outline-none resize-none shadow-inner leading-relaxed" 
                       placeholder="Notas del caso, resumen manual o generado por IA..." 
                       value={selectedPatient.historyText}
                       onChange={(e) => updateCurrentPatient({ historyText: e.target.value })}
                     />
-                    
                     <button onClick={handleProcessTimeline} disabled={isProcessingDocs} className="w-full bg-indigo-600 text-white py-4 rounded-xl text-[10px] font-black tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50 hover:bg-indigo-700 transition-all uppercase">
                       {isProcessingDocs ? <><Loader2 className="animate-spin inline mr-2" size={14}/>Analizando...</> : "Procesar Historia Clínica"}
                     </button>
@@ -266,7 +268,9 @@ const ResidentApp = () => {
               </div>
             </div>
 
-            <div className={`${showLeftPanel ? 'lg:w-1/2' : 'w-full'} flex flex-col bg-gray-50 h-full overflow-hidden relative`}>
+            {/* PANEL DERECHO (CHAT ASISTENTE) */}
+            {/* CAMBIO: Se oculta completamente con 'hidden' si isLearningMode es true */}
+            <div className={`${isLearningMode ? 'hidden' : (showLeftPanel ? 'lg:w-1/2' : 'w-full')} flex flex-col bg-gray-50 h-full overflow-hidden relative`}>
                <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
                  {selectedPatient.chatHistory.length === 0 && (
                    <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none">
