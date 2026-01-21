@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { BookOpen, GraduationCap, Loader2, Sparkles, AlertCircle, RefreshCw, Maximize2, Minimize2, Play, User, CheckCircle2, MousePointerClick } from 'lucide-react';
+import { BookOpen, GraduationCap, Loader2, Sparkles, AlertCircle, RefreshCw, Maximize2, Minimize2, MessageCircle, Play, User, CheckCircle2, MousePointerClick } from 'lucide-react';
 
 interface FileData { name: string; type: string; data: string; }
 interface SimMessage { role: 'model' | 'user'; text: string; }
@@ -24,17 +24,17 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
 
   const apiKey = import.meta.env.VITE_API_KEY;
 
-  // Helper de limpieza (Red de seguridad para formato)
+  // Helper para limpiar texto
   const cleanAndFormat = (text: string) => {
     return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Markdown bold -> HTML bold
-      .replace(/^\* /gm, '') // Listas markdown -> nada (usamos HTML)
-      .replace(/\*/g, '') // Eliminar asteriscos residuales
-      .replace(/```html|```/g, '') // Eliminar bloques de código
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') 
+      .replace(/^\* /gm, '') 
+      .replace(/\*/g, '')
+      .replace(/```html|```/g, '')
       .trim();
   };
 
-  // 1. LÓGICA DE SIMULACIÓN
+  // 1. LÓGICA DE SIMULACIÓN (CON INSTRUCCIÓN CRÍTICA DE OPCIONES HTML)
   const runSimulationTurn = async (selectedOption?: string) => {
     if (!apiKey) { setError("API Key faltante"); return; }
     
@@ -60,18 +60,34 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
         
         REGLAS DE FORMATO VISUAL (ESTRICTO - HTML PURO):
         1. NO USES MARKDOWN. NO USES ASTERISCOS (*).
-        2. ESTRUCTURA TU RESPUESTA DE ARRIBA A ABAJO (Lectura lineal):
-           - Primero: El contexto clínico o feedback de la acción anterior.
-           - Segundo: La evolución o nueva información.
-           - Al Final (Separado): La pregunta o decisión clínica.
+        2. ESTRUCTURA TU RESPUESTA DE ARRIBA A ABAJO (Lectura lineal).
         3. PARA LA PREGUNTA FINAL, USA ESTE CONTENEDOR EXACTO:
            <br>
            <div class="p-5 bg-indigo-50 rounded-xl border-l-4 border-indigo-500 shadow-sm mt-2">
              <p class="font-bold text-indigo-900 text-sm uppercase tracking-wide mb-1">🛑 Decisión Clínica</p>
              <p class="text-indigo-800 text-lg font-medium leading-snug">[TU PREGUNTA AQUÍ]</p>
            </div>
-        4. Usa <strong class="text-gray-900">negrita</strong> para datos duros (fechas, dosis, estadio).
-        5. Separa párrafos con <br><br>.
+
+        4. INSTRUCCIÓN CRÍTICA ADICIONAL (OBLIGATORIA):
+           Cuando presentes la "Decisión Clínica", DEBES generar inmediatamente después TRES OPCIONES DE CONDUCTA (A, B y C) en el siguiente FORMATO HTML OBLIGATORIO:
+
+           <br>
+           <div class="mt-4 space-y-3">
+             <div class="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+               <p class="font-bold text-gray-800 text-base mb-1">Opción A</p>
+               <p class="text-gray-600 text-sm leading-snug">[Texto de la opción A]</p>
+             </div>
+
+             <div class="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+               <p class="font-bold text-gray-800 text-base mb-1">Opción B</p>
+               <p class="text-gray-600 text-sm leading-snug">[Texto de la opción B]</p>
+             </div>
+
+             <div class="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+               <p class="font-bold text-gray-800 text-base mb-1">Opción C</p>
+               <p class="text-gray-600 text-sm leading-snug">[Texto de la opción C]</p>
+             </div>
+           </div>
 
         HISTORIAL PREVIO:
         ${historyContext}
@@ -103,7 +119,7 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
         }
         
         ${!isLastTurn 
-          ? `[AQUÍ INSERTA EL BLOQUE DE PREGUNTA FINAL DESTACADO]`
+          ? `[AQUÍ INSERTA EL BLOQUE DE PREGUNTA FINAL Y LUEGO LAS 3 OPCIONES HTML]`
           : `<br><div class="p-5 bg-green-50 rounded-xl border border-green-200 text-center">
                <p class="font-bold text-green-800 text-lg">¡Simulación Finalizada!</p>
                <p class="text-green-700 mt-2">Hemos recorrido los puntos críticos. Ahora revisemos el análisis teórico completo.</p>
