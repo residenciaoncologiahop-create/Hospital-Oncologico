@@ -17,6 +17,10 @@ import {
 // IMPORTAMOS EL COMPONENTE DE FORMULARIOS
 import FormManager from './components/FormManager';
 
+// --- AUDITORÍA CLÍNICA ---
+import ClinicalAuditModal from './components/ClinicalAuditModal';
+import { generateClinicalAudit } from './utils/clinicalAuditAI';
+
 // --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_API_KEY_FIREBASE,
@@ -257,6 +261,12 @@ const App = () => {
     const [showTumorBoardModal, setShowTumorBoardModal] = useState(false); 
     const [tumorBoardText, setTumorBoardText] = useState('');
     const [isGeneratingTumorBoard, setIsGeneratingTumorBoard] = useState(false);
+    
+    // --- AUDITORÍA CLÍNICA ---
+const [showAuditModal, setShowAuditModal] = useState(false);
+const [auditContent, setAuditContent] = useState<string | null>(null);
+const [isAuditing, setIsAuditing] = useState(false);
+
 
     const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -517,6 +527,29 @@ const App = () => {
         }
     };
 
+    const handleRunClinicalAudit = async () => {
+    if (!selectedPatientId) return;
+
+    if (!historyText && historyFiles.length === 0) {
+        alert("No hay documentación clínica para auditar.");
+        return;
+    }
+
+    setShowAuditModal(true);
+    setIsAuditing(true);
+    setAuditContent(null);
+
+    try {
+        const result = await generateClinicalAudit(historyText, historyFiles);
+        setAuditContent(result);
+        logAction("RUN_CLINICAL_AUDIT", selectedPatientId, doctorName);
+    } catch (e) {
+        setAuditContent("<div class='text-red-600 text-xs'>Error en la auditoría clínica.</div>");
+    } finally {
+        setIsAuditing(false);
+    }
+};
+
     const filteredPatients = patients.filter(p => 
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
@@ -651,7 +684,7 @@ const App = () => {
                                         </section>
 
                                         <section className="space-y-4 pt-4 border-t border-gray-100">
-                                            <div className="grid grid-cols-3 gap-2">
+                                            <div className="grid grid-cols-4 gap-2">
                                                 <button onClick={handleGenerateSummary} disabled={isGeneratingSummary} className="flex flex-col items-center justify-center bg-indigo-50 text-indigo-600 border border-indigo-100 py-3 rounded-xl hover:bg-indigo-100 transition-all">
                                                     {isGeneratingSummary ? <Loader2 className="animate-spin mb-1" size={14} /> : <FileOutput size={14} className="mb-1" />}
                                                     <span className="text-[10px] font-black tracking-widest uppercase">RESUMEN CLÍNICO</span>
@@ -660,6 +693,17 @@ const App = () => {
                                                     {isGeneratingFollowUp ? <Loader2 className="animate-spin mb-1" size={14} /> : <ClipboardCheck size={14} className="mb-1" />}
                                                     <span className="text-[10px] font-black tracking-widest uppercase">PLAN SEGUIMIENTO</span>
                                                 </button>
+                                                <button 
+  onClick={handleRunClinicalAudit}
+  disabled={isAuditing}
+  className="flex flex-col items-center justify-center bg-gray-100 text-gray-800 border border-gray-200 py-3 rounded-xl hover:bg-gray-200 transition-all"
+>
+  <ClipboardCheck size={14} className="mb-1" />
+  <span className="text-[10px] font-black tracking-widest uppercase">
+    CONTROL DE CALIDAD
+  </span>
+</button>
+
                                                 <button onClick={handleGenerateTumorBoard} disabled={isGeneratingTumorBoard} className="flex flex-col items-center justify-center bg-rose-50 text-rose-600 border border-rose-100 py-3 rounded-xl hover:bg-rose-100 transition-all">
                                                     {isGeneratingTumorBoard ? <Loader2 className="animate-spin mb-1" size={14} /> : <Presentation size={14} className="mb-1" />}
                                                     <span className="text-[10px] font-black tracking-widest uppercase">ATENEO / COMITÉ</span>
@@ -766,6 +810,14 @@ const App = () => {
             </main>
 
             {/* SHARED MODAL COMPONENT */}
+            <ClinicalAuditModal 
+  isOpen={showAuditModal}
+  onClose={() => setShowAuditModal(false)}
+  content={auditContent}
+  isLoading={isAuditing}
+  mode="professional"
+/>
+
             {(showSummaryModal || showFollowUpModal || showTumorBoardModal) && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-6">
                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
