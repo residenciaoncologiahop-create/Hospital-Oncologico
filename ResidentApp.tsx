@@ -37,6 +37,8 @@ const ResidentApp = () => {
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [auditContent, setAuditContent] = useState<string | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+const [showSummaryModal, setShowSummaryModal] = useState(false);
   
   // UI & Modals
   const [showCalc, setShowCalc] = useState(false);
@@ -140,11 +142,13 @@ const ResidentApp = () => {
   const handleGenerateSummary = async () => {
     if (!selectedPatient) return;
     setIsGeneratingSummary(true);
-    const summary = await generateResidentClinicalSummary(selectedPatient.historyText, selectedPatient.files);
-    const newHistory = selectedPatient.historyText 
-      ? selectedPatient.historyText + "\n\n--- RESUMEN GENERADO POR IA ---\n" + summary 
-      : summary;
-    updateCurrentPatient({ historyText: newHistory });
+    const summary = await generateResidentClinicalSummary(
+  selectedPatient.historyText,
+  selectedPatient.files
+);
+
+setAiSummary(summary);
+setShowSummaryModal(true);
     setIsGeneratingSummary(false);
   };
 
@@ -373,12 +377,12 @@ const ResidentApp = () => {
 
       {showCalc && <OncoCalculator onClose={() => setShowCalc(false)} />}
       {showDrugs && <DrugReference onClose={() => setShowDrugs(false)} />}
-      <ClinicalAuditModal 
-      isOpen={showAuditModal} 
-      onClose={() => setShowAuditModal(false)} 
-      content={auditContent} 
-      isLoading={isAuditing} 
-    />
+    <ClinicalAuditModal
+  isOpen={showSummaryModal}
+  onClose={() => setShowSummaryModal(false)}
+  content={aiSummary}
+  isLoading={isGeneratingSummary}
+/>
 
     </div>
   );
