@@ -81,7 +81,7 @@ const ClinicalReportModal: React.FC<Props> = ({ isOpen, onClose, title, content,
           ) : content ? (
             <div 
               ref={contentRef}
-              className="prose prose-sm max-w-none text-gray-700 font-sans leading-relaxed"
+              className="max-w-none"
               dangerouslySetInnerHTML={{ __html: content }} 
             />
           ) : (
