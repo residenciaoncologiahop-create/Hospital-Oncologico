@@ -44,7 +44,7 @@ const ClinicalReportModal: React.FC<Props> = ({ isOpen, onClose, title, content,
           ) : content ? (
             // AQUI ESTÁ LA CLAVE: Renderizado HTML seguro con estilos base
             <div 
-              className="prose prose-sm max-w-none text-gray-700 font-sans leading-relaxed"
+              className="max-w-none"
               // Inyectamos el HTML generado por los prompts
               dangerouslySetInnerHTML={{ __html: content }} 
             />
