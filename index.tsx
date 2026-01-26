@@ -169,38 +169,6 @@ SALIDA: ARRAY JSON PURO
     return [];
 };
 
-            try {
-                const firstBracket = cleanText.indexOf('[');
-                const lastBracket = cleanText.lastIndexOf(']');
-                
-                if (firstBracket !== -1 && lastBracket !== -1) {
-                    rawEvents = JSON.parse(cleanText.substring(firstBracket, lastBracket + 1));
-                } else {
-                    rawEvents = JSON.parse(cleanText);
-                }
-            } catch (e) { console.error("Error parseando JSON", e); return []; }
-
-            // --- FILTRO DE CALIDAD AGRESIVO ---
-            const validEvents = rawEvents.map((e: any) => ({
-                date: e.date || e.fecha || "S/F",
-                professional: e.professional || e.profesional || "N/A",
-                category: e.category || e.categoria || "General",
-                note: e.note || e.nota || e.descripcion || "Evento sin descripción",
-                isKey: !!(e.isKey || e.esClave)
-            })).filter((e: any) => {
-                if (e.date === "S/F") return false;
-                if (e.note === "Evento sin descripción" || e.note === "General") return false;
-                if (e.note.trim().length < 5) return false;
-                if (e.category === "General" && e.note.toLowerCase().includes("sin descripción")) return false;
-                return true;
-            });
-            
-            return sortTimeline(validEvents); 
-        }
-        return [];
-    } catch (e) { console.error(e); return []; }
-};
-
 const generateText = async (prompt: string, context: string, files: FileData[]) => {
     const apiKey = import.meta.env.VITE_API_KEY;
     const ai = new GoogleGenAI({ apiKey: apiKey! });
