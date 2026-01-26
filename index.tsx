@@ -90,59 +90,86 @@ const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDat
 
 // --- AI FUNCTIONS ---
 
-const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
-    if (!text && files.length === 0) return [];
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) throw new Error("API Key Missing");
-    
+const extractTimelineFromDocs = async (
+  text: string,
+  files: FileData[]
+): Promise<ClinicalEvent[]> => {
+  if (!text && files.length === 0) return [];
+
+  const apiKey = import.meta.env.VITE_API_KEY;
+  if (!apiKey) throw new Error("API Key Missing");
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+
+    const parts: any[] = [{
+      text: `
+Analiza los documentos y extrae la cronología clínica.
+
+REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales.
+
+REGLAS:
+- date: "DD/MM/YYYY"
+- professional: solo si está explícitamente firmado, si no "N/A"
+- category: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución
+- note: máx 10 palabras
+- isKey: true/false
+
+SALIDA: ARRAY JSON PURO
+`
+    }];
+
+    if (text) parts.push({ text });
+    files.forEach(f =>
+      parts.push({ inlineData: { mimeType: f.type, data: f.data } })
+    );
+
+    const res = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: { parts },
+      config: { responseMimeType: "application/json" }
+    });
+
+    if (!res.text) return [];
+
+    let rawEvents: any[] = [];
+    const cleanText = res.text.trim();
+
     try {
-        const ai = new GoogleGenAI({ apiKey });
-        const parts: any[] = [{ text: `
-            Analiza los documentos y extrae la cronología clínica.
-            
-            REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales del paciente.
-            
-            REGLAS DE FORMATO JSON:
-            - date: "DD/MM/YYYY"
-            - professional: "Nombre del médico/autor SOLO si está explícitamente firmado en el texto (ej: 'Dr. Pérez'). 
-Si no hay firma clara, devolver exactamente 'N/A'."
-            - category: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
-            - note: "Resumen del evento (máx 10 palabras)".
-            - isKey: true/false (si es muy relevante).
-            
-            SALIDA: ÚNICAMENTE UN ARRAY JSON.
-        `}];
-        if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
-        files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+      const first = cleanText.indexOf('[');
+      const last = cleanText.lastIndexOf(']');
+      rawEvents = JSON.parse(
+        first !== -1 && last !== -1
+          ? cleanText.slice(first, last + 1)
+          : cleanText
+      );
+    } catch (e) {
+      console.error("Error parseando JSON de timeline", e);
+      return [];
+    }
 
-        const res = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts },
-            config: { responseMimeType: "application/json" }
-        });
+    const validEvents: ClinicalEvent[] = rawEvents
+      .map((e: any) => ({
+        date: e.date || "S/F",
+        professional: e.professional || "N/A",
+        category: e.category || "General",
+        note: e.note || "Evento sin descripción",
+        isKey: !!e.isKey
+      }))
+      .filter(e =>
+        e.date !== "S/F" &&
+        e.note !== "Evento sin descripción" &&
+        e.note.trim().length >= 5
+      );
 
-        if (res.text) {
-            const cleanText = res.text.replace(/```json|```/g, '').trim();
-            let rawEvents = [];
-            // --- CORRECCIÓN DE AUTORÍA ---
-            const validEvents = rawEvents.map((e: any) => ({
-                date: e.date || e.fecha || "S/F",
-                // AQUI ESTÁ EL CAMBIO: Buscamos todas las variantes posibles del nombre
-                professional: e.professional || e.profesional || e.doctor || e.medico || "N/A", 
-                category: e.category || e.categoria || "General",
-                note: e.note || e.nota || e.descripcion || "Evento sin descripción",
-                isKey: !!(e.isKey || e.esClave)
-            })).filter((e: any) => {
-                if (e.date === "S/F") return false;
-                if (e.note === "Evento sin descripción") return false;
-                return true;
-            });
-            
-            return sortTimeline(validEvents); 
-        }
-        return [];
-    } catch (e) { console.error(e); return []; }
-};            
+    return sortTimeline(validEvents);
+
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
+};
+
             try {
                 const firstBracket = cleanText.indexOf('[');
                 const lastBracket = cleanText.lastIndexOf(']');
