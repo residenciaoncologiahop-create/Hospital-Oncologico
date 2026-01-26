@@ -730,57 +730,55 @@ const [isAuditing, setIsAuditing] = useState(false);
                                         </section>
 
                                         <section className="space-y-4 pt-4 border-t border-gray-100">
-                                            <div className="grid grid-cols-4 gap-2">
-                                                <div className="grid grid-cols-4 gap-2">
+  <div className="grid grid-cols-4 gap-2">
 
-  {/* CONTROL DE CALIDAD */}
-  <button
-    onClick={handleRunClinicalAudit}
-    disabled={isAuditing}
-    className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
-  >
-    <ClipboardCheck size={16} className="text-blue-600 mb-1" />
-    Control Calidad
-  </button>
+    {/* CONTROL DE CALIDAD */}
+    <button
+      onClick={handleRunClinicalAudit}
+      disabled={isAuditing}
+      className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+    >
+      <ClipboardCheck size={16} className="text-blue-600 mb-1" />
+      Control Calidad
+    </button>
 
-  {/* RESUMEN HC */}
-  <button
-    onClick={() => runReportGeneration('Resumen Clínico Profesional', generateResidentClinicalSummary)}
-    className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
-  >
-    <FileText size={16} className="text-indigo-600 mb-1" />
-    Resumen HC
-  </button>
+    {/* RESUMEN HC */}
+    <button
+      onClick={() => runReportGeneration('Resumen Clínico Profesional', generateResidentClinicalSummary)}
+      className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+    >
+      <FileText size={16} className="text-indigo-600 mb-1" />
+      Resumen HC
+    </button>
 
-  {/* SEGUIMIENTO */}
-  <button
-    onClick={() => runReportGeneration('Plan de Seguimiento', generateFollowUpPlan)}
-    className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
-  >
-    <Calendar size={16} className="text-emerald-600 mb-1" />
-    Seguimiento
-  </button>
+    {/* SEGUIMIENTO */}
+    <button
+      onClick={() => runReportGeneration('Plan de Seguimiento', generateFollowUpPlan)}
+      className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+    >
+      <Calendar size={16} className="text-emerald-600 mb-1" />
+      Seguimiento
+    </button>
 
-  {/* COMITÉ */}
-  <button
-    onClick={() => runReportGeneration('Presentación Comité de Tumores', generateTumorBoardAnalysis)}
-    className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
-  >
-    <Presentation size={16} className="text-amber-600 mb-1" />
-    Comité
-  </button>
+    {/* COMITÉ */}
+    <button
+      onClick={() => runReportGeneration('Presentación Comité de Tumores', generateTumorBoardAnalysis)}
+      className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+    >
+      <Presentation size={16} className="text-amber-600 mb-1" />
+      Comité
+    </button>
 
-</div>
-                                                
-                                                
-    CONTROL DE CALIDAD
-  </span>
-</button>
+  </div>
 
-                                               
-                                            </div>
-                                            <FileUploader label="Guías NCCN / Protocolos" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
-                                        </section>
+  <FileUploader
+    label="Guías NCCN / Protocolos"
+    files={guidelineFiles}
+    setFiles={setGuidelineFiles}
+    accept=".pdf"
+  />
+</section>
+
                                     </>
                                 )}
 
