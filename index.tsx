@@ -245,7 +245,6 @@ const App = () => {
     const [guidelineFiles, setGuidelineFiles] = useState<FileData[]>([]);
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [chatInput, setChatInput] = useState('');
-    const [isChatOpen, setIsChatOpen] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
@@ -672,45 +671,28 @@ const [isAuditing, setIsAuditing] = useState(false);
             {/* Main */}
             <main className="flex-1 flex flex-col h-full overflow-hidden">
                 <header className="bg-white/80 backdrop-blur-md border-b h-16 flex items-center px-6 justify-between z-20">
-  <div className="flex items-center space-x-4">
-    <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400">
-      <Menu size={24} />
-    </button>
-
-    {/* Toggle panel documentación */}
-    {selP && (
-      <button
-        onClick={() => setShowLeftPanel(!showLeftPanel)}
-        className="hidden lg:block text-gray-400 hover:text-blue-600 transition-colors"
-        title={showLeftPanel ? "Expandir Chat" : "Mostrar Documentación"}
-      >
-        {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-      </button>
-    )}
-
-    <div className="flex items-center gap-3">
-      {selP && (
-        <button
-          onClick={() => setIsChatOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100"
-          title="Abrir Asistente"
-        >
-          <MessageSquare size={16} />
-          <span className="hidden md:inline text-[10px] font-bold uppercase tracking-wide">
-            Asistente IA
-          </span>
-        </button>
-      )}
-
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full border border-slate-200">
-        <User size={12} className="text-slate-500" />
-        <span className="text-[10px] font-bold text-slate-600 uppercase">
-          Dr. Oncólogo
-        </span>
-      </div>
-    </div>
-  </div>
-</header>
+                    <div className="flex items-center space-x-4">
+                        <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={24} /></button>
+                        {/* TOGGLE PANEL BUTTON */}
+                        {selP && (
+                            <button 
+                                onClick={() => setShowLeftPanel(!showLeftPanel)} 
+                                className="hidden lg:block text-gray-400 hover:text-blue-600 transition-colors"
+                                title={showLeftPanel ? "Expandir Chat" : "Mostrar Documentación"}
+                            >
+                                {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+                            </button>
+                        )}
+                        <div className="flex flex-col">
+                            <h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">{selP ? `Caso: ${selP.name}` : 'Bienvenido'}</h1>
+                            {selP && <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">{selP.diagnosis} – {selP.age} Años</span>}
+                        </div>
+                    </div>
+                    <div className={`px-3 py-1.5 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
+                        {apiKeyExists ? <div className="w-2 h-2 bg-green-500 rounded-full"></div> : <ShieldAlert size={12}/>}
+                        <span>{apiKeyExists ? 'Online' : 'Error API'}</span>
+                    </div>
+                </header>
 
                 {selP ? (
                     <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-50">
@@ -843,18 +825,8 @@ const [isAuditing, setIsAuditing] = useState(false);
                             </div>
                         </div>
 
-                        {/* Right Panel: Chat (Drawer) */}
-<div
-  className={`fixed inset-y-0 right-0 z-40 w-[420px] bg-gray-50 border-l shadow-xl
-  transform transition-transform duration-300
-  ${isChatOpen ? 'translate-x-0' : 'translate-x-full'}`}
->
-    <button
-  onClick={() => setIsChatOpen(false)}
-  className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
->
-  <X size={20} />
-</button>
+                        {/* Right Panel: Chat */}
+                        <div className={`${showLeftPanel ? 'lg:w-1/2' : 'w-full'} flex flex-col bg-gray-50 h-full overflow-hidden relative transition-all duration-300`}>
                             {lastError && (
                                 <div className="absolute top-4 left-4 right-4 z-30 bg-red-600 text-white p-4 rounded-2xl shadow-xl flex items-start space-x-3 border border-red-500 animate-in slide-in-from-top">
                                     <Terminal className="flex-shrink-0 mt-0.5" size={16}/>
@@ -902,7 +874,6 @@ const [isAuditing, setIsAuditing] = useState(false);
                             <button onClick={() => setShowNewPatientModal(true)} className="mt-8 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 uppercase">Crear caso clínico</button>
                         </div>
                     </div>
-            
                 )}
             </main>
 
