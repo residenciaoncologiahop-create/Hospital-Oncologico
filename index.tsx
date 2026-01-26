@@ -144,9 +144,10 @@ SALIDA: ARRAY JSON PURO
           : cleanText
       );
     } catch (e) {
-      console.error("Error parseando JSON de timeline", e);
-      return [];
-    }
+    console.error(e);
+    return [];
+  }
+};
 
     const validEvents: ClinicalEvent[] = rawEvents
       .map((e: any) => ({
@@ -167,6 +168,7 @@ SALIDA: ARRAY JSON PURO
   } catch (e) {
     console.error(e);
     return [];
+  }
 };
 
 const generateText = async (prompt: string, context: string, files: FileData[]) => {
