@@ -672,36 +672,45 @@ const [isAuditing, setIsAuditing] = useState(false);
             {/* Main */}
             <main className="flex-1 flex flex-col h-full overflow-hidden">
                 <header className="bg-white/80 backdrop-blur-md border-b h-16 flex items-center px-6 justify-between z-20">
-                    <div className="flex items-center space-x-4">
-                        <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={24} /></button>
-                        {/* TOGGLE PANEL BUTTON */}
-                        {selP && (
-                            <button 
-                                onClick={() => setShowLeftPanel(!showLeftPanel)} 
-                                className="hidden lg:block text-gray-400 hover:text-blue-600 transition-colors"
-                                title={showLeftPanel ? "Expandir Chat" : "Mostrar Documentación"}
-                            >
-                                {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-                            </button>
-            <button
-  onClick={() => setIsChatOpen(true)}
-  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
->
-  <MessageSquare size={14} />
-  Asistente IA
-</button>
+  <div className="flex items-center space-x-4">
+    <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400">
+      <Menu size={24} />
+    </button>
 
-                        )}
-                        <div className="flex flex-col">
-                            <h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">{selP ? `Caso: ${selP.name}` : 'Bienvenido'}</h1>
-                            {selP && <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">{selP.diagnosis} – {selP.age} Años</span>}
-                        </div>
-                    </div>
-                    <div className={`px-3 py-1.5 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
-                        {apiKeyExists ? <div className="w-2 h-2 bg-green-500 rounded-full"></div> : <ShieldAlert size={12}/>}
-                        <span>{apiKeyExists ? 'Online' : 'Error API'}</span>
-                    </div>
-                </header>
+    {/* Toggle panel documentación */}
+    {selP && (
+      <button
+        onClick={() => setShowLeftPanel(!showLeftPanel)}
+        className="hidden lg:block text-gray-400 hover:text-blue-600 transition-colors"
+        title={showLeftPanel ? "Expandir Chat" : "Mostrar Documentación"}
+      >
+        {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+      </button>
+    )}
+
+    <div className="flex items-center gap-3">
+      {selP && (
+        <button
+          onClick={() => setIsChatOpen(true)}
+          className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100"
+          title="Abrir Asistente"
+        >
+          <MessageSquare size={16} />
+          <span className="hidden md:inline text-[10px] font-bold uppercase tracking-wide">
+            Asistente IA
+          </span>
+        </button>
+      )}
+
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full border border-slate-200">
+        <User size={12} className="text-slate-500" />
+        <span className="text-[10px] font-bold text-slate-600 uppercase">
+          Dr. Oncólogo
+        </span>
+      </div>
+    </div>
+  </div>
+</header>
 
                 {selP ? (
                     <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-50">
