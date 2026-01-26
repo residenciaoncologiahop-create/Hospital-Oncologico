@@ -1,3 +1,5 @@
+import ClinicalReportModal from './components/ClinicalReportModal';
+import { generateResidentClinicalSummary, generateFollowUpPlan, generateTumorBoardAnalysis } from './utils/residentAI';
 import RootOrchestrator from './RootOrchestrator';
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -261,6 +263,12 @@ const App = () => {
     const [showTumorBoardModal, setShowTumorBoardModal] = useState(false); 
     const [tumorBoardText, setTumorBoardText] = useState('');
     const [isGeneratingTumorBoard, setIsGeneratingTumorBoard] = useState(false);
+    const [reportModal, setReportModal] = useState({ 
+  isOpen: false, 
+  title: '', 
+  content: '' as string | null, 
+  isLoading: false 
+});
     
     // --- AUDITORÍA CLÍNICA ---
 const [showAuditModal, setShowAuditModal] = useState(false);
@@ -550,6 +558,16 @@ const [isAuditing, setIsAuditing] = useState(false);
     }
 };
 
+    const runReportGeneration = async (title: string, generatorFn: (text: string, files: any[]) => Promise<string>) => {
+  if (!selP) return;
+  setReportModal({ isOpen: true, title, content: null, isLoading: true });
+
+  const htmlResult = await generatorFn(selP.historyText, historyFiles);
+  
+  setReportModal({ isOpen: true, title, content: htmlResult, isLoading: false });
+};
+
+
     const filteredPatients = patients.filter(p => 
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
@@ -685,14 +703,7 @@ const [isAuditing, setIsAuditing] = useState(false);
 
                                         <section className="space-y-4 pt-4 border-t border-gray-100">
                                             <div className="grid grid-cols-4 gap-2">
-                                                <button onClick={handleGenerateSummary} disabled={isGeneratingSummary} className="flex flex-col items-center justify-center bg-indigo-50 text-indigo-600 border border-indigo-100 py-3 rounded-xl hover:bg-indigo-100 transition-all">
-                                                    {isGeneratingSummary ? <Loader2 className="animate-spin mb-1" size={14} /> : <FileOutput size={14} className="mb-1" />}
-                                                    <span className="text-[10px] font-black tracking-widest uppercase">RESUMEN CLÍNICO</span>
-                                                </button>
-                                                <button onClick={handleGenerateFollowUp} disabled={isGeneratingFollowUp} className="flex flex-col items-center justify-center bg-teal-50 text-teal-600 border border-teal-100 py-3 rounded-xl hover:bg-teal-100 transition-all">
-                                                    {isGeneratingFollowUp ? <Loader2 className="animate-spin mb-1" size={14} /> : <ClipboardCheck size={14} className="mb-1" />}
-                                                    <span className="text-[10px] font-black tracking-widest uppercase">PLAN SEGUIMIENTO</span>
-                                                </button>
+                                                
                                                 <button 
   onClick={handleRunClinicalAudit}
   disabled={isAuditing}
@@ -700,14 +711,32 @@ const [isAuditing, setIsAuditing] = useState(false);
 >
   <ClipboardCheck size={14} className="mb-1" />
   <span className="text-[10px] font-black tracking-widest uppercase">
+      <button 
+  onClick={() => runReportGeneration('Resumen Clínico', generateResidentClinicalSummary)}
+  className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+>
+  <FileText size={16} className="text-indigo-600 mb-1" /> Resumen HC
+</button>
+
+<button 
+  onClick={() => runReportGeneration('Plan de Seguimiento', generateFollowUpPlan)}
+  className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+>
+  <Calendar size={16} className="text-emerald-600 mb-1" /> Seguimiento
+</button>
+
+<button 
+  onClick={() => runReportGeneration('Ateneo / Comité', generateTumorBoardAnalysis)}
+  className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+>
+  <Presentation size={16} className="text-amber-600 mb-1" /> Comité
+</button>
+
     CONTROL DE CALIDAD
   </span>
 </button>
 
-                                                <button onClick={handleGenerateTumorBoard} disabled={isGeneratingTumorBoard} className="flex flex-col items-center justify-center bg-rose-50 text-rose-600 border border-rose-100 py-3 rounded-xl hover:bg-rose-100 transition-all">
-                                                    {isGeneratingTumorBoard ? <Loader2 className="animate-spin mb-1" size={14} /> : <Presentation size={14} className="mb-1" />}
-                                                    <span className="text-[10px] font-black tracking-widest uppercase">ATENEO / COMITÉ</span>
-                                                </button>
+                                               
                                             </div>
                                             <FileUploader label="Guías NCCN / Protocolos" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" />
                                         </section>
@@ -878,6 +907,14 @@ const [isAuditing, setIsAuditing] = useState(false);
                     </div>
                 </div>
             )}
+            <ClinicalReportModal 
+  isOpen={reportModal.isOpen} 
+  onClose={() => setReportModal({ ...reportModal, isOpen: false })} 
+  title={reportModal.title} 
+  content={reportModal.content} 
+  isLoading={reportModal.isLoading} 
+/>
+
         </div>
     );
 };
