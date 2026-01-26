@@ -1,4 +1,5 @@
 import LabPanel, { LabResult } from './components/LabPanel';
+import { labMocks } from "./mocks/labMocks";
 import ClinicalReportModal from './components/ClinicalReportModal';
 import { generateResidentClinicalSummary, generateFollowUpPlan, generateTumorBoardAnalysis } from './utils/residentAI';
 import RootOrchestrator from './RootOrchestrator';
@@ -899,7 +900,7 @@ const [isAuditing, setIsAuditing] = useState(false);
                         {activeTab === 'labs' && (
     <div className="h-full p-6 overflow-y-auto">
         <LabPanel 
-            results={selP?.labResults || []} 
+            results={labMocks}
             onAddManual={handleAddManualLab}
             isResident={false}
         />
