@@ -100,13 +100,17 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
         const parts: any[] = [{ text: `
             Analiza los documentos y extrae la cronología clínica.
             
-            REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales.
+            REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales del paciente.
             
-            REGLAS DE FORMATO:
-            - Idioma: ESPAÑOL.
-            - Fechas: DD/MM/YYYY.
-            - Categorías: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
-            - SALIDA: ÚNICAMENTE UN ARRAY JSON.
+            REGLAS DE FORMATO JSON:
+            - date: "DD/MM/YYYY"
+            - professional: "Nombre del médico/autor SOLO si está explícitamente firmado en el texto (ej: 'Dr. Pérez'). 
+Si no hay firma clara, devolver exactamente 'N/A'."
+            - category: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+            - note: "Resumen del evento (máx 10 palabras)".
+            - isKey: true/false (si es muy relevante).
+            
+            SALIDA: ÚNICAMENTE UN ARRAY JSON.
         `}];
         if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
@@ -120,7 +124,25 @@ const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise
         if (res.text) {
             const cleanText = res.text.replace(/```json|```/g, '').trim();
             let rawEvents = [];
+            // --- CORRECCIÓN DE AUTORÍA ---
+            const validEvents = rawEvents.map((e: any) => ({
+                date: e.date || e.fecha || "S/F",
+                // AQUI ESTÁ EL CAMBIO: Buscamos todas las variantes posibles del nombre
+                professional: e.professional || e.profesional || e.doctor || e.medico || "N/A", 
+                category: e.category || e.categoria || "General",
+                note: e.note || e.nota || e.descripcion || "Evento sin descripción",
+                isKey: !!(e.isKey || e.esClave)
+            })).filter((e: any) => {
+                if (e.date === "S/F") return false;
+                if (e.note === "Evento sin descripción") return false;
+                return true;
+            });
             
+            return sortTimeline(validEvents); 
+        }
+        return [];
+    } catch (e) { console.error(e); return []; }
+};            
             try {
                 const firstBracket = cleanText.indexOf('[');
                 const lastBracket = cleanText.lastIndexOf(']');
