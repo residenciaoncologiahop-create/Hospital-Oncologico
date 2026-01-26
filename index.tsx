@@ -167,7 +167,6 @@ SALIDA: ARRAY JSON PURO
   } catch (e) {
     console.error(e);
     return [];
-  }
 };
 
             try {
