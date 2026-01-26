@@ -900,7 +900,7 @@ const [isAuditing, setIsAuditing] = useState(false);
                         {activeTab === 'labs' && (
     <div className="h-full p-6 overflow-y-auto">
         <LabPanel 
-            results={labMocks}
+            results={selP?.labResults || []}
             onAddManual={handleAddManualLab}
             isResident={false}
         />
