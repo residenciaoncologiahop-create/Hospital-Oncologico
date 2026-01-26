@@ -1,3 +1,4 @@
+import LabPanel, { LabResult } from './components/LabPanel';
 import ClinicalReportModal from './components/ClinicalReportModal';
 import { generateResidentClinicalSummary, generateFollowUpPlan, generateTumorBoardAnalysis } from './utils/residentAI';
 import RootOrchestrator from './RootOrchestrator';
@@ -75,6 +76,7 @@ interface Patient {
     lastUpdated: number;
     chatHistory?: ChatMessage[];
     timeline?: ClinicalEvent[];
+    labResults?: LabResult[];
 }
 
 interface FileData { name: string; type: string; data: string; }
@@ -89,6 +91,49 @@ const parseDate = (dateStr: string) => {
 const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 
 // --- AI FUNCTIONS ---
+const extractLabsFromDocs = async (text: string, files: FileData[]): Promise<LabResult[]> => {
+    if (!text && files.length === 0) return [];
+    const apiKey = import.meta.env.VITE_API_KEY;
+    
+    try {
+        const ai = new GoogleGenAI({ apiKey: apiKey! });
+        const parts: any[] = [{ text: `
+            Analiza los documentos y extrae valores de laboratorio.
+            SALIDA: Array JSON estricto.
+            FORMATO: [{ "date": "DD/MM/YYYY", "test": "Nombre Test", "value": numero, "unit": "unidad" }]
+            Si no hay unidad, usa "-". Si hay rangos, extrae el valor medio o principal.
+            Ignora valores normales si no son relevantes. Prioriza: Hemograma, Renal, Hepático, Marcadores Tumorales.
+        `}];
+        
+        if(text) parts.push({ text: `Notas: ${text}` });
+        files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+
+        const res = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts },
+            config: { responseMimeType: "application/json" }
+        });
+
+        if (res.text) {
+            const cleanText = res.text.replace(/```json|```/g, '').trim();
+            const rawLabs = JSON.parse(cleanText);
+            
+            // Mapeo seguro
+            return rawLabs.map((l: any) => ({
+                date: l.date || "S/F",
+                test: l.test || "Desconocido",
+                value: typeof l.value === 'number' ? l.value : parseFloat(l.value) || 0,
+                unit: l.unit || "",
+                source: "documento",
+                professional: "IA - Extracción Automática"
+            })).filter((l: LabResult) => l.value !== 0 && l.test !== "Desconocido");
+        }
+        return [];
+    } catch (e) {
+        console.error("Lab extraction error", e);
+        return [];
+    }
+};
 
 const extractTimelineFromDocs = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
     if (!text && files.length === 0) return [];
@@ -233,7 +278,7 @@ const App = () => {
     const [apiKeyExists, setApiKeyExists] = useState<boolean>(!!import.meta.env.VITE_API_KEY);
 
     const [showLeftPanel, setShowLeftPanel] = useState(true);
-    const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms'>('docs');
+    const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms'| 'labs'>('docs');
 
     const [newPatientName, setNewPatientName] = useState('');
     const [newPatientAge, setNewPatientAge] = useState('');
@@ -354,26 +399,51 @@ const [isAuditing, setIsAuditing] = useState(false);
         setIsProcessingDocs(true);
         setLastError(null);
         try {
+            // 1. Extraer Timeline (Existente)
             const events = await extractTimelineFromDocs(historyText, historyFiles);
             const currentTimeline = timeline || [];
             const combinedTimeline = sortTimeline([...currentTimeline, ...events]);
             setTimeline(combinedTimeline);
-            
+
+            // 2. NUEVO: Extraer Laboratorios
+            const extractedLabs = await extractLabsFromDocs(historyText, historyFiles);
+            // Fusionar con laboratorios existentes si los hubiera
+            const currentLabs = (patients.find(p => p.id === selectedPatientId)?.labResults || []);
+            const combinedLabs = [...currentLabs, ...extractedLabs];
+
             if (selectedPatientId) {
                 const patientRef = doc(db, "patients", selectedPatientId);
                 await updateDoc(patientRef, {
                     timeline: combinedTimeline,
+                    labResults: combinedLabs, // <--- GUARDAR EN FIREBASE
                     historyText: historyText,
                     lastUpdated: Date.now()
                 });
-                logAction("PROCESS_DOCUMENTS", selectedPatientId, doctorName);
+                logAction("PROCESS_DOCS_AND_LABS", selectedPatientId, doctorName);
             }
-            setActiveTab('timeline');
+            // Puedes decidir si cambiar de tab o quedarte
+            alert(`Procesado: ${events.length} eventos y ${extractedLabs.length} resultados de laboratorio.`);
+            
         } catch (e: any) {
-            setLastError(e.message || "Error procesando documentos.");
+            setLastError(e.message);
         } finally {
             setIsProcessingDocs(false);
         }
+    };
+
+    const handleAddManualLab = async (newLab: LabResult) => {
+        if (!selectedPatientId) return;
+        
+        // Agregar autor real
+        const labWithAuthor = { ...newLab, professional: doctorName || 'Manual' };
+        
+        const currentLabs = (patients.find(p => p.id === selectedPatientId)?.labResults || []);
+        const updatedLabs = [...currentLabs, labWithAuthor];
+
+        const patientRef = doc(db, "patients", selectedPatientId);
+        await updateDoc(patientRef, { labResults: updatedLabs, lastUpdated: Date.now() });
+        
+        // Actualizar estado local forzando re-render si es necesario (generalmente el onSnapshot lo hace)
     };
 
     const handleAddManualEvolution = async () => {
@@ -703,6 +773,7 @@ const [isAuditing, setIsAuditing] = useState(false);
                                 <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historial de Eventos</button>
                                 {/* PESTAÑA TRÁMITES AGREGADA */}
                                 <button onClick={() => setActiveTab('forms')} className={`flex-1 py-4 transition-all ${activeTab === 'forms' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>3. Trámites</button>
+                                <button onClick={() => setActiveTab('labs')} className={`flex-1 py-4 transition-all ${activeTab === 'labs' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>4. Laboratorio</button>
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
@@ -825,6 +896,16 @@ const [isAuditing, setIsAuditing] = useState(false);
                             </div>
                         </div>
 
+                        {activeTab === 'labs' && (
+    <div className="h-full p-6 overflow-y-auto">
+        <LabPanel 
+            results={selP?.labResults || []} 
+            onAddManual={handleAddManualLab}
+            isResident={false}
+        />
+    </div>
+)}
+                        
                         {/* Right Panel: Chat */}
                         <div className={`${showLeftPanel ? 'lg:w-1/2' : 'w-full'} flex flex-col bg-gray-50 h-full overflow-hidden relative transition-all duration-300`}>
                             {lastError && (
