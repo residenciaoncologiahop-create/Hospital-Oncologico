@@ -245,6 +245,7 @@ const App = () => {
     const [guidelineFiles, setGuidelineFiles] = useState<FileData[]>([]);
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [chatInput, setChatInput] = useState('');
+    const [isChatOpen, setIsChatOpen] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
@@ -682,6 +683,14 @@ const [isAuditing, setIsAuditing] = useState(false);
                             >
                                 {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
                             </button>
+            <button
+  onClick={() => setIsChatOpen(true)}
+  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
+>
+  <MessageSquare size={14} />
+  Asistente IA
+</button>
+
                         )}
                         <div className="flex flex-col">
                             <h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">{selP ? `Caso: ${selP.name}` : 'Bienvenido'}</h1>
@@ -825,8 +834,18 @@ const [isAuditing, setIsAuditing] = useState(false);
                             </div>
                         </div>
 
-                        {/* Right Panel: Chat */}
-                        <div className={`${showLeftPanel ? 'lg:w-1/2' : 'w-full'} flex flex-col bg-gray-50 h-full overflow-hidden relative transition-all duration-300`}>
+                        {/* Right Panel: Chat (Drawer) */}
+<div
+  className={`fixed inset-y-0 right-0 z-40 w-[420px] bg-gray-50 border-l shadow-xl
+  transform transition-transform duration-300
+  ${isChatOpen ? 'translate-x-0' : 'translate-x-full'}`}
+>
+    <button
+  onClick={() => setIsChatOpen(false)}
+  className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+>
+  <X size={20} />
+</button>
                             {lastError && (
                                 <div className="absolute top-4 left-4 right-4 z-30 bg-red-600 text-white p-4 rounded-2xl shadow-xl flex items-start space-x-3 border border-red-500 animate-in slide-in-from-top">
                                     <Terminal className="flex-shrink-0 mt-0.5" size={16}/>
@@ -874,6 +893,7 @@ const [isAuditing, setIsAuditing] = useState(false);
                             <button onClick={() => setShowNewPatientModal(true)} className="mt-8 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 uppercase">Crear caso clínico</button>
                         </div>
                     </div>
+            
                 )}
             </main>
 
