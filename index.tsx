@@ -147,7 +147,6 @@ SALIDA: ARRAY JSON PURO
     console.error(e);
     return [];
   }
-};
 
     const validEvents: ClinicalEvent[] = rawEvents
       .map((e: any) => ({
@@ -169,7 +168,7 @@ SALIDA: ARRAY JSON PURO
     console.error(e);
     return [];
   }
-};
+    };
 
 const generateText = async (prompt: string, context: string, files: FileData[]) => {
     const apiKey = import.meta.env.VITE_API_KEY;
