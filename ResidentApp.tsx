@@ -111,10 +111,23 @@ const ResidentApp = () => {
   const handleProcessTimeline = async () => {
     if (!selectedPatient) return;
     setIsProcessingDocs(true);
-    const events = await extractResidentTimeline(selectedPatient.historyText, selectedPatient.files);
-    updateCurrentPatient({ timeline: events });
-    setIsProcessingDocs(false);
-    setActiveTab('timeline');
+    try {
+        const rawEvents = await extractResidentTimeline(selectedPatient.historyText, selectedPatient.files);
+        
+        // 1. Procesamiento de datos para asegurar el campo professional
+        const processedEvents = rawEvents.map((ev: any) => ({
+            ...ev,
+            // Priorizamos el dato extraído. Solo si falta, ponemos N/A.
+            professional: ev.professional || ev.profesional || "N/A"
+        }));
+
+        updateCurrentPatient({ timeline: processedEvents });
+        setIsProcessingDocs(false);
+        setActiveTab('timeline');
+    } catch (e) {
+        console.error(e);
+        setIsProcessingDocs(false);
+    }
   };
 
   // --- NUEVOS HANDLERS UNIFICADOS PARA REPORTES ---
@@ -248,15 +261,30 @@ const ResidentApp = () => {
 
                 {activeTab === 'timeline' && (
                    <div className="space-y-4">
-                     {selectedPatient.timeline.length === 0 ? <div className="text-center py-10 text-gray-400 font-bold text-[10px] uppercase opacity-60">Sin eventos. Procese documentos.</div> : selectedPatient.timeline.map((ev, i) => (
-                       <div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8"><div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md ${ev.isKey ? 'bg-red-500' : 'bg-indigo-400'}`}></div><div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm"><span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg">{ev.date}</span><p className="mt-2 text-[10px] text-gray-600">{ev.note}</p></div></div>
-                     ))}
+                     {/* 2. Validación de seguridad para que se renderice */}
+                     {(!selectedPatient.timeline || selectedPatient.timeline.length === 0) ? (
+                        <div className="text-center py-10 text-gray-400 font-bold text-[10px] uppercase opacity-60">
+                            Sin eventos. Procese documentos.
+                        </div>
+                     ) : (
+                        selectedPatient.timeline.map((ev, i) => (
+                       <div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8">
+                           <div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md ${ev.isKey ? 'bg-red-500' : 'bg-indigo-400'}`}></div>
+                           <div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                             <div className="flex justify-between items-center mb-2">
+                               <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg">{ev.date}</span>
+                               
+                               {/* 3. Visualización del Autor */}
+                               <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate max-w-[120px]">
+                                 {ev.professional}
+                               </span>
+                             </div>
+                             <p className="mt-2 text-[10px] text-gray-600">{ev.note}</p>
+                           </div>
+                       </div>
+                     )))}
                    </div>
                 )}
-                {activeTab === 'forms' && <FormManager patient={selectedPatient as any} historyText={selectedPatient.historyText} files={selectedPatient.files} />}
-                {activeTab === 'learning' && <ResidentLearningModule caseContext={`PACIENTE: ${selectedPatient.name}. EDAD: ${selectedPatient.age}. DIAGNÓSTICO: ${selectedPatient.diagnosis}.\nNOTAS: ${selectedPatient.historyText}`} files={selectedPatient.files}/>}
-              </div>
-            </div>
 
             {/* PANEL DERECHO (CHAT) */}
             <div className={`${isLearningMode ? 'hidden' : (showLeftPanel ? 'lg:w-1/2' : 'w-full')} flex flex-col bg-gray-50 h-full overflow-hidden relative`}>
