@@ -558,13 +558,41 @@ const [isAuditing, setIsAuditing] = useState(false);
     }
 };
 
-    const runReportGeneration = async (title: string, generatorFn: (text: string, files: any[]) => Promise<string>) => {
-  if (!selP) return;
+    // LÓGICA CORREGIDA: Manejo de estado seguro y variables correctas (selP / historyFiles)
+  const runReportGeneration = async (
+  title: string,
+  generatorFn: (text: string, files: FileData[]) => Promise<string>
+) => {
+  if (!selectedPatientId) return;
+
+  const p = patients.find(p => p.id === selectedPatientId);
+  if (!p) return;
+
+  if (!p.historyText && historyFiles.length === 0) {
+    alert("Sin documentación para procesar.");
+    return;
+  }
+
   setReportModal({ isOpen: true, title, content: null, isLoading: true });
 
-  const htmlResult = await generatorFn(selP.historyText, historyFiles);
-  
-  setReportModal({ isOpen: true, title, content: htmlResult, isLoading: false });
+  try {
+    const result = await generatorFn(p.historyText, historyFiles);
+
+    setReportModal(prev => ({
+      ...prev,
+      content: result,
+      isLoading: false
+    }));
+  } catch (error) {
+    console.error(error);
+    setReportModal(prev => ({
+      ...prev,
+      content: `<div class="p-4 text-red-600 bg-red-50 rounded-lg">
+        Error al generar el informe.
+      </div>`,
+      isLoading: false
+    }));
+  }
 };
 
 
@@ -703,35 +731,48 @@ const [isAuditing, setIsAuditing] = useState(false);
 
                                         <section className="space-y-4 pt-4 border-t border-gray-100">
                                             <div className="grid grid-cols-4 gap-2">
+                                                <div className="grid grid-cols-4 gap-2">
+
+  {/* CONTROL DE CALIDAD */}
+  <button
+    onClick={handleRunClinicalAudit}
+    disabled={isAuditing}
+    className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+  >
+    <ClipboardCheck size={16} className="text-blue-600 mb-1" />
+    Control Calidad
+  </button>
+
+  {/* RESUMEN HC */}
+  <button
+    onClick={() => runReportGeneration('Resumen Clínico Profesional', generateResidentClinicalSummary)}
+    className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+  >
+    <FileText size={16} className="text-indigo-600 mb-1" />
+    Resumen HC
+  </button>
+
+  {/* SEGUIMIENTO */}
+  <button
+    onClick={() => runReportGeneration('Plan de Seguimiento', generateFollowUpPlan)}
+    className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+  >
+    <Calendar size={16} className="text-emerald-600 mb-1" />
+    Seguimiento
+  </button>
+
+  {/* COMITÉ */}
+  <button
+    onClick={() => runReportGeneration('Presentación Comité de Tumores', generateTumorBoardAnalysis)}
+    className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
+  >
+    <Presentation size={16} className="text-amber-600 mb-1" />
+    Comité
+  </button>
+
+</div>
                                                 
-                                                <button 
-  onClick={handleRunClinicalAudit}
-  disabled={isAuditing}
-  className="flex flex-col items-center justify-center bg-gray-100 text-gray-800 border border-gray-200 py-3 rounded-xl hover:bg-gray-200 transition-all"
->
-  <ClipboardCheck size={14} className="mb-1" />
-  <span className="text-[10px] font-black tracking-widest uppercase">
-      <button 
-  onClick={() => runReportGeneration('Resumen Clínico', generateResidentClinicalSummary)}
-  className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
->
-  <FileText size={16} className="text-indigo-600 mb-1" /> Resumen HC
-</button>
-
-<button 
-  onClick={() => runReportGeneration('Plan de Seguimiento', generateFollowUpPlan)}
-  className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
->
-  <Calendar size={16} className="text-emerald-600 mb-1" /> Seguimiento
-</button>
-
-<button 
-  onClick={() => runReportGeneration('Ateneo / Comité', generateTumorBoardAnalysis)}
-  className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm"
->
-  <Presentation size={16} className="text-amber-600 mb-1" /> Comité
-</button>
-
+                                                
     CONTROL DE CALIDAD
   </span>
 </button>
