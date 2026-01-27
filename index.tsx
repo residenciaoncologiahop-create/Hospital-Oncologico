@@ -99,14 +99,91 @@ const extractLabsFromDocs = async (text: string, files: FileData[]): Promise<Lab
     try {
         const ai = new GoogleGenAI({ apiKey: apiKey! });
         const parts: any[] = [{ text: `
-            Analiza los documentos y extrae valores de laboratorio.
-            SALIDA: Array JSON estricto.
-            FORMATO: [{ "date": "DD/MM/YYYY", "test": "Nombre Test", "value": numero, "unit": "unidad" }]
-            Si no hay unidad, usa "-". Si hay rangos, extrae el valor medio o principal.
-            Ignora valores normales si no son relevantes. Prioriza: Hemograma, Renal, Hepático, Marcadores Tumorales.
+            Analiza el texto clínico y los documentos adjuntos para extraer RESULTADOS DE LABORATORIO.
+
+            OBJETIVO PRINCIPAL:
+            Detectar, interpretar y NORMALIZAR parámetros de laboratorio aunque estén escritos de forma abreviada, incompleta, con errores ortográficos o siglas informales.
+
+            ────────────────────────────────────────
+            1. NORMALIZACIÓN DE PARÁMETROS
+            ────────────────────────────────────────
+
+            Debes convertir TODAS las variantes a un NOMBRE CANÓNICO estándar.
+
+            Ejemplos (NO LIMITATIVOS):
+
+            - Hemoglobina:
+              "hb", "Hb", "HGB", "hemog", "hemoglob", "hg", "hgb" → "Hemoglobina"
+
+            - Hematocrito:
+              "hto", "hcto", "hemat", "hematoc", "hct" → "Hematocrito"
+
+            - Glóbulos blancos:
+              "gb", "gbl", "wbc", "leucos", "leucocitos", "blancos" → "Glóbulos blancos"
+
+            - Plaquetas:
+              "plaq", "plt", "plaqu", "plaquetas", "pqt" → "Plaquetas"
+
+            - Glucemia:
+              "gluc", "glu", "glicemia", "glucosa" → "Glucemia"
+
+            - Creatinina:
+              "creat", "cr", "creatin", "crea" → "Creatinina"
+
+            - Urea:
+              "urea", "bun", "uremia" → "Urea"
+
+            - Bilirrubina total:
+              "bt", "bil tot", "bilirr total" → "Bilirrubina total"
+
+            - TGO / AST:
+              "tgo", "ast", "got" → "TGO (AST)"
+
+            - TGP / ALT:
+              "tgp", "alt", "gpt" → "TGP (ALT)"
+            
+            - Marcadores Tumorales:
+              "cea" → "CEA"
+              "ca125", "ca 125", "ca-125" → "CA 125"
+              "ca199", "ca 19.9", "ca 19-9" → "CA 19-9"
+              "psa", "antigeno prostatico", "antigeno" → "PSA"
+
+            Si una sigla no es exacta pero es **altamente probable** por contexto, debes inferirla.
+
+            ────────────────────────────────────────
+            2. INFERENCIA POR CONTEXTO CLÍNICO
+            ────────────────────────────────────────
+
+            Si una sigla es ambigua o tiene error tipográfico:
+            - Usa patrones habituales: Si aparece "hb: 12, hto: 36, gb: 5000", ese "gb" son glóbulos blancos.
+            - Si el valor numérico no coincide con la unidad o el parámetro biológico, descártalo (ej: Hb de 15000 es imposible, probablemente sean plaquetas o GB).
+
+            ────────────────────────────────────────
+            3. FORMATO DE SALIDA (OBLIGATORIO)
+            ────────────────────────────────────────
+
+            Devuelve ÚNICAMENTE un ARRAY JSON VÁLIDO, sin texto adicional ni markdown.
+
+            Formato exacto:
+            [
+              {
+                "date": "DD/MM/YYYY",
+                "test": "Nombre Canónico del Parámetro",
+                "value": number,
+                "unit": "unidad"
+              }
+            ]
+
+            Reglas:
+            - Si no hay fecha explícita en el dato, intenta usar la fecha del documento o "S/F".
+            - Si no hay unidad → usa "-".
+            - Si el valor es un rango (ej: "12-14") → usa el promedio o el primer valor.
+            - Solo números en "value".
+            
+            SALIDA: SOLO JSON.
         `}];
         
-        if(text) parts.push({ text: `Notas: ${text}` });
+        if(text) parts.push({ text: `Notas clínicas: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
         const res = await ai.models.generateContent({
@@ -117,17 +194,27 @@ const extractLabsFromDocs = async (text: string, files: FileData[]): Promise<Lab
 
         if (res.text) {
             const cleanText = res.text.replace(/```json|```/g, '').trim();
-            const rawLabs = JSON.parse(cleanText);
+            let rawLabs = [];
+            try {
+                rawLabs = JSON.parse(cleanText);
+            } catch (e) {
+                // Intento de recuperación si el JSON viene sucio
+                const firstBracket = cleanText.indexOf('[');
+                const lastBracket = cleanText.lastIndexOf(']');
+                if (firstBracket !== -1 && lastBracket !== -1) {
+                    rawLabs = JSON.parse(cleanText.substring(firstBracket, lastBracket + 1));
+                }
+            }
             
-            // Mapeo seguro
+            // Mapeo seguro y filtrado de basura
             return rawLabs.map((l: any) => ({
                 date: l.date || "S/F",
                 test: l.test || "Desconocido",
                 value: typeof l.value === 'number' ? l.value : parseFloat(l.value) || 0,
-                unit: l.unit || "",
+                unit: l.unit || "-",
                 source: "documento",
                 professional: "IA - Extracción Automática"
-            })).filter((l: LabResult) => l.value !== 0 && l.test !== "Desconocido");
+            })).filter((l: LabResult) => l.value !== 0 && l.test !== "Desconocido" && !Number.isNaN(l.value));
         }
         return [];
     } catch (e) {
