@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Plus, TestTube, AlertCircle } from 'lucide-react';
+import { Plus, TestTube, AlertCircle, Activity } from 'lucide-react';
 
 export interface LabResult {
   date: string;
