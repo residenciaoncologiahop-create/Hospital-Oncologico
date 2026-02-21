@@ -1,14 +1,9 @@
-import { GoogleGenAI } from "@google/genai";
+import { callGemini } from './aiProxy';
 
 interface FileData { name: string; type: string; data: string; }
 
 export const generateClinicalAudit = async (text: string, files: FileData[]) => {
-  const apiKey = import.meta.env.VITE_API_KEY;
-  if (!apiKey) throw new Error("API Key no configurada.");
-
   try {
-    const ai = new GoogleGenAI({ apiKey });
-
     // PROMPT UNIFICADO (Single String Strategy)
     // Diseñado para actuar como un "Data Extractor" estricto.
 const auditPrompt = `
@@ -116,11 +111,8 @@ FORMATO DE SALIDA OBLIGATORIO (HTML):
       });
     }
 
-    // Llamada al modelo (Usando 1.5 Flash para velocidad en tareas de extracción)
-    const res = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts }
-    });
+    // Llamada segura al backend usando callGemini
+    const res = await callGemini({ parts });
 
     const raw = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
     return raw.replace(/```html|```/g, '').trim();
