@@ -5,10 +5,13 @@ import { generateResidentClinicalSummary, generateFollowUpPlan, generateTumorBoa
 import RootOrchestrator from './RootOrchestrator';
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
+
 // --- FIREBASE IMPORTS ---
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
+// CORRECCIÓN CRÍTICA: Importamos 'db' desde firebase.ts para compartir la sesión autenticada
+import { db } from './firebase'; 
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
 // ------------------------
+
 import { 
     User as LucideUser, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
@@ -27,19 +30,6 @@ import ClinicalAuditModal from './components/ClinicalAuditModal';
 import { User } from 'firebase/auth';
 import AuthWrapper, { logout } from './components/AuthWrapper';
 import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, generateTextSecure } from './utils/aiProxy';
-
-// --- FIREBASE CONFIGURATION ---
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_API_KEY_FIREBASE,
-  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_APP_ID
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 
 // --- AUDIT SYSTEM ---
 const getOrInitFingerprint = () => {
@@ -96,7 +86,6 @@ const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDat
 
 
 // --- COMPONENTS ---
-
 const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/*" }: { label: string, files: FileData[], setFiles: (f: FileData[]) => void, accept?: string }) => {
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -149,7 +138,7 @@ const App = ({ user }: AppProps) => {
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [apiKeyExists, setApiKeyExists] = useState<boolean>(true); // Siempre true, el backend maneja la key
+    const [apiKeyExists, setApiKeyExists] = useState<boolean>(true); 
 
     const [showLeftPanel, setShowLeftPanel] = useState(true);
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms'| 'labs'>('docs');
@@ -194,7 +183,6 @@ const App = ({ user }: AppProps) => {
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
 
-
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -233,7 +221,6 @@ const App = ({ user }: AppProps) => {
                 setChatMessages(p.chatHistory || []);
                 setHistoryFiles([]); setGuidelineFiles([]);
                 setLastError(null);
-                // CORRECCIÓN: Siempre abrir en 'docs' primero
                 setActiveTab('docs'); 
                 setManualDate(new Date().toISOString().split('T')[0]); 
                 setManualDoctor(doctorName || '');
@@ -312,7 +299,6 @@ const App = ({ user }: AppProps) => {
 
         const patientRef = doc(db, "patients", selectedPatientId);
         await updateDoc(patientRef, { labResults: updatedLabs, lastUpdated: Date.now() });
-        
     };
 
     const handleAddManualEvolution = async () => {
@@ -422,25 +408,33 @@ const App = ({ user }: AppProps) => {
         logAction("CHAT_MESSAGE", selectedPatientId, doctorName);
     };
 
+    // --- CORRECCIÓN CRÍTICA DE CREACIÓN DE PACIENTES ---
     const handleCreatePatient = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!doctorName) return;
+        
         const p = {
             doctorId: doctorName,
             name: newPatientName,
-            age: parseInt(newPatientAge),
+            age: parseInt(newPatientAge) || 0, // Protección contra NaN
             diagnosis: newPatientDiagnosis,
             historyText: '',
             lastUpdated: Date.now(),
             chatHistory: [],
-            timeline: []
+            timeline: [],
+            labResults: [] // Inicializamos array de laboratorios
         };
         try {
             const docRef = await addDoc(collection(db, "patients"), p);
-            setSelectedPatientId(docRef.id); setShowNewPatientModal(false);
-            setNewPatientName(''); setNewPatientAge(''); setNewPatientDiagnosis('');
+            setSelectedPatientId(docRef.id); 
+            setShowNewPatientModal(false);
+            setNewPatientName(''); 
+            setNewPatientAge(''); 
+            setNewPatientDiagnosis('');
             logAction("CREATE_PATIENT", docRef.id, doctorName);
-        } catch (error: any) { setLastError("Error creando paciente: " + error.message); }
+        } catch (error: any) { 
+            setLastError("Error creando paciente: " + error.message); 
+        }
     };
 
     const handleDeletePatient = async (id: string, e: React.MouseEvent) => {
@@ -455,27 +449,27 @@ const App = ({ user }: AppProps) => {
     };
 
     const handleRunClinicalAudit = async () => {
-    if (!selectedPatientId) return;
+        if (!selectedPatientId) return;
 
-    if (!historyText && historyFiles.length === 0) {
-        alert("No hay documentación clínica para auditar.");
-        return;
-    }
+        if (!historyText && historyFiles.length === 0) {
+            alert("No hay documentación clínica para auditar.");
+            return;
+        }
 
-    setShowAuditModal(true);
-    setIsAuditing(true);
-    setAuditContent(null);
+        setShowAuditModal(true);
+        setIsAuditing(true);
+        setAuditContent(null);
 
-    try {
-        const result = await generateClinicalAuditSecure(historyText, historyFiles);
-        setAuditContent(result);
-        logAction("RUN_CLINICAL_AUDIT", selectedPatientId, doctorName);
-    } catch (e) {
-        setAuditContent("<div class='text-red-600 text-xs'>Error en la auditoría clínica.</div>");
-    } finally {
-        setIsAuditing(false);
-    }
-};
+        try {
+            const result = await generateClinicalAuditSecure(historyText, historyFiles);
+            setAuditContent(result);
+            logAction("RUN_CLINICAL_AUDIT", selectedPatientId, doctorName);
+        } catch (e) {
+            setAuditContent("<div class='text-red-600 text-xs'>Error en la auditoría clínica.</div>");
+        } finally {
+            setIsAuditing(false);
+        }
+    };
 
     const runReportGeneration = async (
         title: string,
@@ -494,9 +488,6 @@ const App = ({ user }: AppProps) => {
         setReportModal({ isOpen: true, title, content: null, isLoading: true });
 
         try {
-            // Nota: Aquí tendrías que adaptar generateResidentClinicalSummary a usar el proxy si es necesario,
-            // pero si la función ya está importada y manejada internamente, la dejamos como está por ahora
-            // o idealmente crearle su versión Secure. Para mantener el cambio mínimo solicitado:
             const result = await generatorFn(p.historyText, historyFiles);
 
             setReportModal(prev => ({
@@ -514,16 +505,12 @@ const App = ({ user }: AppProps) => {
         }
     };
 
-
     const filteredPatients = patients.filter(p => 
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-
     const selP = patients.find(p => p.id === selectedPatientId);
-
-    // 1. DEFINIR VARIABLE DE ESTADO (Justo antes del return)
     const isLabTab = activeTab === 'labs';
 
     return (
@@ -648,7 +635,7 @@ const App = ({ user }: AppProps) => {
 
                                 {activeTab === 'timeline' && (
                                     <div className="space-y-4 pt-2">
-                                        {timeline.length === 0 ? (
+                                        {(!timeline || timeline.length === 0) ? (
                                             <div className="flex flex-col items-center justify-center py-20 text-gray-200"><Clock size={40} className="mb-3 opacity-10" /><p className="text-xs font-black uppercase tracking-widest">Sin eventos</p></div>
                                         ) : (
                                             timeline
