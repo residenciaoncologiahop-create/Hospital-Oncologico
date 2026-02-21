@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pill, X, Search, Loader2, AlertTriangle } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+// 1. IMPORTACIÓN NUEVA: Usamos el proxy seguro en lugar del SDK de Gemini
+import { callGemini } from '../utils/aiProxy'; 
 
 interface DrugReferenceProps { onClose: () => void; }
 
@@ -17,12 +18,8 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
     setData(null);
 
     try {
-      const apiKey = import.meta.env.VITE_API_KEY;
-      if (!apiKey) throw new Error("API Key no configurada.");
-
-      const ai = new GoogleGenAI({ apiKey });
+      // 2. ELIMINADA la validación de import.meta.env.VITE_API_KEY
       
-      // --- PROMPT ACTUALIZADO CON DATOS TÉCNICOS DE PREPARACIÓN ---
       const prompt = `
         Actúa como un Farmacéutico Oncológico Clínico Experto.
         Genera una ficha técnica precisa para la droga: "${query}".
@@ -69,9 +66,9 @@ const DrugReference: React.FC<DrugReferenceProps> = ({ onClose }) => {
         </div>
       `;
 
-      const res = await ai.models.generateContent({ 
-        model: 'gemini-2.5-flash', 
-        contents: { parts: [{ text: prompt }] } 
+      // 3. LLAMADA SEGURA: Usamos callGemini pasando el prompt
+      const res = await callGemini({ 
+        parts: [{ text: prompt }] 
       });
       
       const text = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "Sin respuesta.";
