@@ -101,11 +101,21 @@ export const extractTimelineSecure = async (
 ): Promise<any[]> => {
   if (!text && files.length === 0) return [];
 
+  // CORRECCIÓN: Se especificó la estructura JSON exacta ("date", "professional", "category", "note", "isKey")
   const instructionText = `
-    Analiza los documentos y extrae la cronología clínica.
+    Analiza los documentos y extrae la cronología clínica de manera ordenada.
     REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales.
-    Fechas: DD/MM/YYYY. Categorías: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
-    SALIDA: ÚNICAMENTE UN ARRAY JSON.
+    Fechas: DD/MM/YYYY. Categorías sugeridas: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+    SALIDA ESTRICTA: ÚNICAMENTE UN ARRAY JSON CON ESTA ESTRUCTURA EXACTA (respeta las claves en inglés):
+    [
+      {
+        "date": "DD/MM/YYYY",
+        "professional": "Nombre del profesional o institución",
+        "category": "Categoría del evento",
+        "note": "Descripción clínica resumida",
+        "isKey": false
+      }
+    ]
   `;
 
   const parts = buildParts(instructionText, []);
@@ -120,7 +130,8 @@ export const extractTimelineSecure = async (
     const end = clean.lastIndexOf(']');
     if (start !== -1 && end !== -1) return JSON.parse(clean.substring(start, end + 1));
     return JSON.parse(clean);
-  } catch {
+  } catch (error) {
+    console.error("Error parseando timeline:", error);
     return [];
   }
 };
