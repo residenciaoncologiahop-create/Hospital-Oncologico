@@ -191,7 +191,7 @@ const App = ({ user }: AppProps) => {
 
     useEffect(() => {
         if (!doctorName) { setPatients([]); return; }
-        const q = query(collection(db, "patients"), where("doctorId", "==", doctorName));
+        const q = query(collection(db, "patients"), where("doctorId", "==", user.uid));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const list = snapshot.docs.map(doc => {
                 const data = doc.data();
@@ -414,7 +414,7 @@ const App = ({ user }: AppProps) => {
         if (!doctorName) return;
         
         const p = {
-            doctorId: doctorName,
+            doctorId: user.uid,
             name: newPatientName,
             age: parseInt(newPatientAge) || 0, // Protección contra NaN
             diagnosis: newPatientDiagnosis,
