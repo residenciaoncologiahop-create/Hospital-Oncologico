@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { BookOpen, GraduationCap, Loader2, Sparkles, AlertCircle, RefreshCw, Maximize2, Minimize2, MessageCircle, Play, User, CheckCircle2, MousePointerClick } from 'lucide-react';
+// IMPORTACIÓN NUEVA: Usamos el proxy seguro en lugar del SDK de Gemini
+import { callGemini } from '../utils/aiProxy';
 
 interface FileData { name: string; type: string; data: string; }
 interface SimMessage { role: 'model' | 'user'; text: string; }
@@ -22,8 +23,6 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
   const [theoryContent, setTheoryContent] = useState<string | null>(null);
   const [theoryLoading, setTheoryLoading] = useState(false);
 
-  const apiKey = import.meta.env.VITE_API_KEY;
-
   // Helper para limpiar texto
   const cleanAndFormat = (text: string) => {
     return text
@@ -36,12 +35,8 @@ const useResidentLearning = (caseContext: string, files: FileData[] = []) => {
 
   // 1. LÓGICA DE SIMULACIÓN (CON INSTRUCCIÓN CRÍTICA DE OPCIONES HTML)
   const runSimulationTurn = async (selectedOption?: string) => {
-    if (!apiKey) { setError("API Key faltante"); return; }
-    
     setSimLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      
       let historyContext = "";
       simMessages.forEach(m => {
         historyContext += `${m.role === 'model' ? 'MENTOR' : 'RESIDENTE'}: ${m.text}\n`;
@@ -156,7 +151,8 @@ Esta regla tiene prioridad sobre cualquier otra instrucción.
           });
       }
 
-      const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
+      // LLAMADA SEGURA A GEMINI
+      const res = await callGemini({ parts });
       const rawText = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "Error.";
       
       const aiText = cleanAndFormat(rawText);
@@ -183,9 +179,6 @@ Esta regla tiene prioridad sobre cualquier otra instrucción.
     setTheoryLoading(true);
     setError(null);
     try {
-      if (!apiKey) throw new Error("API Key no configurada.");
-      const ai = new GoogleGenAI({ apiKey });
-      
       const fullPrompt = `
         ROL: Profesor Titular de Oncología.
         TAREA: Generar el MARCO TEÓRICO FINAL.
@@ -250,7 +243,8 @@ Esta regla tiene prioridad sobre cualquier otra instrucción.
           });
       }
 
-      const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
+      // LLAMADA SEGURA A GEMINI
+      const res = await callGemini({ parts });
       const rawText = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
       
       setTheoryContent(cleanAndFormat(rawText));
