@@ -19,6 +19,7 @@
 
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { auth } from "../firebase";
+import { getApp } from "firebase/app";
 
 // Tipos
 interface GeminiPart {
@@ -47,7 +48,7 @@ export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiRe
     throw new Error("Usuario no autenticado. Inicie sesión para continuar.");
   }
 
-  const functions = getFunctions();
+  const functions = getFunctions(getApp(), 'us-central1');
   const callGeminiFn = httpsCallable<CallGeminiParams, CallGeminiResult>(functions, "callGemini");
 
   const result = await callGeminiFn(params);
