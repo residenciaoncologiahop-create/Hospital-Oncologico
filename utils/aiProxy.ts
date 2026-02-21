@@ -1,22 +1,3 @@
-/**
- * aiProxy.ts
- * 
- * REEMPLAZA todas las llamadas directas al SDK de Gemini (@google/genai)
- * por llamadas a la Cloud Function segura en el backend.
- * 
- * La API key de Gemini nunca sale del servidor.
- * Todas las llamadas requieren autenticación Firebase activa.
- * 
- * USO:
- *   // Antes (INSEGURO):
- *   const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
- *   const res = await ai.models.generateContent({ ... });
- * 
- *   // Ahora (SEGURO):
- *   const res = await callGemini({ prompt: "..." });
- *   console.log(res.text);
- */
-
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { auth } from "../firebase";
 import { getApp } from "firebase/app";
@@ -42,7 +23,6 @@ interface CallGeminiResult {
 // FUNCIÓN PRINCIPAL
 // ──────────────────────────────────────────────
 export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiResult> => {
-  // Verificar sesión activa antes de llamar
   const user = auth.currentUser;
   if (!user) {
     throw new Error("Usuario no autenticado. Inicie sesión para continuar.");
@@ -56,8 +36,7 @@ export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiRe
 };
 
 // ──────────────────────────────────────────────
-// HELPERS: funciones que reemplazan a las de
-// residentAI.ts y clinicalAuditAI.ts
+// HELPERS
 // ──────────────────────────────────────────────
 
 interface FileData { name: string; type: string; data: string; }
@@ -94,7 +73,7 @@ export const getChatResponseSecure = async (
   return res.text;
 };
 
-// ── Extracción de Timeline (CORREGIDA) ─────────
+// ── Extracción de Timeline ─────────────────────
 export const extractTimelineSecure = async (
   text: string,
   files: FileData[]
@@ -116,24 +95,6 @@ export const extractTimelineSecure = async (
       }
     ]
   `;
-
-  const parts = buildParts(instructionText, []);
-  if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
-  files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
-
-  const res = await callGemini({ parts, responseMimeType: "application/json" });
-
-  try {
-    const clean = res.text.replace(/```json|```/g, '').trim();
-    const start = clean.indexOf('[');
-    const end = clean.lastIndexOf(']');
-    if (start !== -1 && end !== -1) return JSON.parse(clean.substring(start, end + 1));
-    return JSON.parse(clean);
-  } catch (error) {
-    console.error("Error parseando timeline:", error);
-    return [];
-  }
-};
 
   const parts = buildParts(instructionText, []);
   if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
@@ -189,7 +150,6 @@ export const generateClinicalAuditSecure = async (
   files: FileData[]
 ): Promise<string> => {
 
-  // El prompt de auditoría completo (idéntico al original en clinicalAuditAI.ts)
   const auditPrompt = `
 ACTUÁ COMO: Extractor y auditor de registros clínicos oncológicos.
 OBJETIVO: Organizar la información clínica existente, detectar datos faltantes y señalar inconsistencias documentales.
