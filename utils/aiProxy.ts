@@ -94,14 +94,13 @@ export const getChatResponseSecure = async (
   return res.text;
 };
 
-// ── Extracción de Timeline ─────────────────────
+// ── Extracción de Timeline (CORREGIDA) ─────────
 export const extractTimelineSecure = async (
   text: string,
   files: FileData[]
 ): Promise<any[]> => {
   if (!text && files.length === 0) return [];
 
-  // CORRECCIÓN: Se especificó la estructura JSON exacta ("date", "professional", "category", "note", "isKey")
   const instructionText = `
     Analiza los documentos y extrae la cronología clínica de manera ordenada.
     REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales.
@@ -117,6 +116,24 @@ export const extractTimelineSecure = async (
       }
     ]
   `;
+
+  const parts = buildParts(instructionText, []);
+  if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
+  files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+
+  const res = await callGemini({ parts, responseMimeType: "application/json" });
+
+  try {
+    const clean = res.text.replace(/```json|```/g, '').trim();
+    const start = clean.indexOf('[');
+    const end = clean.lastIndexOf(']');
+    if (start !== -1 && end !== -1) return JSON.parse(clean.substring(start, end + 1));
+    return JSON.parse(clean);
+  } catch (error) {
+    console.error("Error parseando timeline:", error);
+    return [];
+  }
+};
 
   const parts = buildParts(instructionText, []);
   if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
