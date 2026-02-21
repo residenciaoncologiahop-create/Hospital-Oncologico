@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { callGemini } from './aiProxy';
 
 interface FileData { name: string; type: string; data: string; }
 interface ChatMessage { role: 'user' | 'model'; text: string; timestamp: number; }
@@ -35,11 +35,7 @@ const AUDIT_STYLE_INSTRUCTIONS = `
 // --- FUNCIONES DE UTILIDAD (CHAT Y TIMELINE) ---
 
 export const getResidentChatResponse = async (msgs: ChatMessage[], newMsg: string, context: string, files: FileData[]) => {
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) return "Error: API Key faltante";
-
     try {
-        const ai = new GoogleGenAI({ apiKey });
         const parts: any[] = [{ text: `CONTEXTO DEL CASO:\n${context}` }];
         
         if (files && Array.isArray(files)) {
@@ -51,11 +47,7 @@ export const getResidentChatResponse = async (msgs: ChatMessage[], newMsg: strin
         msgs.slice(-5).forEach(m => parts.push({ text: `${m.role}: ${m.text}` }));
         parts.push({ text: newMsg });
         
-        const res = await ai.models.generateContent({
-            model: MODEL_NAME,
-            contents: { parts },
-            config: { systemInstruction: "Eres un oncólogo docente. Responde en texto plano breve." }
-        });
+        const res = await callGemini({ parts });
         return res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "Error.";
     } catch (e: any) {
         return "Error: " + e.message;
@@ -64,11 +56,8 @@ export const getResidentChatResponse = async (msgs: ChatMessage[], newMsg: strin
 
 export const extractResidentTimeline = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
     if (!text && (!files || files.length === 0)) return [];
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) return [];
     
     try {
-        const ai = new GoogleGenAI({ apiKey });
         const parts: any[] = [{ text: `
             Extrae eventos clínicos clave (Fecha, Profesional, Categoría, Nota).
             Salida JSON array.
@@ -77,11 +66,7 @@ export const extractResidentTimeline = async (text: string, files: FileData[]): 
         if (text) parts.push({ text: `Notas: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
-        const res = await ai.models.generateContent({
-            model: MODEL_NAME,
-            contents: { parts },
-            config: { responseMimeType: "application/json" }
-        });
+        const res = await callGemini({ parts });
 
         if (res.text) {
             const txt = typeof res.text === 'function' ? res.text() : res.text;
@@ -99,12 +84,7 @@ export const extractResidentTimeline = async (text: string, files: FileData[]): 
 
 // 1. RESUMEN CLÍNICO
 export const generateResidentClinicalSummary = async (text: string, files: FileData[]) => {
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) throw new Error("API Key faltante");
-
     try {
-        const ai = new GoogleGenAI({ apiKey });
-        
         const prompt = `
             ACTÚA COMO: Jefe de Residentes de Oncología.
             TAREA: Redactar un Resumen Clínico Institucional.
@@ -151,7 +131,7 @@ export const generateResidentClinicalSummary = async (text: string, files: FileD
         const parts: any[] = [{ text: prompt }];
         if (files) files.slice(0, 5).forEach(f => { if(f.data) parts.push({ inlineData: { mimeType: f.type, data: f.data } }) });
 
-        const res = await ai.models.generateContent({ model: MODEL_NAME, contents: { parts } });
+        const res = await callGemini({ parts });
         const raw = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
         return raw.replace(/```html|```/g, '').trim();
 
@@ -162,12 +142,7 @@ export const generateResidentClinicalSummary = async (text: string, files: FileD
 
 // 2. PLAN DE SEGUIMIENTO
 export const generateFollowUpPlan = async (text: string, files: FileData[]) => {
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) throw new Error("API Key faltante");
-
     try {
-        const ai = new GoogleGenAI({ apiKey });
-
         const prompt = `
             ACTÚA COMO: Oncólogo Clínico.
             TAREA: Redactar Plan de Seguimiento (NCCN/ESMO).
@@ -214,7 +189,7 @@ export const generateFollowUpPlan = async (text: string, files: FileData[]) => {
         const parts: any[] = [{ text: prompt }];
         if (files) files.slice(0, 5).forEach(f => { if(f.data) parts.push({ inlineData: { mimeType: f.type, data: f.data } }) });
 
-        const res = await ai.models.generateContent({ model: MODEL_NAME, contents: { parts } });
+        const res = await callGemini({ parts });
         const raw = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
         return raw.replace(/```html|```/g, '').trim();
 
@@ -225,12 +200,7 @@ export const generateFollowUpPlan = async (text: string, files: FileData[]) => {
 
 // 3. ATENEO / COMITÉ DE TUMORES
 export const generateTumorBoardAnalysis = async (text: string, files: FileData[]) => {
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) throw new Error("API Key faltante");
-
     try {
-        const ai = new GoogleGenAI({ apiKey });
-
         const prompt = `
             ACTÚA COMO: Secretario de Comité de Tumores.
             TAREA: Redactar Presentación de Caso para Discusión.
@@ -244,7 +214,7 @@ export const generateTumorBoardAnalysis = async (text: string, files: FileData[]
                 <div class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
                     <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b pb-1">Presentación del Caso</h3>
                     <p class="mb-2 leading-relaxed text-gray-700">
-                        Paciente de [Edad/Sexo] con [Diagnóstico]. El motivo de presentación al comité es <strong class="font-bold text-gray-900">[Motivo de discusión]</strong>.
+                        Paciente de [Edad/Sexo] con [Diagnóstico]. El motivo de presentation al comité es <strong class="font-bold text-gray-900">[Motivo de discusión]</strong>.
                     </p>
                 </div>
 
@@ -280,7 +250,7 @@ export const generateTumorBoardAnalysis = async (text: string, files: FileData[]
         const parts: any[] = [{ text: prompt }];
         if (files) files.slice(0, 5).forEach(f => { if(f.data) parts.push({ inlineData: { mimeType: f.type, data: f.data } }) });
 
-        const res = await ai.models.generateContent({ model: MODEL_NAME, contents: { parts } });
+        const res = await callGemini({ parts });
         const raw = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
         return raw.replace(/```html|```/g, '').trim();
 
@@ -291,12 +261,7 @@ export const generateTumorBoardAnalysis = async (text: string, files: FileData[]
 
 // 4. AUDITORÍA CLÍNICA (MISMO FORMATO STRICTO)
 export const generateOncologyVerification = async (text: string, files: FileData[]) => {
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) throw new Error("API Key faltante");
-
     try {
-        const ai = new GoogleGenAI({ apiKey });
-        
         const prompt = `
             ACTÚA COMO: Auditor Clínico.
             TAREA: Auditoría de Completitud.
@@ -330,7 +295,7 @@ export const generateOncologyVerification = async (text: string, files: FileData
         const parts: any[] = [{ text: prompt }];
         if (files) files.slice(0, 5).forEach(f => { if(f.data) parts.push({ inlineData: { mimeType: f.type, data: f.data } }) });
 
-        const res = await ai.models.generateContent({ model: MODEL_NAME, contents: { parts } });
+        const res = await callGemini({ parts });
         const raw = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
         return raw.replace(/```html|```/g, '').trim();
 
