@@ -3,7 +3,7 @@ import {
   FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle, CheckCircle2, Map 
 } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { GoogleGenAI } from "@google/genai";
+import { callGemini } from '../utils/aiProxy';
 
 interface FormManagerProps {
   patient: any;
@@ -83,13 +83,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     setStatus('Analizando historia clínica...');
 
     try {
-        const apiKey = import.meta.env.VITE_API_KEY;
-        if (!apiKey) throw new Error("Falta API Key");
-        
-        const ai = new GoogleGenAI({ apiKey });
         const today = new Date().toLocaleDateString('es-AR'); 
 
-        // --- ESTRATEGIA ---
         let strategyPrompt = "";
         if (context === 'RENOVACIÓN') {
             strategyPrompt = `ESTRATEGIA: RENOVACIÓN DE ${drugName.toUpperCase()}. Objetivo: Demostrar beneficio clínico y tolerancia.`;
@@ -123,7 +118,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
         }
 
-        const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
+        const res = await callGemini({ parts });
         const summaryText = res.text || "No se pudo generar el texto.";
 
         setStatus('Generando PDF...');
@@ -168,14 +163,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             y -= 30;
         }
 
-        // SEPARADOR PRINCIPAL
         page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 1.5, color: rgb(0, 0, 0) });
         y -= 25;
 
-        // TÍTULO
         const docTitle = "RESUMEN DE HISTORIA CLÍNICA";
         const docSubTitle = `${context} - BANCO DE DROGAS`;
-        // --- CAMBIO: CÓRDOBA CAPITAL ---
         const dateText = `Córdoba Capital, ${today}`;
 
         const titleWidth = fontBold.widthOfTextAtSize(docTitle, 14);
@@ -186,16 +178,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         page.drawText(docSubTitle, { x: (width - subTitleWidth) / 2, y: y, size: 12, font: fontBold });
         y -= 20;
 
-        // FECHA
         const dateWidth = font.widthOfTextAtSize(dateText, 10);
         page.drawText(dateText, { x: width - marginX - dateWidth, y: y, size: 10, font });
         y -= 20;
 
-        // SEPARADOR SECUNDARIO
         page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 0.5, color: rgb(0.5, 0.5, 0.5) });
         y -= 30;
 
-        // 3. CUERPO DEL TEXTO
         const fontSizeBody = 10;
         const fontSizeHeader = 11;
         const lineHeight = 14;
@@ -205,8 +194,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             const paragraph = paragraphs[i].trim();
             if (!paragraph) { y -= 5; continue; }
 
-            // --- CAMBIO: DETECCIÓN DE TÍTULOS ROBUSTA (Con o sin número) ---
-            // Detecta líneas que contienen los títulos clave y son cortas (para evitar falsos positivos en párrafos)
             const upperPara = paragraph.toUpperCase();
             const isSectionHeader = (
                 upperPara.includes("IDENTIFICACIÓN") || 
@@ -220,7 +207,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             if (isSectionHeader) {
                 y -= 15;
                 if (y < marginBottom + 40) { page = pdfDoc.addPage(); y = height - marginTop - 20; }
-
                 page.drawText(paragraph, { x: marginX, y: y, size: fontSizeHeader, font: fontBold });
                 y -= 5;
                 page.drawLine({ start: { x: marginX, y: y }, end: { x: width - marginX, y: y }, thickness: 0.5, color: rgb(0, 0, 0) });
@@ -228,7 +214,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                 continue;
             }
 
-            // PÁRRAFO NORMAL
             const words = paragraph.split(' ');
             let lineBuffer = '';
 
@@ -242,11 +227,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                     page.drawText(lineBuffer, { x: marginX, y: y, size: fontSizeBody, font });
                     y -= lineHeight;
                     lineBuffer = cleanWord + ' ';
-
-                    if (y < marginBottom) {
-                        page = pdfDoc.addPage();
-                        y = height - marginTop - 40;
-                    }
+                    if (y < marginBottom) { page = pdfDoc.addPage(); y = height - marginTop - 40; }
                 } else {
                     lineBuffer = testLine;
                 }
@@ -255,10 +236,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                 page.drawText(lineBuffer, { x: marginX, y: y, size: fontSizeBody, font });
                 y -= (lineHeight * 1.2);
             }
-            if (y < marginBottom) {
-                page = pdfDoc.addPage();
-                y = height - marginTop - 40;
-            }
+            if (y < marginBottom) { page = pdfDoc.addPage(); y = height - marginTop - 40; }
         }
 
         const pdfBytes = await pdfDoc.save();
@@ -274,9 +252,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   };
 
   const extractPamiData = async () => {
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (!apiKey) throw new Error("Falta API Key");
-    const ai = new GoogleGenAI({ apiKey });
     const today = new Date().toLocaleDateString('es-AR');
     
     const promptText = `
@@ -297,7 +272,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${historyText}` }];
     if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
-    const res = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: { parts } });
+    const res = await callGemini({ parts, responseMimeType: "application/json" });
     const text = res.text || "{}";
     let cleanText = text.replace(/```json|```/g, '').trim();
     const firstBrace = cleanText.indexOf('{');
@@ -340,7 +315,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       };
       const setCheck = (name: string, shouldCheck: boolean) => { try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {} };
 
-      // MAPEO PAMI ORIGINAL
       setText('Apellido y Nombre', finalName);
       setText('Beneficiario Nº', ''); 
       setText('Celular', aiData.paciente_celular);
@@ -502,7 +476,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                           {processingId === form.id ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>}
                           <span>Generar</span>
                         </button>
-                        {/* DISCLAIMER PAMI */}
                         <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-100 rounded text-[9px] text-yellow-700">
                             <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
                             <p>IMPORTANTE: Formulario generado por IA. Revise dosis y fechas antes de presentar.</p>
