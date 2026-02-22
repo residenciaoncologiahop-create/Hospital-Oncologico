@@ -14,7 +14,13 @@ export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiRe
   if (!user) throw new Error("Usuario no autenticado. Inicie sesión para continuar.");
 
   const functions = getFunctions(getApp(), 'us-central1');
-  const callGeminiFn = httpsCallable<CallGeminiParams, CallGeminiResult>(functions, "callGemini");
+  
+  // ⏳ SOLUCIÓN TIMEOUT: Le decimos al navegador que espere hasta 5 minutos (300000 ms)
+  const callGeminiFn = httpsCallable<CallGeminiParams, CallGeminiResult>(
+    functions, 
+    "callGemini",
+    { timeout: 300000 } 
+  );
   
   const result = await callGeminiFn(params);
   return result.data;
