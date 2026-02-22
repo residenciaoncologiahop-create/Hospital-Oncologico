@@ -98,26 +98,76 @@ export const extractTimelineSecure = async (text: string, files: FileData[]): Pr
   } catch { return []; }
 };
 
+// ──────────────────────────────────────────────
+// EXTRACCIÓN DE LABORATORIOS (NORMALIZADA)
+// ──────────────────────────────────────────────
 export const extractLabsSecure = async (text: string, files: FileData[]): Promise<any[]> => {
   if (!text && files.length === 0) return [];
-  const instructionText = `Extrae laboratorios. SALIDA ESTRICTA: ARRAY JSON: [{"date": "DD/MM/YYYY", "test": "nombre", "value": number, "unit": "unidad"}]`;
-  const combinedText = text ? `${instructionText}\n\nNotas: ${text}` : instructionText;
   
+  const instructionText = `
+    Extrae todos los resultados de laboratorio clínico de los documentos y el texto.
+    
+    REGLA CRÍTICA DE NORMALIZACIÓN: Debes unificar OBLIGATORIAMENTE el nombre de los estudios ("test") usando ESTRICTAMENTE los siguientes nombres estándar, sin importar cómo estén abreviados en el texto original:
+    - "Hemoglobina" (si dice Hb, hb, HGB, hemoglobina)
+    - "Hematocrito" (si dice Hto, hto, HCT, HTO)
+    - "Glóbulos Blancos" (si dice GB, gb, leucos, leucocitos, gl blancos, blancos)
+    - "Neutrófilos" (si dice NS, ns, neutro, neutrófilos, segmentados)
+    - "Plaquetas" (si dice plaq, pq, pqt, plaquetas, rto plaq, recuento plaquetario)
+    - "Creatinina" (si dice Cr, creat, crea, creatinina, cr)
+    - "Urea" (si dice urea, uremia, Ur, ur)
+    - "Glucemia" (si dice glu, glucosa, glucemia, gl, Gluc)
+    - "GOT" (si dice AST, GOT, TGO, transaminasa glutámico oxalacética)
+    - "GPT" (si dice ALT, GPT, TGP, transaminasa glutámico pirúvica)
+    - "FAL" (si dice FAL, fosfatasa alcalina)
+    - "Bilirrubina Total" (si dice BT, bt, bilirrubina)
+    - "Sodio" (si dice Na, sodio, natremia, Na+)
+    - "Potasio" (si dice K, potasio, kalemia, K+)
+    - "Calcio" (si dice Ca, calcio, calcemia, Ca++)
+    - "Magnesio" (si dice Mg, magnesio, magnesemia)
+    - "LDH" (si dice LDH, lactato deshidrogenasa)
+
+    Marcadores Tumorales:
+    - "CEA" (si dice CEA, Antígeno Carcinoembrionario, Ag carcinoembrionario, ACE)
+    - "CA 125" (si dice CA 125, CA-125, CA125)
+    - "CA 15-3" (si dice CA 15-3, CA-15-3, CA153, CA 15.3, ca15.3, CA15.3)
+    - "CA 19-9" (si dice CA 19-9, CA-19-9, CA199, CA 19.9, Ca19.9, CA19.9)
+    - "PSA Total" (si dice PSA, PSA total, Antígeno Prostático, PSA-T, APE)
+    - "PSA Libre" (si dice PSA libre)
+    - "AFP" (si dice AFP, Alfafetoproteína, alfa-fetoproteína)
+    - "Beta-hCG" (si dice b-hCG, bhCG, hCG, subunidad beta, gonadotropina coriónica, BHCG, B-HCG)
+    - "Tiroglobulina" (si dice Tg, tiroglobulina)
+    - "Calcitonina" (si dice calcitonina)
+    - "Beta-2 Microglobulina" (si dice B2M, b2-microglobulina, beta 2 microglobulina)
+    - "Cromogranina A" (si dice CgA, cromogranina)
+    - "HE4" (si dice HE4, proteina epididimal humana 4)
+
+    Para cualquier otro estudio que no esté en esta lista, escribe la primera letra en mayúscula (Ej: "Albúmina").
+    
+    SALIDA ESTRICTA: ÚNICAMENTE UN ARRAY JSON CON ESTA ESTRUCTURA: 
+    [{"date": "DD/MM/YYYY", "test": "Nombre Estándar", "value": number, "unit": "unidad"}]
+  `;
+  
+  const combinedText = text ? `${instructionText}\n\nNotas clínicas: ${text}` : instructionText;
   const parts = buildParts(combinedText, files);
   const res = await callGemini({ parts, responseMimeType: "application/json" });
 
   try {
     const clean = res.text.replace(/```json|```/g, '').trim();
-    const start = clean.indexOf('['); const end = clean.lastIndexOf(']');
+    const start = clean.indexOf('['); 
+    const end = clean.lastIndexOf(']');
     const raw = JSON.parse(start !== -1 ? clean.substring(start, end + 1) : clean);
-    return raw.filter((l: any) => l.value !== 0 && !isNaN(parseFloat(l.value)));
-  } catch { return []; }
+    // Filtramos para asegurar que solo pasen números válidos a la curva
+    return raw.filter((l: any) => l.value !== null && l.value !== undefined && !isNaN(parseFloat(l.value)));
+  } catch { 
+    return []; 
+  }
 };
 
 // ──────────────────────────────────────────────
-// AUDITORÍA CLÍNICA (Formato estructurado)
+// AUDITORÍA CLÍNICA (TU DISEÑO FAVORITO)
 // ──────────────────────────────────────────────
 export const generateClinicalAuditSecure = async (text: string, files: FileData[]): Promise<string> => {
+  
   const auditPrompt = `
 ACTUÁ COMO:
 Extractor y auditor de registros clínicos oncológicos.
