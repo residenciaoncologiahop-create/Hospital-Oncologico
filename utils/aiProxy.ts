@@ -105,46 +105,9 @@ export const extractLabsSecure = async (text: string, files: FileData[]): Promis
   if (!text && files.length === 0) return [];
   
   const instructionText = `
-    Extrae todos los resultados de laboratorio clínico de los documentos y el texto.
-    
-    REGLA CRÍTICA DE NORMALIZACIÓN: Debes unificar OBLIGATORIAMENTE el nombre de los estudios ("test") usando ESTRICTAMENTE los siguientes nombres estándar, sin importar cómo estén abreviados en el texto original:
-    - "Hemoglobina" (si dice Hb, hb, HGB, hemoglobina)
-    - "Hematocrito" (si dice Hto, hto, HCT, HTO)
-    - "Glóbulos Blancos" (si dice GB, gb, leucos, leucocitos, gl blancos, blancos)
-    - "Neutrófilos" (si dice NS, ns, neutro, neutrófilos, segmentados)
-    - "Plaquetas" (si dice plaq, pq, pqt, plaquetas, rto plaq, recuento plaquetario)
-    - "Creatinina" (si dice Cr, creat, crea, creatinina, cr)
-    - "Urea" (si dice urea, uremia, Ur, ur)
-    - "Glucemia" (si dice glu, glucosa, glucemia, gl, Gluc)
-    - "GOT" (si dice AST, GOT, TGO, transaminasa glutámico oxalacética)
-    - "GPT" (si dice ALT, GPT, TGP, transaminasa glutámico pirúvica)
-    - "FAL" (si dice FAL, fosfatasa alcalina)
-    - "Bilirrubina Total" (si dice BT, bt, bilirrubina)
-    - "Sodio" (si dice Na, sodio, natremia, Na+)
-    - "Potasio" (si dice K, potasio, kalemia, K+)
-    - "Calcio" (si dice Ca, calcio, calcemia, Ca++)
-    - "Magnesio" (si dice Mg, magnesio, magnesemia)
-    - "LDH" (si dice LDH, lactato deshidrogenasa)
-
-    Marcadores Tumorales:
-    - "CEA" (si dice CEA, Antígeno Carcinoembrionario, Ag carcinoembrionario, ACE)
-    - "CA 125" (si dice CA 125, CA-125, CA125)
-    - "CA 15-3" (si dice CA 15-3, CA-15-3, CA153, CA 15.3, ca15.3, CA15.3)
-    - "CA 19-9" (si dice CA 19-9, CA-19-9, CA199, CA 19.9, Ca19.9, CA19.9)
-    - "PSA Total" (si dice PSA, PSA total, Antígeno Prostático, PSA-T, APE)
-    - "PSA Libre" (si dice PSA libre)
-    - "AFP" (si dice AFP, Alfafetoproteína, alfa-fetoproteína)
-    - "Beta-hCG" (si dice b-hCG, bhCG, hCG, subunidad beta, gonadotropina coriónica, BHCG, B-HCG)
-    - "Tiroglobulina" (si dice Tg, tiroglobulina)
-    - "Calcitonina" (si dice calcitonina)
-    - "Beta-2 Microglobulina" (si dice B2M, b2-microglobulina, beta 2 microglobulina)
-    - "Cromogranina A" (si dice CgA, cromogranina)
-    - "HE4" (si dice HE4, proteina epididimal humana 4)
-
-    Para cualquier otro estudio que no esté en esta lista, escribe la primera letra en mayúscula (Ej: "Albúmina").
-    
+    Extrae todos los resultados de laboratorio clínico y marcadores tumorales.
     SALIDA ESTRICTA: ÚNICAMENTE UN ARRAY JSON CON ESTA ESTRUCTURA: 
-    [{"date": "DD/MM/YYYY", "test": "Nombre Estándar", "value": number, "unit": "unidad"}]
+    [{"date": "DD/MM/YYYY", "test": "Nombre Original", "value": number, "unit": "unidad"}]
   `;
   
   const combinedText = text ? `${instructionText}\n\nNotas clínicas: ${text}` : instructionText;
@@ -156,8 +119,65 @@ export const extractLabsSecure = async (text: string, files: FileData[]): Promis
     const start = clean.indexOf('['); 
     const end = clean.lastIndexOf(']');
     const raw = JSON.parse(start !== -1 ? clean.substring(start, end + 1) : clean);
-    // Filtramos para asegurar que solo pasen números válidos a la curva
-    return raw.filter((l: any) => l.value !== null && l.value !== undefined && !isNaN(parseFloat(l.value)));
+    
+    // 🛡️ DICCIONARIO DE BLINDAJE (Código duro para forzar la unificación)
+    const normalizeName = (name: string) => {
+      if (!name) return "Desconocido";
+      const lower = name.toLowerCase().trim();
+      
+      const dict: Record<string, string> = {
+        'hb': 'Hemoglobina', 'hgb': 'Hemoglobina', 'hemoglobina': 'Hemoglobina',
+        'hto': 'Hematocrito', 'hct': 'Hematocrito', 'hematocrito': 'Hematocrito',
+        'gb': 'Glóbulos Blancos', 'leucos': 'Glóbulos Blancos', 'leucocitos': 'Glóbulos Blancos', 'gl blancos': 'Glóbulos Blancos', 'globulos blancos': 'Glóbulos Blancos', 'glóbulos blancos': 'Glóbulos Blancos',
+        'ns': 'Neutrófilos', 'neutro': 'Neutrófilos', 'neutrofilos': 'Neutrófilos', 'neutrófilos': 'Neutrófilos', 'segmentados': 'Neutrófilos',
+        'plaq': 'Plaquetas', 'pq': 'Plaquetas', 'pqt': 'Plaquetas', 'plaquetas': 'Plaquetas',
+        'cr': 'Creatinina', 'creat': 'Creatinina', 'crea': 'Creatinina', 'creatinina': 'Creatinina',
+        'urea': 'Urea', 'uremia': 'Urea',
+        'glu': 'Glucemia', 'glucosa': 'Glucemia', 'glucemia': 'Glucemia',
+        'ast': 'TGO', 'got': 'TGO', 'tgo': 'TGO',
+        'alt': 'TGP', 'gpt': 'TGP', 'tgp': 'TGP',
+        'fal': 'FAL', 'fosfatasa alcalina': 'FAL',
+        'bt': 'Bilirrubina Total', 'bilirrubina': 'Bilirrubina Total',
+        'na': 'Sodio', 'sodio': 'Sodio', 'natremia': 'Sodio',
+        'k': 'Potasio', 'potasio': 'Potasio', 'kalemia': 'Potasio',
+        'ca': 'Calcio', 'calcio': 'Calcio', 'calcemia': 'Calcio',
+        'mg': 'Magnesio', 'magnesio': 'Magnesio', 'magnesemia': 'Magnesio',
+        'ldh': 'LDH', 'lactato deshidrogenasa': 'LDH',
+        'cea': 'CEA', 'antigeno carcinoembrionario': 'CEA', 'ag carcinoembrionario': 'CEA', 'antígeno carcinoembrionario': 'CEA',
+        'ca 125': 'CA 125', 'ca-125': 'CA 125', 'ca125': 'CA 125',
+        'ca 15-3': 'CA 15-3', 'ca-15-3': 'CA 15-3', 'ca153': 'CA 15-3', 'ca 15.3': 'CA 15-3', 'ca 15 3': 'CA 15-3',
+        'ca 19-9': 'CA 19-9', 'ca-19-9': 'CA 19-9', 'ca199': 'CA 19-9', 'ca 19.9': 'CA 19-9', 'ca 19 9': 'CA 19-9',
+        'psa': 'PSA Total', 'psa total': 'PSA Total', 'antigeno prostatico': 'PSA Total', 'antígeno prostático': 'PSA Total',
+        'psa libre': 'PSA Libre',
+        'afp': 'AFP', 'alfafetoproteina': 'AFP', 'alfa-fetoproteina': 'AFP',
+        'b-hcg': 'Beta-hCG', 'bhcg': 'Beta-hCG', 'hcg': 'Beta-hCG', 'subunidad beta': 'Beta-hCG', 'gonadotropina corionica': 'Beta-hCG', 'beta-hcg': 'Beta-hCG',
+        'tg': 'Tiroglobulina', 'tiroglobulina': 'Tiroglobulina',
+        'calcitonina': 'Calcitonina',
+        'b2m': 'Beta-2 Microglobulina', 'b2-microglobulina': 'Beta-2 Microglobulina', 'beta 2 microglobulina': 'Beta-2 Microglobulina',
+        'cga': 'Cromogranina A', 'cromogranina': 'Cromogranina A', 'cromogranina a': 'Cromogranina A',
+        'he4': 'HE4', 'proteina epididimal humana 4': 'HE4'
+      };
+      
+      // Si encontramos una coincidencia exacta en el diccionario, la usamos
+      if (dict[lower]) return dict[lower];
+      
+      // Búsqueda parcial (por si la IA pone "nivel de hb" o algo similar)
+      for (const [key, value] of Object.entries(dict)) {
+        if (lower.includes(key) && key.length > 2) return value; // > 2 para no cruzar "ca" (calcio) con otras palabras
+      }
+      
+      // Si no coincide, devolvemos la primera en mayúscula para que quede prolijo
+      return name.charAt(0).toUpperCase() + name.slice(1);
+    };
+
+    // Mapeamos y unificamos los resultados antes de devolverlos
+    return raw
+      .filter((l: any) => l.value !== null && l.value !== undefined && !isNaN(parseFloat(l.value)))
+      .map((l: any) => ({
+         ...l,
+         test: normalizeName(l.test) // <-- Aquí ocurre la magia de la unificación
+      }));
+      
   } catch { 
     return []; 
   }
