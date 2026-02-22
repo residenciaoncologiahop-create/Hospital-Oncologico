@@ -9,9 +9,6 @@ interface CallGeminiResult { text: string; }
 interface FileData { name: string; type: string; data: string; }
 interface ChatMessage { role: 'user' | 'model'; text: string; timestamp: number; }
 
-// ──────────────────────────────────────────────
-// FUNCIÓN PRINCIPAL
-// ──────────────────────────────────────────────
 export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiResult> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Usuario no autenticado. Inicie sesión para continuar.");
@@ -24,27 +21,22 @@ export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiRe
 };
 
 // ──────────────────────────────────────────────
-// ESCUDO DE TAMAÑO (Evita que el servidor colapse)
+// LIMPIADOR DE ARCHIVOS (Evita el colapso del servidor)
 // ──────────────────────────────────────────────
 const buildParts = (text: string | undefined, files: FileData[]): GeminiPart[] => {
   const parts: GeminiPart[] = [];
   if (text) parts.push({ text });
 
-  let totalBytes = 0;
-  // Procesamos máximo 2 archivos a la vez para no exceder los límites de Google
-  const filesToProcess = files.slice(0, 2);
-
-  filesToProcess.forEach(f => {
+  files.slice(0, 3).forEach(f => {
     if (f.data && f.type) {
-      totalBytes += f.data.length * 0.75; // Cálculo aproximado de Base64
-      parts.push({ inlineData: { mimeType: f.type, data: f.data } });
+      // LIMPIEZA VITAL: Cortamos la "basura" del string para que la IA y Firebase lo acepten
+      let cleanData = f.data;
+      if (cleanData.includes("base64,")) {
+        cleanData = cleanData.split("base64,")[1];
+      }
+      parts.push({ inlineData: { mimeType: f.type, data: cleanData } });
     }
   });
-
-  const sizeMB = totalBytes / (1024 * 1024);
-  if (sizeMB > 6.5) {
-    throw new Error(`⚠️ Los documentos son muy pesados (${sizeMB.toFixed(1)}MB). Firebase permite un máximo de 6.5MB por petición. Sube un PDF más corto o un resumen en texto.`);
-  }
 
   return parts;
 };
@@ -61,11 +53,35 @@ export const getChatResponseSecure = async (msgs: ChatMessage[], newMsg: string,
   return res.text;
 };
 
+// ──────────────────────────────────────────────
+// LÍNEA DE TIEMPO REFORMULADA Y RESUMIDA
+// ──────────────────────────────────────────────
 export const extractTimelineSecure = async (text: string, files: FileData[]): Promise<any[]> => {
   if (!text && files.length === 0) return [];
-  const instructionText = `Analiza los documentos y extrae la cronología clínica. REGLA: NO incluyas DNI. Fechas: DD/MM/YYYY. SALIDA ESTRICTA: UN ARRAY JSON: [{"date": "DD/MM/YYYY", "professional": "Nombre", "category": "Categoría", "note": "Nota", "isKey": false}]`;
-  const combinedText = text ? `${instructionText}\n\nNotas clínicas: ${text}` : instructionText;
   
+  const instructionText = `
+    Analiza los documentos y extrae la cronología clínica de manera ordenada.
+    
+    REGLAS DE PRIVACIDAD: NO incluyas DNI ni nombres reales.
+    REGLAS DE FORMATO: Fechas siempre en formato DD/MM/YYYY.
+    
+    REGLAS DE REDACCIÓN (CRÍTICAS Y OBLIGATORIAS):
+    1. ¡PROHIBIDO TRANSCRIBIR LITERAMENTE LAS EVOLUCIONES MÉDICAS! Para las notas de evolución o consultas, debes REFORMULAR, interpretar y RESUMIR lo sucedido usando tus propias palabras con un lenguaje médico fluido, técnico y conciso.
+    2. Los resultados de estudios complementarios (laboratorios, biopsias, tomografías) SÍ deben transcribirse de manera exacta y objetiva sin inventar datos.
+    
+    SALIDA ESTRICTA: ÚNICAMENTE UN ARRAY JSON CON ESTA ESTRUCTURA EXACTA:
+    [
+      {
+        "date": "DD/MM/YYYY",
+        "professional": "Nombre del médico o Institución",
+        "category": "Consulta, Imagen, Lab, Cirugía, Quimio, Radio o Evolución",
+        "note": "Texto reformulado y resumido del evento",
+        "isKey": false
+      }
+    ]
+  `;
+  
+  const combinedText = text ? `${instructionText}\n\nNotas clínicas: ${text}` : instructionText;
   const parts = buildParts(combinedText, files);
   const res = await callGemini({ parts, responseMimeType: "application/json" });
 
