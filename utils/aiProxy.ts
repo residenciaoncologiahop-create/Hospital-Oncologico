@@ -3,203 +3,111 @@ import { auth } from "../firebase";
 import { getApp } from "firebase/app";
 
 // Tipos
-interface GeminiPart {
-  text?: string;
-  inlineData?: { mimeType: string; data: string };
-}
-
-interface CallGeminiParams {
-  prompt?: string;
-  parts?: GeminiPart[];
-  systemInstruction?: string;
-  responseMimeType?: string;
-}
-
-interface CallGeminiResult {
-  text: string;
-}
+interface GeminiPart { text?: string; inlineData?: { mimeType: string; data: string }; }
+interface CallGeminiParams { prompt?: string; parts?: GeminiPart[]; systemInstruction?: string; responseMimeType?: string; }
+interface CallGeminiResult { text: string; }
+interface FileData { name: string; type: string; data: string; }
+interface ChatMessage { role: 'user' | 'model'; text: string; timestamp: number; }
 
 // ──────────────────────────────────────────────
 // FUNCIÓN PRINCIPAL
 // ──────────────────────────────────────────────
 export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiResult> => {
   const user = auth.currentUser;
-  if (!user) {
-    throw new Error("Usuario no autenticado. Inicie sesión para continuar.");
-  }
+  if (!user) throw new Error("Usuario no autenticado. Inicie sesión para continuar.");
 
   const functions = getFunctions(getApp(), 'us-central1');
   const callGeminiFn = httpsCallable<CallGeminiParams, CallGeminiResult>(functions, "callGemini");
-
+  
   const result = await callGeminiFn(params);
   return result.data;
 };
 
 // ──────────────────────────────────────────────
-// HELPERS
+// ESCUDO DE TAMAÑO (Evita que el servidor colapse)
 // ──────────────────────────────────────────────
-
-interface FileData { name: string; type: string; data: string; }
-interface ChatMessage { role: 'user' | 'model'; text: string; timestamp: number; }
-
 const buildParts = (text: string | undefined, files: FileData[]): GeminiPart[] => {
   const parts: GeminiPart[] = [];
   if (text) parts.push({ text });
-  files.slice(0, 5).forEach(f => {
+
+  let totalBytes = 0;
+  // Procesamos máximo 2 archivos a la vez para no exceder los límites de Google
+  const filesToProcess = files.slice(0, 2);
+
+  filesToProcess.forEach(f => {
     if (f.data && f.type) {
+      totalBytes += f.data.length * 0.75; // Cálculo aproximado de Base64
       parts.push({ inlineData: { mimeType: f.type, data: f.data } });
     }
   });
+
+  const sizeMB = totalBytes / (1024 * 1024);
+  if (sizeMB > 6.5) {
+    throw new Error(`⚠️ Los documentos son muy pesados (${sizeMB.toFixed(1)}MB). Firebase permite un máximo de 6.5MB por petición. Sube un PDF más corto o un resumen en texto.`);
+  }
+
   return parts;
 };
 
-// ── Chat con contexto ──────────────────────────
-export const getChatResponseSecure = async (
-  msgs: ChatMessage[],
-  newMsg: string,
-  context: string,
-  files: FileData[]
-): Promise<string> => {
+// ── Funciones Exportadas ──────────────────────────
+
+export const getChatResponseSecure = async (msgs: ChatMessage[], newMsg: string, context: string, files: FileData[]): Promise<string> => {
   const historyText = msgs.slice(-5).map(m => `${m.role}: ${m.text}`).join('\n');
   const contextBlock = `Contexto Anónimo:\n${context}\n\nHistorial reciente:\n${historyText}`;
-
-  const parts = buildParts(contextBlock, files.slice(0, 3));
+  const parts = buildParts(contextBlock, files);
   parts.push({ text: newMsg });
 
-  const res = await callGemini({
-    parts,
-    systemInstruction: "Eres un oncólogo experto. Responde en español técnico. NUNCA menciones nombres reales, DNI o datos de contacto.",
-  });
+  const res = await callGemini({ parts, systemInstruction: "Eres un oncólogo experto. Responde en español técnico. NUNCA menciones nombres reales, DNI o datos de contacto." });
   return res.text;
 };
 
-// ── Extracción de Timeline ─────────────────────
-export const extractTimelineSecure = async (
-  text: string,
-  files: FileData[]
-): Promise<any[]> => {
+export const extractTimelineSecure = async (text: string, files: FileData[]): Promise<any[]> => {
   if (!text && files.length === 0) return [];
-
-  const instructionText = `
-    Analiza los documentos y extrae la cronología clínica de manera ordenada.
-    REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales.
-    Fechas: DD/MM/YYYY. Categorías sugeridas: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
-    SALIDA ESTRICTA: ÚNICAMENTE UN ARRAY JSON CON ESTA ESTRUCTURA EXACTA (respeta las claves en inglés):
-    [
-      {
-        "date": "DD/MM/YYYY",
-        "professional": "Nombre del profesional o institución",
-        "category": "Categoría del evento",
-        "note": "Descripción clínica resumida",
-        "isKey": false
-      }
-    ]
-  `;
-
-  const parts = buildParts(instructionText, []);
-  if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
-  files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
-
+  const instructionText = `Analiza los documentos y extrae la cronología clínica. REGLA: NO incluyas DNI. Fechas: DD/MM/YYYY. SALIDA ESTRICTA: UN ARRAY JSON: [{"date": "DD/MM/YYYY", "professional": "Nombre", "category": "Categoría", "note": "Nota", "isKey": false}]`;
+  const combinedText = text ? `${instructionText}\n\nNotas clínicas: ${text}` : instructionText;
+  
+  const parts = buildParts(combinedText, files);
   const res = await callGemini({ parts, responseMimeType: "application/json" });
 
   try {
     const clean = res.text.replace(/```json|```/g, '').trim();
-    const start = clean.indexOf('[');
-    const end = clean.lastIndexOf(']');
-    if (start !== -1 && end !== -1) return JSON.parse(clean.substring(start, end + 1));
-    return JSON.parse(clean);
-  } catch (error) {
-    console.error("Error parseando timeline:", error);
-    return [];
-  }
+    const start = clean.indexOf('['); const end = clean.lastIndexOf(']');
+    return JSON.parse(start !== -1 ? clean.substring(start, end + 1) : clean);
+  } catch { return []; }
 };
 
-// ── Extracción de Laboratorios ─────────────────
-export const extractLabsSecure = async (
-  text: string,
-  files: FileData[]
-): Promise<any[]> => {
+export const extractLabsSecure = async (text: string, files: FileData[]): Promise<any[]> => {
   if (!text && files.length === 0) return [];
-
-  const instructionText = `
-    Extrae resultados de laboratorio del texto clínico y documentos.
-    Normaliza abreviaciones (hb → Hemoglobina, plaq → Plaquetas, etc).
-    SALIDA: ÚNICAMENTE ARRAY JSON: [{ "date": "DD/MM/YYYY", "test": "nombre", "value": number, "unit": "unidad" }]
-  `;
-
-  const parts = buildParts(instructionText, []);
-  if (text) parts.push({ text: `Notas: ${text}` });
-  files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
-
+  const instructionText = `Extrae laboratorios. SALIDA ESTRICTA: ARRAY JSON: [{"date": "DD/MM/YYYY", "test": "nombre", "value": number, "unit": "unidad"}]`;
+  const combinedText = text ? `${instructionText}\n\nNotas: ${text}` : instructionText;
+  
+  const parts = buildParts(combinedText, files);
   const res = await callGemini({ parts, responseMimeType: "application/json" });
 
   try {
     const clean = res.text.replace(/```json|```/g, '').trim();
-    const start = clean.indexOf('[');
-    const end = clean.lastIndexOf(']');
-    const raw = start !== -1 ? JSON.parse(clean.substring(start, end + 1)) : JSON.parse(clean);
+    const start = clean.indexOf('['); const end = clean.lastIndexOf(']');
+    const raw = JSON.parse(start !== -1 ? clean.substring(start, end + 1) : clean);
     return raw.filter((l: any) => l.value !== 0 && !isNaN(parseFloat(l.value)));
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 };
 
-// ── Auditoría Clínica ──────────────────────────
-export const generateClinicalAuditSecure = async (
-  text: string,
-  files: FileData[]
-): Promise<string> => {
-
-  const auditPrompt = `
-ACTUÁ COMO: Extractor y auditor de registros clínicos oncológicos.
-OBJETIVO: Organizar la información clínica existente, detectar datos faltantes y señalar inconsistencias documentales.
-NO realizar interpretación clínica ni sugerir decisiones.
-
-REGLAS DE SEGURIDAD:
-1. NO emitas opiniones clínicas ni sugerencias terapéuticas.
-2. NO infieras datos no escritos.
-3. Si un dato no está explícito, usar "NO DOCUMENTADO".
-4. SOLO HTML limpio con clases Tailwind.
-
-NOTAS CLÍNICAS: "${text}"
-
-TAREAS:
-1) EXTRAER DATOS CLÍNICOS ESTRUCTURADOS (Edad, Sexo, Diagnóstico, Estadio TNM, ECOG, Biomarcadores, Tratamientos)
-2) GENERAR CHECKLIST DE COMPLETITUD (✔ si existe, ⚠ si falta)
-3) DETECTAR INCONSISTENCIAS DOCUMENTALES
-
-FORMATO: HTML puro con clases Tailwind, en div contenedor.
-  `;
-
+export const generateClinicalAuditSecure = async (text: string, files: FileData[]): Promise<string> => {
+  const auditPrompt = `ACTUÁ COMO: Extractor y auditor de registros clínicos. REGLAS: SOLO HTML limpio con Tailwind. \n\nNOTAS CLÍNICAS: "${text}"`;
   const parts = buildParts(auditPrompt, files);
   const res = await callGemini({ parts });
   return res.text.replace(/```html|```/g, '').trim();
 };
 
-// ── Generación de texto genérico ───────────────
-export const generateTextSecure = async (
-  prompt: string,
-  context: string,
-  files: FileData[]
-): Promise<string> => {
-  const privacyRule = "\n\nIMPORTANTE: NO incluyas nombres reales, DNI, ni datos de contacto.";
-  const parts = buildParts(prompt + privacyRule, []);
-  parts.push({ text: context });
-  files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
-
+export const generateTextSecure = async (prompt: string, context: string, files: FileData[]): Promise<string> => {
+  const combinedText = `${prompt}\n\nIMPORTANTE: NO nombres reales, DNI, ni contacto.\n\n${context}`;
+  const parts = buildParts(combinedText, files);
   const res = await callGemini({ parts });
   return res.text;
 };
 
-// ── Vademécum de fármacos ──────────────────────
 export const getDrugInfoSecure = async (drugName: string): Promise<string> => {
-  const prompt = `
-    Actúa como un Farmacéutico Oncológico Clínico Experto.
-    Genera una ficha técnica precisa para: "${drugName}".
-    Incluye: Mecanismo, Indicaciones, Preparación/Administración, Posología, RAM.
-    REGLA: Devuelve ÚNICAMENTE HTML con clases Tailwind, sin markdown.
-    ADVERTENCIA OBLIGATORIA al final: "Verificar siempre con fuentes oficiales antes de la administración."
-  `;
+  const prompt = `Actúa como Farmacéutico Oncológico. Ficha para: "${drugName}". Devuelve ÚNICAMENTE HTML con Tailwind.`;
   const res = await callGemini({ prompt });
   return res.text.replace(/```html|```/g, '').trim();
 };
