@@ -7,10 +7,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 
 // --- FIREBASE IMPORTS ---
-// CORRECCIÓN CRÍTICA: Importamos 'db' desde firebase.ts para compartir la sesión autenticada
 import { db } from './firebase'; 
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
-// ------------------------
 
 import { 
     User as LucideUser, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
@@ -20,16 +18,15 @@ import {
     PanelLeftClose, PanelLeftOpen, FileInput 
 } from 'lucide-react';
 
-// IMPORTAMOS EL COMPONENTE DE FORMULARIOS
 import FormManager from './components/FormManager';
-
-// --- AUDITORÍA CLÍNICA ---
 import ClinicalAuditModal from './components/ClinicalAuditModal';
 
-// --- NUEVAS IMPORTACIONES SEGURIDAD ---
 import { User } from 'firebase/auth';
 import AuthWrapper, { logout } from './components/AuthWrapper';
 import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, generateTextSecure } from './utils/aiProxy';
+
+// --- RANGOS ETARIOS ---
+const AGE_RANGES = ['0-18', '19-30', '31-40', '41-50', '51-60', '61-70', '71-80', '80+'];
 
 // --- AUDIT SYSTEM ---
 const getOrInitFingerprint = () => {
@@ -45,7 +42,7 @@ const logAction = async (action: string, patientId: string | null, doctorName: s
     try {
         const fingerprint = getOrInitFingerprint();
         await addDoc(collection(db, "audit_logs"), {
-            action: action,
+            action,
             patientId: patientId || 'N/A',
             doctorName: doctorName || 'Unknown',
             doctorFingerprint: fingerprint,
@@ -63,8 +60,8 @@ interface ClinicalEvent { date: string; professional: string; category: string; 
 interface Patient {
     id: string;
     doctorId: string; 
-    name: string;
-    age: number;
+    hcNumber: string;   // Reemplaza 'name' — número de historia clínica
+    ageRange: string;   // Reemplaza 'age' — rango etario (ej: "51-60")
     diagnosis: string;
     historyText: string;
     lastUpdated: number;
@@ -133,7 +130,6 @@ interface AppProps { user: User; }
 const App = ({ user }: AppProps) => {
     const doctorName = user.displayName || user.email || 'Profesional';
     
-    const [legalAccepted, setLegalAccepted] = useState(false);
     const [patients, setPatients] = useState<Patient[]>([]);
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
@@ -143,8 +139,9 @@ const App = ({ user }: AppProps) => {
     const [showLeftPanel, setShowLeftPanel] = useState(true);
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms'| 'labs'>('docs');
 
-    const [newPatientName, setNewPatientName] = useState('');
-    const [newPatientAge, setNewPatientAge] = useState('');
+    // --- NUEVOS CAMPOS DE CREACIÓN (pseudonimizados) ---
+    const [newPatientHC, setNewPatientHC] = useState('');
+    const [newPatientAgeRange, setNewPatientAgeRange] = useState('41-50');
     const [newPatientDiagnosis, setNewPatientDiagnosis] = useState('');
 
     const [historyText, setHistoryText] = useState('');
@@ -162,15 +159,6 @@ const App = ({ user }: AppProps) => {
     const [manualDoctor, setManualDoctor] = useState(doctorName || '');
     const [manualNote, setManualNote] = useState('');
 
-    const [showSummaryModal, setShowSummaryModal] = useState(false);
-    const [summaryText, setSummaryText] = useState('');
-    const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-    const [showFollowUpModal, setShowFollowUpModal] = useState(false);
-    const [followUpText, setFollowUpText] = useState('');
-    const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
-    const [showTumorBoardModal, setShowTumorBoardModal] = useState(false); 
-    const [tumorBoardText, setTumorBoardText] = useState('');
-    const [isGeneratingTumorBoard, setIsGeneratingTumorBoard] = useState(false);
     const [reportModal, setReportModal] = useState({ 
         isOpen: false, 
         title: '', 
@@ -178,7 +166,6 @@ const App = ({ user }: AppProps) => {
         isLoading: false 
     });
     
-    // --- AUDITORÍA CLÍNICA ---
     const [showAuditModal, setShowAuditModal] = useState(false);
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
@@ -190,7 +177,7 @@ const App = ({ user }: AppProps) => {
     }, []);
 
     useEffect(() => {
-        if (!doctorName) { setPatients([]); return; }
+        if (!user.uid) { setPatients([]); return; }
         const q = query(collection(db, "patients"), where("doctorId", "==", user.uid));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const list = snapshot.docs.map(doc => {
@@ -198,7 +185,8 @@ const App = ({ user }: AppProps) => {
                 return { 
                     id: doc.id, 
                     ...data,
-                    name: data.name || '', 
+                    hcNumber: data.hcNumber || data.name || 'S/N', // compatibilidad con registros viejos
+                    ageRange: data.ageRange || (data.age ? `${data.age}` : 'N/D'),
                     diagnosis: data.diagnosis || ''
                 } as Patient;
             });
@@ -206,7 +194,7 @@ const App = ({ user }: AppProps) => {
             setPatients(list);
         });
         return () => unsubscribe();
-    }, [doctorName]);
+    }, [user.uid]);
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -229,11 +217,14 @@ const App = ({ user }: AppProps) => {
         }
     }, [selectedPatientId]);
 
+    // --- CONTEXTO ANÓNIMO: NUNCA incluye HC ni datos identificatorios ---
+    // La IA solo ve rango etario, diagnóstico, timeline y notas clínicas.
+    // El número de HC es solo una referencia interna del médico.
     const getAnonContext = (p: Patient) => {
-        return `Paciente de ${p.age} años.
+        return `Paciente en rango etario: ${p.ageRange} años.
         Diagnóstico: ${p.diagnosis}.
-        Historial: ${JSON.stringify(p.timeline || [])}.
-        Notas Clínicas (Anónimas): ${p.historyText || ''}`;
+        Historial cronológico: ${JSON.stringify(p.timeline || [])}.
+        Notas Clínicas: ${p.historyText || ''}`;
     };
 
     const savePatientDetails = async () => {
@@ -252,7 +243,6 @@ const App = ({ user }: AppProps) => {
         setIsProcessingDocs(true);
         setLastError(null);
         try {
-            // 1. Extraer Timeline Seguro
             const rawEvents = await extractTimelineSecure(historyText, historyFiles);
             const events = rawEvents.map((e: any) => ({
                 date: e.date || "S/F",
@@ -265,7 +255,6 @@ const App = ({ user }: AppProps) => {
             const combinedTimeline = sortTimeline([...currentTimeline, ...events]);
             setTimeline(combinedTimeline);
 
-            // 2. Extraer Laboratorios Seguro
             const extractedLabs = await extractLabsSecure(historyText, historyFiles);
             const currentLabs = (patients.find(p => p.id === selectedPatientId)?.labResults || []);
             const combinedLabs = [...currentLabs, ...extractedLabs];
@@ -291,12 +280,9 @@ const App = ({ user }: AppProps) => {
 
     const handleAddManualLab = async (newLab: LabResult) => {
         if (!selectedPatientId) return;
-        
         const labWithAuthor = { ...newLab, professional: doctorName || 'Manual' };
-        
         const currentLabs = (patients.find(p => p.id === selectedPatientId)?.labResults || []);
         const updatedLabs = [...currentLabs, labWithAuthor];
-
         const patientRef = doc(db, "patients", selectedPatientId);
         await updateDoc(patientRef, { labResults: updatedLabs, lastUpdated: Date.now() });
     };
@@ -334,57 +320,6 @@ const App = ({ user }: AppProps) => {
         }
     };
 
-    const handleGenerateSummary = async () => {
-        if (!selectedPatientId) return;
-        const p = patients.find(pat => pat.id === selectedPatientId);
-        if (!p) return;
-        setIsGeneratingSummary(true); setShowSummaryModal(true); setSummaryText("Generando resumen...");
-        
-        const context = getAnonContext(p);
-        const prompt = `Genera un RESUMEN DE HISTORIA CLÍNICA oncológico profesional en ESPAÑOL basándote en los documentos adjuntos y las notas.`;
-        
-        const summary = await generateTextSecure(prompt, context, historyFiles);
-        setSummaryText(summary); setIsGeneratingSummary(false);
-        logAction("GENERATE_SUMMARY", selectedPatientId, doctorName);
-    };
-
-    const handleGenerateFollowUp = async () => {
-        if (!selectedPatientId) return;
-        const p = patients.find(pat => pat.id === selectedPatientId);
-        if (!p) return;
-        setIsGeneratingFollowUp(true); setShowFollowUpModal(true); setFollowUpText("Analizando guías...");
-        
-        const context = getAnonContext(p);
-        const prompt = "Sugiere PLAN DE SEGUIMIENTO (Follow-up) detallado basado en NCCN/ESMO (Estado, Estudios prox, Consultas) en Español.";
-        
-        const advice = await generateTextSecure(prompt, context, guidelineFiles);
-        setFollowUpText(advice); setIsGeneratingFollowUp(false);
-        logAction("GENERATE_FOLLOWUP", selectedPatientId, doctorName);
-    };
-
-    const handleGenerateTumorBoard = async () => {
-        if (!selectedPatientId) return;
-        const p = patients.find(pat => pat.id === selectedPatientId);
-        if (!p) return;
-        setIsGeneratingTumorBoard(true); setShowTumorBoardModal(true); setTumorBoardText("Preparando presentación...");
-        
-        const context = getAnonContext(p);
-        const prompt = `Genera Presentación para Ateneo/Comité de Tumores (Tumor Board) en ESPAÑOL.`;
-        
-        const text = await generateTextSecure(prompt, context, historyFiles);
-        setTumorBoardText(text); setIsGeneratingTumorBoard(false);
-        logAction("GENERATE_TUMOR_BOARD", selectedPatientId, doctorName);
-    };
-
-    const handlePrintPDF = (content: string) => {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-            printWindow.document.write(`<html><head><title>OncoGuide Doc</title><style>body { font-family: monospace; padding: 40px; white-space: pre-wrap; font-size: 13px; line-height: 1.5; } h1 { font-family: sans-serif; font-size: 18px; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;}</style></head><body><h1>OncoGuide - Documento Clínico</h1>${content}</body></html>`);
-            printWindow.document.close();
-            printWindow.print();
-        }
-    };
-
     const handleSendMessage = async () => {
         if (!chatInput.trim() || !selectedPatientId) return;
         const p = patients.find(pat => pat.id === selectedPatientId);
@@ -408,38 +343,38 @@ const App = ({ user }: AppProps) => {
         logAction("CHAT_MESSAGE", selectedPatientId, doctorName);
     };
 
-    // --- CORRECCIÓN CRÍTICA DE CREACIÓN DE PACIENTES ---
+    // --- CREACIÓN DE PACIENTE PSEUDONIMIZADA ---
     const handleCreatePatient = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!doctorName) return;
+        if (!newPatientHC.trim()) return;
         
         const p = {
             doctorId: user.uid,
-            name: newPatientName,
-            age: parseInt(newPatientAge) || 0, // Protección contra NaN
+            hcNumber: newPatientHC.trim(),   // Número de HC — no contiene nombre ni DNI
+            ageRange: newPatientAgeRange,     // Rango etario — no es edad exacta
             diagnosis: newPatientDiagnosis,
             historyText: '',
             lastUpdated: Date.now(),
             chatHistory: [],
             timeline: [],
-            labResults: [] // Inicializamos array de laboratorios
+            labResults: []
         };
         try {
             const docRef = await addDoc(collection(db, "patients"), p);
             setSelectedPatientId(docRef.id); 
             setShowNewPatientModal(false);
-            setNewPatientName(''); 
-            setNewPatientAge(''); 
+            setNewPatientHC(''); 
+            setNewPatientAgeRange('41-50'); 
             setNewPatientDiagnosis('');
             logAction("CREATE_PATIENT", docRef.id, doctorName);
         } catch (error: any) { 
-            setLastError("Error creando paciente: " + error.message); 
+            setLastError("Error creando caso: " + error.message); 
         }
     };
 
     const handleDeletePatient = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation(); 
-        if (confirm("¿Eliminar paciente permanentemente?")) {
+        if (confirm("¿Eliminar este caso permanentemente?")) {
             try {
                 await deleteDoc(doc(db, "patients", id));
                 if (selectedPatientId === id) setSelectedPatientId(null);
@@ -450,16 +385,13 @@ const App = ({ user }: AppProps) => {
 
     const handleRunClinicalAudit = async () => {
         if (!selectedPatientId) return;
-
         if (!historyText && historyFiles.length === 0) {
             alert("No hay documentación clínica para auditar.");
             return;
         }
-
         setShowAuditModal(true);
         setIsAuditing(true);
         setAuditContent(null);
-
         try {
             const result = await generateClinicalAuditSecure(historyText, historyFiles);
             setAuditContent(result);
@@ -476,25 +408,16 @@ const App = ({ user }: AppProps) => {
         generatorFn: (text: string, files: FileData[]) => Promise<string>
     ) => {
         if (!selectedPatientId) return;
-
         const p = patients.find(p => p.id === selectedPatientId);
         if (!p) return;
-
         if (!p.historyText && historyFiles.length === 0) {
             alert("Sin documentación para procesar.");
             return;
         }
-
         setReportModal({ isOpen: true, title, content: null, isLoading: true });
-
         try {
             const result = await generatorFn(p.historyText, historyFiles);
-
-            setReportModal(prev => ({
-                ...prev,
-                content: result,
-                isLoading: false
-            }));
+            setReportModal(prev => ({ ...prev, content: result, isLoading: false }));
         } catch (error) {
             console.error(error);
             setReportModal(prev => ({
@@ -505,8 +428,9 @@ const App = ({ user }: AppProps) => {
         }
     };
 
+    // Búsqueda solo por número de HC o diagnóstico
     const filteredPatients = patients.filter(p => 
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        p.hcNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
         p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -523,22 +447,40 @@ const App = ({ user }: AppProps) => {
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     <div>
-                        <div className="flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-3"><span>Casos Clínicos</span><button onClick={() => setShowNewPatientModal(true)} className="text-blue-600 bg-blue-50 p-1 rounded-lg"><Plus size={14}/></button></div>
+                        <div className="flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-3">
+                            <span>Casos Clínicos</span>
+                            <button onClick={() => setShowNewPatientModal(true)} className="text-blue-600 bg-blue-50 p-1 rounded-lg"><Plus size={14}/></button>
+                        </div>
                         <div className="px-2 mb-3">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} />
-                                <input type="text" placeholder="Buscar caso..." className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-[11px] outline-none focus:border-blue-300 transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar por N° HC o diagnóstico..." 
+                                    className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-[11px] outline-none focus:border-blue-300 transition-all" 
+                                    value={searchTerm} 
+                                    onChange={(e) => setSearchTerm(e.target.value)} 
+                                />
                             </div>
                         </div>
                         <div className="space-y-1.5">
                             {filteredPatients.length === 0 && <p className="text-center text-[10px] text-gray-400 py-4">Sin resultados.</p>}
                             {filteredPatients.map(p => (
-                                <div key={p.id} onClick={() => {setSelectedPatientId(p.id); setMobileMenuOpen(false);}} className={`group w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer ${selectedPatientId === p.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'hover:bg-white border border-transparent hover:border-gray-100'}`}>
+                                <div 
+                                    key={p.id} 
+                                    onClick={() => {setSelectedPatientId(p.id); setMobileMenuOpen(false);}} 
+                                    className={`group w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer ${selectedPatientId === p.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'hover:bg-white border border-transparent hover:border-gray-100'}`}
+                                >
                                     <div className="flex flex-col pr-2 flex-1 min-w-0">
-                                        <span className="font-bold text-xs break-words">{p.name}</span>
+                                        <span className="font-bold text-xs">HC-{p.hcNumber}</span>
                                         <span className={`text-[10px] font-semibold truncate ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
                                     </div>
-                                    <button onClick={(e) => handleDeletePatient(p.id, e)} className={`p-1.5 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedPatientId === p.id ? 'text-blue-200 hover:text-white hover:bg-blue-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}><Trash2 size={12} /></button>
+                                    <button 
+                                        onClick={(e) => handleDeletePatient(p.id, e)} 
+                                        className={`p-1.5 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedPatientId === p.id ? 'text-blue-200 hover:text-white hover:bg-blue-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
                                 </div>
                             ))}
                         </div>
@@ -547,8 +489,11 @@ const App = ({ user }: AppProps) => {
                 <div className="p-5 border-t bg-white flex flex-col space-y-3">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3 truncate">
-                            <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-md">{doctorName[0]}</div>
-                            <div className="flex flex-col truncate"><span className="text-[9px] font-black text-gray-400 uppercase leading-none mb-0.5">Profesional</span><span className="text-xs font-bold truncate leading-none">Dr. {doctorName}</span></div>
+                            <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-md">{doctorName[0].toUpperCase()}</div>
+                            <div className="flex flex-col truncate">
+                                <span className="text-[9px] font-black text-gray-400 uppercase leading-none mb-0.5">Profesional</span>
+                                <span className="text-xs font-bold truncate leading-none">Dr. {doctorName}</span>
+                            </div>
                         </div>
                         <button onClick={logout} className="text-gray-200 hover:text-red-500 transition-colors"><LogOut size={16} /></button>
                     </div>
@@ -570,11 +515,16 @@ const App = ({ user }: AppProps) => {
                                 {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
                             </button>
                         )}
-                        <div className="flex flex-col"><h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">{selP ? `Caso: ${selP.name}` : 'Bienvenido'}</h1>{selP && <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">{selP.diagnosis} – {selP.age} Años</span>}</div>
+                        <div className="flex flex-col">
+                            <h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">
+                                {selP ? `HC-${selP.hcNumber}` : 'Bienvenido'}
+                            </h1>
+                            {selP && <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">{selP.diagnosis} — {selP.ageRange} años</span>}
+                        </div>
                     </div>
                     <div className={`px-3 py-1.5 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
                         {apiKeyExists ? <div className="w-2 h-2 bg-green-500 rounded-full"></div> : <ShieldAlert size={12}/>}
-                        <span>{apiKeyExists ? 'Online' : 'Error API'}</span>
+                        <span>{apiKeyExists ? 'Seguro' : 'Error API'}</span>
                     </div>
                 </header>
 
@@ -593,10 +543,23 @@ const App = ({ user }: AppProps) => {
                                 {activeTab === 'docs' && (
                                     <>
                                         <section className="space-y-4">
-                                            <div className="flex items-center justify-between border-b border-gray-50 pb-2"><h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Documentación del Caso</h3><button onClick={savePatientDetails} className="text-blue-600 font-bold text-[10px] hover:underline uppercase">Guardar cambios</button></div>
+                                            <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Documentación del Caso</h3>
+                                                <button onClick={savePatientDetails} className="text-blue-600 font-bold text-[10px] hover:underline uppercase">Guardar cambios</button>
+                                            </div>
                                             <FileUploader label="Archivos Digitales" files={historyFiles} setFiles={setHistoryFiles} />
-                                            <textarea className="w-full h-32 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-blue-200 transition-all outline-none resize-none shadow-inner" placeholder="Resumen manual del caso..." value={historyText} onChange={(e) => setHistoryText(e.target.value)} onBlur={savePatientDetails} />
-                                            <button onClick={handleProcessDocuments} disabled={isProcessingDocs} className="w-full bg-blue-600 text-white py-4 rounded-xl text-xs font-black tracking-widest shadow-xl shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center">
+                                            <textarea 
+                                                className="w-full h-32 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-blue-200 transition-all outline-none resize-none shadow-inner" 
+                                                placeholder="Resumen manual del caso..." 
+                                                value={historyText} 
+                                                onChange={(e) => setHistoryText(e.target.value)} 
+                                                onBlur={savePatientDetails} 
+                                            />
+                                            <button 
+                                                onClick={handleProcessDocuments} 
+                                                disabled={isProcessingDocs} 
+                                                className="w-full bg-blue-600 text-white py-4 rounded-xl text-xs font-black tracking-widest shadow-xl shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center"
+                                            >
                                                 {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={16}/>Analizando...</> : "Procesar documentos"}
                                             </button>
                                         </section>
@@ -702,10 +665,10 @@ const App = ({ user }: AppProps) => {
                                 )}
                                 {chatMessages.map((m, i) => (
                                     <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                            <div className={`max-w-[85%] p-6 rounded-[2rem] text-sm shadow-md leading-relaxed font-medium ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-blue-100' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}`}>
-                                                <div className="whitespace-pre-wrap">{m.text}</div>
-                                                <div className={`text-[10px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>{new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                            </div>
+                                        <div className={`max-w-[85%] p-6 rounded-[2rem] text-sm shadow-md leading-relaxed font-medium ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-blue-100' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}`}>
+                                            <div className="whitespace-pre-wrap">{m.text}</div>
+                                            <div className={`text-[10px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>{new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                        </div>
                                     </div>
                                 ))}
                                 {isTyping && <div className="flex justify-start"><div className="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm animate-pulse text-[10px] font-black text-blue-600 tracking-[0.2em] uppercase">IA Razonando...</div></div>}
@@ -714,8 +677,21 @@ const App = ({ user }: AppProps) => {
 
                             <div className="p-6 bg-white/80 backdrop-blur-md border-t">
                                 <div className="relative flex items-center bg-gray-50 rounded-3xl border-2 border-transparent focus-within:border-blue-100 focus-within:bg-white transition-all p-3 pl-6">
-                                    <textarea className="flex-1 bg-transparent text-sm font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" placeholder="Plantear dudas / aspectos a discutir" rows={1} value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} />
-                                    <button onClick={handleSendMessage} disabled={!chatInput.trim() || isTyping} className="ml-3 p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-100 disabled:opacity-50 active:scale-90 transition-all"><MessageSquare size={20} /></button>
+                                    <textarea 
+                                        className="flex-1 bg-transparent text-sm font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" 
+                                        placeholder="Plantear dudas / aspectos a discutir" 
+                                        rows={1} 
+                                        value={chatInput} 
+                                        onChange={e => setChatInput(e.target.value)} 
+                                        onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} 
+                                    />
+                                    <button 
+                                        onClick={handleSendMessage} 
+                                        disabled={!chatInput.trim() || isTyping} 
+                                        className="ml-3 p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-100 disabled:opacity-50 active:scale-90 transition-all"
+                                    >
+                                        <MessageSquare size={20} />
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -732,7 +708,7 @@ const App = ({ user }: AppProps) => {
                 )}
             </main>
 
-            {/* Modal Crear Paciente */}
+            {/* Modal Crear Caso — PSEUDONIMIZADO */}
             {showNewPatientModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-md p-6">
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden transform animate-in fade-in zoom-in duration-300">
@@ -742,25 +718,51 @@ const App = ({ user }: AppProps) => {
                         </div>
                         <form onSubmit={handleCreatePatient} className="p-8 space-y-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Nombre completo del paciente</label>
-                                <input type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: Juan Pérez" value={newPatientName} onChange={e => setNewPatientName(e.target.value)} />
+                                <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Número de Historia Clínica</label>
+                                <input 
+                                    type="text" 
+                                    required 
+                                    autoFocus
+                                    className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" 
+                                    placeholder="Ej: 9014766" 
+                                    value={newPatientHC} 
+                                    onChange={e => setNewPatientHC(e.target.value)} 
+                                />
                             </div>
                             <div className="flex space-x-4">
-                                <div className="w-1/3 space-y-2">
-                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Edad</label>
-                                    <input type="number" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="--" value={newPatientAge} onChange={e => setNewPatientAge(e.target.value)} />
+                                <div className="w-1/2 space-y-2">
+                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Rango Etario</label>
+                                    <select 
+                                        className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all"
+                                        value={newPatientAgeRange}
+                                        onChange={e => setNewPatientAgeRange(e.target.value)}
+                                    >
+                                        {AGE_RANGES.map(r => (
+                                            <option key={r} value={r}>{r} años</option>
+                                        ))}
+                                    </select>
                                 </div>
-                                <div className="w-2/3 space-y-2">
-                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Base</label>
-                                    <input type="text" required className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" placeholder="Ej: Ca Mama" value={newPatientDiagnosis} onChange={e => setNewPatientDiagnosis(e.target.value)} />
+                                <div className="w-1/2 space-y-2">
+                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Diagnóstico Base</label>
+                                    <input 
+                                        type="text" 
+                                        required 
+                                        className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all" 
+                                        placeholder="Ej: Ca Mama" 
+                                        value={newPatientDiagnosis} 
+                                        onChange={e => setNewPatientDiagnosis(e.target.value)} 
+                                    />
                                 </div>
                             </div>
-                            <p className="text-xs text-gray-400 mt-4 text-center">Uso exclusivo del equipo de salud.</p>
+                            <p className="text-[9px] text-gray-300 text-center leading-relaxed">
+                                Los datos se almacenan sin nombre ni DNI del paciente, en cumplimiento con la Ley 25.326.
+                            </p>
                             <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-xl text-xs font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase tracking-widest">Crear caso clínico</button>
                         </form>
                     </div>
                 </div>
             )}
+
             <ClinicalAuditModal 
               isOpen={showAuditModal}
               onClose={() => setShowAuditModal(false)}
@@ -775,7 +777,6 @@ const App = ({ user }: AppProps) => {
               content={reportModal.content} 
               isLoading={reportModal.isLoading} 
             />
-
         </div>
     );
 };
