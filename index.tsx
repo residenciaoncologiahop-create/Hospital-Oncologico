@@ -6,6 +6,7 @@ import RootOrchestrator from './RootOrchestrator';
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import PendientesPanel from './components/PendientesPanel';
+import ImagingPanel, { ImagingStudy } from './components/ImagingPanel';
 
 // --- FIREBASE IMPORTS ---
 import { db } from './firebase'; 
@@ -69,6 +70,7 @@ interface Patient {
     chatHistory?: ChatMessage[];
     timeline?: ClinicalEvent[];
     labResults?: LabResult[];
+    imagingStudies?: ImagingStudy[];
 }
 
 interface FileData { name: string; type: string; data: string; }
@@ -136,7 +138,8 @@ const App = ({ user }: AppProps) => {
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [apiKeyExists, setApiKeyExists] = useState<boolean>(true); 
+    const [apiKeyExists, setApiKeyExists] = useState<boolean>(true);
+    const [imagingStudies, setImagingStudies] = useState<ImagingStudy[]>([]);
     const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xl'>(() => {
     return (localStorage.getItem('onco_fontsize') as any) || 'large';
 });
@@ -150,7 +153,7 @@ const cycleFontSize = () => {
 const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
 
     const [showLeftPanel, setShowLeftPanel] = useState(true);
-    const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms'| 'labs'>('docs');
+    const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms' | 'labs' | 'imaging'>('docs');
 
     // --- NUEVOS CAMPOS DE CREACIÓN (pseudonimizados) ---
     const [newPatientHC, setNewPatientHC] = useState('');
@@ -226,6 +229,7 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
                 setManualDate(new Date().toISOString().split('T')[0]); 
                 setManualDoctor(doctorName || '');
                 setShowLeftPanel(true);
+                setImagingStudies(p.imagingStudies || []);
             }
         }
     }, [selectedPatientId]);
@@ -249,6 +253,21 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
             });
             logAction("UPDATE_PATIENT_DATA", selectedPatientId, doctorName);
         }
+    };
+
+    const saveImagingStudies = async (studies: ImagingStudy[]) => {
+        if (selectedPatientId) {
+            const patientRef = doc(db, "patients", selectedPatientId);
+            await updateDoc(patientRef, {
+                imagingStudies: studies,
+                lastUpdated: Date.now()
+            });
+        }
+    };
+
+    const handleImagingStudiesChange = (studies: ImagingStudy[]) => {
+        setImagingStudies(studies);
+        saveImagingStudies(studies);
     };
 
     const handleProcessDocuments = async () => {
@@ -470,7 +489,7 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
 };
 
     const selP = patients.find(p => p.id === selectedPatientId);
-    const isLabTab = activeTab === 'labs';
+    const isLabTab = activeTab === 'labs' || activeTab === 'imaging';
 
     return (
         <>
@@ -601,7 +620,8 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
                                 <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>1. Documentación</button>
                                 <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historial de Eventos</button>
                                 <button onClick={() => setActiveTab('forms')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'forms' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>3. Trámites</button>
-                                <button onClick={() => setActiveTab('labs')} className={`flex-1 py-4 transition-all ${activeTab === 'labs' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>4. Laboratorio</button>
+                                <button onClick={() => setActiveTab('labs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'labs' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>4. Lab</button>
+    <button onClick={() => setActiveTab('imaging')} className={`flex-1 py-4 transition-all ${activeTab === 'imaging' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>5. Imágenes</button>
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
@@ -704,6 +724,14 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
                                         />
                                     </div>
                                 )}
+                                {activeTab === 'imaging' && (
+        <div className="h-full p-6 overflow-y-auto">
+            <ImagingPanel
+                studies={imagingStudies}
+                onStudiesChange={handleImagingStudiesChange}
+            />
+        </div>
+    )}
                             </div>
                         </div>
 
