@@ -435,6 +435,28 @@ const App = ({ user }: AppProps) => {
         p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+     const renderMarkdown = (text: string) => {
+    return text
+        .split('\n')
+        .map((line, i) => {
+            // Línea de lista con *
+            if (/^\s*\*\s+/.test(line)) {
+                const content = line.replace(/^\s*\*\s+/, '');
+                return <div key={i} className="flex gap-2 mb-1"><span className="text-blue-300 mt-0.5 flex-shrink-0">•</span><span dangerouslySetInnerHTML={{ __html: content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/></div>;
+            }
+            // Línea numerada
+            if (/^\d+\.\s+/.test(line)) {
+                const num = line.match(/^(\d+)\./)?.[1];
+                const content = line.replace(/^\d+\.\s+/, '');
+                return <div key={i} className="flex gap-2 mb-1"><span className="text-blue-300 flex-shrink-0 font-black">{num}.</span><span dangerouslySetInnerHTML={{ __html: content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/></div>;
+            }
+            // Línea vacía
+            if (!line.trim()) return <div key={i} className="h-2"/>;
+            // Línea normal con negritas
+            return <p key={i} className="mb-1" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/>;
+        });
+};
+
     const selP = patients.find(p => p.id === selectedPatientId);
     const isLabTab = activeTab === 'labs';
 
@@ -668,7 +690,9 @@ const App = ({ user }: AppProps) => {
                                 {chatMessages.map((m, i) => (
                                     <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                         <div className={`max-w-[85%] p-6 rounded-[2rem] shadow-md ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-blue-100' : 'bg-white border border-gray-100 rounded-bl-none'}`}>
-        <div className={`whitespace-pre-wrap leading-relaxed ${m.role === 'user' ? 'text-sm font-semibold' : 'text-[13px] font-normal text-gray-700'}`}>{m.text}</div>
+        <div className={`leading-relaxed space-y-0.5 ${m.role === 'user' ? 'text-sm font-semibold' : 'text-[13px] font-normal text-gray-700'}`}>
+    {m.role === 'model' ? renderMarkdown(m.text) : m.text}
+</div>
                                             <div className={`text-[10px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>{new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                         </div>
                                     </div>
