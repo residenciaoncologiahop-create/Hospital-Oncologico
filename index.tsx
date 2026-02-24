@@ -135,6 +135,7 @@ const App = ({ user }: AppProps) => {
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(true);
     const [apiKeyExists, setApiKeyExists] = useState<boolean>(true); 
     const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xl'>(() => {
     return (localStorage.getItem('onco_fontsize') as any) || 'large';
@@ -487,7 +488,7 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
 `}</style>
         <div className={`flex h-screen bg-white text-gray-800 font-medium text-xs overflow-hidden ${fontSize === 'large' ? 'fs-large' : fontSize === 'xl' ? 'fs-xl' : ''}`}>
             {/* Sidebar */}
-            <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
+            <aside className={`fixed inset-y-0 left-0 z-40 bg-gray-50 border-r lg:static flex flex-col transition-all duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} ${sidebarOpen ? 'w-72 lg:translate-x-0' : 'w-0 lg:translate-x-0 overflow-hidden'}`}>
                 <div className="p-6 border-b flex items-center justify-between bg-white">
                     <div className="flex items-center space-x-2 text-blue-600 font-black text-xl tracking-tighter"><Activity size={24} /><span>OncoGuide</span></div>
                     <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-300"><X size={24}/></button>
@@ -563,6 +564,13 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
                 <header className="bg-white/80 backdrop-blur-md border-b h-16 flex items-center px-6 justify-between z-20">
                     <div className="flex items-center space-x-4">
                         <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={24} /></button>
+<button 
+    onClick={() => setSidebarOpen(!sidebarOpen)} 
+    className="hidden lg:block text-gray-400 hover:text-blue-600 transition-colors"
+    title={sidebarOpen ? "Ocultar panel" : "Mostrar panel"}
+>
+    {sidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+</button>
                         {selP && (
                             <button 
                                 onClick={() => setShowLeftPanel(!showLeftPanel)} 
