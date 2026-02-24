@@ -294,3 +294,6 @@ NO incluyas nombres ni datos identificatorios.
   const res = await callGemini({ prompt });
   return res.text.replace(/```html|```/g, '').trim();
 };
+
+// Alias para compatibilidad con ImagingPanel.tsx
+export const extractImagingDataSecure = extractImagingFromHistorySecure;
