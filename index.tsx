@@ -608,10 +608,9 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
                                 {activeTab === 'docs' && (
                                     <>
                                         <section className="space-y-4">
-                                            <div className="flex items-center justify-between border-b border-gray-50 pb-2">
-                                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Documentación del Caso</h3>
-                                                <button onClick={savePatientDetails} className="text-blue-600 font-bold text-[10px] hover:underline uppercase">Guardar cambios</button>
-                                            </div>
+                                            <div className="border-b border-gray-50 pb-2">
+    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Documentación del Caso</h3>
+</div>
                                             <FileUploader label="Archivos Digitales" files={historyFiles} setFiles={setHistoryFiles} />
                                             <textarea 
                                                 className="w-full h-32 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-blue-200 transition-all outline-none resize-none shadow-inner" 
