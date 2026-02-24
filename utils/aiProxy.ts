@@ -6,15 +6,6 @@
  * 
  * La API key de Gemini nunca sale del servidor.
  * Todas las llamadas requieren autenticación Firebase activa.
- * 
- * USO:
- *   // Antes (INSEGURO):
- *   const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
- *   const res = await ai.models.generateContent({ ... });
- * 
- *   // Ahora (SEGURO):
- *   const res = await callGemini({ prompt: "..." });
- *   console.log(res.text);
  */
 
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -41,7 +32,6 @@ interface CallGeminiResult {
 // FUNCIÓN PRINCIPAL
 // ──────────────────────────────────────────────
 export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiResult> => {
-  // Verificar sesión activa antes de llamar
   const user = auth.currentUser;
   if (!user) {
     throw new Error("Usuario no autenticado. Inicie sesión para continuar.");
@@ -55,8 +45,7 @@ export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiRe
 };
 
 // ──────────────────────────────────────────────
-// HELPERS: funciones que reemplazan a las de
-// residentAI.ts y clinicalAuditAI.ts
+// HELPERS
 // ──────────────────────────────────────────────
 
 interface FileData { name: string; type: string; data: string; }
@@ -160,7 +149,6 @@ export const generateClinicalAuditSecure = async (
   files: FileData[]
 ): Promise<string> => {
 
-  // El prompt de auditoría completo (idéntico al original en clinicalAuditAI.ts)
   const auditPrompt = `
 ACTUÁ COMO: Extractor y auditor de registros clínicos oncológicos.
 OBJETIVO: Organizar la información clínica existente, detectar datos faltantes y señalar inconsistencias documentales.
@@ -214,54 +202,63 @@ export const getDrugInfoSecure = async (drugName: string): Promise<string> => {
   const res = await callGemini({ prompt });
   return res.text.replace(/```html|```/g, '').trim();
 };
-// ── Extracción de datos de informe de imagen ──────────────────────────
-export const extractImagingDataSecure = async (
+
+// ── Extracción masiva de imágenes desde historia clínica ───────────────
+// Detecta TODOS los informes de imagen en los documentos y devuelve array
+// de estudios estructurados. Se llama desde handleProcessDocuments.
+export const extractImagingFromHistorySecure = async (
   text: string,
   files: FileData[]
-): Promise<any> => {
+): Promise<any[]> => {
+  if (!text && files.length === 0) return [];
 
   const instructionText = `
 Sos un radiólogo oncológico experto en criterios RECIST 1.1.
-Analizá el informe de imagen adjunto y extraé los datos estructurados.
 
-REGLAS:
-- Medidas SIEMPRE en milímetros (mm). Si el informe dice "2.3 cm", convertí a 23 mm.
-- Fechas en formato DD/MM/YYYY.
-- Tipo de estudio: solo "TC", "RMN" o "PET-TC".
-- Si no podés determinar un campo, usá null.
-- Las lesiones diana son las medibles según RECIST 1.1 (eje largo >10mm para tejidos blandos, >15mm para ganglios).
-- Las lesiones no diana son lesiones conocidas no medibles o no seleccionadas como diana.
+Analizá TODOS los documentos adjuntos y el texto clínico. Buscá TODOS los informes de imágenes oncológicas (TC, RMN, PET-TC). Puede haber múltiples estudios en un mismo documento o en documentos distintos.
 
-SALIDA: ÚNICAMENTE JSON con esta estructura exacta:
-{
-  "type": "TC" | "RMN" | "PET-TC",
-  "date": "DD/MM/YYYY",
-  "bodyRegion": "descripción de región estudiada",
-  "targetLesions": [
-    { "location": "localización anatómica", "measurement": número_en_mm }
-  ],
-  "nonTargetLesions": [
-    { "location": "localización", "status": "presente/ausente/aumentado/disminuido" }
-  ],
-  "newLesions": true | false,
-  "rawSummary": "resumen del informe en 2-3 líneas"
-}
+REGLAS ESTRICTAS:
+- Medidas SIEMPRE en milímetros (mm). Si dice "2.3 cm" → 23. Si dice "12 mm" → 12.
+- Fechas en DD/MM/YYYY. Si solo hay mes/año, usar "01/MM/YYYY".
+- Tipo: SOLO "TC", "RMN" o "PET-TC". Si es "TAC" o "tomografía" → "TC".
+- Lesiones diana: medibles según RECIST 1.1 (>10mm tejidos blandos, >15mm ganglios).
+- Lesiones no diana: no medibles o no seleccionadas como diana.
+- Tratamiento: esquema activo AL MOMENTO del estudio según contexto clínico cercano. Si no está claro → null.
+- NO incluyas datos identificatorios (nombres, DNI, nro de historia clínica).
+- Si no hay ningún informe de imagen, devolvé [].
+
+SALIDA: ÚNICAMENTE ARRAY JSON:
+[
+  {
+    "type": "TC" | "RMN" | "PET-TC",
+    "date": "DD/MM/YYYY",
+    "bodyRegion": "región anatómica estudiada",
+    "treatment": "esquema de tratamiento activo o null",
+    "targetLesions": [
+      { "location": "localización anatómica precisa", "measurement": número_en_mm }
+    ],
+    "nonTargetLesions": [
+      { "location": "localización", "status": "presente|ausente|aumentado|disminuido|estable" }
+    ],
+    "newLesions": true | false
+  }
+]
   `;
 
   const parts = buildParts(instructionText, []);
-  if (text) parts.push({ text: `Informe: ${text}` });
+  if (text) parts.push({ text: `Historia clínica:\n${text}` });
   files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
   const res = await callGemini({ parts, responseMimeType: "application/json" });
 
   try {
     const clean = res.text.replace(/```json|```/g, '').trim();
-    const start = clean.indexOf('{');
-    const end = clean.lastIndexOf('}');
+    const start = clean.indexOf('[');
+    const end = clean.lastIndexOf(']');
     if (start !== -1 && end !== -1) return JSON.parse(clean.substring(start, end + 1));
     return JSON.parse(clean);
   } catch {
-    throw new Error("No se pudo interpretar el informe de imagen.");
+    return [];
   }
 };
 
@@ -273,27 +270,25 @@ export const compareRecistSecure = async (
   const prompt = `
 Sos un oncólogo experto en criterios RECIST 1.1 (versión 2009).
 
-Analizá la siguiente serie de estudios de imagen del mismo paciente y generá un informe de respuesta al tratamiento.
+Analizá la siguiente serie de estudios del mismo paciente y generá un informe de respuesta.
 
 ESTUDIOS (ordenados cronológicamente):
 ${JSON.stringify(studies, null, 2)}
 
-CRITERIOS RECIST 1.1 A APLICAR:
+CRITERIOS RECIST 1.1:
 - Respuesta Completa (RC): Desaparición de todas las lesiones diana. Ganglios <10mm.
 - Respuesta Parcial (RP): Reducción ≥30% de la suma de diámetros vs baseline.
-- Enfermedad Progresiva (EP): Aumento ≥20% de la suma vs nadir + aumento absoluto ≥5mm. O aparición de nuevas lesiones.
+- Enfermedad Progresiva (EP): Aumento ≥20% de la suma vs nadir + aumento absoluto ≥5mm. O nuevas lesiones.
 - Enfermedad Estable (EE): No cumple criterios de RP ni EP.
-- Para lesiones no diana: RC si desaparecen todas, EP si progresan inequívocamente, EE/RP si persisten sin progresión clara.
-- La respuesta global considera tanto lesiones diana como no diana y nuevas lesiones.
 
-FORMATO DE SALIDA: HTML puro con clases Tailwind en un div contenedor. Incluir:
-1. Tabla comparativa de lesiones diana (baseline → cada estudio posterior, con variación % respecto a baseline y nadir)
-2. Evaluación de lesiones no diana
+FORMATO: HTML puro con clases Tailwind en un div contenedor. Incluir:
+1. Tabla comparativa de lesiones diana (baseline → cada estudio, variación % vs baseline y nadir)
+2. Evaluación de lesiones no diana por estudio
 3. Nuevas lesiones detectadas
-4. Respuesta por estudio (usando badges de color: verde=RC/RP, amarillo=EE, rojo=EP)
+4. Respuesta por estudio (badges: verde=RC/RP, amarillo=EE, rojo=EP)
 5. Conclusión RECIST global con razonamiento
 
-IMPORTANTE: No incluyas nombres ni datos identificatorios del paciente.
+NO incluyas nombres ni datos identificatorios.
   `;
 
   const res = await callGemini({ prompt });
