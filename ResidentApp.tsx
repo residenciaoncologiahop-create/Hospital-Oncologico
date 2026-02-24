@@ -2,29 +2,26 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Activity, Plus, Search, Trash2, LogOut, Menu, X, 
   FileText, Clock, FileOutput, GraduationCap, Calculator, Pill, 
-  Stethoscope, User, ChevronRight, PanelLeftClose, PanelLeftOpen, MessageSquare, Loader2, AlertCircle, Sparkles, ClipboardList, ShieldCheck, Users, CalendarHeart
+  Stethoscope, User, ChevronRight, PanelLeftClose, PanelLeftOpen, MessageSquare, Loader2, AlertCircle, Sparkles, ClipboardList, ShieldCheck, Users, CalendarHeart, Info
 } from 'lucide-react';
 
-// --- IMPORTS ---
 import FormManager from './components/FormManager';
 import OncoCalculator from './components/OncoCalculator';
 import DrugReference from './components/DrugReference';
 import FileUploader from './components/FileUploader';
 import ResidentLearningModule from './components/ResidentLearningModule';
 import ClinicalAuditModal from './components/ClinicalAuditModal';
-import ClinicalReportModal from './components/ClinicalReportModal'; // <--- NUEVO IMPORT
+import ClinicalReportModal from './components/ClinicalReportModal';
 
-// Importamos todas las funciones generadoras
 import { 
   getResidentChatResponse, 
   extractResidentTimeline, 
-  generateResidentClinicalSummary, // Resumen
-  generateFollowUpPlan,            // Seguimiento (Nuevo)
-  generateTumorBoardAnalysis,      // Ateneo (Nuevo)
+  generateResidentClinicalSummary,
+  generateFollowUpPlan,
+  generateTumorBoardAnalysis,
   generateOncologyVerification 
 } from './utils/residentAI';
 
-// --- TIPOS (Sin cambios) ---
 interface ResidentPatient {
   id: string;
   name: string;
@@ -37,13 +34,19 @@ interface ResidentPatient {
   lastUpdated: number;
 }
 
+// Helper para parsear fechas DD/MM/AAAA
+const parseDate = (dateStr: string) => {
+  if (!dateStr) return 0;
+  const parts = dateStr.split('/');
+  if (parts.length === 3) return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
+  return 0;
+};
+
 const ResidentApp = () => {
-  // --- ESTADOS ---
   const [patients, setPatients] = useState<ResidentPatient[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms' | 'learning'>('docs');
   
-  // UI & Modals
   const [showCalc, setShowCalc] = useState(false);
   const [showDrugs, setShowDrugs] = useState(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
@@ -51,34 +54,30 @@ const ResidentApp = () => {
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Estados de IA Generativa (Reportes)
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [auditContent, setAuditContent] = useState<string | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
 
-  // --- NUEVO ESTADO UNIFICADO PARA REPORTES HTML ---
   const [reportModal, setReportModal] = useState({ isOpen: false, title: '', content: '' as string | null, isLoading: false });
 
-  // Chat State
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Processing States
   const [isProcessingDocs, setIsProcessingDocs] = useState(false);
 
-  // New Patient Form
   const [newName, setNewName] = useState('');
   const [newAge, setNewAge] = useState('');
   const [newDx, setNewDx] = useState('');
 
   const selectedPatient = patients.find(p => p.id === selectedId);
-  const filteredPatients = patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredPatients = patients.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
+  );
   const isLearningMode = activeTab === 'learning';
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [selectedPatient?.chatHistory, isTyping]);
-
-  // --- HANDLERS ---
 
   const updateCurrentPatient = (updates: Partial<ResidentPatient>) => {
     setPatients(prev => prev.map(p => p.id === selectedId ? { ...p, ...updates, lastUpdated: Date.now() } : p));
@@ -86,14 +85,30 @@ const ResidentApp = () => {
 
   const handleCreatePatient = (e: React.FormEvent) => {
     e.preventDefault();
-    const newPatient: ResidentPatient = { id: `res-${Date.now()}`, name: newName, age: parseInt(newAge) || 0, diagnosis: newDx, historyText: '', files: [], timeline: [], chatHistory: [], lastUpdated: Date.now() };
+    const newPatient: ResidentPatient = { 
+      id: `res-${Date.now()}`, 
+      name: newName, 
+      age: parseInt(newAge) || 0, 
+      diagnosis: newDx, 
+      historyText: '', 
+      files: [], 
+      timeline: [], 
+      chatHistory: [], 
+      lastUpdated: Date.now() 
+    };
     setPatients(prev => [newPatient, ...prev]);
     setSelectedId(newPatient.id);
     setShowNewPatientModal(false);
     setNewName(''); setNewAge(''); setNewDx('');
   };
 
-  const handleDeletePatient = (id: string, e: React.MouseEvent) => { e.stopPropagation(); if (window.confirm("¿Descartar caso?")) { setPatients(prev => prev.filter(p => p.id !== id)); if (selectedId === id) setSelectedId(null); } };
+  const handleDeletePatient = (id: string, e: React.MouseEvent) => { 
+    e.stopPropagation(); 
+    if (window.confirm("¿Descartar caso?")) { 
+      setPatients(prev => prev.filter(p => p.id !== id)); 
+      if (selectedId === id) setSelectedId(null); 
+    } 
+  };
 
   const handleSendMessage = async () => {
     if (!chatInput.trim() || !selectedPatient) return;
@@ -101,7 +116,7 @@ const ResidentApp = () => {
     const updatedHistory = [...selectedPatient.chatHistory, newMsg];
     updateCurrentPatient({ chatHistory: updatedHistory });
     setChatInput(''); setIsTyping(true);
-    const context = `Paciente: ${selectedPatient.name}, ${selectedPatient.age} años. Dx: ${selectedPatient.diagnosis}.\nHistoria: ${selectedPatient.historyText}`;
+    const context = `Caso educativo. Dx: ${selectedPatient.diagnosis}.\nHistoria: ${selectedPatient.historyText}`;
     const response = await getResidentChatResponse(updatedHistory, newMsg.text, context, selectedPatient.files);
     const aiMsg = { role: 'model' as const, text: response, timestamp: Date.now() };
     updateCurrentPatient({ chatHistory: [...updatedHistory, aiMsg] });
@@ -111,26 +126,37 @@ const ResidentApp = () => {
   const handleProcessTimeline = async () => {
     if (!selectedPatient) return;
     setIsProcessingDocs(true);
-    const events = await extractResidentTimeline(selectedPatient.historyText, selectedPatient.files);
-    updateCurrentPatient({ timeline: events });
-    setIsProcessingDocs(false);
-    setActiveTab('timeline');
+    try {
+      const events = await extractResidentTimeline(selectedPatient.historyText, selectedPatient.files);
+      // Normalizar campos por si Gemini devuelve variantes
+      const normalized = events.map((e: any) => ({
+        date: e.date || e.fecha || 'S/F',
+        professional: e.professional || e.profesional || 'N/A',
+        category: e.category || e.categoria || e.type || 'Evento',
+        note: e.note || e.nota || e.description || e.descripcion || '',
+        isKey: !!e.isKey || !!e.clave || !!e.key
+      })).filter((e: any) => e.note && e.note.trim() !== '');
+      
+      updateCurrentPatient({ timeline: normalized });
+      setActiveTab('timeline');
+    } catch (err) {
+      console.error("Error procesando timeline:", err);
+    } finally {
+      setIsProcessingDocs(false);
+    }
   };
 
-  // --- NUEVOS HANDLERS UNIFICADOS PARA REPORTES ---
-  
   const runReportGeneration = async (title: string, generatorFn: (text: string, files: any[]) => Promise<string>) => {
     if (!selectedPatient) return;
-    if (!selectedPatient.historyText && selectedPatient.files.length === 0) { alert("Sin datos para procesar."); return; }
-
+    if (!selectedPatient.historyText && selectedPatient.files.length === 0) { 
+      alert("Sin datos para procesar."); 
+      return; 
+    }
     setReportModal({ isOpen: true, title, content: null, isLoading: true });
-    
     const htmlResult = await generatorFn(selectedPatient.historyText, selectedPatient.files);
-    
     setReportModal({ isOpen: true, title, content: htmlResult, isLoading: false });
   };
 
-  // Handler Específico para Auditoría (Usa su propio modal por diseño)
   const handleRunAudit = async () => {
     if (!selectedPatient) return;
     setShowAuditModal(true); setIsAuditing(true); setAuditContent(null);
@@ -138,12 +164,14 @@ const ResidentApp = () => {
     setAuditContent(result); setIsAuditing(false);
   };
 
-  const handleExit = () => { if (window.confirm("Se borrarán los datos. ¿Salir?")) window.location.reload(); };
+  const handleExit = () => { 
+    if (window.confirm("Se borrarán los datos. ¿Salir?")) window.location.reload(); 
+  };
 
   return (
     <div className="flex h-screen bg-white text-gray-800 font-sans text-xs overflow-hidden">
       
-      {/* SIDEBAR (Sin cambios) */}
+      {/* SIDEBAR */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 border-b flex items-center justify-between bg-white">
           <div className="flex items-center space-x-2 text-indigo-600 font-black text-xl tracking-tighter"><GraduationCap size={24} /><span>OncoResidente</span></div>
@@ -157,18 +185,33 @@ const ResidentApp = () => {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div className="flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-2"><span>Casos en memoria</span><button onClick={() => setShowNewPatientModal(true)} className="text-indigo-600 bg-indigo-50 p-1.5 rounded-lg hover:bg-indigo-100 transition-colors"><Plus size={14}/></button></div>
-          <div className="px-2 mb-3"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} /><input type="text" placeholder="Filtrar..." className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-[11px] outline-none focus:border-indigo-300 transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/></div></div>
+          <div className="flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-2">
+            <span>Casos en memoria</span>
+            <button onClick={() => setShowNewPatientModal(true)} className="text-indigo-600 bg-indigo-50 p-1.5 rounded-lg hover:bg-indigo-100 transition-colors"><Plus size={14}/></button>
+          </div>
+          <div className="px-2 mb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={12} />
+              <input type="text" placeholder="Filtrar..." className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-[11px] outline-none focus:border-indigo-300 transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
+            </div>
+          </div>
           <div className="space-y-1.5">
             {filteredPatients.map(p => (
               <div key={p.id} onClick={() => { setSelectedId(p.id); setMobileMenuOpen(false); }} className={`group w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer ${selectedId === p.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'hover:bg-white border border-transparent hover:border-gray-100'}`}>
-                <div className="flex flex-col pr-2 flex-1 min-w-0"><span className="font-bold text-xs break-words">{p.name}</span><span className={`text-[10px] font-semibold truncate ${selectedId === p.id ? 'text-indigo-200' : 'text-gray-400'}`}>{p.diagnosis}</span></div>
+                <div className="flex flex-col pr-2 flex-1 min-w-0">
+                  <span className="font-bold text-xs break-words">{p.name}</span>
+                  <span className={`text-[10px] font-semibold truncate ${selectedId === p.id ? 'text-indigo-200' : 'text-gray-400'}`}>{p.diagnosis}</span>
+                </div>
                 <button onClick={(e) => handleDeletePatient(p.id, e)} className={`p-1.5 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedId === p.id ? 'text-indigo-300 hover:text-white hover:bg-indigo-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}><Trash2 size={12} /></button>
               </div>
             ))}
           </div>
         </div>
-        <div className="p-4 border-t bg-white"><button onClick={handleExit} className="w-full flex items-center justify-center space-x-2 text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"><LogOut size={14} /><span className="text-[10px] font-bold uppercase tracking-widest">Salir</span></button></div>
+        <div className="p-4 border-t bg-white">
+          <button onClick={handleExit} className="w-full flex items-center justify-center space-x-2 text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50">
+            <LogOut size={14} /><span className="text-[10px] font-bold uppercase tracking-widest">Salir</span>
+          </button>
+        </div>
       </aside>
 
       {/* MAIN */}
@@ -181,9 +224,15 @@ const ResidentApp = () => {
                 {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
               </button>
             )}
-            <div className="flex flex-col"><h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">{selectedPatient ? selectedPatient.name : 'Bienvenido, Residente'}</h1>{selectedPatient && <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{selectedPatient.diagnosis}</span>}</div>
+            <div className="flex flex-col">
+              <h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">{selectedPatient ? selectedPatient.name : 'Bienvenido, Residente'}</h1>
+              {selectedPatient && <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{selectedPatient.diagnosis}</span>}
+            </div>
           </div>
-          <div className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase"><div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div><span>Sesión Volátil</span></div>
+          <div className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase">
+            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
+            <span>Sesión Volátil</span>
+          </div>
         </header>
 
         {selectedPatient ? (
@@ -203,72 +252,126 @@ const ResidentApp = () => {
                   <div className="space-y-6">
                     <FileUploader label="Documentos del Caso" files={selectedPatient.files} setFiles={(newFiles) => updateCurrentPatient({ files: newFiles })} />
                     
-                    {/* ZONA DE BOTONES DE ACCIÓN (IA) */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        
-                        {/* 1. AUDITORÍA (Existente) */}
-                        <button 
-                          onClick={handleRunAudit}
-                          disabled={isAuditing}
-                          className="flex flex-col items-center justify-center gap-1 bg-gray-800 text-white hover:bg-gray-700 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all shadow-lg"
-                        >
-                          <ClipboardList size={16} className="mb-1" /> Auditoría
-                        </button>
-
-                        {/* 2. RESUMEN CLÍNICO (Ahora abre Modal HTML) */}
-                        <button 
-                          onClick={() => runReportGeneration('Resumen Clínico Institucional', generateResidentClinicalSummary)} 
-                          className="flex flex-col items-center justify-center gap-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-indigo-100"
-                        >
-                          <FileText size={16} className="mb-1" /> Resumen
-                        </button>
-
-                        {/* 3. PLAN DE SEGUIMIENTO (Nuevo) */}
-                        <button 
-                          onClick={() => runReportGeneration('Plan de Seguimiento Oncológico', generateFollowUpPlan)} 
-                          className="flex flex-col items-center justify-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-emerald-100"
-                        >
-                          <CalendarHeart size={16} className="mb-1" /> Seguimiento
-                        </button>
-
-                        {/* 4. ATENEO / COMITÉ (Nuevo) */}
-                        <button 
-                          onClick={() => runReportGeneration('Presentación Comité de Tumores', generateTumorBoardAnalysis)} 
-                          className="flex flex-col items-center justify-center gap-1 bg-amber-50 text-amber-700 hover:bg-amber-100 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-amber-100"
-                        >
-                          <Users size={16} className="mb-1" /> Comité
-                        </button>
-
+                      <button 
+                        onClick={handleRunAudit} disabled={isAuditing}
+                        className="flex flex-col items-center justify-center gap-1 bg-gray-800 text-white hover:bg-gray-700 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all shadow-lg"
+                      >
+                        <ClipboardList size={16} className="mb-1" /> Auditoría
+                      </button>
+                      <button 
+                        onClick={() => runReportGeneration('Resumen Clínico Institucional', generateResidentClinicalSummary)} 
+                        className="flex flex-col items-center justify-center gap-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-indigo-100"
+                      >
+                        <FileText size={16} className="mb-1" /> Resumen
+                      </button>
+                      <button 
+                        onClick={() => runReportGeneration('Plan de Seguimiento Oncológico', generateFollowUpPlan)} 
+                        className="flex flex-col items-center justify-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-emerald-100"
+                      >
+                        <CalendarHeart size={16} className="mb-1" /> Seguimiento
+                      </button>
+                      <button 
+                        onClick={() => runReportGeneration('Presentación Comité de Tumores', generateTumorBoardAnalysis)} 
+                        className="flex flex-col items-center justify-center gap-1 bg-amber-50 text-amber-700 hover:bg-amber-100 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-amber-100"
+                      >
+                        <Users size={16} className="mb-1" /> Comité
+                      </button>
                     </div>
 
-                    <textarea className="w-full h-64 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-indigo-200 transition-all outline-none resize-none shadow-inner leading-relaxed" placeholder="Notas manuales del caso..." value={selectedPatient.historyText} onChange={(e) => updateCurrentPatient({ historyText: e.target.value })} />
-                    <button onClick={handleProcessTimeline} disabled={isProcessingDocs} className="w-full bg-indigo-600 text-white py-4 rounded-xl text-[10px] font-black tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50 hover:bg-indigo-700 transition-all uppercase">{isProcessingDocs ? <><Loader2 className="animate-spin inline mr-2" size={14}/>Analizando...</> : "Procesar Historia Clínica"}</button>
+                    <textarea 
+                      className="w-full h-64 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-indigo-200 transition-all outline-none resize-none shadow-inner leading-relaxed" 
+                      placeholder="Notas manuales del caso..." 
+                      value={selectedPatient.historyText} 
+                      onChange={(e) => updateCurrentPatient({ historyText: e.target.value })} 
+                    />
+                    <button 
+                      onClick={handleProcessTimeline} 
+                      disabled={isProcessingDocs} 
+                      className="w-full bg-indigo-600 text-white py-4 rounded-xl text-[10px] font-black tracking-widest shadow-xl shadow-indigo-100 disabled:opacity-50 hover:bg-indigo-700 transition-all uppercase flex items-center justify-center"
+                    >
+                      {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={14}/>Analizando...</> : "Procesar Historia Clínica"}
+                    </button>
                   </div>
                 )}
 
                 {activeTab === 'timeline' && (
-                   <div className="space-y-4">
-                     {selectedPatient.timeline.length === 0 ? <div className="text-center py-10 text-gray-400 font-bold text-[10px] uppercase opacity-60">Sin eventos. Procese documentos.</div> : selectedPatient.timeline.map((ev, i) => (
-                       <div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8"><div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md ${ev.isKey ? 'bg-red-500' : 'bg-indigo-400'}`}></div><div className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm"><span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg">{ev.date}</span><p className="mt-2 text-[10px] text-gray-600">{ev.note}</p></div></div>
-                     ))}
-                   </div>
+                  <div className="space-y-4 pt-2">
+                    {(!selectedPatient.timeline || selectedPatient.timeline.length === 0) ? (
+                      <div className="flex flex-col items-center justify-center py-20 text-gray-200">
+                        <Clock size={40} className="mb-3 opacity-10" />
+                        <p className="text-xs font-black uppercase tracking-widest">Sin eventos. Procesá los documentos primero.</p>
+                      </div>
+                    ) : (
+                      selectedPatient.timeline
+                        .filter(ev => ev.note && ev.note.trim() !== '' && !ev.note.toLowerCase().includes('sin descripción'))
+                        .map((ev, i) => (
+                          <div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8 group">
+                            <div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md flex items-center justify-center transition-all group-hover:scale-110 ${ev.isKey ? 'bg-red-500 text-white' : 'bg-indigo-400 text-white'}`}>
+                              {ev.isKey ? <AlertCircle size={10}/> : <Info size={10}/>}
+                            </div>
+                            <div className={`p-5 rounded-2xl border transition-all hover:shadow-xl ${ev.isKey ? 'bg-red-50/50 border-red-100' : 'bg-white border-gray-50 shadow-sm'}`}>
+                              <div className="flex justify-between items-center mb-2">
+                                <span className={`text-[10px] font-black px-3 py-1 rounded-full tracking-widest uppercase ${ev.isKey ? 'bg-red-500 text-white shadow-md' : 'bg-indigo-50 text-indigo-600'}`}>{ev.date}</span>
+                                <span className="text-[10px] text-gray-400 font-bold uppercase truncate max-w-[150px]">{ev.professional}</span>
+                              </div>
+                              {ev.category && ev.category !== 'General' && (
+                                <h4 className={`font-bold text-xs mb-1 uppercase tracking-tight ${ev.isKey ? 'text-red-900' : 'text-gray-800'}`}>{ev.category}</h4>
+                              )}
+                              <p className={`leading-relaxed text-xs font-medium ${ev.isKey ? 'text-red-900' : 'text-gray-600'}`}>{ev.note}</p>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
                 )}
-                {activeTab === 'forms' && <FormManager patient={selectedPatient as any} historyText={selectedPatient.historyText} files={selectedPatient.files} />}
-                {activeTab === 'learning' && <ResidentLearningModule caseContext={`PACIENTE: ${selectedPatient.name}. EDAD: ${selectedPatient.age}. DIAGNÓSTICO: ${selectedPatient.diagnosis}.\nNOTAS: ${selectedPatient.historyText}`} files={selectedPatient.files}/>}
+
+                {activeTab === 'forms' && (
+                  <FormManager patient={selectedPatient as any} historyText={selectedPatient.historyText} files={selectedPatient.files} />
+                )}
+
+                {activeTab === 'learning' && (
+                  <ResidentLearningModule 
+                    caseContext={`DIAGNÓSTICO: ${selectedPatient.diagnosis}.\nNOTAS: ${selectedPatient.historyText}`} 
+                    files={selectedPatient.files}
+                  />
+                )}
               </div>
             </div>
 
-            {/* PANEL DERECHO (CHAT) */}
+            {/* PANEL DERECHO: CHAT */}
             <div className={`${isLearningMode ? 'hidden' : (showLeftPanel ? 'lg:w-1/2' : 'w-full')} flex flex-col bg-gray-50 h-full overflow-hidden relative`}>
-               <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
-                 {selectedPatient.chatHistory.length === 0 && <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none"><div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><MessageSquare size={48} className="text-indigo-600" /></div><p className="text-xs font-black uppercase tracking-widest">Asistente Oncológico</p></div>}
-                 {selectedPatient.chatHistory.map((m, i) => (
-                   <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] p-5 rounded-[2rem] text-xs shadow-md font-medium ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none'}`}><div className="whitespace-pre-wrap">{m.text}</div></div></div>
-                 ))}
-                 {isTyping && <div className="text-[10px] text-gray-400 font-bold animate-pulse pl-4">Analizando...</div>}
-                 <div ref={chatEndRef} />
-               </div>
-               <div className="p-6 bg-white/80 backdrop-blur-md border-t"><div className="relative flex items-center bg-gray-50 rounded-3xl border-2 border-transparent focus-within:border-indigo-100 focus-within:bg-white transition-all p-3 pl-6"><textarea className="flex-1 bg-transparent text-xs font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" placeholder="Consulta..." rows={1} value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} /><button onClick={handleSendMessage} disabled={!chatInput.trim()} className="ml-3 p-3 bg-indigo-600 text-white rounded-2xl shadow-lg disabled:opacity-50"><MessageSquare size={20} /></button></div></div>
+              <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
+                {selectedPatient.chatHistory.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none">
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><MessageSquare size={48} className="text-indigo-600" /></div>
+                    <p className="text-xs font-black uppercase tracking-widest">Asistente Oncológico</p>
+                  </div>
+                )}
+                {selectedPatient.chatHistory.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] p-5 rounded-[2rem] text-xs shadow-md font-medium ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none border border-gray-100'}`}>
+                      <div className="whitespace-pre-wrap">{m.text}</div>
+                      <div className={`text-[10px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-indigo-200 text-right' : 'text-gray-300'}`}>{new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                    </div>
+                  </div>
+                ))}
+                {isTyping && <div className="text-[10px] text-gray-400 font-bold animate-pulse pl-4">Analizando...</div>}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="p-6 bg-white/80 backdrop-blur-md border-t">
+                <div className="relative flex items-center bg-gray-50 rounded-3xl border-2 border-transparent focus-within:border-indigo-100 focus-within:bg-white transition-all p-3 pl-6">
+                  <textarea 
+                    className="flex-1 bg-transparent text-xs font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" 
+                    placeholder="Consulta..." 
+                    rows={1} 
+                    value={chatInput} 
+                    onChange={e => setChatInput(e.target.value)} 
+                    onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} 
+                  />
+                  <button onClick={handleSendMessage} disabled={!chatInput.trim() || isTyping} className="ml-3 p-3 bg-indigo-600 text-white rounded-2xl shadow-lg disabled:opacity-50 active:scale-90 transition-all"><MessageSquare size={20} /></button>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -276,6 +379,7 @@ const ResidentApp = () => {
             <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-gray-100 max-w-sm">
               <GraduationCap size={64} className="mb-6 text-indigo-500 mx-auto" />
               <h2 className="text-xl font-black text-gray-800 tracking-tight">Espacio de Formación</h2>
+              <p className="text-gray-400 text-xs mt-4 font-bold leading-relaxed">Los casos se almacenan solo en memoria y se borran al salir.</p>
               <button onClick={() => setShowNewPatientModal(true)} className="mt-8 bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-[10px] tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 uppercase">Iniciar Caso</button>
             </div>
           </div>
@@ -286,10 +390,20 @@ const ResidentApp = () => {
       {showNewPatientModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-md p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-300">
-            <div className="p-8 border-b flex justify-between items-center bg-indigo-50/50"><h3 className="font-black text-indigo-900 text-[10px] uppercase tracking-widest">Nuevo Caso</h3><button onClick={() => setShowNewPatientModal(false)} className="text-gray-400 hover:text-indigo-600"><X size={24} /></button></div>
-            <form onSubmit={handleCreatePatient} className="p-8 space-y-6">
-              <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Identificación</label><input autoFocus type="text" required className="w-full px-5 py-3 bg-gray-50 rounded-xl text-xs font-bold outline-none" value={newName} onChange={e => setNewName(e.target.value)} /></div>
-              <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl text-[10px] font-black shadow-xl hover:bg-indigo-700 transition-all uppercase">Crear</button>
+            <div className="p-8 border-b flex justify-between items-center bg-indigo-50/50">
+              <h3 className="font-black text-indigo-900 text-[10px] uppercase tracking-widest">Nuevo Caso</h3>
+              <button onClick={() => setShowNewPatientModal(false)} className="text-gray-400 hover:text-indigo-600"><X size={24} /></button>
+            </div>
+            <form onSubmit={handleCreatePatient} className="p-8 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Identificación del caso</label>
+                <input autoFocus type="text" required className="w-full px-5 py-3 bg-gray-50 rounded-xl text-xs font-bold outline-none focus:bg-white border-2 border-transparent focus:border-indigo-100 transition-all" placeholder="Ej: Caso Mama HER2+" value={newName} onChange={e => setNewName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Diagnóstico</label>
+                <input type="text" className="w-full px-5 py-3 bg-gray-50 rounded-xl text-xs font-bold outline-none focus:bg-white border-2 border-transparent focus:border-indigo-100 transition-all" placeholder="Ej: Ca Mama HER2+" value={newDx} onChange={e => setNewDx(e.target.value)} />
+              </div>
+              <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl text-[10px] font-black shadow-xl hover:bg-indigo-700 transition-all uppercase tracking-widest">Crear</button>
             </form>
           </div>
         </div>
@@ -298,10 +412,8 @@ const ResidentApp = () => {
       {showCalc && <OncoCalculator onClose={() => setShowCalc(false)} />}
       {showDrugs && <DrugReference onClose={() => setShowDrugs(false)} />}
       
-      {/* MODAL AUDITORÍA (EXISTENTE) */}
       <ClinicalAuditModal isOpen={showAuditModal} onClose={() => setShowAuditModal(false)} content={auditContent} isLoading={isAuditing} />
       
-      {/* MODAL REPORTES (NUEVO) - Muestra el HTML generado */}
       <ClinicalReportModal 
         isOpen={reportModal.isOpen} 
         onClose={() => setReportModal({ ...reportModal, isOpen: false })} 
@@ -309,7 +421,6 @@ const ResidentApp = () => {
         content={reportModal.content} 
         isLoading={reportModal.isLoading} 
       />
-
     </div>
   );
 };
