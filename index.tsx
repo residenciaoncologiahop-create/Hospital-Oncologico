@@ -472,7 +472,8 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
     const isLabTab = activeTab === 'labs';
 
     return (
-        <style>{`
+        <>
+<style>{`
     .fs-large { font-size: 112% !important; }
     .fs-large .text-\\[10px\\] { font-size: 12px !important; }
     .fs-large .text-\\[9px\\] { font-size: 11px !important; }
@@ -836,6 +837,7 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
               isLoading={reportModal.isLoading} 
             />
         </div>
+</>
     );
 };
 
