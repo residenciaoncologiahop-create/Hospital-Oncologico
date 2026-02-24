@@ -4,7 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, ReferenceLine
 } from 'recharts';
-import { extractImagingDataSecure, compareRecistSecure } from '../utils/aiProxy';
+import { extractImagingFromHistorySecure as extractImagingDataSecure, compareRecistSecure } from '../utils/aiProxy';
 
 // ── Tipos ──────────────────────────────────────────────────────────────
 interface TargetLesion {
