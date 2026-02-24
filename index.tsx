@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import PendientesPanel from './components/PendientesPanel';
 import ImagingPanel, { ImagingStudy } from './components/ImagingPanel';
+import { extractImagingFromHistorySecure } from './utils/aiProxy';
 
 // --- FIREBASE IMPORTS ---
 import { db } from './firebase'; 
@@ -300,8 +301,30 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
                     lastUpdated: Date.now()
                 });
                 logAction("PROCESS_DOCS_AND_LABS", selectedPatientId, doctorName);
+                // Extracción automática de informes de imagen
+    const extractedImaging = await extractImagingFromHistorySecure(historyText, historyFiles);
+    if (extractedImaging.length > 0) {
+        const currentImaging = patients.find(p => p.id === selectedPatientId)?.imagingStudies || [];
+        const newStudies: ImagingStudy[] = extractedImaging.map((d: any) => ({
+            id: `img-${Date.now()}-${Math.random().toString(36).substr(2,5)}`,
+            type: d.type || 'TC',
+            date: d.date || 'S/F',
+            bodyRegion: d.bodyRegion || 'No especificado',
+            treatment: d.treatment || null,
+            targetLesions: d.targetLesions || [],
+            nonTargetLesions: d.nonTargetLesions || [],
+            newLesions: !!d.newLesions,
+            extractedAt: Date.now(),
+        }));
+        const combinedImaging = [...currentImaging, ...newStudies];
+        setImagingStudies(combinedImaging);
+        await updateDoc(doc(db, "patients", selectedPatientId), {
+            imagingStudies: combinedImaging,
+            lastUpdated: Date.now()
+        });
+    }
             }
-            alert(`Procesado: ${events.length} eventos y ${extractedLabs.length} resultados de laboratorio.`);
+            alert(`Procesado: ${events.length} eventos, ${extractedLabs.length} laboratorios y ${extractedImaging.length} estudios de imagen.`);
             
         } catch (e: any) {
             setLastError(e.message);
@@ -617,11 +640,11 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
                         {/* Left Panel */}
                         <div className={`${isLabTab ? 'w-full' : (showLeftPanel ? 'lg:w-1/2 border-r' : 'hidden')} flex flex-col bg-white h-full transition-all duration-300`}>
                             <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
-                                <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>1. Documentación</button>
-                                <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historial de Eventos</button>
-                                <button onClick={() => setActiveTab('forms')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'forms' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>3. Trámites</button>
-                                <button onClick={() => setActiveTab('labs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'labs' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>4. Lab</button>
-    <button onClick={() => setActiveTab('imaging')} className={`flex-1 py-4 transition-all ${activeTab === 'imaging' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>5. Imágenes</button>
+                                <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}> Documentación</button>
+                                <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}> Eventos</button>
+                                <button onClick={() => setActiveTab('forms')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'forms' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}> Trámites</button>
+                                <button onClick={() => setActiveTab('labs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'labs' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}> Lab</button>
+    <button onClick={() => setActiveTab('imaging')} className={`flex-1 py-4 transition-all ${activeTab === 'imaging' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}> Imágenes</button>
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
