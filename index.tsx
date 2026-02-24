@@ -5,6 +5,7 @@ import { generateResidentClinicalSummary, generateFollowUpPlan, generateTumorBoa
 import RootOrchestrator from './RootOrchestrator';
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
+import PendientesPanel from './components/PendientesPanel';
 
 // --- FIREBASE IMPORTS ---
 import { db } from './firebase'; 
@@ -486,7 +487,8 @@ const App = ({ user }: AppProps) => {
                         </div>
                     </div>
                 </div>
-                <div className="p-5 border-t bg-white flex flex-col space-y-3">
+    <PendientesPanel doctorId={user.uid} />
+    <div className="p-5 border-t bg-white flex flex-col space-y-3">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3 truncate">
                             <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-md">{doctorName[0].toUpperCase()}</div>
@@ -665,8 +667,8 @@ const App = ({ user }: AppProps) => {
                                 )}
                                 {chatMessages.map((m, i) => (
                                     <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[85%] p-6 rounded-[2rem] text-sm shadow-md leading-relaxed font-medium ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-blue-100' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'}`}>
-                                            <div className="whitespace-pre-wrap">{m.text}</div>
+                                        <div className={`max-w-[85%] p-6 rounded-[2rem] shadow-md ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-blue-100' : 'bg-white border border-gray-100 rounded-bl-none'}`}>
+        <div className={`whitespace-pre-wrap leading-relaxed ${m.role === 'user' ? 'text-sm font-semibold' : 'text-[13px] font-normal text-gray-700'}`}>{m.text}</div>
                                             <div className={`text-[10px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>{new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                         </div>
                                     </div>
