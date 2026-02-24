@@ -136,6 +136,17 @@ const App = ({ user }: AppProps) => {
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [apiKeyExists, setApiKeyExists] = useState<boolean>(true); 
+    const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xl'>(() => {
+    return (localStorage.getItem('onco_fontsize') as any) || 'normal';
+});
+
+const cycleFontSize = () => {
+    const next = fontSize === 'normal' ? 'large' : fontSize === 'large' ? 'xl' : 'normal';
+    setFontSize(next);
+    localStorage.setItem('onco_fontsize', next);
+};
+
+const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
 
     const [showLeftPanel, setShowLeftPanel] = useState(true);
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms'| 'labs'>('docs');
@@ -461,7 +472,19 @@ const App = ({ user }: AppProps) => {
     const isLabTab = activeTab === 'labs';
 
     return (
-        <div className="flex h-screen bg-white text-gray-800 font-medium text-xs overflow-hidden">
+        <style>{`
+    .fs-large { font-size: 112% !important; }
+    .fs-large .text-\\[10px\\] { font-size: 12px !important; }
+    .fs-large .text-\\[9px\\] { font-size: 11px !important; }
+    .fs-large .text-xs { font-size: 13px !important; }
+    .fs-large .text-sm { font-size: 15px !important; }
+    .fs-xl { font-size: 125% !important; }
+    .fs-xl .text-\\[10px\\] { font-size: 13px !important; }
+    .fs-xl .text-\\[9px\\] { font-size: 12px !important; }
+    .fs-xl .text-xs { font-size: 14px !important; }
+    .fs-xl .text-sm { font-size: 16px !important; }
+`}</style>
+        <div className={`flex h-screen bg-white text-gray-800 font-medium text-xs overflow-hidden ${fontSize === 'large' ? 'fs-large' : fontSize === 'xl' ? 'fs-xl' : ''}`}>
             {/* Sidebar */}
             <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
                 <div className="p-6 border-b flex items-center justify-between bg-white">
@@ -519,7 +542,16 @@ const App = ({ user }: AppProps) => {
                                 <span className="text-xs font-bold truncate leading-none">Dr. {doctorName}</span>
                             </div>
                         </div>
-                        <button onClick={logout} className="text-gray-200 hover:text-red-500 transition-colors"><LogOut size={16} /></button>
+                        <div className="flex items-center gap-2">
+    <button 
+        onClick={cycleFontSize}
+        className="text-[10px] font-black text-gray-400 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors tracking-widest"
+        title="Cambiar tamaño de letra"
+    >
+        {fontSizeLabel[fontSize]}
+    </button>
+    <button onClick={logout} className="text-gray-200 hover:text-red-500 transition-colors"><LogOut size={16} /></button>
+</div>
                     </div>
                     <p className="text-[8px] text-gray-300 text-center font-medium">Herramienta de apoyo para discusión clínica y docencia. No sustituye la historia clínica ni el juicio médico.</p>
                 </div>
