@@ -21,7 +21,6 @@ export interface ImagingStudy {
   targetLesions: TargetLesion[];
   nonTargetLesions: NonTargetLesion[];
   newLesions: boolean;
-  rawSummary: string;
   extractedAt: number;
 }
 
@@ -102,7 +101,6 @@ const ImagingPanel: React.FC<ImagingPanelProps> = ({ studies, onStudiesChange })
         targetLesions: data.targetLesions || [],
         nonTargetLesions: data.nonTargetLesions || [],
         newLesions: !!data.newLesions,
-        rawSummary: data.rawSummary || '',
         extractedAt: Date.now(),
       };
       onStudiesChange([...studies, newStudy]);
@@ -278,11 +276,6 @@ const ImagingPanel: React.FC<ImagingPanelProps> = ({ studies, onStudiesChange })
                       {/* Detalle expandido */}
                       {expandedId === study.id && (
                         <div className="px-4 pb-4 space-y-3 border-t border-gray-50">
-                          {study.rawSummary && (
-                            <p className="text-[11px] text-gray-500 font-medium leading-relaxed pt-3 italic">
-                              "{study.rawSummary}"
-                            </p>
-                          )}
 
                           {study.targetLesions.length > 0 && (
                             <div>
