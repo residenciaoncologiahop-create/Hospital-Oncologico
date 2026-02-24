@@ -706,12 +706,11 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
                                 {activeTab === 'timeline' && (
                                     <div className="space-y-4 pt-2">
                                         {(!timeline || timeline.length === 0) ? (
-                                            <div className="flex flex-col items-center justify-center py-20 text-gray-200"><Clock size={40} className="mb-3 opacity-10" /><p className="text-xs font-black uppercase tracking-widest">Sin eventos</p></div>
-                                        ) : (
-                                            timeline
-                                            .filter(ev => ev.category !== 'General' && ev.note && !ev.note.toLowerCase().includes('sin descripción') && ev.note.trim() !== '')
-                                            .map((ev, i) => (
-                                                <div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8 group">
+    <div className="flex flex-col items-center justify-center py-20 text-gray-200"><Clock size={40} className="mb-3 opacity-10" /><p className="text-xs font-black uppercase tracking-widest">Sin eventos</p></div>
+) : (
+    timeline
+    .map((ev, i) => (
+        <div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8 group">
                                                     <div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md transition-all group-hover:scale-110 flex items-center justify-center ${ev.isKey ? 'bg-red-500 text-white' : 'bg-blue-400 text-white'}`}>
                                                         {ev.isKey ? <AlertCircle size={10}/> : <Info size={10}/>}
                                                     </div>
