@@ -38,7 +38,13 @@ export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiRe
   }
 
   const functions = getFunctions();
-  const callGeminiFn = httpsCallable<CallGeminiParams, CallGeminiResult>(functions, "callGemini");
+  
+  // ⏳ SOLUCIÓN TIMEOUT: Le decimos al navegador que espere hasta 9 minutos (540000 ms)
+  const callGeminiFn = httpsCallable<CallGeminiParams, CallGeminiResult>(
+    functions, 
+    "callGemini",
+    { timeout: 540000 } 
+  );
 
   const result = await callGeminiFn(params);
   return result.data;
