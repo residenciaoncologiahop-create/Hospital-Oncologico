@@ -137,7 +137,7 @@ const App = ({ user }: AppProps) => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [apiKeyExists, setApiKeyExists] = useState<boolean>(true); 
     const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xl'>(() => {
-    return (localStorage.getItem('onco_fontsize') as any) || 'normal';
+    return (localStorage.getItem('onco_fontsize') as any) || 'large';
 });
 
 const cycleFontSize = () => {
