@@ -441,7 +441,7 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
     const handleRunClinicalAudit = async () => {
         if (!selectedPatientId) return;
         if (!historyText && historyFiles.length === 0) {
-            alert("No hay documentación clínica para auditar.");
+            alert("No hay ción clínica para auditar.");
             return;
         }
         setShowAuditModal(true);
@@ -640,7 +640,7 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
                         {/* Left Panel */}
                         <div className={`${isLabTab ? 'w-full' : (showLeftPanel ? 'lg:w-1/2 border-r' : 'hidden')} flex flex-col bg-white h-full transition-all duration-300`}>
                             <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
-                                <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}> Documentación</button>
+                                <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}> Documentos</button>
                                 <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}> Eventos</button>
                                 <button onClick={() => setActiveTab('forms')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'forms' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}> Trámites</button>
                                 <button onClick={() => setActiveTab('labs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'labs' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}> Lab</button>
