@@ -8,6 +8,9 @@ import { createRoot } from 'react-dom/client';
 import PendientesPanel from './components/PendientesPanel';
 import ImagingPanel, { ImagingStudy } from './components/ImagingPanel';
 import { extractImagingFromHistorySecure } from './utils/aiProxy';
+import { 
+    ..., Image
+} from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { db } from './firebase'; 
@@ -658,13 +661,29 @@ if (extractedImaging.length > 0) {
                     <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-50">
                         {/* Left Panel */}
                         <div className={`${isLabTab ? 'w-full' : (showLeftPanel ? 'lg:w-1/2 border-r' : 'hidden')} flex flex-col bg-white h-full transition-all duration-300`}>
-                            <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
-                                <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}> Documentos</button>
-                                <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}> Eventos</button>
-                                <button onClick={() => setActiveTab('forms')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'forms' ? 'text-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}> Trámites</button>
-                                <button onClick={() => setActiveTab('labs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'labs' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}> Lab</button>
-    <button onClick={() => setActiveTab('imaging')} className={`flex-1 py-4 transition-all ${activeTab === 'imaging' ? 'text-blue-600 bg-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}> Imágenes</button>
-                            </div>
+                            <div className="flex border-b bg-gray-50/50">
+    {([
+        { id: 'docs',    icon: <FileText size={13}/>,       label: 'Docs'      },
+        { id: 'timeline',icon: <Clock size={13}/>,          label: 'Eventos'   },
+        { id: 'forms',   icon: <ClipboardCheck size={13}/>, label: 'Trámites'  },
+        { id: 'labs',    icon: <Activity size={13}/>,       label: 'Lab'       },
+        { id: 'imaging', icon: <Image size={13}/>,          label: 'Imágenes'  },
+    ] as const).map((tab, i, arr) => (
+        <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-all text-[9px] font-black uppercase tracking-widest
+                ${i < arr.length - 1 ? 'border-r border-gray-100' : ''}
+                ${activeTab === tab.id
+                    ? 'text-blue-600 bg-white shadow-sm border-b-2 border-b-blue-600'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-white/60 border-b-2 border-b-transparent'
+                }`}
+        >
+            {tab.icon}
+            {tab.label}
+        </button>
+    ))}
+</div>
 
                             <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
                                 {activeTab === 'docs' && (
