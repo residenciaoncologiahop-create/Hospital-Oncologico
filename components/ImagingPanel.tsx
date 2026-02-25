@@ -262,9 +262,13 @@ const ImagingPanel: React.FC<ImagingPanelProps> = ({ studies, onStudiesChange })
     setIsExtracting(true);
     setExtractError(null);
     try {
-      const data = await extractImagingDataSecure(reportText, reportFiles);
-      const newStudy: ImagingStudy = {
-        id: `img-${Date.now()}`,
+      // extractImagingFromHistorySecure devuelve un ARRAY (puede haber múltiples estudios)
+      const results = await extractImagingDataSecure(reportText, reportFiles);
+      if (!results || results.length === 0) {
+        throw new Error("No se detectó ningún informe de imagen en el texto ingresado.");
+      }
+      const newStudies: ImagingStudy[] = results.map((data: any, i: number) => ({
+        id: `img-${Date.now()}-${i}`,
         type: data.type || 'TC',
         date: data.date || 'S/F',
         bodyRegion: data.bodyRegion || 'No especificado',
@@ -273,11 +277,14 @@ const ImagingPanel: React.FC<ImagingPanelProps> = ({ studies, onStudiesChange })
         nonTargetLesions: data.nonTargetLesions || [],
         newLesions: !!data.newLesions,
         extractedAt: Date.now(),
-      };
-      onStudiesChange([...studies, newStudy]);
+      }));
+      onStudiesChange([...studies, ...newStudies]);
       setReportText('');
       setReportFiles([]);
       setRecistHtml(null);
+      if (newStudies.length > 1) {
+        alert(`Se detectaron ${newStudies.length} estudios de imagen.`);
+      }
     } catch (e: any) {
       setExtractError(e.message || "Error al procesar el informe.");
     } finally {
