@@ -655,9 +655,17 @@ if (extractedImaging.length > 0) {
     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Documentación del Caso</h3>
 </div>
                                             <FileUploader label="Archivos Digitales" files={historyFiles} setFiles={setHistoryFiles} />
+                                            <div className="flex items-center space-x-2 text-gray-400 mb-2">
+                                                <PenTool size={13} />
+                                                <h3 className="text-xs font-black uppercase tracking-widest">Registro de evolución clínica (resumen)</h3>
+                                            </div>
+                                            <div className="flex space-x-2 mb-2">
+                                                <input type="date" className="bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 focus:border-blue-200 outline-none" value={manualDate} onChange={e => setManualDate(e.target.value)} />
+                                                <input type="text" className="flex-1 bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 focus:border-blue-200 outline-none" placeholder="Médico responsable" value={manualDoctor} onChange={e => setManualDoctor(e.target.value)} />
+                                            </div>
                                             <textarea 
                                                 className="w-full h-32 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-blue-200 transition-all outline-none resize-none shadow-inner" 
-                                                placeholder="Resumen manual del caso..." 
+                                                placeholder="Registrar información relevante para la comprensión del caso (no constituye evolución en historia clínica)." 
                                                 value={historyText} 
                                                 onChange={(e) => setHistoryText(e.target.value)} 
                                                 onBlur={savePatientDetails} 
@@ -667,20 +675,8 @@ if (extractedImaging.length > 0) {
                                                 disabled={isProcessingDocs} 
                                                 className="w-full bg-blue-600 text-white py-4 rounded-xl text-xs font-black tracking-widest shadow-xl shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center"
                                             >
-                                                {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={16}/>Analizando...</> : "Procesar documentos"}
+                                                {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={16}/>Analizando...</> : "Procesar historia"}
                                             </button>
-                                        </section>
-
-                                        <section className="space-y-3 pt-6 border-t border-gray-100">
-                                            <div className="flex items-center space-x-2 text-gray-400"><PenTool size={14} /><h3 className="text-xs font-black uppercase tracking-widest">Registro de evolución clínica (resumen)</h3></div>
-                                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-3">
-                                                <div className="flex space-x-2">
-                                                    <input type="date" className="bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200" value={manualDate} onChange={e => setManualDate(e.target.value)} />
-                                                    <input type="text" className="flex-1 bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200" placeholder="Médico" value={manualDoctor} onChange={e => setManualDoctor(e.target.value)} />
-                                                </div>
-                                                <textarea className="w-full h-20 bg-white p-3 rounded-xl text-xs font-medium border border-gray-200 resize-none" placeholder="Registrar información relevante para la comprensión del caso (no constituye evolución en historia clínica)." value={manualNote} onChange={e => setManualNote(e.target.value)} />
-                                                <button onClick={handleAddManualEvolution} disabled={!manualNote.trim()} className="w-full bg-gray-800 text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black disabled:opacity-50">Agregar hito clínico</button>
-                                            </div>
                                         </section>
 
                                         <section className="space-y-4 pt-4 border-t border-gray-100">
