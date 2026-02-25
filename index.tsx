@@ -303,28 +303,28 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
                 logAction("PROCESS_DOCS_AND_LABS", selectedPatientId, doctorName);
                 // Extracción automática de informes de imagen
     const extractedImaging = await extractImagingFromHistorySecure(historyText, historyFiles);
-    if (extractedImaging.length > 0) {
-        const currentImaging = patients.find(p => p.id === selectedPatientId)?.imagingStudies || [];
-        const newStudies: ImagingStudy[] = extractedImaging.map((d: any) => ({
-            id: `img-${Date.now()}-${Math.random().toString(36).substr(2,5)}`,
-            type: d.type || 'TC',
-            date: d.date || 'S/F',
-            bodyRegion: d.bodyRegion || 'No especificado',
-            treatment: d.treatment || null,
-            targetLesions: d.targetLesions || [],
-            nonTargetLesions: d.nonTargetLesions || [],
-            newLesions: !!d.newLesions,
-            extractedAt: Date.now(),
-        }));
-        const combinedImaging = [...currentImaging, ...newStudies];
-        setImagingStudies(combinedImaging);
-        await updateDoc(doc(db, "patients", selectedPatientId), {
-            imagingStudies: combinedImaging,
-            lastUpdated: Date.now()
-        });
-    }
+if (extractedImaging.length > 0) {
+    const currentImaging = patients.find(p => p.id === selectedPatientId)?.imagingStudies || [];
+    const newStudies: ImagingStudy[] = extractedImaging.map((d: any) => ({
+        id: `img-${Date.now()}-${Math.random().toString(36).substr(2,5)}`,
+        type: d.type || 'TC',
+        date: d.date || 'S/F',
+        bodyRegion: d.bodyRegion || 'No especificado',
+        treatment: d.treatment || null,
+        targetLesions: d.targetLesions || [],
+        nonTargetLesions: d.nonTargetLesions || [],
+        newLesions: !!d.newLesions,
+        extractedAt: Date.now(),
+    }));
+    const combinedImaging = [...currentImaging, ...newStudies];
+    setImagingStudies(combinedImaging);
+    await updateDoc(doc(db, "patients", selectedPatientId), {
+        imagingStudies: combinedImaging,
+        lastUpdated: Date.now()
+    });
+}
             }
-            alert(`Procesado: ${events.length} eventos, ${extractedLabs.length} laboratorios y ${extractedImaging.length} estudios de imagen.`);
+            alert(`Procesado: ${events.length} eventos y ${extractedLabs.length} laboratorios.`);
             
         } catch (e: any) {
             setLastError(e.message);
