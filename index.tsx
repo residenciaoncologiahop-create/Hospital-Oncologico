@@ -8,9 +8,6 @@ import { createRoot } from 'react-dom/client';
 import PendientesPanel from './components/PendientesPanel';
 import ImagingPanel, { ImagingStudy } from './components/ImagingPanel';
 import { extractImagingFromHistorySecure } from './utils/aiProxy';
-import { 
-    ..., Image
-} from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { db } from './firebase'; 
@@ -21,7 +18,7 @@ import {
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
     List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal,
     Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation,
-    PanelLeftClose, PanelLeftOpen, FileInput 
+    PanelLeftClose, PanelLeftOpen, FileInput, Image 
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
