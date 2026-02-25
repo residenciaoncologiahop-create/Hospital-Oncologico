@@ -531,10 +531,18 @@ if (extractedImaging.length > 0) {
         <div className={`flex h-screen bg-white text-gray-800 font-medium text-xs overflow-hidden ${fontSize === 'large' ? 'fs-large' : fontSize === 'xl' ? 'fs-xl' : ''}`}>
             {/* Sidebar */}
             <aside className={`fixed inset-y-0 left-0 z-40 bg-gray-50 border-r lg:static flex flex-col transition-all duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} ${sidebarOpen ? 'w-72 lg:translate-x-0' : 'w-0 lg:translate-x-0 overflow-hidden'}`}>
-                <div className="p-6 border-b flex items-center justify-between bg-white">
-                    <div className="flex items-center space-x-2 text-blue-600 font-black text-xl tracking-tighter"><Activity size={24} /><span>OncoGuide</span></div>
-                    <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-300"><X size={24}/></button>
-                </div>
+                <div className="px-5 py-4 border-b flex items-center justify-between bg-white">
+    <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-500 rounded-xl flex items-center justify-center shadow-md shadow-blue-100">
+            <Activity size={16} className="text-white"/>
+        </div>
+        <div className="flex flex-col leading-none">
+            <span className="font-black text-gray-800 text-sm tracking-tight">OncoGuide</span>
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Soporte Clínico</span>
+        </div>
+    </div>
+    <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-300 hover:text-gray-500"><X size={20}/></button>
+</div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     <div>
                         <div className="flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-3">
@@ -603,37 +611,48 @@ if (extractedImaging.length > 0) {
 
             {/* Main */}
             <main className="flex-1 flex flex-col h-full overflow-hidden">
-                <header className="bg-white/80 backdrop-blur-md border-b h-16 flex items-center px-6 justify-between z-20">
-                    <div className="flex items-center space-x-4">
-                        <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={24} /></button>
-<button 
-    onClick={() => setSidebarOpen(!sidebarOpen)} 
-    className="hidden lg:block text-gray-400 hover:text-blue-600 transition-colors"
-    title={sidebarOpen ? "Ocultar panel" : "Mostrar panel"}
->
-    {sidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-</button>
-                        {selP && (
-                            <button 
-                                onClick={() => setShowLeftPanel(!showLeftPanel)} 
-                                className="hidden lg:block text-gray-400 hover:text-blue-600 transition-colors"
-                                title={showLeftPanel ? "Expandir Chat" : "Mostrar Documentación"}
-                            >
-                                {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-                            </button>
-                        )}
-                        <div className="flex flex-col">
-                            <h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">
-                                {selP ? `HC-${selP.hcNumber}` : 'Bienvenido'}
-                            </h1>
-                            {selP && <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">{selP.diagnosis} — {selP.ageRange} años</span>}
-                        </div>
-                    </div>
-                    <div className={`px-3 py-1.5 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
-                        {apiKeyExists ? <div className="w-2 h-2 bg-green-500 rounded-full"></div> : <ShieldAlert size={12}/>}
-                        <span>{apiKeyExists ? 'Seguro' : 'Error API'}</span>
-                    </div>
-                </header>
+                <header className="bg-white border-b h-14 flex items-center px-5 justify-between z-20 shadow-sm">
+    <div className="flex items-center gap-3">
+        <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={22}/></button>
+        <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="hidden lg:flex items-center justify-center w-7 h-7 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+            title={sidebarOpen ? "Ocultar panel" : "Mostrar panel"}
+        >
+            {sidebarOpen ? <PanelLeftClose size={16}/> : <PanelLeftOpen size={16}/>}
+        </button>
+        {selP && (
+            <button
+                onClick={() => setShowLeftPanel(!showLeftPanel)}
+                className="hidden lg:flex items-center justify-center w-7 h-7 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                title={showLeftPanel ? "Expandir Chat" : "Mostrar Documentación"}
+            >
+                {showLeftPanel ? <PanelLeftClose size={16}/> : <PanelLeftOpen size={16}/>}
+            </button>
+        )}
+        {selP ? (
+            <div className="flex items-center gap-3 pl-1 border-l border-gray-100 ml-1">
+                <div className="flex flex-col">
+                    <h1 className="font-black text-gray-800 text-base tracking-tight leading-none truncate max-w-xs">
+                        HC-{selP.hcNumber}
+                    </h1>
+                    <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">
+                        {selP.diagnosis} — {selP.ageRange} años
+                    </span>
+                </div>
+            </div>
+        ) : (
+            <h1 className="font-black text-gray-700 text-sm tracking-tight">Seleccioná un caso</h1>
+        )}
+    </div>
+    <div className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
+        {apiKeyExists
+            ? <div className="w-1.5 h-1.5 bg-green-500 rounded-full"/>
+            : <ShieldAlert size={11}/>
+        }
+        <span>{apiKeyExists ? 'Seguro' : 'Error API'}</span>
+    </div>
+</header>
 
                 {selP ? (
                     <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-50">
