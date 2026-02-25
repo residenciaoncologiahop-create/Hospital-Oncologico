@@ -154,6 +154,7 @@ const cycleFontSize = () => {
 const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
 
     const [showLeftPanel, setShowLeftPanel] = useState(true);
+    const [showChat, setShowChat] = useState(false);
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms' | 'labs' | 'imaging'>('docs');
 
     // --- NUEVOS CAMPOS DE CREACIÓN (pseudonimizados) ---
@@ -621,15 +622,7 @@ if (extractedImaging.length > 0) {
         >
             {sidebarOpen ? <PanelLeftClose size={16}/> : <PanelLeftOpen size={16}/>}
         </button>
-        {selP && (
-            <button
-                onClick={() => setShowLeftPanel(!showLeftPanel)}
-                className="hidden lg:flex items-center justify-center w-7 h-7 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                title={showLeftPanel ? "Expandir Chat" : "Mostrar Documentación"}
-            >
-                {showLeftPanel ? <PanelLeftClose size={16}/> : <PanelLeftOpen size={16}/>}
-            </button>
-        )}
+        
         {selP ? (
             <div className="flex items-center gap-3 pl-1 border-l border-gray-100 ml-1">
                 <div className="flex flex-col">
@@ -654,10 +647,10 @@ if (extractedImaging.length > 0) {
     </div>
 </header>
 
-                {selP ? (
-                    <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-50">
-                        {/* Left Panel */}
-                        <div className={`${isLabTab ? 'w-full' : (showLeftPanel ? 'lg:w-1/2 border-r' : 'hidden')} flex flex-col bg-white h-full transition-all duration-300`}>
+                {selP ? (<>
+    <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-50">
+    {/* Left Panel — ancho completo siempre */}
+    <div className="w-full flex flex-col bg-white h-full transition-all duration-300">
                             <div className="flex border-b bg-gray-50/50">
     {([
         { id: 'docs',    icon: <FileText size={13}/>,       label: 'Docs'      },
@@ -827,94 +820,128 @@ if (extractedImaging.length > 0) {
                             </div>
                         </div>
 
-                        {/* Right Panel: Chat */}
-                        <div className={`${isLabTab ? 'hidden' : (showLeftPanel ? 'lg:w-1/2' : 'w-full')} flex flex-col bg-gray-50 h-full overflow-hidden relative transition-all duration-300`}>
-                            {lastError && (
-                                <div className="absolute top-4 left-4 right-4 z-30 bg-red-600 text-white p-4 rounded-2xl shadow-xl flex items-start space-x-3 border border-red-500 animate-in slide-in-from-top">
-                                    <Terminal className="flex-shrink-0 mt-0.5" size={16}/>
-                                    <div><p className="text-[10px] font-black uppercase tracking-widest mb-0.5">Error:</p><p className="text-xs font-bold leading-tight">{lastError}</p></div>
-                                    <button onClick={() => setLastError(null)} className="ml-auto opacity-60 hover:opacity-100"><X size={16}/></button>
-                                </div>
+                    {/* Botón flotante Asistente */}
+                    {selP && (
+                        <button
+                            onClick={() => setShowChat(true)}
+                            className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 bg-blue-600 text-white pl-4 pr-5 py-3 rounded-2xl shadow-xl shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all"
+                        >
+                            <MessageSquare size={16}/>
+                            <span className="text-xs font-black uppercase tracking-widest">Asistente</span>
+                            {chatMessages.length > 0 && (
+                                <span className="w-5 h-5 bg-white text-blue-600 rounded-full text-[9px] font-black flex items-center justify-center">
+                                    {chatMessages.length}
+                                </span>
                             )}
+                        </button>
+                    )}
 
-                            <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
-    {chatMessages.length === 0 && (
-        <div className="flex flex-col items-center justify-center h-full text-center space-y-4 select-none">
-            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
-                <MessageSquare size={36} className="text-blue-200 mx-auto" />
-            </div>
-            <div className="space-y-1.5">
-                <p className="text-xs font-black uppercase tracking-widest text-gray-300">Asistente de Discusión Clínica</p>
-                <p className="text-[10px] font-medium text-gray-300 max-w-[180px] mx-auto leading-relaxed">Las respuestas son orientativas. Toda decisión clínica corresponde al equipo tratante.</p>
-            </div>
-        </div>
-    )}
-    {chatMessages.map((m, i) => (
-        <div key={i} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {/* Avatar IA */}
-            {m.role === 'model' && (
-                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-100 mb-1">
-                    <Activity size={13} className="text-white"/>
-                </div>
-            )}
-            <div className={`max-w-[82%] rounded-2xl shadow-sm ${
-                m.role === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-sm px-5 py-3.5'
-                    : 'bg-white border border-gray-100 rounded-bl-sm px-5 py-4'
-            }`}>
-                <div className={`leading-relaxed space-y-1 ${m.role === 'user' ? 'text-sm font-semibold' : 'text-[13px] font-normal text-gray-700'}`}>
-                    {m.role === 'model' ? renderMarkdown(m.text) : m.text}
-                </div>
-                <div className={`text-[9px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>
-                    {new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </div>
-            </div>
-            {/* Avatar médico */}
-            {m.role === 'user' && (
-                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-gray-600 to-gray-400 flex items-center justify-center flex-shrink-0 shadow-sm mb-1">
-                    <span className="text-white font-black text-[10px]">{doctorName[0].toUpperCase()}</span>
-                </div>
-            )}
-        </div>
-    ))}
-    {isTyping && (
-        <div className="flex items-end gap-2 justify-start">
-            <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-100">
-                <Activity size={13} className="text-white"/>
-            </div>
-            <div className="bg-white px-5 py-3.5 rounded-2xl rounded-bl-sm border border-gray-100 shadow-sm flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}/>
-                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}/>
-                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}/>
-            </div>
-        </div>
-    )}
-    <div ref={chatEndRef} />
-</div>
-
-                            <div className="p-6 bg-white/80 backdrop-blur-md border-t">
-                                <div className="relative flex items-center bg-gray-50 rounded-3xl border-2 border-transparent focus-within:border-blue-100 focus-within:bg-white transition-all p-3 pl-6">
-                                    <textarea 
-                                        className="flex-1 bg-transparent text-sm font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" 
-                                        placeholder="Plantear dudas / aspectos a discutir" 
-                                        rows={1} 
-                                        value={chatInput} 
-                                        onChange={e => setChatInput(e.target.value)} 
-                                        onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} 
-                                    />
-                                    <button 
-                                        onClick={handleSendMessage} 
-                                        disabled={!chatInput.trim() || isTyping} 
-                                        className="ml-3 p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-100 disabled:opacity-50 active:scale-90 transition-all"
-                                    >
-                                        <MessageSquare size={20} />
+                    {/* Chat Drawer */}
+                    {showChat && selP && (
+                        <div className="fixed inset-0 z-50 flex justify-end">
+                            {/* Overlay */}
+                            <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm" onClick={() => setShowChat(false)}/>
+                            {/* Panel */}
+                            <div className="relative w-full max-w-lg bg-gray-50 flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-300">
+                                {/* Header del drawer */}
+                                <div className="flex items-center justify-between px-6 py-4 bg-white border-b">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center shadow-md shadow-blue-100">
+                                            <Activity size={13} className="text-white"/>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-gray-800 uppercase tracking-widest">Asistente Clínico</p>
+                                            <p className="text-[9px] text-gray-400 font-medium">HC-{selP.hcNumber} · {selP.diagnosis}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setShowChat(false)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all">
+                                        <X size={16}/>
                                     </button>
+                                </div>
+
+                                {/* Error */}
+                                {lastError && (
+                                    <div className="mx-4 mt-3 bg-red-600 text-white p-3 rounded-2xl flex items-start gap-2 text-xs">
+                                        <Terminal size={14} className="flex-shrink-0 mt-0.5"/>
+                                        <span className="font-bold">{lastError}</span>
+                                        <button onClick={() => setLastError(null)} className="ml-auto opacity-60 hover:opacity-100"><X size={14}/></button>
+                                    </div>
+                                )}
+
+                                {/* Mensajes */}
+                                <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-hide">
+                                    {chatMessages.length === 0 && (
+                                        <div className="flex flex-col items-center justify-center h-full text-center space-y-4 select-none">
+                                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+                                                <MessageSquare size={36} className="text-blue-200 mx-auto"/>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <p className="text-xs font-black uppercase tracking-widest text-gray-300">Asistente de Discusión Clínica</p>
+                                                <p className="text-[10px] font-medium text-gray-300 max-w-[180px] mx-auto leading-relaxed">Las respuestas son orientativas. Toda decisión clínica corresponde al equipo tratante.</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {chatMessages.map((m, i) => (
+                                        <div key={i} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            {m.role === 'model' && (
+                                                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-100 mb-1">
+                                                    <Activity size={13} className="text-white"/>
+                                                </div>
+                                            )}
+                                            <div className={`max-w-[82%] rounded-2xl shadow-sm ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-sm px-5 py-3.5' : 'bg-white border border-gray-100 rounded-bl-sm px-5 py-4'}`}>
+                                                <div className={`leading-relaxed space-y-1 ${m.role === 'user' ? 'text-sm font-semibold' : 'text-[13px] font-normal text-gray-700'}`}>
+                                                    {m.role === 'model' ? renderMarkdown(m.text) : m.text}
+                                                </div>
+                                                <div className={`text-[9px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>
+                                                    {new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                </div>
+                                            </div>
+                                            {m.role === 'user' && (
+                                                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-gray-600 to-gray-400 flex items-center justify-center flex-shrink-0 shadow-sm mb-1">
+                                                    <span className="text-white font-black text-[10px]">{doctorName[0].toUpperCase()}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {isTyping && (
+                                        <div className="flex items-end gap-2">
+                                            <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-100">
+                                                <Activity size={13} className="text-white"/>
+                                            </div>
+                                            <div className="bg-white px-5 py-3.5 rounded-2xl rounded-bl-sm border border-gray-100 shadow-sm flex items-center gap-1.5">
+                                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}/>
+                                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}/>
+                                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}/>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div ref={chatEndRef}/>
+                                </div>
+
+                                {/* Input */}
+                                <div className="p-4 bg-white/90 backdrop-blur-md border-t">
+                                    <div className="flex items-center bg-gray-50 rounded-2xl border-2 border-transparent focus-within:border-blue-100 focus-within:bg-white transition-all p-2.5 pl-4 gap-2">
+                                        <textarea
+                                            className="flex-1 bg-transparent text-sm font-medium outline-none resize-none max-h-32 scrollbar-hide py-1"
+                                            placeholder="Plantear dudas / aspectos a discutir..."
+                                            rows={1}
+                                            value={chatInput}
+                                            onChange={e => setChatInput(e.target.value)}
+                                            onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                                        />
+                                        <button
+                                            onClick={handleSendMessage}
+                                            disabled={!chatInput.trim() || isTyping}
+                                            className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-100 disabled:opacity-50 active:scale-90 transition-all flex-shrink-0"
+                                        >
+                                            <MessageSquare size={16}/>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                
-                    ) : (
+                    )}
+                </>) : (
     <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden">
         {/* Fondo decorativo */}
         <div className="absolute inset-0 pointer-events-none">
