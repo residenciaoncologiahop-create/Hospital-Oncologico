@@ -898,15 +898,57 @@ if (extractedImaging.length > 0) {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-gray-50">
-                        <div className="bg-white p-12 rounded-[3rem] shadow-2xl border border-gray-100 max-w-sm">
-                            <Activity size={64} className="mb-6 text-blue-600 mx-auto opacity-10 animate-pulse" />
-                            <h2 className="text-xl font-black text-gray-800 tracking-tight">Consola de Decisión</h2>
-                            <p className="text-gray-400 text-xs mt-4 font-bold leading-relaxed">Seleccione un caso o inicie un nuevo registro.</p>
-                            <button onClick={() => setShowNewPatientModal(true)} className="mt-8 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 uppercase">Crear caso clínico</button>
-                        </div>
-                    </div>
-                )}
+                    ) : (
+    <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden">
+        {/* Fondo decorativo */}
+        <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-60"/>
+            <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-indigo-50 rounded-full blur-3xl opacity-40"/>
+        </div>
+
+        <div className="relative z-10 flex flex-col items-center text-center max-w-xs px-8 space-y-6">
+            {/* Ícono principal */}
+            <div className="relative">
+                <div className="w-20 h-20 bg-white rounded-[2rem] shadow-xl border border-gray-100 flex items-center justify-center">
+                    <Activity size={36} className="text-blue-500"/>
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
+                    <Plus size={14} className="text-white"/>
+                </div>
+            </div>
+
+            {/* Texto */}
+            <div className="space-y-2">
+                <h2 className="text-lg font-black text-gray-800 tracking-tight">Ningún caso seleccionado</h2>
+                <p className="text-xs text-gray-400 font-medium leading-relaxed">
+                    Seleccioná un caso existente del panel izquierdo o creá uno nuevo para comenzar.
+                </p>
+            </div>
+
+            {/* Acción */}
+            <button
+                onClick={() => setShowNewPatientModal(true)}
+                className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-xs tracking-widest hover:bg-blue-700 active:scale-95 transition-all shadow-lg shadow-blue-100 uppercase"
+            >
+                <Plus size={14}/>
+                Crear caso clínico
+            </button>
+
+            {/* Stats decorativos */}
+            <div className="flex items-center gap-4 pt-2">
+                <div className="flex flex-col items-center">
+                    <span className="text-lg font-black text-gray-800">{patients.length}</span>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Casos</span>
+                </div>
+                <div className="w-px h-8 bg-gray-100"/>
+                <div className="flex flex-col items-center">
+                    <span className="text-lg font-black text-gray-800">{new Date().toLocaleDateString('es-AR', {day:'2-digit', month:'short'})}</span>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Hoy</span>
+                </div>
+            </div>
+        </div>
+    </div>
+)}
             </main>
 
             {/* Modal Crear Caso — PSEUDONIMIZADO */}
