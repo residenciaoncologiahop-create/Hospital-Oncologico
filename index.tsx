@@ -730,7 +730,7 @@ if (extractedImaging.length > 0) {
                     <p className="text-xs font-black uppercase tracking-widest">Sin eventos</p>
                 </div>
             ) : (
-                timeline.map((ev, i) => {
+                [...timeline].sort((a, b) => parseDate(a.date) - parseDate(b.date)).map((ev, i) => {
                     const s = getStyle(ev);
                     return (
                         <div key={i} className="relative pl-9 pb-6 group">
