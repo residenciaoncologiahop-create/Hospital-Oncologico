@@ -703,33 +703,72 @@ if (extractedImaging.length > 0) {
                                     </>
                                 )}
 
-                                {activeTab === 'timeline' && (
-                                    <div className="space-y-4 pt-2">
-                                        {(!timeline || timeline.length === 0) ? (
-    <div className="flex flex-col items-center justify-center py-20 text-gray-200"><Clock size={40} className="mb-3 opacity-10" /><p className="text-xs font-black uppercase tracking-widest">Sin eventos</p></div>
-) : (
-    timeline
-    .map((ev, i) => (
-        <div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8 group">
-                                                    <div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md transition-all group-hover:scale-110 flex items-center justify-center ${ev.isKey ? 'bg-red-500 text-white' : 'bg-blue-400 text-white'}`}>
-                                                        {ev.isKey ? <AlertCircle size={10}/> : <Info size={10}/>}
-                                                    </div>
-                                                    <div className={`p-5 rounded-2xl border transition-all hover:shadow-xl ${ev.isKey ? 'bg-red-50/50 border-red-100' : 'bg-white border-gray-50 shadow-sm'}`}>
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <span className={`text-[10px] font-black px-3 py-1 rounded-full tracking-widest uppercase ${ev.isKey ? 'bg-red-500 text-white shadow-md' : 'bg-blue-50 text-blue-600'}`}>{ev.date}</span>
-                                                            <div className="flex items-center space-x-2">
-                                                                <span className="text-[10px] text-gray-400 font-bold uppercase truncate max-w-[150px]">{ev.professional}</span>
-                                                                <button onClick={() => handleDeleteEvent(i)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12}/></button>
-                                                            </div>
-                                                        </div>
-                                                        <h4 className={`font-bold text-xs mb-1 uppercase tracking-tight ${ev.isKey ? 'text-red-900' : 'text-gray-800'}`}>{ev.category}</h4>
-                                                        <p className={`leading-relaxed text-xs font-medium ${ev.isKey ? 'text-red-900' : 'text-gray-600'}`}>{ev.note}</p>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
+                                {activeTab === 'timeline' && (() => {
+    const CATEGORY_STYLES: Record<string, { dot: string; card: string; badge: string; border: string }> = {
+        'Quimio':     { dot: 'bg-violet-500', card: 'bg-violet-50/40 border-violet-100', badge: 'bg-violet-100 text-violet-700', border: 'border-violet-200' },
+        'Cirugía':    { dot: 'bg-orange-500', card: 'bg-orange-50/40 border-orange-100', badge: 'bg-orange-100 text-orange-700', border: 'border-orange-200' },
+        'Imagen':     { dot: 'bg-cyan-500',   card: 'bg-cyan-50/40 border-cyan-100',     badge: 'bg-cyan-100 text-cyan-700',     border: 'border-cyan-200' },
+        'Lab':        { dot: 'bg-green-500',  card: 'bg-green-50/40 border-green-100',   badge: 'bg-green-100 text-green-700',   border: 'border-green-200' },
+        'Radio':      { dot: 'bg-yellow-500', card: 'bg-yellow-50/40 border-yellow-100', badge: 'bg-yellow-100 text-yellow-700', border: 'border-yellow-200' },
+        'Consulta':   { dot: 'bg-blue-400',   card: 'bg-blue-50/30 border-blue-100',     badge: 'bg-blue-100 text-blue-600',     border: 'border-blue-200' },
+        'Evolución Manual': { dot: 'bg-gray-400', card: 'bg-gray-50 border-gray-100', badge: 'bg-gray-100 text-gray-600', border: 'border-gray-200' },
+    };
+    const KEY_STYLE = { dot: 'bg-red-500', card: 'bg-red-50/50 border-red-100', badge: 'bg-red-500 text-white', border: 'border-red-200' };
+    const DEFAULT_STYLE = { dot: 'bg-blue-400', card: 'bg-white border-gray-100', badge: 'bg-blue-50 text-blue-600', border: 'border-gray-100' };
+
+    const getStyle = (ev: ClinicalEvent) => {
+        if (ev.isKey) return KEY_STYLE;
+        const cat = Object.keys(CATEGORY_STYLES).find(k => ev.category?.toLowerCase().includes(k.toLowerCase()));
+        return cat ? CATEGORY_STYLES[cat] : DEFAULT_STYLE;
+    };
+
+    return (
+        <div className="space-y-3 pt-2">
+            {(!timeline || timeline.length === 0) ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-200">
+                    <Clock size={40} className="mb-3 opacity-10" />
+                    <p className="text-xs font-black uppercase tracking-widest">Sin eventos</p>
+                </div>
+            ) : (
+                timeline.map((ev, i) => {
+                    const s = getStyle(ev);
+                    return (
+                        <div key={i} className="relative pl-9 pb-6 group">
+                            {/* línea vertical */}
+                            {i < timeline.length - 1 && (
+                                <div className="absolute left-[13px] top-6 bottom-0 w-px bg-gray-100"/>
+                            )}
+                            {/* dot */}
+                            <div className={`absolute left-0 top-1.5 w-6 h-6 rounded-full border-4 border-white shadow-md flex items-center justify-center transition-transform group-hover:scale-110 ${s.dot}`}>
+                                {ev.isKey ? <AlertCircle size={10} className="text-white"/> : <Info size={10} className="text-white"/>}
+                            </div>
+                            {/* card */}
+                            <div className={`rounded-2xl border p-4 transition-all hover:shadow-md ${s.card}`}>
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full tracking-widest uppercase ${s.badge}`}>
+                                            {ev.date}
+                                        </span>
+                                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border uppercase tracking-widest text-gray-600 bg-white ${s.border}`}>
+                                            {ev.category}
+                                        </span>
                                     </div>
-                                )}
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <span className="text-[10px] text-gray-400 font-bold truncate max-w-[120px]">{ev.professional}</span>
+                                        <button onClick={() => handleDeleteEvent(i)} className="text-gray-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                                            <Trash2 size={11}/>
+                                        </button>
+                                    </div>
+                                </div>
+                                <p className="text-xs font-medium text-gray-600 leading-relaxed">{ev.note}</p>
+                            </div>
+                        </div>
+                    );
+                })
+            )}
+        </div>
+    );
+})()}
 
                                 {activeTab === 'forms' && (
                                     <div className="h-full overflow-y-auto">
