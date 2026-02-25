@@ -802,29 +802,60 @@ if (extractedImaging.length > 0) {
                                 </div>
                             )}
 
-                            <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
-                                {chatMessages.length === 0 && (
-                                    <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none">
-                                        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><MessageSquare size={48} className="text-blue-600" /></div>
-                                        <div className="space-y-2">
-                                            <p className="text-sm font-black uppercase tracking-widest">Asistente de Discusión</p>
-                                            <p className="text-xs font-bold max-w-[200px] mx-auto leading-relaxed">Las respuestas generadas son orientativas y educativas. Toda decisión clínica corresponde al equipo tratante.</p>
-                                        </div>
-                                    </div>
-                                )}
-                                {chatMessages.map((m, i) => (
-                                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[85%] p-6 rounded-[2rem] shadow-md ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-blue-100' : 'bg-white border border-gray-100 rounded-bl-none'}`}>
-        <div className={`leading-relaxed space-y-0.5 ${m.role === 'user' ? 'text-sm font-semibold' : 'text-[13px] font-normal text-gray-700'}`}>
-    {m.role === 'model' ? renderMarkdown(m.text) : m.text}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
+    {chatMessages.length === 0 && (
+        <div className="flex flex-col items-center justify-center h-full text-center space-y-4 select-none">
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+                <MessageSquare size={36} className="text-blue-200 mx-auto" />
+            </div>
+            <div className="space-y-1.5">
+                <p className="text-xs font-black uppercase tracking-widest text-gray-300">Asistente de Discusión Clínica</p>
+                <p className="text-[10px] font-medium text-gray-300 max-w-[180px] mx-auto leading-relaxed">Las respuestas son orientativas. Toda decisión clínica corresponde al equipo tratante.</p>
+            </div>
+        </div>
+    )}
+    {chatMessages.map((m, i) => (
+        <div key={i} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {/* Avatar IA */}
+            {m.role === 'model' && (
+                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-100 mb-1">
+                    <Activity size={13} className="text-white"/>
+                </div>
+            )}
+            <div className={`max-w-[82%] rounded-2xl shadow-sm ${
+                m.role === 'user'
+                    ? 'bg-blue-600 text-white rounded-br-sm px-5 py-3.5'
+                    : 'bg-white border border-gray-100 rounded-bl-sm px-5 py-4'
+            }`}>
+                <div className={`leading-relaxed space-y-1 ${m.role === 'user' ? 'text-sm font-semibold' : 'text-[13px] font-normal text-gray-700'}`}>
+                    {m.role === 'model' ? renderMarkdown(m.text) : m.text}
+                </div>
+                <div className={`text-[9px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>
+                    {new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </div>
+            </div>
+            {/* Avatar médico */}
+            {m.role === 'user' && (
+                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-gray-600 to-gray-400 flex items-center justify-center flex-shrink-0 shadow-sm mb-1">
+                    <span className="text-white font-black text-[10px]">{doctorName[0].toUpperCase()}</span>
+                </div>
+            )}
+        </div>
+    ))}
+    {isTyping && (
+        <div className="flex items-end gap-2 justify-start">
+            <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-100">
+                <Activity size={13} className="text-white"/>
+            </div>
+            <div className="bg-white px-5 py-3.5 rounded-2xl rounded-bl-sm border border-gray-100 shadow-sm flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}/>
+                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}/>
+                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}/>
+            </div>
+        </div>
+    )}
+    <div ref={chatEndRef} />
 </div>
-                                            <div className={`text-[10px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-blue-200 text-right' : 'text-gray-300'}`}>{new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                        </div>
-                                    </div>
-                                ))}
-                                {isTyping && <div className="flex justify-start"><div className="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm animate-pulse text-[10px] font-black text-blue-600 tracking-[0.2em] uppercase">IA Razonando...</div></div>}
-                                <div ref={chatEndRef} />
-                            </div>
 
                             <div className="p-6 bg-white/80 backdrop-blur-md border-t">
                                 <div className="relative flex items-center bg-gray-50 rounded-3xl border-2 border-transparent focus-within:border-blue-100 focus-within:bg-white transition-all p-3 pl-6">
