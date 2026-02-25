@@ -98,8 +98,19 @@ export const extractTimelineSecure = async (
   const instructionText = `
     Analiza los documentos y extrae la cronología clínica.
     REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales.
-    Fechas: DD/MM/YYYY. Categorías: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
-    SALIDA: ÚNICAMENTE UN ARRAY JSON.
+    Fechas: DD/MM/YYYY. Categorías permitidas: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+    
+    ESTRUCTURA JSON ESTRICTA REQUERIDA:
+    Debes devolver ÚNICAMENTE un array de objetos JSON con exactamente estas propiedades en inglés:
+    [
+      {
+        "date": "DD/MM/YYYY",
+        "professional": "Nombre del médico o especialidad",
+        "category": "Una de las categorías permitidas",
+        "note": "Resumen conciso del evento clínico",
+        "isKey": true o false (true si es un evento crítico como diagnóstico, recaída o cirugía mayor)
+      }
+    ]
   `;
 
   const parts = buildParts(instructionText, []);
