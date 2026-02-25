@@ -278,12 +278,12 @@ const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
         try {
             const rawEvents = await extractTimelineSecure(historyText, historyFiles);
             const events = rawEvents.map((e: any) => ({
-                date: e.date || "S/F",
-                professional: e.professional || "N/A",
-                category: e.category || "General",
-                note: e.note || "Evento",
-                isKey: !!e.isKey
-            }));
+    date: e.date || e.fecha || "S/F",
+    professional: e.professional || e.profesional || e.medico || "N/A",
+    category: e.category || e.categoria || e.tipo || "General",
+    note: e.note || e.nota || e.descripcion || "Evento",
+    isKey: !!e.isKey || !!e.clave || !!e.importante
+}));
             const currentTimeline = timeline || [];
             const combinedTimeline = sortTimeline([...currentTimeline, ...events]);
             setTimeline(combinedTimeline);
