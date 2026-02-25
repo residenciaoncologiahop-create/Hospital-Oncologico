@@ -60,86 +60,124 @@ const sumMeasurements = (lesions: TargetLesion[]) =>
   lesions.reduce((acc, l) => acc + (l.measurement || 0), 0);
 
 // ── Gráfico de evolución de lesiones ──────────────────────────────────
-const LesionEvolutionChart = ({ studies }: { studies: ImagingStudy[] }) => {
-  // Recolectar todas las localizaciones únicas de lesiones diana
-  const allLocations = Array.from(
-    new Set(studies.flatMap(s => s.targetLesions.map(l => l.location)))
-  );
+const CLINICAL_COLORS = ['#2563eb','#dc2626','#059669','#d97706','#7c3aed','#0891b2','#c2410c','#4d7c0f'];
 
-  // Ordenar estudios cronológicamente
+const LesionEvolutionChart = ({ studies }: { studies: ImagingStudy[] }) => {
+  const allLocations = Array.from(new Set(studies.flatMap(s => s.targetLesions.map(l => l.location))));
   const sorted = [...studies].sort((a, b) => parseDate(a.date) - parseDate(b.date));
 
-  // Construir datos del gráfico: un punto por estudio
   const chartData = sorted.map((study, idx) => {
     const point: any = {
       date: study.date,
-      label: study.date,
       treatment: study.treatment || '',
       total: sumMeasurements(study.targetLesions),
     };
-
-    // Medida de cada lesión en este estudio
     allLocations.forEach(loc => {
       const lesion = study.targetLesions.find(l => l.location === loc);
       point[loc] = lesion ? lesion.measurement : null;
     });
-
-    // % cambio de la suma vs baseline (idx=0)
     if (idx === 0) {
       point.pctChange = 0;
     } else {
       const baseline = sumMeasurements(sorted[0].targetLesions);
-      point.pctChange = baseline > 0
-        ? parseFloat(((point.total - baseline) / baseline * 100).toFixed(1))
-        : null;
+      point.pctChange = baseline > 0 ? parseFloat(((point.total - baseline) / baseline * 100).toFixed(1)) : null;
     }
-
     return point;
   });
 
   if (sorted.length < 2 || allLocations.length === 0) return null;
 
+  const CustomDot = (props: any) => {
+    const { cx, cy, payload, dataKey } = props;
+    if (payload[dataKey] === null || payload[dataKey] === undefined) return null;
+    const idx = sorted.findIndex(s => s.date === payload.date);
+    const colorIdx = allLocations.indexOf(dataKey);
+    const color = CLINICAL_COLORS[colorIdx % CLINICAL_COLORS.length];
+    return <circle cx={cx} cy={cy} r={5} fill="white" stroke={color} strokeWidth={2.5}/>;
+  };
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     const treatment = payload[0]?.payload?.treatment;
+    const total = payload[0]?.payload?.total;
+    const pct = payload[0]?.payload?.pctChange;
     return (
-      <div className="bg-white border border-gray-100 rounded-xl shadow-lg p-3 text-xs space-y-1 max-w-[220px]">
-        <p className="font-black text-gray-700">{label}</p>
-        {treatment && <p className="text-[10px] text-indigo-600 font-bold">Tto: {treatment}</p>}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-xl p-4 text-xs min-w-[180px]">
+        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-50">
+          <p className="font-black text-gray-800">{label}</p>
+          {pct !== null && pct !== 0 && (
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${pct <= -30 ? 'bg-green-100 text-green-700' : pct >= 20 ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+              {pct > 0 ? '+' : ''}{pct}%
+            </span>
+          )}
+        </div>
+        {treatment && <p className="text-[10px] text-indigo-500 font-semibold mb-2">⚕ {treatment}</p>}
         {payload.map((p: any, i: number) => (
-          p.value !== null && (
-            <div key={i} className="flex justify-between gap-3">
-              <span style={{ color: p.color }} className="truncate font-medium">{p.name}</span>
-              <span className="font-black">{p.value} mm</span>
+          p.value !== null && p.value !== undefined && (
+            <div key={i} className="flex justify-between items-center gap-4 py-0.5">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }}/>
+                <span className="text-gray-500 truncate max-w-[110px]">{p.name}</span>
+              </div>
+              <span className="font-black text-gray-800">{p.value} mm</span>
             </div>
           )
         ))}
+        {total !== undefined && payload.length > 1 && (
+          <div className="flex justify-between items-center pt-2 mt-1 border-t border-gray-50">
+            <span className="text-gray-400 font-semibold">Suma</span>
+            <span className="font-black text-blue-600">{total} mm</span>
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="space-y-4">
-      {/* Gráfico de líneas por lesión */}
+    <div className="space-y-5">
       <div>
-        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">
-          Evolución por Lesión Diana (mm)
+        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-4">
+          Evolución de Lesiones Diana (mm)
         </p>
-        <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-            <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 10 }} unit="mm" />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ fontSize: '10px' }} />
+        <ResponsiveContainer width="100%" height={230}>
+          <LineChart data={chartData} margin={{ top: 8, right: 16, left: -8, bottom: 4 }}>
+            <defs>
+              {allLocations.map((loc, i) => (
+                <linearGradient key={loc} id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={CLINICAL_COLORS[i % CLINICAL_COLORS.length]} stopOpacity={0.15}/>
+                  <stop offset="95%" stopColor={CLINICAL_COLORS[i % CLINICAL_COLORS.length]} stopOpacity={0}/>
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="2 4" stroke="#f1f5f9" vertical={false}/>
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }}
+              axisLine={false}
+              tickLine={false}
+              dy={6}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }}
+              axisLine={false}
+              tickLine={false}
+              unit="mm"
+              dx={-4}
+            />
+            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e2e8f0', strokeWidth: 1, strokeDasharray: '4 4' }}/>
+            <Legend
+              wrapperStyle={{ fontSize: '10px', fontWeight: 700, paddingTop: '12px' }}
+              formatter={(value) => <span style={{ color: '#64748b' }}>{value.length > 22 ? value.substring(0,22)+'…' : value}</span>}
+            />
             {allLocations.map((loc, i) => (
               <Line
                 key={loc}
                 type="monotone"
                 dataKey={loc}
-                stroke={LINE_COLORS[i % LINE_COLORS.length]}
-                strokeWidth={2}
-                dot={{ r: 4 }}
+                stroke={CLINICAL_COLORS[i % CLINICAL_COLORS.length]}
+                strokeWidth={2.5}
+                dot={<CustomDot dataKey={loc}/>}
+                activeDot={{ r: 6, strokeWidth: 0 }}
                 connectNulls
                 name={loc.length > 25 ? loc.substring(0, 25) + '…' : loc}
               />
@@ -148,20 +186,20 @@ const LesionEvolutionChart = ({ studies }: { studies: ImagingStudy[] }) => {
         </ResponsiveContainer>
       </div>
 
-      {/* Tabla de variación porcentual */}
+      {/* Tabla RECIST */}
       <div>
         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">
-          Variación vs Baseline (Suma de Lesiones Diana)
+          Variación vs Baseline
         </p>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-xl border border-gray-100">
           <table className="w-full text-[10px]">
             <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left py-2 px-2 font-black text-gray-400 uppercase tracking-widest">Fecha</th>
-                <th className="text-left py-2 px-2 font-black text-gray-400 uppercase tracking-widest">Tratamiento</th>
-                <th className="text-right py-2 px-2 font-black text-gray-400 uppercase tracking-widest">Suma (mm)</th>
-                <th className="text-right py-2 px-2 font-black text-gray-400 uppercase tracking-widest">vs Baseline</th>
-                <th className="text-center py-2 px-2 font-black text-gray-400 uppercase tracking-widest">Respuesta</th>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left py-2.5 px-3 font-black text-gray-400 uppercase tracking-widest">Fecha</th>
+                <th className="text-left py-2.5 px-3 font-black text-gray-400 uppercase tracking-widest">Tratamiento</th>
+                <th className="text-right py-2.5 px-3 font-black text-gray-400 uppercase tracking-widest">Σ mm</th>
+                <th className="text-right py-2.5 px-3 font-black text-gray-400 uppercase tracking-widest">Δ%</th>
+                <th className="text-center py-2.5 px-3 font-black text-gray-400 uppercase tracking-widest">RECIST</th>
               </tr>
             </thead>
             <tbody>
@@ -169,37 +207,32 @@ const LesionEvolutionChart = ({ studies }: { studies: ImagingStudy[] }) => {
                 const pct = row.pctChange;
                 let responseLabel = '—';
                 let responseColor = 'bg-gray-100 text-gray-500';
-                if (idx === 0) {
-                  responseLabel = 'Baseline';
-                  responseColor = 'bg-gray-100 text-gray-600';
-                } else if (pct !== null) {
-                  if (row.total === 0) { responseLabel = 'RC'; responseColor = 'bg-green-100 text-green-700'; }
-                  else if (pct <= -30) { responseLabel = 'RP'; responseColor = 'bg-green-100 text-green-700'; }
-                  else if (pct >= 20) { responseLabel = 'EP'; responseColor = 'bg-red-100 text-red-700'; }
-                  else { responseLabel = 'EE'; responseColor = 'bg-yellow-100 text-yellow-700'; }
+                if (idx === 0) { responseLabel = 'Baseline'; responseColor = 'bg-slate-100 text-slate-600'; }
+                else if (pct !== null) {
+                  if (row.total === 0)   { responseLabel = 'RC'; responseColor = 'bg-emerald-100 text-emerald-700'; }
+                  else if (pct <= -30)   { responseLabel = 'RP'; responseColor = 'bg-green-100 text-green-700'; }
+                  else if (pct >= 20)    { responseLabel = 'EP'; responseColor = 'bg-red-100 text-red-700'; }
+                  else                   { responseLabel = 'EE'; responseColor = 'bg-yellow-100 text-yellow-700'; }
                 }
-                // Si hay nuevas lesiones, siempre EP
-                if (idx > 0 && sorted[idx]?.newLesions) {
-                  responseLabel = 'EP'; responseColor = 'bg-red-100 text-red-700';
-                }
+                if (idx > 0 && sorted[idx]?.newLesions) { responseLabel = 'EP'; responseColor = 'bg-red-100 text-red-700'; }
 
                 return (
-                  <tr key={idx} className={`border-b border-gray-50 ${idx === 0 ? 'bg-gray-50/50' : ''}`}>
-                    <td className="py-2 px-2 font-bold text-gray-700">{row.date}</td>
-                    <td className="py-2 px-2 text-indigo-600 font-medium truncate max-w-[100px]">
+                  <tr key={idx} className={`border-b border-gray-50 transition-colors hover:bg-gray-50/50 ${idx === 0 ? 'bg-slate-50/50' : ''}`}>
+                    <td className="py-2.5 px-3 font-bold text-gray-700">{row.date}</td>
+                    <td className="py-2.5 px-3 text-indigo-500 font-medium truncate max-w-[90px]">
                       {row.treatment || <span className="text-gray-300">—</span>}
                     </td>
-                    <td className="py-2 px-2 text-right font-black text-gray-800">{row.total}</td>
-                    <td className={`py-2 px-2 text-right font-black ${
-                      pct === null || idx === 0 ? 'text-gray-400'
+                    <td className="py-2.5 px-3 text-right font-black text-gray-800">{row.total}</td>
+                    <td className={`py-2.5 px-3 text-right font-black ${
+                      idx === 0 || pct === null ? 'text-gray-300'
                       : pct <= -30 ? 'text-green-600'
-                      : pct >= 20 ? 'text-red-600'
+                      : pct >= 20  ? 'text-red-600'
                       : 'text-yellow-600'
                     }`}>
                       {idx === 0 ? '—' : pct !== null ? `${pct > 0 ? '+' : ''}${pct}%` : '—'}
                     </td>
-                    <td className="py-2 px-2 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${responseColor}`}>
+                    <td className="py-2.5 px-3 text-center">
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${responseColor}`}>
                         {responseLabel}
                       </span>
                     </td>
