@@ -65,7 +65,16 @@ const ClinicalAuditModal: React.FC<Props> = ({
               </div>
             </div>
           ) : content ? (
-            <div className="prose prose-sm max-w-none text-gray-600" dangerouslySetInnerHTML={{ __html: content }} />
+ <div
+              className="prose prose-sm max-w-none text-gray-700 leading-relaxed
+                [&_h1]:text-xl [&_h1]:leading-snug [&_h1]:mb-4
+                [&_h2]:text-lg [&_h2]:leading-snug [&_h2]:mb-3
+                [&_h3]:text-lg [&_h3]:leading-snug [&_h3]:mb-3
+                [&_p]:leading-relaxed [&_p]:my-2
+                [&_li]:leading-relaxed [&_li]:my-1
+                [&_td]:align-top [&_td]:py-2 [&_td]:leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: content }}
+            />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-gray-300">
               <AlertTriangle size={48} className="mb-2"/>
