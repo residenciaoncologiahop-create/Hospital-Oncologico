@@ -561,7 +561,7 @@ const App = ({ user }: AppProps) => {
                         </div>
                         {/* Botón PENDIENTES */}
                         <button
-                            onClick={() => { setPendientesTab('hoy'); setShowPendientesModal(v => !v); }}
+                            onClick={() => setShowPendientesModal(v => !v)}
                             className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all
                                 ${showPendientesModal
                                     ? 'bg-blue-600 text-white shadow-md shadow-blue-100'
