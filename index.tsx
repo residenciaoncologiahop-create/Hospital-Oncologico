@@ -173,6 +173,9 @@ const App = ({ user }: AppProps) => {
 
     const [reportModal, setReportModal] = useState({ isOpen: false, title: '', content: '' as string | null, isLoading: false });
     const [showAuditModal, setShowAuditModal] = useState(false);
+    const [showPendientesModal, setShowPendientesModal] = useState(false);
+    const [pendientesTab, setPendientesTab] = useState<'hoy' | 'agenda'>('hoy');
+    const [pendientesTodayCount, setPendientesTodayCount] = useState(0);
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
 
@@ -510,7 +513,7 @@ const App = ({ user }: AppProps) => {
                         </div>
                     </div>
 
-                    <PendientesPanel doctorId={user.uid}/>
+
 
                     <div className="p-5 border-t bg-white flex flex-col space-y-3">
                         <div className="flex items-center justify-between">
@@ -533,7 +536,7 @@ const App = ({ user }: AppProps) => {
                 </aside>
 
                 {/* ── MAIN ────────────────────────────────────── */}
-                <main className="flex-1 flex flex-col h-full overflow-hidden">
+                <main className="flex-1 flex flex-col h-full overflow-hidden relative">
 
                     {/* Header */}
                     <header className="bg-white border-b h-14 flex items-center px-5 justify-between z-20 shadow-sm">
@@ -557,11 +560,63 @@ const App = ({ user }: AppProps) => {
                                 <h1 className="font-black text-gray-700 text-sm tracking-tight">Seleccioná un caso</h1>
                             )}
                         </div>
-                        <div className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
-                            {apiKeyExists ? <div className="w-1.5 h-1.5 bg-green-500 rounded-full"/> : <ShieldAlert size={11}/>}
-                            <span>{apiKeyExists ? 'Seguro' : 'Error API'}</span>
+                        <div className="flex items-center gap-2">
+                            {/* Botón PENDIENTES */}
+                            <button
+                                onClick={() => { setPendientesTab('hoy'); setShowPendientesModal(v => !v); }}
+                                className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all
+                                    ${showPendientesModal && pendientesTab === 'hoy'
+                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-100'
+                                        : 'bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600'}`}
+                            >
+                                <span>Pendientes</span>
+                                {pendientesTodayCount > 0 && (
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none
+                                        ${showPendientesModal && pendientesTab === 'hoy' ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}>
+                                        {pendientesTodayCount}
+                                    </span>
+                                )}
+                            </button>
+
+                            {/* Botón AGENDA */}
+                            <button
+                                onClick={() => { setPendientesTab('agenda'); setShowPendientesModal(v => !v); }}
+                                className={`px-3 py-1.5 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all
+                                    ${showPendientesModal && pendientesTab === 'agenda'
+                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-100'
+                                        : 'bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600'}`}
+                            >
+                                Agenda
+                            </button>
+
+                            {/* Badge SEGURO */}
+                            <div className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
+                                {apiKeyExists ? <div className="w-1.5 h-1.5 bg-green-500 rounded-full"/> : <ShieldAlert size={11}/>}
+                                <span>{apiKeyExists ? 'Seguro' : 'Error API'}</span>
+                            </div>
                         </div>
                     </header>
+
+                    {/* ── DROPDOWN PENDIENTES / AGENDA ─────────── */}
+                    {showPendientesModal && (
+                        <>
+                            {/* Overlay transparente para cerrar al clickear afuera */}
+                            <div
+                                className="fixed inset-0 z-40"
+                                onClick={() => setShowPendientesModal(false)}
+                            />
+                            {/* Panel */}
+                            <div className="absolute top-14 right-0 z-50 w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl shadow-gray-200/80 p-4 animate-in fade-in slide-in-from-top-2 duration-200"
+                                style={{ position: 'absolute', top: '56px', right: '16px' }}
+                            >
+                                <PendientesPanel
+                                    doctorId={user.uid}
+                                    initialTab={pendientesTab}
+                                    onCountChange={setPendientesTodayCount}
+                                />
+                            </div>
+                        </>
+                    )}
 
                     {selP ? (
                         <>
