@@ -562,7 +562,7 @@ const App = ({ user }: AppProps) => {
                         {/* Botón PENDIENTES */}
                         <button
                             onClick={() => setShowPendientesModal(v => !v)}
-                            className={`mr-12 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all
+                            className={`mr-36 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all
                                 ${showPendientesModal
                                     ? 'bg-blue-600 text-white shadow-md shadow-blue-100'
                                     : 'bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600'}`}
@@ -587,7 +587,7 @@ const App = ({ user }: AppProps) => {
                             />
                             {/* Panel */}
                             <div className="absolute top-14 right-0 z-50 w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl shadow-gray-200/80 p-4 animate-in fade-in slide-in-from-top-2 duration-200"
-                                style={{ position: 'absolute', top: '56px', right: '64px' }}
+                                style={{ position: 'absolute', top: '56px', right: '160px' }}
                             >
                                 <PendientesPanel
                                     doctorId={user.uid}
