@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Activity, Plus, Search, Trash2, LogOut, Menu, X, 
   FileText, Clock, FileOutput, GraduationCap, Calculator, Pill, 
-  Stethoscope, User, ChevronRight, PanelLeftClose, PanelLeftOpen, MessageSquare, Loader2, AlertCircle, Sparkles, ClipboardList, ShieldCheck, Users, CalendarHeart, Info
+  Stethoscope, User, ChevronRight, MessageSquare, Loader2, AlertCircle, Sparkles, ClipboardList, ShieldCheck, Users, CalendarHeart, Info
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -51,7 +51,6 @@ const ResidentApp = () => {
   const [showDrugs, setShowDrugs] = useState(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [showAuditModal, setShowAuditModal] = useState(false);
@@ -62,7 +61,12 @@ const ResidentApp = () => {
 
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('oncoguide_chat', { detail: { open: showChat } }));
+  }, [showChat]);
 
   const [isProcessingDocs, setIsProcessingDocs] = useState(false);
 
@@ -219,11 +223,6 @@ const ResidentApp = () => {
         <header className="bg-white/80 backdrop-blur-md border-b h-16 flex items-center px-6 justify-between z-20">
           <div className="flex items-center space-x-4">
             <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={24} /></button>
-            {selectedPatient && !isLearningMode && (
-              <button onClick={() => setShowLeftPanel(!showLeftPanel)} className="hidden lg:block text-gray-400 hover:text-indigo-600 transition-colors">
-                {showLeftPanel ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-              </button>
-            )}
             <div className="flex flex-col">
               <h1 className="font-black text-gray-800 text-lg tracking-tight leading-none truncate max-w-md">{selectedPatient ? selectedPatient.name : 'Bienvenido, Residente'}</h1>
               {selectedPatient && <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{selectedPatient.diagnosis}</span>}
@@ -238,8 +237,8 @@ const ResidentApp = () => {
         {selectedPatient ? (
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             
-            {/* PANEL IZQUIERDO */}
-            <div className={`${isLearningMode ? 'w-full' : (showLeftPanel ? 'lg:w-1/2 border-r' : 'hidden')} flex flex-col bg-white h-full transition-all duration-300`}>
+            {/* PANEL IZQUIERDO — ancho completo siempre */}
+            <div className={`${isLearningMode ? 'w-full' : 'w-full'} flex flex-col bg-white h-full transition-all duration-300`}>
               <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
                 <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-indigo-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>1. Datos</button>
                 <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-indigo-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historia</button>
@@ -339,40 +338,106 @@ const ResidentApp = () => {
               </div>
             </div>
 
-            {/* PANEL DERECHO: CHAT */}
-            <div className={`${isLearningMode ? 'hidden' : (showLeftPanel ? 'lg:w-1/2' : 'w-full')} flex flex-col bg-gray-50 h-full overflow-hidden relative`}>
-              <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
-                {selectedPatient.chatHistory.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30 select-none">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm"><MessageSquare size={48} className="text-indigo-600" /></div>
-                    <p className="text-xs font-black uppercase tracking-widest">Asistente Oncológico</p>
-                  </div>
+            {/* BOTÓN FLOTANTE ASISTENTE */}
+            {!isLearningMode && (
+              <button
+                onClick={() => setShowChat(true)}
+                className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 bg-indigo-600 text-white pl-4 pr-5 py-3 rounded-2xl shadow-xl shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all"
+              >
+                <MessageSquare size={16}/>
+                <span className="text-xs font-black uppercase tracking-widest">Asistente</span>
+                {selectedPatient.chatHistory.length > 0 && (
+                  <span className="w-5 h-5 bg-white text-indigo-600 rounded-full text-[9px] font-black flex items-center justify-center">
+                    {selectedPatient.chatHistory.length}
+                  </span>
                 )}
-                {selectedPatient.chatHistory.map((m, i) => (
-                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] p-5 rounded-[2rem] text-xs shadow-md font-medium ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none border border-gray-100'}`}>
-                      <div className="whitespace-pre-wrap">{m.text}</div>
-                      <div className={`text-[10px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-indigo-200 text-right' : 'text-gray-300'}`}>{new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+              </button>
+            )}
+
+            {/* DRAWER ASISTENTE */}
+            {showChat && !isLearningMode && (
+              <div className="fixed inset-0 z-50 flex justify-end">
+                <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm" onClick={() => setShowChat(false)}/>
+                <div className="relative w-full max-w-lg bg-gray-50 flex flex-col h-full shadow-2xl">
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-6 py-4 bg-white border-b">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-400 flex items-center justify-center shadow-md shadow-indigo-100">
+                        <Activity size={13} className="text-white"/>
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-gray-800 uppercase tracking-widest">Asistente Oncológico</p>
+                        <p className="text-[9px] text-gray-400 font-medium">{selectedPatient.name} · {selectedPatient.diagnosis}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setShowChat(false)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all">
+                      <X size={16}/>
+                    </button>
+                  </div>
+                  {/* Mensajes */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
+                    {selectedPatient.chatHistory.length === 0 && (
+                      <div className="flex flex-col items-center justify-center h-full text-center space-y-4 select-none opacity-40">
+                        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+                          <MessageSquare size={36} className="text-indigo-200 mx-auto"/>
+                        </div>
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-300">Asistente Oncológico</p>
+                      </div>
+                    )}
+                    {selectedPatient.chatHistory.map((m, i) => (
+                      <div key={i} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        {m.role === 'model' && (
+                          <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-100 mb-1">
+                            <Activity size={13} className="text-white"/>
+                          </div>
+                        )}
+                        <div className={`max-w-[82%] rounded-2xl shadow-sm ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm px-5 py-3.5' : 'bg-white border border-gray-100 rounded-bl-sm px-5 py-4'}`}>
+                          <div className={`leading-relaxed text-xs font-medium ${m.role === 'user' ? '' : 'text-gray-700'}`}>
+                            {m.text}
+                          </div>
+                          <div className={`text-[9px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-indigo-200 text-right' : 'text-gray-300'}`}>
+                            {new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {isTyping && (
+                      <div className="flex items-end gap-2">
+                        <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-100">
+                          <Activity size={13} className="text-white"/>
+                        </div>
+                        <div className="bg-white px-5 py-3.5 rounded-2xl rounded-bl-sm border border-gray-100 shadow-sm flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}/>
+                          <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}/>
+                          <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}/>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef}/>
+                  </div>
+                  {/* Input */}
+                  <div className="p-4 bg-white/90 backdrop-blur-md border-t">
+                    <div className="flex items-center bg-gray-50 rounded-2xl border-2 border-transparent focus-within:border-indigo-100 focus-within:bg-white transition-all p-2.5 pl-4 gap-2">
+                      <textarea
+                        className="flex-1 bg-transparent text-sm font-medium outline-none resize-none max-h-32 scrollbar-hide py-1"
+                        placeholder="Consulta..."
+                        rows={1}
+                        value={chatInput}
+                        onChange={e => setChatInput(e.target.value)}
+                        onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                      />
+                      <button
+                        onClick={handleSendMessage}
+                        disabled={!chatInput.trim() || isTyping}
+                        className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-md shadow-indigo-100 disabled:opacity-50 active:scale-90 transition-all flex-shrink-0"
+                      >
+                        <MessageSquare size={16}/>
+                      </button>
                     </div>
                   </div>
-                ))}
-                {isTyping && <div className="text-[10px] text-gray-400 font-bold animate-pulse pl-4">Analizando...</div>}
-                <div ref={chatEndRef} />
-              </div>
-              <div className="p-6 bg-white/80 backdrop-blur-md border-t">
-                <div className="relative flex items-center bg-gray-50 rounded-3xl border-2 border-transparent focus-within:border-indigo-100 focus-within:bg-white transition-all p-3 pl-6">
-                  <textarea 
-                    className="flex-1 bg-transparent text-xs font-bold outline-none resize-none max-h-32 scrollbar-hide py-2" 
-                    placeholder="Consulta..." 
-                    rows={1} 
-                    value={chatInput} 
-                    onChange={e => setChatInput(e.target.value)} 
-                    onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} 
-                  />
-                  <button onClick={handleSendMessage} disabled={!chatInput.trim() || isTyping} className="ml-3 p-3 bg-indigo-600 text-white rounded-2xl shadow-lg disabled:opacity-50 active:scale-90 transition-all"><MessageSquare size={20} /></button>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center opacity-80">
