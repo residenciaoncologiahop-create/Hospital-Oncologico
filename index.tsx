@@ -16,7 +16,7 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where
 import { 
     User as LucideUser, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
-    List, File, Loader2, AlertCircle, ShieldAlert, Info, Terminal,
+    List, File, Loader2, AlertCircle, Info, Terminal,
     Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation,
     PanelLeftClose, PanelLeftOpen, FileInput, Image
 } from 'lucide-react';
@@ -138,7 +138,7 @@ const App = ({ user }: AppProps) => {
     const [showNewPatientModal, setShowNewPatientModal] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [apiKeyExists, setApiKeyExists] = useState<boolean>(true);
+
     const [imagingStudies, setImagingStudies] = useState<ImagingStudy[]>([]);
     const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xl'>(() => {
         return (localStorage.getItem('onco_fontsize') as any) || 'large';
@@ -174,7 +174,6 @@ const App = ({ user }: AppProps) => {
     const [reportModal, setReportModal] = useState({ isOpen: false, title: '', content: '' as string | null, isLoading: false });
     const [showAuditModal, setShowAuditModal] = useState(false);
     const [showPendientesModal, setShowPendientesModal] = useState(false);
-    const [pendientesTab, setPendientesTab] = useState<'hoy' | 'agenda'>('hoy');
     const [pendientesTodayCount, setPendientesTodayCount] = useState(0);
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
@@ -560,41 +559,22 @@ const App = ({ user }: AppProps) => {
                                 <h1 className="font-black text-gray-700 text-sm tracking-tight">Seleccioná un caso</h1>
                             )}
                         </div>
-                        <div className="flex items-center gap-2">
-                            {/* Botón PENDIENTES */}
-                            <button
-                                onClick={() => { setPendientesTab('hoy'); setShowPendientesModal(v => !v); }}
-                                className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all
-                                    ${showPendientesModal && pendientesTab === 'hoy'
-                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-100'
-                                        : 'bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600'}`}
-                            >
-                                <span>Pendientes</span>
-                                {pendientesTodayCount > 0 && (
-                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none
-                                        ${showPendientesModal && pendientesTab === 'hoy' ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}>
-                                        {pendientesTodayCount}
-                                    </span>
-                                )}
-                            </button>
-
-                            {/* Botón AGENDA */}
-                            <button
-                                onClick={() => { setPendientesTab('agenda'); setShowPendientesModal(v => !v); }}
-                                className={`px-3 py-1.5 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all
-                                    ${showPendientesModal && pendientesTab === 'agenda'
-                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-100'
-                                        : 'bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600'}`}
-                            >
-                                Agenda
-                            </button>
-
-                            {/* Badge SEGURO */}
-                            <div className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all ${apiKeyExists ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600 animate-pulse'}`}>
-                                {apiKeyExists ? <div className="w-1.5 h-1.5 bg-green-500 rounded-full"/> : <ShieldAlert size={11}/>}
-                                <span>{apiKeyExists ? 'Seguro' : 'Error API'}</span>
-                            </div>
-                        </div>
+                        {/* Botón PENDIENTES */}
+                        <button
+                            onClick={() => { setPendientesTab('hoy'); setShowPendientesModal(v => !v); }}
+                            className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all
+                                ${showPendientesModal
+                                    ? 'bg-blue-600 text-white shadow-md shadow-blue-100'
+                                    : 'bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600'}`}
+                        >
+                            <span>Pendientes</span>
+                            {pendientesTodayCount > 0 && (
+                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none
+                                    ${showPendientesModal ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}>
+                                    {pendientesTodayCount}
+                                </span>
+                            )}
+                        </button>
                     </header>
 
                     {/* ── DROPDOWN PENDIENTES / AGENDA ─────────── */}
@@ -611,7 +591,7 @@ const App = ({ user }: AppProps) => {
                             >
                                 <PendientesPanel
                                     doctorId={user.uid}
-                                    initialTab={pendientesTab}
+                                    initialTab="hoy"
                                     onCountChange={setPendientesTodayCount}
                                 />
                             </div>
