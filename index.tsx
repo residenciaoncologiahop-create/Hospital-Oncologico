@@ -151,6 +151,9 @@ const App = ({ user }: AppProps) => {
     const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
 
     const [showChat, setShowChat] = useState(false);
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('oncoguide_chat', { detail: { open: showChat } }));
+    }, [showChat]);
     const [activeTab, setActiveTab] = useState<'docs' | 'timeline' | 'forms' | 'labs' | 'imaging'>('docs');
 
     const [newPatientHC, setNewPatientHC] = useState('');
