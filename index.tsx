@@ -151,6 +151,13 @@ const App = ({ user }: AppProps) => {
     const fontSizeLabel = { normal: 'A', large: 'A+', xl: 'A++' };
 
     const [showChat, setShowChat] = useState(false);
+    const [closingChat, setClosingChat] = useState(false);
+
+    const closeChat = () => {
+        setClosingChat(true);
+        setTimeout(() => { setShowChat(false); setClosingChat(false); }, 280);
+    };
+
     useEffect(() => {
         window.dispatchEvent(new CustomEvent('oncoguide_chat', { detail: { open: showChat } }));
     }, [showChat]);
@@ -492,12 +499,26 @@ const App = ({ user }: AppProps) => {
                                 </div>
                             </div>
                             <div className="space-y-1.5">
-                                {filteredPatients.length === 0 && <p className="text-center text-[10px] text-gray-400 py-4">Sin resultados.</p>}
+                                {filteredPatients.length === 0 && (
+                                    <div className="flex flex-col items-center justify-center py-8 px-4 text-center space-y-2">
+                                        <div className="w-10 h-10 bg-gray-100 rounded-2xl flex items-center justify-center">
+                                            <Search size={16} className="text-gray-300"/>
+                                        </div>
+                                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">
+                                            {searchTerm ? 'Sin resultados' : 'Sin casos aún'}
+                                        </p>
+                                        {!searchTerm && (
+                                            <p className="text-[9px] text-gray-300 font-medium leading-relaxed">
+                                                Presioná <span className="font-black">+</span> para crear el primer caso clínico
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                                 {filteredPatients.map(p => (
                                     <div
                                         key={p.id}
                                         onClick={() => { setSelectedPatientId(p.id); setMobileMenuOpen(false); }}
-                                        className={`group w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer ${selectedPatientId === p.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'hover:bg-white border border-transparent hover:border-gray-100'}`}
+                                        className={`group w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer ${selectedPatientId === p.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'hover:bg-blue-50/50 border border-transparent hover:border-blue-100/60'}`}
                                     >
                                         <div className="flex flex-col pr-2 flex-1 min-w-0">
                                             <span className="font-bold text-xs">HC-{p.hcNumber}</span>
@@ -517,7 +538,9 @@ const App = ({ user }: AppProps) => {
 
 
 
-                    <div className="p-5 border-t bg-white flex flex-col space-y-3">
+                    <div className="relative">
+                        <div className="absolute -top-8 left-0 right-0 h-8 bg-gradient-to-b from-transparent to-white pointer-events-none z-10"/>
+                        <div className="p-5 border-t bg-white flex flex-col space-y-3">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3 truncate">
                                 <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-md">{doctorName[0].toUpperCase()}</div>
@@ -534,6 +557,7 @@ const App = ({ user }: AppProps) => {
                             </div>
                         </div>
                         <p className="text-[8px] text-gray-300 text-center font-medium">Herramienta de apoyo para discusión clínica y docencia. No sustituye la historia clínica ni el juicio médico.</p>
+                    </div>
                     </div>
                 </aside>
 
@@ -621,7 +645,7 @@ const App = ({ user }: AppProps) => {
                                             className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-all text-[9px] font-black uppercase tracking-widest
                                                 ${i < arr.length - 1 ? 'border-r border-gray-100' : ''}
                                                 ${activeTab === tab.id
-                                                    ? 'text-blue-600 bg-white shadow-sm border-b-2 border-b-blue-600'
+                                                    ? 'text-blue-600 bg-blue-50/70 shadow-sm border-b-2 border-b-blue-600'
                                                     : 'text-gray-400 hover:text-gray-600 hover:bg-white/60 border-b-2 border-b-transparent'
                                                 }`}
                                         >
@@ -660,9 +684,13 @@ const App = ({ user }: AppProps) => {
                                                 <button
                                                     onClick={handleProcessDocuments}
                                                     disabled={isProcessingDocs}
-                                                    className="w-full bg-blue-600 text-white py-4 rounded-xl text-xs font-black tracking-widest shadow-xl shadow-blue-100 disabled:opacity-50 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center"
+                                                    className={`w-full py-4 rounded-xl text-xs font-black tracking-widest transition-all active:scale-[0.98] flex items-center justify-center
+                                                        ${timeline.length > 0
+                                                            ? 'bg-white text-blue-600 border-2 border-blue-200 hover:bg-blue-50 disabled:opacity-50'
+                                                            : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:bg-blue-700 disabled:opacity-50'
+                                                        }`}
                                                 >
-                                                    {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={16}/>Analizando...</> : "Procesar historia"}
+                                                    {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={16}/>Analizando...</> : (timeline.length > 0 ? '↻ Reprocesar historia' : 'Procesar historia')}
                                                 </button>
                                             </section>
 
@@ -780,8 +808,8 @@ const App = ({ user }: AppProps) => {
                             {/* Chat Drawer */}
                             {showChat && (
                                 <div className="fixed inset-0 z-50 flex justify-end">
-                                    <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm" onClick={() => setShowChat(false)}/>
-                                    <div className="relative w-full max-w-lg bg-gray-50 flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-300">
+                                    <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm" onClick={closeChat}/>
+                                    <div className={`relative w-full max-w-lg bg-gray-50 flex flex-col h-full shadow-2xl ${closingChat ? 'animate-out slide-out-to-right duration-300' : 'animate-in slide-in-from-right duration-300'}`}>
                                         <div className="flex items-center justify-between px-6 py-4 bg-white border-b">
                                             <div className="flex items-center gap-2.5">
                                                 <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center shadow-md shadow-blue-100">
@@ -792,7 +820,7 @@ const App = ({ user }: AppProps) => {
                                                     <p className="text-[9px] text-gray-400 font-medium">HC-{selP.hcNumber} · {selP.diagnosis}</p>
                                                 </div>
                                             </div>
-                                            <button onClick={() => setShowChat(false)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all">
+                                            <button onClick={closeChat} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all">
                                                 <X size={16}/>
                                             </button>
                                         </div>
