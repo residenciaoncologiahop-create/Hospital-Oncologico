@@ -50,7 +50,7 @@ const ClinicalAuditModal: React.FC<Props> = ({
         </div>
 
         {/* CONTENT (Común para ambos) */}
-        <div className="flex-1 overflow-y-auto p-8 bg-white scrollbar-hide">
+        <div className="flex-1 overflow-y-auto px-8 py-6 bg-white scrollbar-hide min-w-0">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-full space-y-6">
               <div className="relative">
@@ -65,16 +65,25 @@ const ClinicalAuditModal: React.FC<Props> = ({
               </div>
             </div>
           ) : content ? (
- <div
-              className="prose prose-sm max-w-none text-gray-700 leading-relaxed
-                [&_h1]:text-xl [&_h1]:leading-snug [&_h1]:mb-4
-                [&_h2]:text-lg [&_h2]:leading-snug [&_h2]:mb-3
-                [&_h3]:text-lg [&_h3]:leading-snug [&_h3]:mb-3
-                [&_p]:leading-relaxed [&_p]:my-2
-                [&_li]:leading-relaxed [&_li]:my-1
-                [&_td]:align-top [&_td]:py-2 [&_td]:leading-relaxed"
+            <div
+              className="
+                text-gray-700 text-sm leading-relaxed space-y-4
+                [&_h1]:text-lg [&_h1]:font-black [&_h1]:text-gray-800 [&_h1]:uppercase [&_h1]:tracking-wide [&_h1]:border-b [&_h1]:border-gray-100 [&_h1]:pb-2 [&_h1]:mb-4 [&_h1]:mt-6
+                [&_h2]:text-sm [&_h2]:font-black [&_h2]:text-gray-800 [&_h2]:uppercase [&_h2]:tracking-wide [&_h2]:mt-6 [&_h2]:mb-3
+                [&_h3]:text-xs [&_h3]:font-black [&_h3]:text-blue-600 [&_h3]:uppercase [&_h3]:tracking-widest [&_h3]:mt-4 [&_h3]:mb-2
+                [&_p]:text-sm [&_p]:leading-relaxed [&_p]:my-2 [&_p]:text-gray-600
+                [&_ul]:space-y-1.5 [&_ul]:my-3 [&_ul]:pl-0
+                [&_li]:text-sm [&_li]:leading-relaxed [&_li]:text-gray-600 [&_li]:pl-4 [&_li]:relative [&_li]:before:content-['•'] [&_li]:before:absolute [&_li]:before:left-0 [&_li]:before:text-blue-400 [&_li]:list-none
+                [&_strong]:font-black [&_strong]:text-gray-800
+                [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse [&_table]:my-4
+                [&_th]:text-left [&_th]:font-black [&_th]:text-gray-500 [&_th]:uppercase [&_th]:tracking-widest [&_th]:text-[10px] [&_th]:py-2 [&_th]:px-3 [&_th]:bg-gray-50 [&_th]:border-b [&_th]:border-gray-100
+                [&_td]:py-2 [&_td]:px-3 [&_td]:text-gray-600 [&_td]:border-b [&_td]:border-gray-50 [&_td]:align-top [&_td]:leading-relaxed
+                [&_tr:hover_td]:bg-gray-50/50
+                [&_hr]:border-gray-100 [&_hr]:my-6
+              "
               dangerouslySetInnerHTML={{ __html: content }}
             />
+
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-gray-300">
               <AlertTriangle size={48} className="mb-2"/>
