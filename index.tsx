@@ -258,7 +258,13 @@ const App = ({ user }: AppProps) => {
         setIsProcessingDocs(true);
         setLastError(null);
         try {
-            const rawEvents = await extractTimelineSecure(historyText, historyFiles);
+            // Las 3 extracciones corren en paralelo
+            const [rawEvents, extractedLabs, extractedImaging] = await Promise.all([
+                extractTimelineSecure(historyText, historyFiles),
+                extractLabsSecure(historyText, historyFiles),
+                extractImagingFromHistorySecure(historyText, historyFiles),
+            ]);
+
             const events = rawEvents.map((e: any) => ({
                 date: e.date || e.fecha || "S/F",
                 professional: e.professional || e.profesional || e.medico || "N/A",
@@ -269,16 +275,19 @@ const App = ({ user }: AppProps) => {
             const combinedTimeline = sortTimeline([...(timeline || []), ...events]);
             setTimeline(combinedTimeline);
 
-            const extractedLabs = await extractLabsSecure(historyText, historyFiles);
             const currentLabs = patients.find(p => p.id === selectedPatientId)?.labResults || [];
             const combinedLabs = [...currentLabs, ...extractedLabs];
 
             if (selectedPatientId) {
                 const patientRef = doc(db, "patients", selectedPatientId);
-                await updateDoc(patientRef, { timeline: combinedTimeline, labResults: combinedLabs, historyText, lastUpdated: Date.now() });
-                logAction("PROCESS_DOCS_AND_LABS", selectedPatientId, doctorName);
 
-                const extractedImaging = await extractImagingFromHistorySecure(historyText, historyFiles);
+                const updateData: any = {
+                    timeline: combinedTimeline,
+                    labResults: combinedLabs,
+                    historyText,
+                    lastUpdated: Date.now()
+                };
+
                 if (extractedImaging.length > 0) {
                     const currentImaging = patients.find(p => p.id === selectedPatientId)?.imagingStudies || [];
                     const newStudies: ImagingStudy[] = extractedImaging.map((d: any) => ({
@@ -294,16 +303,16 @@ const App = ({ user }: AppProps) => {
                     }));
                     const combinedImaging = [...currentImaging, ...newStudies];
                     setImagingStudies(combinedImaging);
-                    await updateDoc(patientRef, { imagingStudies: combinedImaging, lastUpdated: Date.now() });
+                    updateData.imagingStudies = combinedImaging;
                 }
+
+                // Un solo updateDoc con todo junto
+                await updateDoc(patientRef, updateData);
+                logAction("PROCESS_DOCS_AND_LABS", selectedPatientId, doctorName);
             }
+
             alert(`Procesado: ${events.length} eventos y ${extractedLabs.length} laboratorios.`);
-        } catch (e: any) {
-            setLastError(e.message);
-        } finally {
-            setIsProcessingDocs(false);
-        }
-    };
+
 
     const handleAddManualLab = async (newLab: LabResult) => {
         if (!selectedPatientId) return;
