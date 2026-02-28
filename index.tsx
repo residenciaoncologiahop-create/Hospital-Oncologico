@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client';
 import PendientesPanel from './components/PendientesPanel';
 import ImagingPanel, { ImagingStudy } from './components/ImagingPanel';
 import { extractImagingFromHistorySecure } from './utils/aiProxy';
+import { requestNotificationPermission } from './utils/notificationService';
 
 // --- FIREBASE IMPORTS ---
 import { db } from './firebase'; 
@@ -190,8 +191,12 @@ const App = ({ user }: AppProps) => {
 
     const chatEndRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => { getOrInitFingerprint(); }, []);
-
+    useEffect(() => {
+        getOrInitFingerprint();
+        // Pedir permiso de notificaciones (solo la primera vez)
+        requestNotificationPermission();
+    }, []);
+    
     useEffect(() => {
         if (!user.uid) { setPatients([]); return; }
         const q = query(collection(db, "patients"), where("doctorId", "==", user.uid));
