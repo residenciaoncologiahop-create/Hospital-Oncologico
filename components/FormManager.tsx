@@ -37,8 +37,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
-    { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'manual', context: 'ADMISIÓN' },
-    { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'manual', context: 'RENOVACIÓN' },
+    { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'auto_banco', context: 'ADMISIÓN' },
+{ id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'auto_banco', context: 'RENOVACIÓN' },
     { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/nuevo_dinadic.pdf', type: 'manual', context: 'SOLICITUD' },
   ];
 
@@ -441,6 +441,332 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
+  const extractBancoDrogasData = async (context: string) => {
+    const today = new Date().toLocaleDateString('es-AR');
+    const isRenovacion = context === 'RENOVACIÓN';
+
+    const prompt = `
+      Actúa como oncólogo experto. Hoy es ${today}. Analizá la historia clínica y extraé datos para el formulario Banco de Drogas ${context}.
+      IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown.
+
+      ${isRenovacion ? `
+      CONTEXTO RENOVACIÓN: El paciente ya tiene tratamiento aprobado y solicita continuarlo.
+      - motivo_renovacion: "continua" si sigue igual, "cambio" si hubo toxicidad o progresión
+      - ciclos_realizados: número de ciclos ya completados
+      - ciclos_programados: número total planificado
+      - respuesta: "estable", "parcial" o "completa"
+      - sitio_progresion: si hubo progresión, dónde
+      ` : `
+      CONTEXTO ADMISIÓN: Primera solicitud del tratamiento.
+      - anatomia_patologica: hallazgos histológicos/IHQ completos, máx 400 chars
+      - tnm_t, tnm_n, tnm_m: clasificación TNM si existe
+      - receptor_RE, receptor_RP, receptor_HER2, receptor_KRAS, receptor_EGER: positivo/negativo/no aplica
+      - tratamiento_previo_cx_si: true si tuvo cirugía de tumor primario
+      - cx_especificar: descripción concisa de la cirugía
+      - cx_ganglios_resecados: número si aplica
+      - cx_ganglios_comprometidos: número si aplica
+      - cx_metastasis_si: true si tuvo cirugía de metástasis
+      - rt_primario_si: true si tuvo RT en tumor primario
+      - rt_metastasis_si: true si tuvo RT en metástasis
+      - rt_localizacion: dónde
+      - tratamientos_sistemicos_si: true si tuvo quimio/hormonoterapia/biologicos previos
+      - qt_tipo: "neoadyuvante", "adyuvante" o "avanzado"
+      - qt_droga: nombre de la droga
+      `}
+
+      Campos comunes requeridos:
+      {
+        "nombre_apellido": "",
+        "dni": "",
+        "fnac": "DD/MM/AAAA",
+        "edad": "",
+        "sexo": "M" o "F",
+        "domicilio": "",
+        "telefono": "",
+        "localidad": "",
+        "provincia": "Córdoba",
+        "pais": "Argentina",
+        "institucion": "Hospital Oncológico Provincial - Córdoba",
+        "diagnostico": "",
+        "cie10": "",
+        "estadio": "",
+        "sup_corporal": "",
+        "peso": "",
+        "talla": "",
+        "ecog": "0",
+        "tipo_tratamiento": "adyuvante/neoadyuvante/avanzado",
+        "linea": "1",
+        "droga_1": "", "dosis_1": "", "dias_1": "", "total_dia_1": "",
+        "droga_2": "", "dosis_2": "", "dias_2": "", "total_dia_2": "",
+        "droga_3": "", "dosis_3": "", "dias_3": "", "total_dia_3": "",
+        "intervalo_ciclo": "",
+        "ciclos_programados": "",
+        "lugar_fecha": "${today} - Córdoba",
+        "contacto_institucional": "",
+        ${isRenovacion ? `
+        "motivo_renovacion": "continua",
+        "ciclos_realizados": "",
+        "respuesta": "estable",
+        "sitio_progresion": "",
+        "receptor_RE": "", "receptor_RP": "", "receptor_HER2": "", "receptor_KRAS": "", "receptor_EGER": ""
+        ` : `
+        "anatomia_patologica": "",
+        "tnm_t": "", "tnm_n": "", "tnm_m": "",
+        "receptor_RE": "", "receptor_RP": "", "receptor_HER2": "", "receptor_KRAS": "", "receptor_EGER": "",
+        "tratamiento_previo_cx_si": false,
+        "cx_especificar": "", "cx_ganglios_resecados": "", "cx_ganglios_comprometidos": "",
+        "cx_metastasis_si": false, "cx_fecha": "",
+        "rt_primario_si": false, "rt_metastasis_si": false, "rt_localizacion": "",
+        "tratamientos_sistemicos_si": false,
+        "qt_tipo": "", "qt_droga": ""
+        `}
+      }
+
+      CONTEXTO CLÍNICO: ${historyText}
+    `;
+
+    const parts: any[] = [{ text: prompt }];
+    if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+
+    const res = await callGemini({ parts, responseMimeType: "application/json" });
+    let clean = res.text.replace(/```json|```/g, '').trim();
+    const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
+    if (s !== -1 && e !== -1) clean = clean.substring(s, e + 1);
+    return JSON.parse(clean);
+  };
+
+  const fillAdmisionPDF = async (formDef: any) => {
+    if (!historyText && (!files || files.length === 0)) { alert("⚠️ Suba la Historia Clínica primero."); return; }
+    setProcessingId(formDef.id);
+    setStatus('Procesando Admisión...');
+    try {
+      const d = await extractBancoDrogasData('ADMISIÓN');
+      const bsa = calculateBSA(d.peso, d.talla);
+      const [fnd, fnm, fna] = (cleanDate(d.fnac) || '').split('/');
+      const [dxd, dxm, dxa] = (cleanDate(d.fecha_diagnostico) || '').split('/');
+
+      const formUrl = window.location.origin + formDef.file;
+      const res = await fetch(formUrl);
+      if (!res.ok) throw new Error(`No se encontró ${formDef.file}`);
+      const pdfDoc = await PDFDocument.load(await res.arrayBuffer());
+      const form = pdfDoc.getForm();
+
+      const setT = (name: string, val: string, max = 10, min = 7) => {
+        try {
+          const f = form.getTextField(name);
+          if (!val?.trim()) return;
+          const text = String(val).trim();
+          let fs = max, w = 350;
+          try { const r = (f as any).acroField.getWidgets()[0].getRectangle(); w = Math.max(r.width - 4, 30); } catch {}
+          while (fs > min && text.length * 0.52 * fs > w) fs = Math.round((fs - 0.5) * 10) / 10;
+          f.setText(text); f.setFontSize(fs);
+        } catch {}
+      };
+      const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch {} };
+
+      // Datos del paciente
+      setT('Text1', d.nombre_apellido);
+      setT('Text2', 'Argentina');
+      setT('Text3', fnd); setT('Text4', fnm); setT('Text5', fna);
+      setT('Text6', d.dni);
+      setT('Text11', d.edad);
+      setT('Text12', d.domicilio);
+      setT('Text13', d.telefono);
+      setT('Text14', d.localidad);
+      setT('Text15', d.provincia);
+      setT('Text16', d.pais);
+      setT('Text17', d.institucion);
+      setT('Text18', d.diagnostico);
+      setT('Text19', d.cie10);
+
+      // Sexo
+      if (d.sexo === 'F') setBtn('Button9'); else setBtn('Button8');
+
+      // Receptores
+      setT('Text20', d.receptor_RE);
+      setT('Text21', d.receptor_RP);
+      setT('Text22', d.receptor_HER2);
+      setT('Text23', d.receptor_KRAS);
+      setT('Text24', d.receptor_EGER);
+
+      // Fecha diagnóstico y TNM
+      setT('Text27', dxd); setT('Text28', dxm); setT('Text29', dxa);
+      setT('Text30', d.tnm_t); setT('Text31', d.tnm_n); setT('Text32', d.tnm_m);
+      setT('Text33', d.estadio);
+
+      // Anatomía patológica (2 líneas)
+      const ap = d.anatomia_patologica || '';
+      setT('Text34', ap.substring(0, 220), 9, 6.5);
+      if (ap.length > 220) setT('Text35', ap.substring(220, 440), 9, 6.5);
+
+      // Sup Corporal / Peso / Talla
+      setT('Text36', bsa || d.sup_corporal);
+      setT('Text37', d.peso);
+      setT('Text38', d.talla);
+
+      // ECOG
+      const ecogBtn = ['Button39','Button40','Button41','Button42'];
+      const ecogIdx = parseInt(d.ecog || '0');
+      if (ecogIdx >= 0 && ecogIdx <= 3) setBtn(ecogBtn[ecogIdx]);
+
+      // Tratamientos previos
+      if (d.tratamientos_sistemicos_si) setBtn('Button44'); else setBtn('Button45');
+      setT('Text46', d.qt_droga, 9, 6.5);
+
+      // RT
+      if (d.rt_primario_si) setBtn('Button52'); else setBtn('Button53');
+      if (d.rt_localizacion) setT('Text54', d.rt_localizacion, 9, 7);
+
+      // Tratamiento a realizar
+      const tipo = (d.tipo_tratamiento || '').toLowerCase();
+      if (tipo.includes('adyuvante') && !tipo.includes('neo')) setBtn('Button68');
+      else if (tipo.includes('neoadyuvante')) setBtn('Button70');
+      else if (tipo.includes('avanzado')) { /* Button para avanzado */ }
+
+      // Nº línea
+      const lineaBtns: Record<string, string> = {'1':'Button89','2':'Button90','3':'Button91'};
+      if (lineaBtns[d.linea]) setBtn(lineaBtns[d.linea]);
+
+      // Intervalo y ciclos
+      setT('Text92', d.intervalo_ciclo);
+      setT('Text94', d.ciclos_programados);
+
+      // Tabla de drogas
+      const drugRows = [
+        [d.droga_1, d.dosis_1, d.dias_1, d.total_dia_1, 'Text95','Text96','Text97','Text98'],
+        [d.droga_2, d.dosis_2, d.dias_2, d.total_dia_2, 'Text99','Text100','Text101','Text102'],
+        [d.droga_3, d.dosis_3, d.dias_3, d.total_dia_3, 'Text103','Text104','Text105','Text106'],
+      ];
+      drugRows.forEach(([drg, dos, dias, tot, td, tds, tdi, tto]) => {
+        if (drg) { setT(td, String(drg).toUpperCase(), 9, 7); setT(tds, String(dos)); setT(tdi, String(dias)); setT(tto, String(tot)); }
+      });
+
+      // Lugar y fecha
+      setT('Text141', d.lugar_fecha);
+      setT('Text142', `Hospital Oncológico Prov. Cba - ${doctorData.nombre} Mat.${doctorData.matricula}`);
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
+      link.download = `Admision_BancoDrogas_${d.nombre_apellido || patient.name}.pdf`; link.click();
+      setStatus('¡Listo!');
+    } catch (e: any) { alert('Error: ' + e.message); }
+    finally { setProcessingId(null); setStatus(''); }
+  };
+
+  const fillRenovacionPDF = async (formDef: any) => {
+    if (!historyText && (!files || files.length === 0)) { alert("⚠️ Suba la Historia Clínica primero."); return; }
+    setProcessingId(formDef.id);
+    setStatus('Procesando Renovación...');
+    try {
+      const d = await extractBancoDrogasData('RENOVACIÓN');
+      const bsa = calculateBSA(d.peso, d.talla);
+      const [fnd, fnm, fna] = (cleanDate(d.fnac) || '').split('/');
+
+      const formUrl = window.location.origin + formDef.file;
+      const res = await fetch(formUrl);
+      if (!res.ok) throw new Error(`No se encontró ${formDef.file}`);
+      const pdfDoc = await PDFDocument.load(await res.arrayBuffer());
+      const form = pdfDoc.getForm();
+
+      const setT = (name: string, val: string, max = 10, min = 7) => {
+        try {
+          const f = form.getTextField(name);
+          if (!val?.trim()) return;
+          const text = String(val).trim();
+          let fs = max, w = 350;
+          try { const r = (f as any).acroField.getWidgets()[0].getRectangle(); w = Math.max(r.width - 4, 30); } catch {}
+          while (fs > min && text.length * 0.52 * fs > w) fs = Math.round((fs - 0.5) * 10) / 10;
+          f.setText(text); f.setFontSize(fs);
+        } catch {}
+      };
+      const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch {} };
+
+      // Datos del paciente
+      setT('Text2', d.nombre_apellido);
+      setT('Text3', 'Argentina');
+      setT('Text4', fnd); setT('Text5', fnm); setT('Text6', fna);
+      setT('Text7', d.dni);
+      setT('Text12', d.edad);
+      setT('Text13', d.domicilio);
+      setT('Text14', d.telefono);
+      setT('Text15', d.localidad);
+      setT('Text16', d.provincia);
+      setT('Text17', d.pais);
+      setT('Text19', d.institucion);
+      setT('Text20', d.diagnostico);
+      setT('Text21', d.cie10);
+
+      // Sexo
+      if (d.sexo === 'F') setBtn('Button10'); else setBtn('Button9');
+
+      // Motivo renovación
+      if ((d.motivo_renovacion || '').includes('continua')) setBtn('Button23'); else setBtn('Button24');
+
+      // Sitio de progresión
+      if (d.sitio_progresion) setT('Text31', d.sitio_progresion, 9, 6.5);
+
+      // Receptores
+      setT('Text32', d.receptor_RE);
+      setT('Text33', d.receptor_RP);
+      setT('Text34', d.receptor_HER2);
+      setT('Text35', d.receptor_KRAS);
+      setT('Text36', d.receptor_EGER);
+
+      // Sup Corporal / Peso / Talla
+      setT('Text51', bsa || d.sup_corporal);
+      setT('Text52', d.peso);
+      setT('Text53', d.talla);
+
+      // ECOG
+      const ecogBtn = ['Button57','Button58','Button59','Button60'];
+      const ecogIdx = parseInt(d.ecog || '0');
+      if (ecogIdx >= 0 && ecogIdx <= 3) setBtn(ecogBtn[ecogIdx]);
+
+      // Tipo tratamiento
+      const tipo = (d.tipo_tratamiento || '').toLowerCase();
+      if (tipo.includes('adyuvante') && !tipo.includes('neo')) { setBtn('Button62'); }
+      else if (tipo.includes('neoadyuvante')) { setBtn('Button64'); }
+      else if (tipo.includes('avanzado')) { setBtn('Button66'); }
+
+      // Nº línea
+      const lineaBtns: Record<string, string> = {'1':'Button68','2':'Button69','3':'Button70'};
+      if (lineaBtns[d.linea]) setBtn(lineaBtns[d.linea]);
+
+      // Ciclos
+      setT('Text71', d.intervalo_ciclo);
+      setT('Text72', d.ciclos_realizados);
+      setT('Text73', d.ciclos_programados);
+
+      // Valoración de respuesta
+      const resp = (d.respuesta || '').toLowerCase();
+      if (resp.includes('estable')) setBtn('Button137');
+      else if (resp.includes('parcial')) setBtn('Button138');
+      else if (resp.includes('completa')) setBtn('Button139');
+
+      // Tabla de drogas
+      const drugRows = [
+        [d.droga_1, d.dosis_1, d.dias_1, d.total_dia_1, 'Text76','Text79','Text80','Text81'],
+        [d.droga_2, d.dosis_2, d.dias_2, d.total_dia_2, 'Text82','Text83','Text84','Text85'],
+        [d.droga_3, d.dosis_3, d.dias_3, d.total_dia_3, 'Text86','Text87','Text88','Text89'],
+      ];
+      drugRows.forEach(([drg, dos, dias, tot, td, tds, tdi, tto]) => {
+        if (drg) { setT(td, String(drg).toUpperCase(), 9, 7); setT(tds, String(dos)); setT(tdi, String(dias)); setT(tto, String(tot)); }
+      });
+
+      // Lugar y fecha
+      setT('Text140', d.lugar_fecha);
+      setT('Text141', `Hospital Oncológico Prov. Cba - ${doctorData.nombre} Mat.${doctorData.matricula}`);
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
+      link.download = `Renovacion_BancoDrogas_${d.nombre_apellido || patient.name}.pdf`; link.click();
+      setStatus('¡Listo!');
+    } catch (e: any) { alert('Error: ' + e.message); }
+    finally { setProcessingId(null); setStatus(''); }
+  };
+
   const generateFieldMap = async (formDef: any) => {
     setProcessingId('map-' + formDef.id);
     setStatus('Generando mapa...');
@@ -542,6 +868,28 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                         <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-100 rounded text-[9px] text-yellow-700">
                             <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
                             <p>IMPORTANTE: Formulario generado por IA. Revise dosis y fechas antes de presentar.</p>
+                        </div>
+                    </div>
+                ) : form.type === 'auto_banco' ? (
+                    <div className="flex-1 flex flex-col gap-2">
+                        <button
+                          onClick={() => form.id === 'admision' ? fillAdmisionPDF(form) : fillRenovacionPDF(form)}
+                          disabled={processingId !== null}
+                          className={`flex-1 flex items-center justify-center space-x-2 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50
+                            ${processingId === form.id ? 'bg-green-600' : 'bg-green-700 hover:bg-green-800'}`}
+                        >
+                          {processingId === form.id ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>}
+                          <span>Generar</span>
+                        </button>
+                        <button
+                          onClick={() => downloadTemplate(form)}
+                          className="flex-1 flex items-center justify-center space-x-2 bg-gray-100 text-gray-700 hover:bg-gray-200 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          <Download size={14}/><span>Plantilla Vacía</span>
+                        </button>
+                        <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-100 rounded text-[9px] text-yellow-700">
+                            <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
+                            <p>Generado por IA. Revise antes de presentar.</p>
                         </div>
                     </div>
                 ) : (
