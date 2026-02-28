@@ -256,18 +256,51 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     
     const promptText = `
         Actúa como un ONCÓLOGO EXPERTO. Hoy es ${today}.
-        OBJETIVO: Completar planilla PAMI. REGLAS: Español, Informe conciso, Ciclos "Hasta progresión", Tratamiento estándar NCCN.
-        Extrae JSON: {
-          "paciente_nombre_real": "Nombre", "paciente_dni": "DNI", "paciente_celular": "Celular", "paciente_fnac": "DD/MM/AAAA",
-          "diagnostico_cie10": "Dx", "histopatologico": "Histo", "peso": "kg", "talla": "cm", "ecog": "0-4",
-          "estadio_inicial": "EI", "estadio_actual": "EA", "fecha_diagnostico_inicial": "DD/MM/AAAA",
-          "linea_tratamiento": "Línea", "antecedentes_qx": "Cx", "antecedentes_radio": "RT",
-          "laboratorio_formateado": "Lab", "informe_clinico_detallado": "Informe",
-          "motivo_solicitud": "Inicio...", "tipo_tratamiento": "Adyuvante...",
-          "ciclos_planeados": "Ciclos", "frecuencia_dias": "D1",
-          "droga_1": "D1", "presentacion_1": "P1", "dosis_1": "Dosis1",
-          "droga_2": "D2", "presentacion_2": "P2", "dosis_2": "Dosis2"
-        }`;
+        OBJETIVO: Extraer datos para completar formulario PAMI oncológico.
+        IDIOMA: Todo en español.
+        
+        REGLAS DE EXTRACCIÓN:
+        - fecha_nacimiento: buscar "Fecha nac.:", "Fecha de nacimiento:", "F. Nac" en el documento. Formato DD/MM/AAAA.
+        - estadio_inicial: estadio FIGO o TNM al momento del diagnóstico (ej: "FIGO IVB", "T2N1M0"). NO el actual.
+        - estadio_actual: estado clínico actual (ej: "Remisión completa", "Progresión", "Estable").
+        - linea_tratamiento: número de línea actual (ej: "1ra línea", "2da línea", "Seguimiento", "Adyuvancia").
+        - antecedentes_qx: TODAS las cirugías con fecha. Texto completo sin abreviar.
+        - antecedentes_radio: TODOS los tratamientos de radioterapia con fecha. Texto completo.
+        - informe_clinico_detallado: resumen clínico completo, máximo 800 caracteres, sin DNI ni nombre completo.
+        - laboratorio_formateado: datos de laboratorio relevantes, máximo 120 caracteres.
+        - Si un dato no está disponible, devolver cadena vacía "".
+        - Para droga_1/droga_2: si el paciente está en seguimiento sin tratamiento activo, devolver "".
+        
+        Devolver ÚNICAMENTE este JSON, sin markdown:
+        {
+          "paciente_nombre_real": "",
+          "paciente_fnac": "DD/MM/AAAA",
+          "paciente_celular": "",
+          "diagnostico_cie10": "",
+          "histopatologico": "",
+          "peso": "",
+          "talla": "",
+          "ecog": "",
+          "estadio_inicial": "",
+          "estadio_actual": "",
+          "fecha_diagnostico_inicial": "DD/MM/AAAA",
+          "linea_tratamiento": "",
+          "antecedentes_qx": "",
+          "antecedentes_radio": "",
+          "laboratorio_formateado": "",
+          "informe_clinico_detallado": "",
+          "motivo_solicitud": "",
+          "tipo_tratamiento": "",
+          "ciclos_planeados": "",
+          "frecuencia_dias": "",
+          "droga_1": "",
+          "presentacion_1": "",
+          "dosis_1": "",
+          "droga_2": "",
+          "presentacion_2": "",
+          "dosis_2": ""
+        }
+    `;
 
     const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${historyText}` }];
     if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
@@ -279,7 +312,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     const lastBrace = cleanText.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) cleanText = cleanText.substring(firstBrace, lastBrace + 1);
     return JSON.parse(cleanText);
-  };
+};
 
   const fillPamiPDF = async (formDef: any) => {
     if ((!files || files.length === 0) && !historyText) {
@@ -302,26 +335,43 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
 
-      const setText = (name: string, val: string, limit?: number, fontSize?: number) => {
-        try { 
-            const f = form.getTextField(name); 
-            if (val) {
-                let textToWrite = String(val);
-                if (limit && textToWrite.length > limit) textToWrite = textToWrite.substring(0, limit);
-                f.setText(textToWrite);
-                if (fontSize) f.setFontSize(fontSize);
+      // Auto-fit: shrink font until text fits within field width
+      const setText = (name: string, val: string, maxFontSize: number = 10, minFontSize: number = 6) => {
+        try {
+          const f = form.getTextField(name);
+          if (!val || !String(val).trim()) return;
+          const text = String(val).trim();
+
+          // Get actual field width from PDF widget
+          let fieldWidth = 350; // fallback default
+          try {
+            const widgets = (f as any).acroField.getWidgets();
+            if (widgets && widgets.length > 0) {
+              const rect = widgets[0].getRectangle();
+              fieldWidth = Math.max(rect.width - 6, 50);
             }
-        } catch (e) {}
+          } catch {}
+
+          // Calculate font size that fits: Helvetica avg char ≈ 0.52 * fontSize wide
+          let fontSize = maxFontSize;
+          const AVG_CHAR_RATIO = 0.52;
+          while (fontSize > minFontSize) {
+            const estimatedWidth = text.length * AVG_CHAR_RATIO * fontSize;
+            if (estimatedWidth <= fieldWidth) break;
+            fontSize = Math.round((fontSize - 0.5) * 10) / 10;
+          }
+
+          f.setText(text);
+          f.setFontSize(fontSize);
+        } catch {}
       };
-      const setCheck = (name: string, shouldCheck: boolean) => { try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {} };
 
       setText('Apellido y Nombre', finalName);
-      setText('Beneficiario Nº', ''); 
+      setText('Fecha de nacimiento', cleanDate(aiData.paciente_fnac) || aiData.paciente_fnac);
       setText('Celular', aiData.paciente_celular);
-      setText('Fecha de nacimiento', cleanFnac || aiData.paciente_fnac);
-      setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10, 85);
-      setText('Diagnóstico CIE 10', aiData.diagnostico_cie10, 85);
-      setText('Histopatológico', aiData.histopatologico, 85);
+      setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10);
+      setText('Diagnóstico CIE 10', aiData.diagnostico_cie10);
+      setText('Histopatológico', aiData.histopatologico);
       setText('ECOG Performance Status (0-4)', aiData.ecog);
       setText('ECOG', aiData.ecog);
       setText('Estadío actual', aiData.estadio_actual);
@@ -330,41 +380,53 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       setText('Fecha de Diagnóstico Inicial', aiData.fecha_diagnostico_inicial);
       setText('Fecha diagnostico inicial', aiData.fecha_diagnostico_inicial);
       setText('Línea de tratamiento', aiData.linea_tratamiento);
-      if (aiData.motivo_solicitud?.toLowerCase().includes('inicio')) setCheck('Inicio', true);
-      if (aiData.motivo_solicitud?.toLowerCase().includes('renovac')) setCheck('Renovación', true);
-      if (aiData.motivo_solicitud?.toLowerCase().includes('toxicidad')) setCheck('Cambio de Toxicidad', true);
-      if (aiData.motivo_solicitud?.toLowerCase().includes('progresi')) setCheck('Cambio por Progresión', true);
-      setText('Ciclos', aiData.ciclos_planeados, 41);
+      setText('Ciclos', aiData.ciclos_planeados);
       setText('Días', aiData.frecuencia_dias);
-      setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 80);
-      setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 75);
-      setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 1100, 9); 
-      setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 85);
+      setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 9, 5.5);
+      setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 9, 5.5);
+      setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 9, 7);
+      setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 9, 6);
       setText('Peso', aiData.peso);
       setText('Talla', aiData.talla);
       setText('Sup. Corporal', bsa);
       setText('Sup Corpora', bsa);
+
+      if (aiData.motivo_solicitud?.toLowerCase().includes('inicio')) setCheck('Inicio', true);
+      if (aiData.motivo_solicitud?.toLowerCase().includes('renovac')) setCheck('Renovación', true);
+      if (aiData.motivo_solicitud?.toLowerCase().includes('toxicidad')) setCheck('Cambio de Toxicidad', true);
+      if (aiData.motivo_solicitud?.toLowerCase().includes('progresi')) setCheck('Cambio por Progresión', true);
+
       if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
       if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
       if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
-      setText('DrogaGenéricoRow1', aiData.droga_1);
-      setText('PresentaciónRow1', aiData.presentacion_1);
-      setText('DosisRow1', aiData.dosis_1);
-      setText('N CiclosDuración díasRow1', aiData.frecuencia_dias); 
+
+      if (aiData.droga_1) {
+        setText('DrogaGenéricoRow1', aiData.droga_1);
+        setText('PresentaciónRow1', aiData.presentacion_1);
+        setText('DosisRow1', aiData.dosis_1);
+        setText('N CiclosDuración díasRow1', aiData.frecuencia_dias);
+      }
       if (aiData.droga_2) {
         setText('DrogaGenéricoRow2', aiData.droga_2);
         setText('PresentaciónRow2', aiData.presentacion_2);
         setText('DosisRow2', aiData.dosis_2);
         setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
       }
+
+      // Datos del médico
       setText('Apellido y Nombre_2', doctorData.nombre);
       setText('Matricula', doctorData.matricula);
       setText('Especialidad', doctorData.especialidad);
       setText('Email_2', doctorData.email);
       setText('Provincia', doctorData.provincia);
-      setText('CUIL', doctorData.cuil_prefix); setText('CUIL1', doctorData.cuil_dni); setText('CUIL2', doctorData.cuil_suffix);
-      setText('CUIT', doctorData.cuil_prefix); setText('CUIT1', doctorData.cuil_dni); setText('CUIT2', doctorData.cuil_suffix);
-      setText('Celular', doctorData.cel_area); setText('Celular1', doctorData.cel_num); setText('Celular_2', doctorData.cel_num); 
+      setText('CUIL', doctorData.cuil_prefix);
+      setText('CUIL1', doctorData.cuil_dni);
+      setText('CUIL2', doctorData.cuil_suffix);
+      setText('CUIT', doctorData.cuil_prefix);
+      setText('CUIT1', doctorData.cuil_dni);
+      setText('CUIT2', doctorData.cuil_suffix);
+      setText('Celular_2', doctorData.cel_area);
+      setText('Celular1', doctorData.cel_num);
       setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
 
       const pdfBytes = await pdfDoc.save();
