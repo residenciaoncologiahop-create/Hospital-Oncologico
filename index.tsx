@@ -312,7 +312,12 @@ const App = ({ user }: AppProps) => {
             }
 
             alert(`Procesado: ${events.length} eventos y ${extractedLabs.length} laboratorios.`);
-
+            } catch (e: any) {
+            setLastError(e.message);
+        } finally {
+            setIsProcessingDocs(false);
+        }
+    };
 
     const handleAddManualLab = async (newLab: LabResult) => {
         if (!selectedPatientId) return;
