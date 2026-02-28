@@ -43,8 +43,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   ];
 
   const calculateBSA = (weight: string, height: string) => {
-    const w = parseFloat(weight?.toString().replace(',', '.'));
-    const h = parseFloat(height?.toString().replace(',', '.'));
+    let w = parseFloat(weight?.toString().replace(',', '.'));
+    let h = parseFloat(height?.toString().replace(',', '.'));
+    // Corregir talla en metros si viene mal (ej: 1.60 en vez de 160)
+    if (h > 0 && h < 3) h = h * 100;
     if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) return Math.sqrt((w * h) / 3600).toFixed(2);
     return '';
   };
@@ -264,10 +266,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         - estadio_inicial: estadio FIGO o TNM al momento del diagnóstico (ej: "FIGO IVB", "T2N1M0"). NO el actual.
         - estadio_actual: estado clínico actual (ej: "Remisión completa", "Progresión", "Estable").
         - linea_tratamiento: número de línea actual (ej: "1ra línea", "2da línea", "Seguimiento", "Adyuvancia").
-        - antecedentes_qx: TODAS las cirugías con fecha. Texto completo sin abreviar.
-        - antecedentes_radio: TODOS los tratamientos de radioterapia con fecha. Texto completo.
+        - antecedentes_qx: Resumen CONCISO de cirugías usando abreviaturas médicas estándar (Cx=cirugía, Nef=nefrectomía, LAP=laparotomía, etc). Incluir fecha y lado. Máximo 120 caracteres. Ej: "Nef izq (02/2024), Extracción implante subdérmico (05/2024)".
+- antecedentes_radio: Resumen CONCISO usando abreviaturas (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis si está disponible y fecha. Máximo 120 caracteres. Ej: "QRT (Cisplatino) + BT (09-10/2023)".
         - informe_clinico_detallado: resumen clínico completo, máximo 800 caracteres, sin DNI ni nombre completo.
-        - laboratorio_formateado: datos de laboratorio relevantes, máximo 120 caracteres.
+        - laboratorio_formateado: SOLO parámetros oncológicamente relevantes para este diagnóstico (hemograma, función renal/hepática, marcadores tumorales específicos). Excluir hormonas de fertilidad, lípidos u otros no relacionados. Formato conciso: "Hb 12g/dl, Cr 0.8, LDH 180". Máximo 100 caracteres.
         - Si un dato no está disponible, devolver cadena vacía "".
         - Para droga_1/droga_2: si el paciente está en seguimiento sin tratamiento activo, devolver "".
         
@@ -368,7 +370,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
       setText('Apellido y Nombre', finalName);
       setText('Fecha de nacimiento', cleanDate(aiData.paciente_fnac) || aiData.paciente_fnac);
-      setText('Celular', aiData.paciente_celular);
       setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10);
       setText('Diagnóstico CIE 10', aiData.diagnostico_cie10);
       setText('Histopatológico', aiData.histopatologico);
@@ -382,10 +383,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       setText('Línea de tratamiento', aiData.linea_tratamiento);
       setText('Ciclos', aiData.ciclos_planeados);
       setText('Días', aiData.frecuencia_dias);
-      setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 9, 5.5);
-      setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 9, 5.5);
-      setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 9, 7);
-      setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 9, 6);
+      setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 9, 7);
+      setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 9, 7);
+      setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 9, 7.5);
+      setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 9, 7.5);;
       setText('Peso', aiData.peso);
       setText('Talla', aiData.talla);
       setText('Sup. Corporal', bsa);
