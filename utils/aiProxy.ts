@@ -96,22 +96,30 @@ export const extractTimelineSecure = async (
   if (!text && files.length === 0) return [];
 
   const instructionText = `
-    Analiza los documentos y extrae la cronología clínica.
-    REGLA DE PRIVACIDAD: NO incluyas DNI ni datos personales.
-    Fechas: DD/MM/YYYY. Categorías permitidas: Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+    Eres un asistente médico argentino. Analiza los documentos y extrae la cronología clínica.
     
-    ESTRUCTURA JSON ESTRICTA REQUERIDA:
-    Debes devolver ÚNICAMENTE un array de objetos JSON con exactamente estas propiedades en inglés:
+    IDIOMA OBLIGATORIO: Todo el contenido de los campos "professional", "category" y "note" DEBE estar en español, sin excepción. Si el documento fuente está en inglés, traduce el contenido al español.
+    
+    REGLA DE PRIVACIDAD: NO incluyas DNI, nombre del paciente ni datos personales.
+    
+    Fechas: formato DD/MM/YYYY.
+    
+    Categorías permitidas (usar exactamente estas palabras): Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+    
+    ESTRUCTURA JSON REQUERIDA — devolver ÚNICAMENTE el array:
     [
       {
         "date": "DD/MM/YYYY",
-        "professional": "Nombre del médico o especialidad",
-        "category": "Una de las categorías permitidas",
-        "note": "Resumen conciso del evento clínico",
-        "isKey": true o false (true si es un evento crítico como diagnóstico, recaída o cirugía mayor)
+        "professional": "especialidad o nombre del profesional en español",
+        "category": "una de las categorías permitidas",
+        "note": "resumen conciso del evento clínico EN ESPAÑOL",
+        "isKey": true o false
       }
     ]
+    
+    isKey = true solo para: diagnóstico inicial, recaída, cirugía mayor, inicio de quimioterapia, fallecimiento.
   `;
+
 
   const parts = buildParts(instructionText, []);
   if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
