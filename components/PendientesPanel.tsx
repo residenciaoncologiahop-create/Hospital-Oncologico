@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
 import { db } from '../firebase';
 import { Plus, Check, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { notifyPendientesHoy, notifyPendientesManana } from '../utils/notificationService';
 
 interface Pendiente {
   id: string;
@@ -43,6 +44,19 @@ const PendientesPanel: React.FC<PendientesPanelProps> = ({ doctorId, initialTab 
     });
     return () => unsub();
   }, [doctorId]);
+
+  useEffect(() => {
+    if (pendientes.length === 0) return;
+
+    const todayPending = pendientes.filter(p => p.date === today && !p.done).length;
+    notifyPendientesHoy(todayPending);
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const tomorrowPending = pendientes.filter(p => p.date === tomorrowStr && !p.done).length;
+    notifyPendientesManana(tomorrowPending);
+  }, [pendientes]);
 
   const todayTasks = pendientes.filter(p => p.date === today).sort((a, b) => a.createdAt - b.createdAt);
   const selectedTasks = pendientes.filter(p => p.date === selectedDate).sort((a, b) => a.createdAt - b.createdAt);
