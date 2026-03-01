@@ -819,7 +819,9 @@ CONTEXTO CLÍNICO: ${historyText}
       const si = clean.indexOf('{'), ei = clean.lastIndexOf('}');
       if (si !== -1 && ei !== -1) clean = clean.substring(si, ei + 1);
       const d = JSON.parse(clean);
-      const bsa = calculateBSA(d.peso, d.altura);
+      let alturaCorregida = d.altura ? String(d.altura).replace(',', '.') : '';
+if (alturaCorregida && parseFloat(alturaCorregida) < 3) alturaCorregida = String(Math.round(parseFloat(alturaCorregida) * 100));
+const bsa = calculateBSA(d.peso, alturaCorregida);
 
       setStatus('Generando PDF...');
 
@@ -868,21 +870,21 @@ CONTEXTO CLÍNICO: ${historyText}
       };
 
       // ── PÁGINA 1 ──
-      draw(p1, 153, 277.5, d.nombre_apellido);
-      draw(p1, 276, 289.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
-      draw(p1, 87,  301.5, d.edad);
-      draw(p1, 229, 301.5, d.sexo);
-      draw(p1, 115, 313.5, d.domicilio);
-      draw(p1, 110, 325.5, d.localidad);
-      draw(p1, 347, 325.5, d.provincia || 'Córdoba');
-      draw(p1, 103, 337.5, d.telefono);
-      draw(p1, 318, 337.5, d.celular);
-      draw(p1, 152, 349.5, d.email);
-      draw(p1, 121, 361.5, d.diagnostico);
-      draw(p1, 114, 373.5, d.n_ciclo || '1');
-      draw(p1, 91,  385.5, d.altura ? `${d.altura} cm` : '');
-      draw(p1, 191, 385.5, d.peso ? `${d.peso} kg` : '');
-      draw(p1, 362, 385.5, bsa ? `${bsa} m²` : '');
+      draw(p1, 153, 289.5, d.nombre_apellido);
+draw(p1, 276, 301.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
+draw(p1, 87,  313.5, d.edad);
+draw(p1, 229, 313.5, d.sexo);
+draw(p1, 115, 325.5, d.domicilio);
+draw(p1, 110, 337.5, d.localidad);
+draw(p1, 347, 337.5, d.provincia || 'Córdoba');
+draw(p1, 103, 349.5, d.telefono);
+draw(p1, 318, 349.5, d.celular);
+draw(p1, 152, 361.5, d.email);
+draw(p1, 121, 373.5, d.diagnostico);
+draw(p1, 114, 385.5, d.n_ciclo || '1');
+draw(p1, 91,  397.5, alturaCorregida ? `${alturaCorregida} cm` : '');
+draw(p1, 191, 397.5, d.peso ? `${d.peso} kg` : '');
+draw(p1, 362, 397.5, bsa ? `${bsa} m²` : '');
 
       draw(p1, 253, 429.4, doctorData.nombre);
       draw(p1, 124, 441.4, doctorData.especialidad || 'Oncología Clínica');
