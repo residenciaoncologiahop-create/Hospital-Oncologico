@@ -887,6 +887,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                         >
                           <Download size={14}/><span>Plantilla Vacía</span>
                         </button>
+                        <button
+                          onClick={() => generateClinicalSummary(form.context || 'SOLICITUD')}
+                          disabled={processingId !== null}
+                          className="flex-1 flex items-center justify-center space-x-2 bg-purple-600 text-white hover:bg-purple-700 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                        >
+                          {processingId === 'summary' ? <Loader2 className="animate-spin" size={14}/> : <FilePlus size={14}/>}
+                          <span>Resumen Clínico</span>
+                        </button>
                         <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-100 rounded text-[9px] text-yellow-700">
                             <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
                             <p>Generado por IA. Revise antes de presentar.</p>
