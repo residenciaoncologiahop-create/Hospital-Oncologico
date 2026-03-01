@@ -39,7 +39,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'auto_banco', context: 'ADMISIÓN' },
 { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'auto_banco', context: 'RENOVACIÓN' },
-    { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/nuevo_dinadic.pdf', type: 'manual', context: 'SOLICITUD' },
+    { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/nuevo_dinadic.pdf', type: 'auto_dinadic', context: 'SOLICITUD' },
   ];
 
   const calculateBSA = (weight: string, height: string) => {
@@ -767,6 +767,223 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
+  const generateDinadicPDF = async () => {
+    if (!historyText && (!files || files.length === 0)) {
+      alert("⚠️ Suba la Historia Clínica primero.");
+      return;
+    }
+    setProcessingId('dinadic');
+    setStatus('Analizando historia clínica...');
+    try {
+      const today = new Date().toLocaleDateString('es-AR');
+
+      // 1. EXTRACCIÓN DE DATOS VÍA IA
+      const extractPrompt = `
+Actúa como oncólogo experto. Hoy es ${today}.
+Analizá la historia clínica y extraé datos para el formulario DINADIC (Solicitud de Medicamentos - DADSE).
+IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de código.
+
+{
+  "nombre_apellido": "",
+  "tipo_documento": "DNI",
+  "numero_documento": "",
+  "edad": "",
+  "sexo": "Femenino o Masculino",
+  "domicilio": "",
+  "localidad": "",
+  "provincia": "Córdoba",
+  "telefono": "",
+  "celular": "",
+  "email": "",
+  "diagnostico": "",
+  "altura": "",
+  "peso": "",
+  "n_ciclo": "1",
+  "fecha_diagnostico": "DD/MM/AAAA",
+  "resumen_hc": "Resumen clínico con estadio e inmunohistoquímica. Narrativa cronológica. Máx 690 chars (6 líneas × 115).",
+  "metodos_complementarios": "Estudios de imagen y laboratorio con fechas y resultados clave. Máx 575 chars (5 líneas).",
+  "estado_general": "ECOG y comorbilidades relevantes. Máx 345 chars (3 líneas).",
+  "movilidad": "ambulante/semi ambulante/no ambulante",
+  "tratamientos_previos": "Tratamientos oncológicos previos con fechas. Máx 345 chars (3 líneas).",
+  "tipo_terapia_previa": "Cx, QT, RT, etc con fechas. Abreviaturas médicas. Máx 460 chars (4 líneas).",
+  "tipo_terapia_actual": "adyuvancia/neoadyuvancia/avanzado",
+  "linea": "1/2/3",
+  "numero_ciclos": "",
+  "frecuencia_ciclos": "",
+  "tiempo_tratamiento": "",
+  "fecha_inicio": "DD/MM/AAAA",
+  "medicamentos": "Nombre genérico. Máx 345 chars (3 líneas).",
+  "dosis_m2": "",
+  "dosis_total_ciclo": "",
+  "dias_admin": "",
+  "intervalo": "",
+  "fundamentacion": "Justificación oncológica del tratamiento. Máx 345 chars (3 líneas)."
+}
+
+CONTEXTO CLÍNICO: ${historyText}
+      `;
+
+      const parts: any[] = [{ text: extractPrompt }];
+      if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+
+      const res = await callGemini({ parts, responseMimeType: "application/json" });
+      let clean = (res.text || '{}').replace(/```json|```/g, '').trim();
+      const si = clean.indexOf('{'), ei = clean.lastIndexOf('}');
+      if (si !== -1 && ei !== -1) clean = clean.substring(si, ei + 1);
+      const d = JSON.parse(clean);
+      const bsa = calculateBSA(d.peso, d.altura);
+
+      setStatus('Generando PDF...');
+
+      // 2. CARGAR PDF ORIGINAL Y SUPERPONER TEXTO
+      const formUrl = window.location.origin + '/forms/nuevo_dinadic.pdf';
+      const pdfRes = await fetch(formUrl);
+      if (!pdfRes.ok) throw new Error('No se encontró el formulario DINADIC.');
+      const pdfDoc = await PDFDocument.load(await pdfRes.arrayBuffer());
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      const pages = pdfDoc.getPages();
+      const p1 = pages[0];
+      const p2 = pages[1];
+      const pH = 841.9; // altura A4
+      const FS = 8;     // font size base
+      const maxW = 480; // ancho útil de texto
+      const lineSpacing = 12; // espaciado entre líneas de puntos
+
+      // Helper: dibujar texto simple en coordenadas absolutas
+      // pdfplumber top → pdf-lib y: y = pH - top - 9 (para FS=8, queda sobre la línea de puntos)
+      const draw = (page: any, x: number, top: number, text: string, fs = FS, f = font) => {
+        if (!text?.trim()) return;
+        const str = String(text).trim();
+        page.drawText(str, { x, y: pH - top - 9, size: fs, font: f });
+      };
+
+      // Helper: wrap text into multiple dot-line rows
+      const drawLines = (page: any, x: number, firstTop: number, text: string, maxLines: number, fs = FS) => {
+        if (!text?.trim()) return;
+        const charPerLine = Math.floor(maxW / (0.52 * fs));
+        const words = String(text).trim().split(' ');
+        const lines: string[] = [];
+        let cur = '';
+        for (const w of words) {
+          if (lines.length >= maxLines) break;
+          const test = cur ? cur + ' ' + w : w;
+          if (test.length > charPerLine && cur) { lines.push(cur); cur = w; }
+          else { cur = test; }
+        }
+        if (cur && lines.length < maxLines) lines.push(cur);
+        lines.forEach((line, i) => {
+          page.drawText(line, { x, y: pH - firstTop - 9 - i * lineSpacing, size: fs, font });
+        });
+      };
+
+      // Helper: marcar checkbox dibujando X
+      const markX = (page: any, x: number, top: number) => {
+        page.drawText('X', { x, y: pH - top - 9, size: 9, font: fontBold });
+      };
+
+      // ── PÁGINA 1 ──────────────────────────────────────────────
+      // Datos del paciente
+      draw(p1, 153, 277.5, d.nombre_apellido);
+      draw(p1, 276, 289.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
+      draw(p1, 87,  301.5, d.edad);
+      draw(p1, 229, 301.5, d.sexo);
+      draw(p1, 115, 313.5, d.domicilio);
+      draw(p1, 110, 325.5, d.localidad);
+      draw(p1, 347, 325.5, d.provincia || 'Córdoba');
+      draw(p1, 103, 337.5, d.telefono);
+      draw(p1, 318, 337.5, d.celular);
+      draw(p1, 152, 349.5, d.email);
+      draw(p1, 121, 361.5, d.diagnostico);
+      draw(p1, 114, 373.5, d.n_ciclo || '1');
+      draw(p1, 91,  385.5, d.altura ? `${d.altura} cm` : '');
+      draw(p1, 191, 385.5, d.peso ? `${d.peso} kg` : '');
+      draw(p1, 362, 385.5, bsa ? `${bsa} m²` : '');
+
+      // Datos del médico
+      draw(p1, 253, 429.4, doctorData.nombre);
+      draw(p1, 124, 441.4, doctorData.especialidad || 'Oncología Clínica');
+      draw(p1, 100, 453.4, 'Oncología');
+      draw(p1, 239, 465.4, '');  // Jefe de servicio — no disponible
+      draw(p1, 226, 477.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 96,  489.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 358, 489.4, doctorData.email);
+
+      // Diagnóstico que justifica (línea corta hasta ~374)
+      draw(p1, 121, 533.2, d.diagnostico);
+      draw(p1, 490, 533.2, cleanDate(d.fecha_diagnostico) || d.fecha_diagnostico || '');
+
+      // Resumen HC — 6 líneas (top: 569.2, 581.2, 593.2, 605.2, 617.2, 629.2)
+      drawLines(p1, 57, 569.2, d.resumen_hc, 6);
+
+      // Métodos complementarios — 5 líneas (top: 677.2 … 725.2)
+      drawLines(p1, 57, 677.2, d.metodos_complementarios, 5);
+
+      // ── PÁGINA 2 ──────────────────────────────────────────────
+      // Estado general — 3 líneas (top: 83, 95, 107)
+      drawLines(p2, 57, 83.0, d.estado_general, 3);
+
+      // Movilidad checkbox
+      const movilidad = (d.movilidad || 'ambulante').toLowerCase();
+      if (movilidad.includes('no')) markX(p2, 411, 154.3);
+      else if (movilidad.includes('semi')) markX(p2, 246, 154.3);
+      else markX(p2, 96, 154.3);
+
+      // Tratamientos previos — 3 líneas (top: 213.5, 225.5, 237.5)
+      drawLines(p2, 57, 213.5, d.tratamientos_previos, 3);
+
+      // Tipo terapia previa — 4 líneas (top: 286.7, 298.7, 310.7, 322.7)
+      drawLines(p2, 57, 286.7, d.tipo_terapia_previa, 4);
+
+      // Tipo de terapia (NEOADYUVANCIA / ADYUVANCIA / AVANZADO) + Línea
+      const tipoActual = (d.tipo_terapia_actual || '').toLowerCase();
+      if (tipoActual.includes('neoadyu')) markX(p2, 57, 368.1);
+      else if (tipoActual.includes('adyu')) markX(p2, 166, 368.1);
+      else if (tipoActual.includes('avanzado')) markX(p2, 265, 368.1);
+      const linea = String(d.linea || '1');
+      if (linea === '1') markX(p2, 354, 368.1);
+      else if (linea === '2') markX(p2, 417, 368.1);
+      else if (linea === '3') markX(p2, 480, 368.1);
+
+      // Esquema terapéutico
+      draw(p2, 173, 444.0, d.numero_ciclos);
+      draw(p2, 178, 456.0, d.frecuencia_ciclos);
+      draw(p2, 176, 468.0, d.tiempo_tratamiento);
+      draw(p2, 277, 480.0, cleanDate(d.fecha_inicio) || d.fecha_inicio || '');
+
+      // Medicamentos — línea principal + 2 líneas extra (top: 492, 504, 516)
+      drawLines(p2, 57, 492.0, d.medicamentos, 3);
+
+      // Dosis / m2, Dosis total ciclo, Días admin, Intervalo
+      draw(p2, 57,  528.0, d.dosis_m2);
+      draw(p2, 230, 528.0, d.dosis_total_ciclo);
+      draw(p2, 344, 528.0, d.dias_admin);
+      draw(p2, 447, 528.0, d.intervalo);
+
+      // Fundamentación — 3 líneas (top: 564, 576, 588)
+      drawLines(p2, 57, 564.0, d.fundamentacion, 3);
+
+      // Fecha de prescripción
+      draw(p2, 171, 725.4, today);
+
+      // Guardar y descargar
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `DINADIC_${d.nombre_apellido || patient.name}_${today.replace(/\//g, '-')}.pdf`;
+      link.click();
+      setStatus('¡Listo!');
+    } catch (e: any) {
+      alert("Error al generar DINADIC: " + e.message);
+    } finally {
+      setProcessingId(null);
+      setStatus('');
+    }
+  };
+
+
   const generateFieldMap = async (formDef: any) => {
     setProcessingId('map-' + formDef.id);
     setStatus('Generando mapa...');
@@ -868,6 +1085,28 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
                         <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-100 rounded text-[9px] text-yellow-700">
                             <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
                             <p>IMPORTANTE: Formulario generado por IA. Revise dosis y fechas antes de presentar.</p>
+                        </div>
+                    </div>
+                ) : form.type === 'auto_dinadic' ? (
+                    <div className="flex-1 flex flex-col gap-2">
+                        <button
+                          onClick={() => generateDinadicPDF()}
+                          disabled={processingId !== null}
+                          className={`flex-1 flex items-center justify-center space-x-2 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50
+                            ${processingId === 'dinadic' ? 'bg-blue-600' : 'bg-blue-700 hover:bg-blue-800'}`}
+                        >
+                          {processingId === 'dinadic' ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>}
+                          <span>Generar</span>
+                        </button>
+                        <button
+                          onClick={() => downloadTemplate(form)}
+                          className="flex-1 flex items-center justify-center space-x-2 bg-gray-100 text-gray-700 hover:bg-gray-200 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          <Download size={14}/><span>Plantilla Vacía</span>
+                        </button>
+                        <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-100 rounded text-[9px] text-yellow-700">
+                            <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
+                            <p>Generado por IA. Revise antes de presentar.</p>
                         </div>
                     </div>
                 ) : form.type === 'auto_banco' ? (
