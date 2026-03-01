@@ -838,11 +838,22 @@ CONTEXTO CLÍNICO: ${historyText}
       const maxW = 480;
       const lineSpacing = 12;
 
-      // CAMBIO 1: offset corregido a +3 (encima de la línea de puntos)
-      const draw = (page: any, x: number, top: number, text: string, fs = FS, f = font) => {
+      // Helper: limpiar dots con rectángulo blanco, luego escribir texto
+      // rightEdge: límite derecho del campo (para no pisar campos adyacentes en la misma línea)
+      const draw = (page: any, x: number, top: number, text: string, fs = FS, f = font, rightEdge = 538) => {
         if (!text?.trim()) return;
         const str = String(text).trim();
-        page.drawText(str, { x, y: pH - top + 3, size: fs, font: f });
+        const yPos = pH - top + 3;
+        // Borrar dots con rectángulo blanco opaco
+        page.drawRectangle({
+          x: x - 1,
+          y: yPos - 3,
+          width: rightEdge - x + 1,
+          height: fs + 4,
+          color: rgb(1, 1, 1),
+          opacity: 1,
+        });
+        page.drawText(str, { x, y: yPos, size: fs, font: f });
       };
 
       const drawLines = (page: any, x: number, firstTop: number, text: string, maxLines: number, fs = FS) => {
@@ -859,7 +870,17 @@ CONTEXTO CLÍNICO: ${historyText}
         }
         if (cur && lines.length < maxLines) lines.push(cur);
         lines.forEach((line, i) => {
-          page.drawText(line, { x, y: pH - firstTop + 3 - i * lineSpacing, size: fs, font });
+          const yPos = pH - firstTop + 3 - i * lineSpacing;
+          // Borrar dots con rectángulo blanco opaco
+          page.drawRectangle({
+            x: x - 1,
+            y: yPos - 3,
+            width: 538 - x + 1,
+            height: fs + 4,
+            color: rgb(1, 1, 1),
+            opacity: 1,
+          });
+          page.drawText(line, { x, y: yPos, size: fs, font });
         });
       };
 
@@ -870,25 +891,25 @@ CONTEXTO CLÍNICO: ${historyText}
       // ── PÁGINA 1 ──
       draw(p1, 153, 277.5, d.nombre_apellido);
       draw(p1, 276, 289.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
-      draw(p1, 87,  301.5, d.edad);
+      draw(p1, 87,  301.5, d.edad,                       FS, font, 198);  // hasta antes de "Sexo:"
       draw(p1, 229, 301.5, d.sexo);
       draw(p1, 115, 313.5, d.domicilio);
-      draw(p1, 110, 325.5, d.localidad);
+      draw(p1, 110, 325.5, d.localidad,                  FS, font, 292);  // hasta antes de "Provincia:"
       draw(p1, 347, 325.5, d.provincia || 'Córdoba');
-      draw(p1, 103, 337.5, d.telefono);
+      draw(p1, 103, 337.5, d.telefono,                   FS, font, 314);  // hasta antes de "Celular:"
       draw(p1, 318, 337.5, d.celular);
       draw(p1, 152, 349.5, d.email);
       draw(p1, 121, 361.5, d.diagnostico);
       draw(p1, 114, 373.5, d.n_ciclo || '1');
-      draw(p1, 91,  385.5, d.altura ? `${d.altura} cm` : '');
-      draw(p1, 191, 385.5, d.peso ? `${d.peso} kg` : '');
+      draw(p1, 91,  385.5, d.altura ? `${d.altura} cm` : '',  FS, font, 160); // hasta antes de "Peso:"
+      draw(p1, 191, 385.5, d.peso ? `${d.peso} kg` : '',      FS, font, 313); // hasta antes de "Superficie corporal:"
       draw(p1, 362, 385.5, bsa ? `${bsa} m²` : '');
 
       draw(p1, 253, 429.4, doctorData.nombre);
       draw(p1, 124, 441.4, doctorData.especialidad || 'Oncología Clínica');
-      draw(p1, 100, 453.4, 'Oncología');
-      draw(p1, 226, 477.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
-      draw(p1, 96,  489.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 100, 453.4, 'Oncología',                                           FS, font, 220); // hasta antes de "Sello:"
+      draw(p1, 226, 477.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '', FS, font, 350); // hasta "Interno:"
+      draw(p1, 96,  489.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '', FS, font, 260); // hasta "CorreoElectrónico:"
       draw(p1, 358, 489.4, doctorData.email);
 
       draw(p1, 121, 533.2, d.diagnostico);
@@ -924,9 +945,9 @@ CONTEXTO CLÍNICO: ${historyText}
 
       drawLines(p2, 57, 492.0, d.medicamentos, 3);
 
-      draw(p2, 57,  528.0, d.dosis_m2);
-      draw(p2, 230, 528.0, d.dosis_total_ciclo);
-      draw(p2, 344, 528.0, d.dias_admin);
+      draw(p2, 57,  528.0, d.dosis_m2,          FS, font, 226); // hasta "Dosis total:"
+      draw(p2, 230, 528.0, d.dosis_total_ciclo, FS, font, 340); // hasta "Días de admin:"
+      draw(p2, 344, 528.0, d.dias_admin,         FS, font, 442); // hasta "Intervalo:"
       draw(p2, 447, 528.0, d.intervalo);
 
       drawLines(p2, 57, 564.0, d.fundamentacion, 3);
