@@ -19,7 +19,7 @@ import {
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
     List, File, Loader2, AlertCircle, Info, Terminal,
     Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation,
-    PanelLeftClose, PanelLeftOpen, FileInput, Image
+    PanelLeftClose, PanelLeftOpen, FileInput, Image, Zap, ChevronDown
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -186,6 +186,7 @@ const App = ({ user }: AppProps) => {
     const [showAuditModal, setShowAuditModal] = useState(false);
     const [showPendientesModal, setShowPendientesModal] = useState(false);
     const [pendientesTodayCount, setPendientesTodayCount] = useState(0);
+    const [guardiaMode, setGuardiaMode] = useState(false);
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
 
@@ -605,6 +606,18 @@ const App = ({ user }: AppProps) => {
                                 <h1 className="font-black text-gray-700 text-sm tracking-tight">Seleccioná un caso</h1>
                             )}
                         </div>
+                        {/* Botón GUARDIA RÁPIDA */}
+                        <button
+                            onClick={() => setGuardiaMode(v => !v)}
+                            className={`mr-2 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all
+                                ${guardiaMode
+                                    ? 'bg-amber-500 text-white shadow-md shadow-amber-100'
+                                    : 'bg-gray-100 text-gray-500 hover:bg-amber-50 hover:text-amber-600'}`}
+                            title="Modo Guardia Rápida"
+                        >
+                            <Zap size={12}/>
+                            <span className="hidden sm:inline">Guardia</span>
+                        </button>
                         {/* Botón PENDIENTES */}
                         <button
                             onClick={() => setShowPendientesModal(v => !v)}
@@ -642,6 +655,101 @@ const App = ({ user }: AppProps) => {
                                 />
                             </div>
                         </>
+                    )}
+
+                    {/* ── GUARDIA RÁPIDA ─────────────────────────── */}
+                    {guardiaMode && (
+                        <div className="absolute inset-0 z-30 bg-gray-50 flex flex-col overflow-hidden">
+                            <div className="flex items-center justify-between px-6 py-3 bg-amber-500 text-white flex-shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <Zap size={16}/>
+                                    <span className="font-black text-sm uppercase tracking-widest">Modo Guardia</span>
+                                    <span className="text-amber-200 text-[10px] font-bold">— {patients.length} caso{patients.length !== 1 ? 's' : ''}</span>
+                                </div>
+                                <button
+                                    onClick={() => setGuardiaMode(false)}
+                                    className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-all"
+                                >
+                                    <X size={12}/> Salir
+                                </button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-5 scrollbar-hide">
+                                {patients.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-full text-center opacity-40 select-none">
+                                        <Stethoscope size={40} className="text-gray-300 mb-3"/>
+                                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Sin casos cargados</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                        {[...patients]
+                                            .sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0))
+                                            .map(p => {
+                                                const events = [...(p.timeline || [])].sort((a, b) => parseDate(b.date) - parseDate(a.date));
+                                                const lastEvent = events[0];
+                                                const txEvent = events.find(e =>
+                                                    /quimio|trat|esquema|ciclo|droga|fármaco|farmaco|inmunoter|hormonoter|radiote|cirugía|cirugia/i.test(e.category + ' ' + e.note)
+                                                );
+                                                const labs = (p.labResults || []).sort((a: any, b: any) => parseDate(b.date) - parseDate(a.date));
+                                                const seenTests = new Set<string>();
+                                                const recentLabs = labs.filter((l: any) => {
+                                                    if (seenTests.has(l.test)) return false;
+                                                    seenTests.add(l.test);
+                                                    return true;
+                                                }).slice(0, 4);
+                                                return (
+                                                    <div
+                                                        key={p.id}
+                                                        onClick={() => { setSelectedPatientId(p.id); setGuardiaMode(false); }}
+                                                        className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-amber-200 cursor-pointer transition-all group flex flex-col overflow-hidden"
+                                                    >
+                                                        <div className="px-4 pt-4 pb-3 border-b border-gray-50">
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">HC-{p.hcNumber}</p>
+                                                                    <p className="text-sm font-black text-gray-800 leading-tight truncate">{p.diagnosis}</p>
+                                                                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">{p.ageRange} años</p>
+                                                                </div>
+                                                                <ChevronRight size={14} className="text-gray-300 group-hover:text-amber-400 transition-colors flex-shrink-0 mt-1"/>
+                                                            </div>
+                                                        </div>
+                                                        <div className="px-4 py-2.5 border-b border-gray-50">
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Trat. actual</p>
+                                                            {txEvent ? (
+                                                                <p className="text-[11px] font-medium text-gray-700 leading-snug line-clamp-2">{txEvent.note}</p>
+                                                            ) : lastEvent ? (
+                                                                <p className="text-[11px] font-medium text-gray-500 leading-snug line-clamp-2 italic">{lastEvent.note}</p>
+                                                            ) : (
+                                                                <p className="text-[10px] text-gray-300 italic">Sin eventos registrados</p>
+                                                            )}
+                                                        </div>
+                                                        <div className="px-4 py-2.5 flex-1">
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Último lab</p>
+                                                            {recentLabs.length > 0 ? (
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {recentLabs.map((l: any, i: number) => (
+                                                                        <span key={i} className="inline-flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-lg px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                                                                            <span className="text-gray-400 font-medium">{l.test}</span>
+                                                                            <span>{l.value} {l.unit}</span>
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-[10px] text-gray-300 italic">Sin laboratorio</p>
+                                                            )}
+                                                        </div>
+                                                        {lastEvent && (
+                                                            <div className="px-4 py-2 bg-gray-50/80 border-t border-gray-50">
+                                                                <p className="text-[9px] text-gray-300 font-medium">Último evento: {lastEvent.date}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
+                                        }
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     )}
 
                     {selP ? (
