@@ -870,20 +870,20 @@ const bsa = calculateBSA(d.peso, alturaCorregida);
       };
 
       // ── PÁGINA 1 ──
-      draw(p1, 153, 289.5, d.nombre_apellido);
-draw(p1, 276, 301.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
-draw(p1, 87,  313.5, d.edad);
-draw(p1, 229, 313.5, d.sexo);
-draw(p1, 115, 325.5, d.domicilio);
-draw(p1, 110, 337.5, d.localidad);
-draw(p1, 347, 337.5, d.provincia || 'Córdoba');
-draw(p1, 103, 349.5, d.telefono);
-draw(p1, 318, 349.5, d.celular);
-draw(p1, 152, 361.5, d.email);
-draw(p1, 121, 373.5, d.diagnostico);
-draw(p1, 114, 385.5, d.n_ciclo || '1');
-draw(p1, 91,  397.5, alturaCorregida ? `${alturaCorregida} cm` : '');
-draw(p1, 191, 397.5, d.peso ? `${d.peso} kg` : '');
+      draw(p1, 153, 285.5, d.nombre_apellido);
+draw(p1, 276, 297.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
+draw(p1, 87,  309.5, d.edad);
+draw(p1, 229, 309.5, d.sexo);
+draw(p1, 115, 321.5, d.domicilio);
+draw(p1, 110, 333.5, d.localidad);
+draw(p1, 347, 333.5, d.provincia || 'Córdoba');
+draw(p1, 103, 345.5, d.telefono);
+draw(p1, 318, 345.5, d.celular);
+draw(p1, 152, 357.5, d.email);
+draw(p1, 121, 369.5, d.diagnostico);
+draw(p1, 114, 381.5, d.n_ciclo || '1');
+draw(p1, 91,  393.5, alturaCorregida ? `${alturaCorregida} cm` : '');
+draw(p1, 191, 393.5, d.peso ? `${d.peso} kg` : '');
 draw(p1, 362, 397.5, bsa ? `${bsa} m²` : '');
 
       draw(p1, 253, 429.4, doctorData.nombre);
@@ -894,37 +894,43 @@ draw(p1, 362, 397.5, bsa ? `${bsa} m²` : '');
       draw(p1, 358, 489.4, doctorData.email);
 
       draw(p1, 121, 533.2, d.diagnostico);
-      draw(p1, 490, 533.2, cleanDate(d.fecha_diagnostico) || d.fecha_diagnostico || '');
+      const [fdd, fdm, fda] = (cleanDate(d.fecha_diagnostico) || '').split('/');
+draw(p1, 490, 533.2, fdd || '');
+draw(p1, 507, 533.2, fdm || '');
+draw(p1, 524, 533.2, fda || '');
 
-      drawLines(p1, 57, 569.2, d.resumen_hc, 6);
-      drawLines(p1, 57, 677.2, d.metodos_complementarios, 5);
+      drawLines(p1, 57, 584.0, d.resumen_hc, 6);
+drawLines(p1, 57, 692.0, d.metodos_complementarios, 5);
 
       // ── PÁGINA 2 ──
       drawLines(p2, 57, 83.0, d.estado_general, 3);
 
       const movilidad = (d.movilidad || 'ambulante').toLowerCase();
-      if (movilidad.includes('no')) markX(p2, 411, 154.3);
-      else if (movilidad.includes('semi')) markX(p2, 246, 154.3);
-      else markX(p2, 96, 154.3);
+      if (movilidad.includes('no')) markX(p2, 418, 158.0);
+else if (movilidad.includes('semi')) markX(p2, 253, 158.0);
+else markX(p2, 103, 158.0);
 
       drawLines(p2, 57, 213.5, d.tratamientos_previos, 3);
       drawLines(p2, 57, 286.7, d.tipo_terapia_previa, 4);
 
       const tipoActual = (d.tipo_terapia_actual || '').toLowerCase();
-      if (tipoActual.includes('neoadyu')) markX(p2, 57, 368.1);
-      else if (tipoActual.includes('adyu')) markX(p2, 166, 368.1);
-      else if (tipoActual.includes('avanzado')) markX(p2, 265, 368.1);
-      const linea = String(d.linea || '1');
-      if (linea === '1') markX(p2, 354, 368.1);
-      else if (linea === '2') markX(p2, 417, 368.1);
-      else if (linea === '3') markX(p2, 480, 368.1);
+      if (tipoActual.includes('neoadyu')) markX(p2, 63, 372.0);
+else if (tipoActual.includes('adyu')) markX(p2, 172, 372.0);
+else if (tipoActual.includes('avanzado')) markX(p2, 271, 372.0);
+const linea = String(d.linea || '1');
+if (linea === '1') markX(p2, 360, 372.0);
+else if (linea === '2') markX(p2, 423, 372.0);
+else if (linea === '3') markX(p2, 486, 372.0);
 
-      draw(p2, 173, 444.0, d.numero_ciclos);
-      draw(p2, 178, 456.0, d.frecuencia_ciclos);
-      draw(p2, 176, 468.0, d.tiempo_tratamiento);
-      draw(p2, 277, 480.0, cleanDate(d.fecha_inicio) || d.fecha_inicio || '');
+      draw(p2, 173, 440.0, d.numero_ciclos);
+      draw(p2, 178, 452.0, d.frecuencia_ciclos);
+      draw(p2, 176, 464.0, d.tiempo_tratamiento);
+      const [fid, fim, fia] = (cleanDate(d.fecha_inicio) || '').split('/');
+draw(p2, 277, 480.0, fid || '');
+draw(p2, 305, 480.0, fim || '');
+draw(p2, 333, 480.0, fia || '');
 
-      drawLines(p2, 57, 492.0, d.medicamentos, 3);
+      drawLines(p2, 57, 502.0, d.medicamentos, 3);
 
       draw(p2, 57,  528.0, d.dosis_m2);
       draw(p2, 230, 528.0, d.dosis_total_ciclo);
