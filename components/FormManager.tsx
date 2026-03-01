@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle, CheckCircle2, Map 
+  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle, CheckCircle2, Map, Share2
 } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../utils/aiProxy';
@@ -40,12 +40,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'auto_banco', context: 'ADMISIÓN' },
     { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'auto_banco', context: 'RENOVACIÓN' },
     { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/nuevo_dinadic.pdf', type: 'auto_dinadic', context: 'SOLICITUD' },
+    { id: 'interconsulta', name: 'Resumen de Interconsulta / Derivación', file: '', type: 'interconsulta' },
   ];
 
   const calculateBSA = (weight: string, height: string) => {
     let w = parseFloat(weight?.toString().replace(',', '.'));
     let h = parseFloat(height?.toString().replace(',', '.'));
-    // Corregir talla en metros si viene mal (ej: 1.60 en vez de 160)
     if (h > 0 && h < 3) h = h * 100;
     if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) return Math.sqrt((w * h) / 3600).toFixed(2);
     return '';
@@ -94,8 +94,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             strategyPrompt = `ESTRATEGIA: ADMISIÓN / SOLICITUD DE ${drugName.toUpperCase()}. Objetivo: Justificar indicación inicial (ignorar continuidad si ya la tomó).`;
         }
 
+        // CAMBIO 3: subtítulo correcto según entidad
+        const entityLabel = context === 'SOLICITUD'
+          ? 'DINADIC - Dir. de Asistencia Directa por Situaciones Especiales'
+          : `${context} - BANCO DE DROGAS`;
+
         const prompt = `
-        Actúa como un Oncólogo Experto. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
+        Actúa como un Oncólogo Experto. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${entityLabel}.
         
         ${strategyPrompt}
         
@@ -125,7 +130,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
         setStatus('Generando PDF...');
 
-        // --- CREACIÓN DEL PDF ---
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -138,7 +142,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const marginBottom = 50; 
         let y = height - marginTop;
 
-        // 1. LOGO
         let logoLoaded = false;
         try {
             const logoUrl = window.location.origin + '/img/header_logo.png';
@@ -169,7 +172,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         y -= 25;
 
         const docTitle = "RESUMEN DE HISTORIA CLÍNICA";
-        const docSubTitle = `${context} - BANCO DE DROGAS`;
+        const docSubTitle = entityLabel;
         const dateText = `Córdoba Capital, ${today}`;
 
         const titleWidth = fontBold.widthOfTextAtSize(docTitle, 14);
@@ -253,11 +256,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  const extractPamiData = async () => {
+  // CAMBIO 4: extractPamiData recibe drugName
+  const extractPamiData = async (drugName: string) => {
     const today = new Date().toLocaleDateString('es-AR');
     
     const promptText = `
         Actúa como un ONCÓLOGO EXPERTO. Hoy es ${today}.
+        FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}. Completar droga_1 con este fármaco exacto.
         OBJETIVO: Extraer datos para completar formulario PAMI oncológico.
         IDIOMA: Todo en español.
         
@@ -267,11 +272,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         - estadio_actual: estado clínico actual (ej: "Remisión completa", "Progresión", "Estable").
         - linea_tratamiento: número de línea actual (ej: "1ra línea", "2da línea", "Seguimiento", "Adyuvancia").
         - antecedentes_qx: Resumen CONCISO de cirugías usando abreviaturas médicas estándar (Cx=cirugía, Nef=nefrectomía, LAP=laparotomía, etc). Incluir fecha y lado. Máximo 120 caracteres. Ej: "Nef izq (02/2024), Extracción implante subdérmico (05/2024)".
-- antecedentes_radio: Resumen CONCISO usando abreviaturas (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis si está disponible y fecha. Máximo 120 caracteres. Ej: "QRT (Cisplatino) + BT (09-10/2023)".
+        - antecedentes_radio: Resumen CONCISO usando abreviaturas (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis si está disponible y fecha. Máximo 120 caracteres. Ej: "QRT (Cisplatino) + BT (09-10/2023)".
         - informe_clinico_detallado: resumen clínico completo, máximo 800 caracteres, sin DNI ni nombre completo.
         - laboratorio_formateado: SOLO parámetros oncológicamente relevantes para este diagnóstico (hemograma, función renal/hepática, marcadores tumorales específicos). Excluir hormonas de fertilidad, lípidos u otros no relacionados. Formato conciso: "Hb 12g/dl, Cr 0.8, LDH 180". Máximo 100 caracteres.
         - Si un dato no está disponible, devolver cadena vacía "".
-        - Para droga_1/droga_2: si el paciente está en seguimiento sin tratamiento activo, devolver "".
+        - droga_1: usar EXACTAMENTE el fármaco indicado arriba.
         
         Devolver ÚNICAMENTE este JSON, sin markdown:
         {
@@ -314,21 +319,24 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     const lastBrace = cleanText.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) cleanText = cleanText.substring(firstBrace, lastBrace + 1);
     return JSON.parse(cleanText);
-};
+  };
 
   const fillPamiPDF = async (formDef: any) => {
     if ((!files || files.length === 0) && !historyText) {
         alert("⚠️ Suba la Historia Clínica primero.");
         return;
     }
+    // CAMBIO 4: pedir droga antes de procesar
+    const drugName = window.prompt('Ingrese el/los fármaco/s a solicitar en el formulario PAMI:');
+    if (!drugName || !drugName.trim()) return;
+
     setProcessingId(formDef.id);
     setStatus('Procesando PAMI...');
 
     try {
-      const aiData = await extractPamiData();
+      const aiData = await extractPamiData(drugName);
       const bsa = calculateBSA(aiData.peso, aiData.talla);
       const finalName = aiData.paciente_nombre_real || patient.name;
-      const cleanFnac = cleanDate(aiData.paciente_fnac);
 
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
@@ -337,15 +345,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
 
-      // Auto-fit: shrink font until text fits within field width
       const setText = (name: string, val: string, maxFontSize: number = 10, minFontSize: number = 6) => {
         try {
           const f = form.getTextField(name);
           if (!val || !String(val).trim()) return;
           const text = String(val).trim();
-
-          // Get actual field width from PDF widget
-          let fieldWidth = 350; // fallback default
+          let fieldWidth = 350;
           try {
             const widgets = (f as any).acroField.getWidgets();
             if (widgets && widgets.length > 0) {
@@ -353,8 +358,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
               fieldWidth = Math.max(rect.width - 6, 50);
             }
           } catch {}
-
-          // Calculate font size that fits: Helvetica avg char ≈ 0.52 * fontSize wide
           let fontSize = maxFontSize;
           const AVG_CHAR_RATIO = 0.52;
           while (fontSize > minFontSize) {
@@ -362,7 +365,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             if (estimatedWidth <= fieldWidth) break;
             fontSize = Math.round((fontSize - 0.5) * 10) / 10;
           }
-
           f.setText(text);
           f.setFontSize(fontSize);
         } catch {}
@@ -387,7 +389,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 9, 7);
       setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 9, 7);
       setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 9, 7.5);
-      setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 9, 7.5);;
+      setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 9, 7.5);
       setText('Peso', aiData.peso);
       setText('Talla', aiData.talla);
       setText('Sup. Corporal', bsa);
@@ -415,7 +417,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
       }
 
-      // Datos del médico
       setText('Apellido y Nombre_2', doctorData.nombre);
       setText('Matricula', doctorData.matricula);
       setText('Especialidad', doctorData.especialidad);
@@ -442,12 +443,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  const extractBancoDrogasData = async (context: string) => {
+  // CAMBIO 4: extractBancoDrogasData recibe drugName
+  const extractBancoDrogasData = async (context: string, drugName: string) => {
     const today = new Date().toLocaleDateString('es-AR');
     const isRenovacion = context === 'RENOVACIÓN';
 
     const prompt = `
       Actúa como oncólogo experto. Hoy es ${today}. Analizá la historia clínica y extraé datos para el formulario Banco de Drogas ${context}.
+      FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}. Usar en droga_1.
       IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown.
 
       ${isRenovacion ? `
@@ -497,7 +500,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         "ecog": "0",
         "tipo_tratamiento": "adyuvante/neoadyuvante/avanzado",
         "linea": "1",
-        "droga_1": "", "dosis_1": "", "dias_1": "", "total_dia_1": "",
+        "droga_1": "${drugName}", "dosis_1": "", "dias_1": "", "total_dia_1": "",
         "droga_2": "", "dosis_2": "", "dias_2": "", "total_dia_2": "",
         "droga_3": "", "dosis_3": "", "dias_3": "", "total_dia_3": "",
         "intervalo_ciclo": "",
@@ -538,10 +541,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const fillAdmisionPDF = async (formDef: any) => {
     if (!historyText && (!files || files.length === 0)) { alert("⚠️ Suba la Historia Clínica primero."); return; }
+    // CAMBIO 4: pedir droga antes de procesar
+    const drugName = window.prompt('Ingrese el/los fármaco/s para la Admisión Banco de Drogas:');
+    if (!drugName || !drugName.trim()) return;
+
     setProcessingId(formDef.id);
     setStatus('Procesando Admisión...');
     try {
-      const d = await extractBancoDrogasData('ADMISIÓN');
+      const d = await extractBancoDrogasData('ADMISIÓN', drugName);
       const bsa = calculateBSA(d.peso, d.talla);
       const [fnd, fnm, fna] = (cleanDate(d.fnac) || '').split('/');
       const [dxd, dxm, dxa] = (cleanDate(d.fecha_diagnostico) || '').split('/');
@@ -565,7 +572,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       };
       const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch {} };
 
-      // Datos del paciente
       setT('Text1', d.nombre_apellido);
       setT('Text2', 'Argentina');
       setT('Text3', fnd); setT('Text4', fnm); setT('Text5', fna);
@@ -580,59 +586,46 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       setT('Text18', d.diagnostico);
       setT('Text19', d.cie10);
 
-      // Sexo
       if (d.sexo === 'F') setBtn('Button9'); else setBtn('Button8');
 
-      // Receptores
       setT('Text20', d.receptor_RE);
       setT('Text21', d.receptor_RP);
       setT('Text22', d.receptor_HER2);
       setT('Text23', d.receptor_KRAS);
       setT('Text24', d.receptor_EGER);
 
-      // Fecha diagnóstico y TNM
       setT('Text27', dxd); setT('Text28', dxm); setT('Text29', dxa);
       setT('Text30', d.tnm_t); setT('Text31', d.tnm_n); setT('Text32', d.tnm_m);
       setT('Text33', d.estadio);
 
-      // Anatomía patológica (2 líneas)
       const ap = d.anatomia_patologica || '';
       setT('Text34', ap.substring(0, 220), 9, 6.5);
       if (ap.length > 220) setT('Text35', ap.substring(220, 440), 9, 6.5);
 
-      // Sup Corporal / Peso / Talla
       setT('Text36', bsa || d.sup_corporal);
       setT('Text37', d.peso);
       setT('Text38', d.talla);
 
-      // ECOG
       const ecogBtn = ['Button39','Button40','Button41','Button42'];
       const ecogIdx = parseInt(d.ecog || '0');
       if (ecogIdx >= 0 && ecogIdx <= 3) setBtn(ecogBtn[ecogIdx]);
 
-      // Tratamientos previos
       if (d.tratamientos_sistemicos_si) setBtn('Button44'); else setBtn('Button45');
       setT('Text46', d.qt_droga, 9, 6.5);
 
-      // RT
       if (d.rt_primario_si) setBtn('Button52'); else setBtn('Button53');
       if (d.rt_localizacion) setT('Text54', d.rt_localizacion, 9, 7);
 
-      // Tratamiento a realizar
       const tipo = (d.tipo_tratamiento || '').toLowerCase();
       if (tipo.includes('adyuvante') && !tipo.includes('neo')) setBtn('Button68');
       else if (tipo.includes('neoadyuvante')) setBtn('Button70');
-      else if (tipo.includes('avanzado')) { /* Button para avanzado */ }
 
-      // Nº línea
       const lineaBtns: Record<string, string> = {'1':'Button89','2':'Button90','3':'Button91'};
       if (lineaBtns[d.linea]) setBtn(lineaBtns[d.linea]);
 
-      // Intervalo y ciclos
       setT('Text92', d.intervalo_ciclo);
       setT('Text94', d.ciclos_programados);
 
-      // Tabla de drogas
       const drugRows = [
         [d.droga_1, d.dosis_1, d.dias_1, d.total_dia_1, 'Text95','Text96','Text97','Text98'],
         [d.droga_2, d.dosis_2, d.dias_2, d.total_dia_2, 'Text99','Text100','Text101','Text102'],
@@ -642,7 +635,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         if (drg) { setT(td, String(drg).toUpperCase(), 9, 7); setT(tds, String(dos)); setT(tdi, String(dias)); setT(tto, String(tot)); }
       });
 
-      // Lugar y fecha
       setT('Text141', d.lugar_fecha);
       setT('Text142', `Hospital Oncológico Prov. Cba - ${doctorData.nombre} Mat.${doctorData.matricula}`);
 
@@ -657,10 +649,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const fillRenovacionPDF = async (formDef: any) => {
     if (!historyText && (!files || files.length === 0)) { alert("⚠️ Suba la Historia Clínica primero."); return; }
+    // CAMBIO 4: pedir droga antes de procesar
+    const drugName = window.prompt('Ingrese el/los fármaco/s para la Renovación Banco de Drogas:');
+    if (!drugName || !drugName.trim()) return;
+
     setProcessingId(formDef.id);
     setStatus('Procesando Renovación...');
     try {
-      const d = await extractBancoDrogasData('RENOVACIÓN');
+      const d = await extractBancoDrogasData('RENOVACIÓN', drugName);
       const bsa = calculateBSA(d.peso, d.talla);
       const [fnd, fnm, fna] = (cleanDate(d.fnac) || '').split('/');
 
@@ -683,7 +679,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       };
       const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch {} };
 
-      // Datos del paciente
       setT('Text2', d.nombre_apellido);
       setT('Text3', 'Argentina');
       setT('Text4', fnd); setT('Text5', fnm); setT('Text6', fna);
@@ -698,54 +693,43 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       setT('Text20', d.diagnostico);
       setT('Text21', d.cie10);
 
-      // Sexo
       if (d.sexo === 'F') setBtn('Button10'); else setBtn('Button9');
 
-      // Motivo renovación
       if ((d.motivo_renovacion || '').includes('continua')) setBtn('Button23'); else setBtn('Button24');
 
-      // Sitio de progresión
       if (d.sitio_progresion) setT('Text31', d.sitio_progresion, 9, 6.5);
 
-      // Receptores
       setT('Text32', d.receptor_RE);
       setT('Text33', d.receptor_RP);
       setT('Text34', d.receptor_HER2);
       setT('Text35', d.receptor_KRAS);
       setT('Text36', d.receptor_EGER);
 
-      // Sup Corporal / Peso / Talla
       setT('Text51', bsa || d.sup_corporal);
       setT('Text52', d.peso);
       setT('Text53', d.talla);
 
-      // ECOG
       const ecogBtn = ['Button57','Button58','Button59','Button60'];
       const ecogIdx = parseInt(d.ecog || '0');
       if (ecogIdx >= 0 && ecogIdx <= 3) setBtn(ecogBtn[ecogIdx]);
 
-      // Tipo tratamiento
       const tipo = (d.tipo_tratamiento || '').toLowerCase();
       if (tipo.includes('adyuvante') && !tipo.includes('neo')) { setBtn('Button62'); }
       else if (tipo.includes('neoadyuvante')) { setBtn('Button64'); }
       else if (tipo.includes('avanzado')) { setBtn('Button66'); }
 
-      // Nº línea
       const lineaBtns: Record<string, string> = {'1':'Button68','2':'Button69','3':'Button70'};
       if (lineaBtns[d.linea]) setBtn(lineaBtns[d.linea]);
 
-      // Ciclos
       setT('Text71', d.intervalo_ciclo);
       setT('Text72', d.ciclos_realizados);
       setT('Text73', d.ciclos_programados);
 
-      // Valoración de respuesta
       const resp = (d.respuesta || '').toLowerCase();
       if (resp.includes('estable')) setBtn('Button137');
       else if (resp.includes('parcial')) setBtn('Button138');
       else if (resp.includes('completa')) setBtn('Button139');
 
-      // Tabla de drogas
       const drugRows = [
         [d.droga_1, d.dosis_1, d.dias_1, d.total_dia_1, 'Text76','Text79','Text80','Text81'],
         [d.droga_2, d.dosis_2, d.dias_2, d.total_dia_2, 'Text82','Text83','Text84','Text85'],
@@ -755,7 +739,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         if (drg) { setT(td, String(drg).toUpperCase(), 9, 7); setT(tds, String(dos)); setT(tdi, String(dias)); setT(tto, String(tot)); }
       });
 
-      // Lugar y fecha
       setT('Text140', d.lugar_fecha);
       setT('Text141', `Hospital Oncológico Prov. Cba - ${doctorData.nombre} Mat.${doctorData.matricula}`);
 
@@ -773,15 +756,19 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       alert("⚠️ Suba la Historia Clínica primero.");
       return;
     }
+    // CAMBIO 4: pedir droga antes de procesar
+    const drugName = window.prompt('Ingrese el/los fármaco/s a solicitar en el formulario DINADIC:');
+    if (!drugName || !drugName.trim()) return;
+
     setProcessingId('dinadic');
     setStatus('Analizando historia clínica...');
     try {
       const today = new Date().toLocaleDateString('es-AR');
 
-      // 1. EXTRACCIÓN DE DATOS VÍA IA
       const extractPrompt = `
 Actúa como oncólogo experto. Hoy es ${today}.
 Analizá la historia clínica y extraé datos para el formulario DINADIC (Solicitud de Medicamentos - DADSE).
+FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}. Usar EXACTAMENTE este valor en el campo "medicamentos".
 IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de código.
 
 {
@@ -813,7 +800,7 @@ IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de c
   "frecuencia_ciclos": "",
   "tiempo_tratamiento": "",
   "fecha_inicio": "DD/MM/AAAA",
-  "medicamentos": "Nombre genérico. Máx 345 chars (3 líneas).",
+  "medicamentos": "${drugName}",
   "dosis_m2": "",
   "dosis_total_ciclo": "",
   "dias_admin": "",
@@ -836,7 +823,6 @@ CONTEXTO CLÍNICO: ${historyText}
 
       setStatus('Generando PDF...');
 
-      // 2. CARGAR PDF ORIGINAL Y SUPERPONER TEXTO
       const formUrl = window.location.origin + '/forms/nuevo_dinadic.pdf';
       const pdfRes = await fetch(formUrl);
       if (!pdfRes.ok) throw new Error('No se encontró el formulario DINADIC.');
@@ -847,20 +833,18 @@ CONTEXTO CLÍNICO: ${historyText}
       const pages = pdfDoc.getPages();
       const p1 = pages[0];
       const p2 = pages[1];
-      const pH = 841.9; // altura A4
-      const FS = 8;     // font size base
-      const maxW = 480; // ancho útil de texto
-      const lineSpacing = 12; // espaciado entre líneas de puntos
+      const pH = 841.9;
+      const FS = 8;
+      const maxW = 480;
+      const lineSpacing = 12;
 
-      // Helper: dibujar texto simple en coordenadas absolutas
-      // pdfplumber top → pdf-lib y: y = pH - top - 3 (ajustado para que no se superponga a los puntos)
+      // CAMBIO 1: offset corregido a +3 (encima de la línea de puntos)
       const draw = (page: any, x: number, top: number, text: string, fs = FS, f = font) => {
         if (!text?.trim()) return;
         const str = String(text).trim();
-        page.drawText(str, { x, y: pH - top - 3, size: fs, font: f });
+        page.drawText(str, { x, y: pH - top + 3, size: fs, font: f });
       };
 
-      // Helper: wrap text into multiple dot-line rows
       const drawLines = (page: any, x: number, firstTop: number, text: string, maxLines: number, fs = FS) => {
         if (!text?.trim()) return;
         const charPerLine = Math.floor(maxW / (0.52 * fs));
@@ -875,17 +859,15 @@ CONTEXTO CLÍNICO: ${historyText}
         }
         if (cur && lines.length < maxLines) lines.push(cur);
         lines.forEach((line, i) => {
-          page.drawText(line, { x, y: pH - firstTop - 3 - i * lineSpacing, size: fs, font });
+          page.drawText(line, { x, y: pH - firstTop + 3 - i * lineSpacing, size: fs, font });
         });
       };
 
-      // Helper: marcar checkbox dibujando X
       const markX = (page: any, x: number, top: number) => {
-        page.drawText('X', { x, y: pH - top - 3, size: 9, font: fontBold });
+        page.drawText('X', { x, y: pH - top + 3, size: 9, font: fontBold });
       };
 
-      // ── PÁGINA 1 ──────────────────────────────────────────────
-      // Datos del paciente
+      // ── PÁGINA 1 ──
       draw(p1, 153, 277.5, d.nombre_apellido);
       draw(p1, 276, 289.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
       draw(p1, 87,  301.5, d.edad);
@@ -902,42 +884,30 @@ CONTEXTO CLÍNICO: ${historyText}
       draw(p1, 191, 385.5, d.peso ? `${d.peso} kg` : '');
       draw(p1, 362, 385.5, bsa ? `${bsa} m²` : '');
 
-      // Datos del médico
       draw(p1, 253, 429.4, doctorData.nombre);
       draw(p1, 124, 441.4, doctorData.especialidad || 'Oncología Clínica');
       draw(p1, 100, 453.4, 'Oncología');
-      draw(p1, 239, 465.4, '');  // Jefe de servicio — no disponible
       draw(p1, 226, 477.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
       draw(p1, 96,  489.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
       draw(p1, 358, 489.4, doctorData.email);
 
-      // Diagnóstico que justifica (línea corta hasta ~374)
       draw(p1, 121, 533.2, d.diagnostico);
       draw(p1, 490, 533.2, cleanDate(d.fecha_diagnostico) || d.fecha_diagnostico || '');
 
-      // Resumen HC — 6 líneas (top: 569.2, 581.2, 593.2, 605.2, 617.2, 629.2)
       drawLines(p1, 57, 569.2, d.resumen_hc, 6);
-
-      // Métodos complementarios — 5 líneas (top: 677.2 … 725.2)
       drawLines(p1, 57, 677.2, d.metodos_complementarios, 5);
 
-      // ── PÁGINA 2 ──────────────────────────────────────────────
-      // Estado general — 3 líneas (top: 83, 95, 107)
+      // ── PÁGINA 2 ──
       drawLines(p2, 57, 83.0, d.estado_general, 3);
 
-      // Movilidad checkbox
       const movilidad = (d.movilidad || 'ambulante').toLowerCase();
       if (movilidad.includes('no')) markX(p2, 411, 154.3);
       else if (movilidad.includes('semi')) markX(p2, 246, 154.3);
       else markX(p2, 96, 154.3);
 
-      // Tratamientos previos — 3 líneas (top: 213.5, 225.5, 237.5)
       drawLines(p2, 57, 213.5, d.tratamientos_previos, 3);
-
-      // Tipo terapia previa — 4 líneas (top: 286.7, 298.7, 310.7, 322.7)
       drawLines(p2, 57, 286.7, d.tipo_terapia_previa, 4);
 
-      // Tipo de terapia (NEOADYUVANCIA / ADYUVANCIA / AVANZADO) + Línea
       const tipoActual = (d.tipo_terapia_actual || '').toLowerCase();
       if (tipoActual.includes('neoadyu')) markX(p2, 57, 368.1);
       else if (tipoActual.includes('adyu')) markX(p2, 166, 368.1);
@@ -947,28 +917,26 @@ CONTEXTO CLÍNICO: ${historyText}
       else if (linea === '2') markX(p2, 417, 368.1);
       else if (linea === '3') markX(p2, 480, 368.1);
 
-      // Esquema terapéutico
       draw(p2, 173, 444.0, d.numero_ciclos);
       draw(p2, 178, 456.0, d.frecuencia_ciclos);
       draw(p2, 176, 468.0, d.tiempo_tratamiento);
       draw(p2, 277, 480.0, cleanDate(d.fecha_inicio) || d.fecha_inicio || '');
 
-      // Medicamentos — línea principal + 2 líneas extra (top: 492, 504, 516)
       drawLines(p2, 57, 492.0, d.medicamentos, 3);
 
-      // Dosis / m2, Dosis total ciclo, Días admin, Intervalo
       draw(p2, 57,  528.0, d.dosis_m2);
       draw(p2, 230, 528.0, d.dosis_total_ciclo);
       draw(p2, 344, 528.0, d.dias_admin);
       draw(p2, 447, 528.0, d.intervalo);
 
-      // Fundamentación — 3 líneas (top: 564, 576, 588)
       drawLines(p2, 57, 564.0, d.fundamentacion, 3);
 
-      // Fecha de prescripción
-      draw(p2, 171, 725.4, today);
+      // CAMBIO 2: fecha de prescripción en slots DD / MM / AAAA separados
+      const [pd, pm, pa] = today.split('/');
+      draw(p2, 171, 725.4, pd || '');
+      draw(p2, 240, 725.4, pm || '');
+      draw(p2, 308, 725.4, pa || '');
 
-      // Guardar y descargar
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
@@ -984,6 +952,329 @@ CONTEXTO CLÍNICO: ${historyText}
     }
   };
 
+  // ─── INTERCONSULTA / DERIVACIÓN ─────────────────────────────────────────────
+  const generateInterconsultaPDF = async () => {
+    if (!historyText && (!files || files.length === 0)) {
+      alert("⚠️ Suba la Historia Clínica primero.");
+      return;
+    }
+    setProcessingId('interconsulta');
+    setStatus('Analizando historia clínica...');
+    try {
+      const today = new Date().toLocaleDateString('es-AR');
+
+      // 1. Extracción estructurada vía IA
+      const extractPrompt = `
+Actúa como oncólogo experto. Hoy es ${today}.
+Analizá la historia clínica y devolvé ÚNICAMENTE este JSON sin markdown:
+{
+  "nombre": "",
+  "nhc": "",
+  "fnac": "DD/MM/AAAA",
+  "edad": "",
+  "sexo": "Masculino/Femenino",
+  "cobertura": "",
+  "diagnostico": "",
+  "estadio": "",
+  "ecog": "",
+  "peso": "",
+  "talla": "",
+  "cronologia": [
+    { "fecha": "DD/MM/AAAA", "categoria": "Diagnóstico|Imagen|Laboratorio|Cirugía|Quimioterapia|Radioterapia|Seguimiento|Otro", "descripcion": "" }
+  ],
+  "tratamiento_actual": "",
+  "laboratorio_reciente": "",
+  "comorbilidades": "",
+  "motivo_derivacion": "Resumen del estado actual y motivo de la interconsulta/derivación. Máx 300 chars."
+}
+REGLAS:
+- cronologia: incluir TODOS los eventos relevantes ordenados por fecha, máximo 20 items.
+- descripcion de cada evento: concisa, máx 120 chars, con datos clave (dosis, tamaño, resultado).
+- laboratorio_reciente: últimos valores relevantes en formato "Hb 12, Cr 0.8, LDH 180".
+- Si un dato no está disponible devolver "".
+CONTEXTO: ${historyText}
+      `;
+
+      const parts: any[] = [{ text: extractPrompt }];
+      if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+
+      const res = await callGemini({ parts, responseMimeType: "application/json" });
+      let clean = (res.text || '{}').replace(/```json|```/g, '').trim();
+      const si = clean.indexOf('{'), ei = clean.lastIndexOf('}');
+      if (si !== -1 && ei !== -1) clean = clean.substring(si, ei + 1);
+      const d = JSON.parse(clean);
+      const bsa = calculateBSA(d.peso, d.talla);
+
+      setStatus('Generando PDF...');
+
+      // 2. Construcción del PDF con pdf-lib
+      const pdfDoc = await PDFDocument.create();
+      const font     = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      const W = 595.28; // A4 width pts
+      const H = 841.89; // A4 height pts
+      const mX = 45;    // margen horizontal
+      const mBottom = 50;
+      const bodyW = W - mX * 2;
+
+      let page = pdfDoc.addPage([W, H]);
+      let y = H - 30;
+
+      // Helper: nueva página automática
+      const checkPage = (needed = 20) => {
+        if (y < mBottom + needed) {
+          page = pdfDoc.addPage([W, H]);
+          y = H - 50;
+        }
+      };
+
+      // Helper: texto con wrap automático, devuelve nueva Y
+      const drawWrapped = (
+        text: string, x: number, startY: number,
+        maxW: number, fs: number, f = font, lineH = fs * 1.4
+      ): number => {
+        if (!text?.trim()) return startY;
+        const words = String(text).trim().split(' ');
+        let line = '';
+        let cy = startY;
+        for (const w of words) {
+          const test = line ? line + ' ' + w : w;
+          if (font.widthOfTextAtSize(test, fs) > maxW && line) {
+            checkPage(lineH + 4);
+            page.drawText(line, { x, y: cy, size: fs, font: f });
+            cy -= lineH;
+            line = w;
+          } else { line = test; }
+        }
+        if (line) {
+          checkPage(lineH + 4);
+          page.drawText(line, { x, y: cy, size: fs, font: f });
+          cy -= lineH;
+        }
+        return cy;
+      };
+
+      // Helper: línea horizontal
+      const hLine = (yPos: number, thickness = 0.5, c = rgb(0.7, 0.7, 0.7)) => {
+        page.drawLine({ start: { x: mX, y: yPos }, end: { x: W - mX, y: yPos }, thickness, color: c });
+      };
+
+      // Helper: encabezado de sección
+      const sectionHeader = (label: string) => {
+        checkPage(30);
+        y -= 10;
+        page.drawRectangle({ x: mX, y: y - 2, width: bodyW, height: 16, color: rgb(0.12, 0.22, 0.40) });
+        page.drawText(label, { x: mX + 6, y: y + 2, size: 9, font: fontBold, color: rgb(1, 1, 1) });
+        y -= 18;
+      };
+
+      // ── LOGO ──────────────────────────────────────────────────────────────────
+      let logoH = 0;
+      try {
+        const logoRes = await fetch(window.location.origin + '/img/header_logo.png');
+        if (logoRes.ok) {
+          const logoBytes = await logoRes.arrayBuffer();
+          const img = await pdfDoc.embedPng(logoBytes);
+          const dims = img.scale(0.32);
+          page.drawImage(img, { x: (W - dims.width) / 2, y: y - dims.height, width: dims.width, height: dims.height });
+          logoH = dims.height + 10;
+        }
+      } catch (_) {}
+      if (logoH === 0) {
+        // fallback texto
+        const ht = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
+        page.drawText(ht, { x: (W - fontBold.widthOfTextAtSize(ht, 13)) / 2, y, size: 13, font: fontBold });
+        logoH = 20;
+      }
+      y -= logoH;
+
+      // ── LÍNEA + TÍTULO ────────────────────────────────────────────────────────
+      hLine(y, 1.5, rgb(0.12, 0.22, 0.40));
+      y -= 20;
+
+      const title = "RESUMEN DE INTERCONSULTA / DERIVACIÓN";
+      page.drawText(title, { x: (W - fontBold.widthOfTextAtSize(title, 13)) / 2, y, size: 13, font: fontBold });
+      y -= 16;
+
+      const sub = "Hospital Oncológico Provincial · Córdoba";
+      page.drawText(sub, { x: (W - font.widthOfTextAtSize(sub, 9)) / 2, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
+      y -= 12;
+
+      const dateStr = `Córdoba Capital, ${today}`;
+      page.drawText(dateStr, { x: W - mX - font.widthOfTextAtSize(dateStr, 9), y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
+      y -= 6;
+      hLine(y, 0.5, rgb(0.5, 0.5, 0.5));
+      y -= 16;
+
+      // ── DATOS DEL PACIENTE ────────────────────────────────────────────────────
+      sectionHeader("DATOS DEL PACIENTE");
+
+      // Dos columnas
+      const col1x = mX;
+      const col2x = mX + bodyW / 2 + 5;
+      const labelFs = 7.5;
+      const valFs = 9;
+      const rowH = 14;
+
+      const drawField = (lx: number, label: string, value: string, rowY: number) => {
+        page.drawText(label.toUpperCase(), { x: lx, y: rowY, size: labelFs, font, color: rgb(0.5, 0.5, 0.5) });
+        page.drawText(value || '—', { x: lx, y: rowY - 9, size: valFs, font: fontBold });
+      };
+
+      drawField(col1x, 'Apellido y nombre', d.nombre || patient.name, y);
+      drawField(col2x, 'NHC', d.nhc || '—', y);
+      y -= rowH * 1.8;
+
+      drawField(col1x, 'Fecha de nacimiento', d.fnac || '—', y);
+      drawField(col2x, 'Edad / Sexo', `${d.edad || '?'} años · ${d.sexo || '—'}`, y);
+      y -= rowH * 1.8;
+
+      drawField(col1x, 'Cobertura', d.cobertura || '—', y);
+      drawField(col2x, 'ECOG', d.ecog !== undefined && d.ecog !== '' ? `PS ${d.ecog}` : '—', y);
+      y -= rowH * 1.8;
+
+      if (d.peso || d.talla || bsa) {
+        drawField(col1x, 'Peso / Talla / SC', `${d.peso || '?'} kg · ${d.talla || '?'} cm · ${bsa || '?'} m²`, y);
+        y -= rowH * 1.8;
+      }
+
+      // Diagnóstico (ancho completo)
+      page.drawText('DIAGNÓSTICO', { x: mX, y, size: labelFs, font, color: rgb(0.5, 0.5, 0.5) });
+      y -= 10;
+      y = drawWrapped(`${d.diagnostico || '—'}${d.estadio ? ' · ' + d.estadio : ''}`, mX, y, bodyW, 10, fontBold);
+      y -= 6;
+
+      if (d.comorbilidades) {
+        page.drawText('COMORBILIDADES', { x: mX, y, size: labelFs, font, color: rgb(0.5, 0.5, 0.5) });
+        y -= 10;
+        y = drawWrapped(d.comorbilidades, mX, y, bodyW, 9);
+        y -= 4;
+      }
+
+      hLine(y);
+      y -= 8;
+
+      // ── CRONOLOGÍA ────────────────────────────────────────────────────────────
+      sectionHeader("CRONOLOGÍA CLÍNICA");
+
+      // Colores por categoría
+      const catColor: Record<string, [number, number, number]> = {
+        'Diagnóstico':   [0.55, 0.0,  0.0],
+        'Imagen':        [0.0,  0.35, 0.55],
+        'Laboratorio':   [0.1,  0.45, 0.1],
+        'Cirugía':       [0.5,  0.25, 0.0],
+        'Quimioterapia': [0.45, 0.0,  0.45],
+        'Radioterapia':  [0.6,  0.4,  0.0],
+        'Seguimiento':   [0.25, 0.25, 0.25],
+        'Otro':          [0.3,  0.3,  0.3],
+      };
+
+      const cronologia: any[] = Array.isArray(d.cronologia) ? d.cronologia : [];
+
+      for (const ev of cronologia) {
+        checkPage(22);
+        const cat = ev.categoria || 'Otro';
+        const [r, g, b2] = catColor[cat] || catColor['Otro'];
+        const catColor2 = rgb(r, g, b2);
+
+        // Bullet colorido
+        page.drawCircle({ x: mX + 5, y: y - 3, size: 5, color: catColor2 });
+
+        // Fecha
+        page.drawText(ev.fecha || '', { x: mX + 14, y, size: 8, font: fontBold });
+
+        // Categoría badge
+        const catX = mX + 70;
+        const catW = fontBold.widthOfTextAtSize(cat, 7) + 8;
+        page.drawRectangle({ x: catX, y: y - 3, width: catW, height: 12, color: catColor2, opacity: 0.12 });
+        page.drawText(cat.toUpperCase(), { x: catX + 4, y, size: 7, font: fontBold, color: catColor2 });
+
+        // Descripción
+        const descX = catX + catW + 8;
+        const descW = W - mX - descX;
+        y = drawWrapped(ev.descripcion || '', descX, y, descW, 8.5);
+        y -= 4;
+        hLine(y, 0.3, rgb(0.9, 0.9, 0.9));
+        y -= 4;
+      }
+
+      y -= 4;
+
+      // ── TRATAMIENTO ACTUAL ────────────────────────────────────────────────────
+      if (d.tratamiento_actual) {
+        sectionHeader("TRATAMIENTO ACTUAL");
+        y = drawWrapped(d.tratamiento_actual, mX, y, bodyW, 9);
+        y -= 8;
+      }
+
+      // ── LABORATORIO ───────────────────────────────────────────────────────────
+      if (d.laboratorio_reciente) {
+        sectionHeader("LABORATORIO RECIENTE");
+        y = drawWrapped(d.laboratorio_reciente, mX, y, bodyW, 9);
+        y -= 8;
+      }
+
+      // ── MOTIVO DE DERIVACIÓN ──────────────────────────────────────────────────
+      if (d.motivo_derivacion) {
+        sectionHeader("MOTIVO DE INTERCONSULTA / DERIVACIÓN");
+        y = drawWrapped(d.motivo_derivacion, mX, y, bodyW, 9);
+        y -= 12;
+      }
+
+      // ── FIRMA ─────────────────────────────────────────────────────────────────
+      checkPage(70);
+      y -= 10;
+      hLine(y, 1, rgb(0.12, 0.22, 0.40));
+      y -= 18;
+
+      if (doctorData.nombre) {
+        page.drawText('Médico tratante:', { x: mX, y, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
+        y -= 11;
+        page.drawText(doctorData.nombre, { x: mX, y, size: 10, font: fontBold });
+        if (doctorData.especialidad) {
+          page.drawText(doctorData.especialidad, { x: mX, y: y - 12, size: 8.5, font });
+        }
+        if (doctorData.matricula) {
+          page.drawText(`Mat. ${doctorData.matricula}`, { x: mX, y: y - 22, size: 8.5, font });
+        }
+        if (doctorData.email) {
+          page.drawText(doctorData.email, { x: mX, y: y - 32, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
+        }
+      }
+
+      // Línea de firma a la derecha
+      const sigX = W - mX - 160;
+      page.drawLine({ start: { x: sigX, y: y - 30 }, end: { x: W - mX, y: y - 30 }, thickness: 0.8, color: rgb(0, 0, 0) });
+      page.drawText('Firma y sello', { x: sigX + 42, y: y - 42, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
+
+      // Número de página en cada página
+      const pageCount = pdfDoc.getPageCount();
+      for (let pi = 0; pi < pageCount; pi++) {
+        const pg = pdfDoc.getPage(pi);
+        pg.drawText(`Página ${pi + 1} de ${pageCount}`, {
+          x: W - mX - 60, y: 22, size: 7.5, font, color: rgb(0.6, 0.6, 0.6)
+        });
+        pg.drawText('Hospital Oncológico Provincial · Córdoba · OncoGuide', {
+          x: mX, y: 22, size: 7.5, font, color: rgb(0.6, 0.6, 0.6)
+        });
+      }
+
+      // 3. Descargar
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `Interconsulta_${d.nombre || patient.name}_${today.replace(/\//g, '-')}.pdf`;
+      link.click();
+      setStatus('¡Listo!');
+    } catch (e: any) {
+      alert("Error al generar interconsulta: " + e.message);
+    } finally {
+      setProcessingId(null);
+      setStatus('');
+    }
+  };
 
   const generateFieldMap = async (formDef: any) => {
     setProcessingId('map-' + formDef.id);
@@ -1146,6 +1437,22 @@ CONTEXTO CLÍNICO: ${historyText}
                         <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-100 rounded text-[9px] text-yellow-700">
                             <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
                             <p>Generado por IA. Revise antes de presentar.</p>
+                        </div>
+                    </div>
+                ) : form.type === 'interconsulta' ? (
+                    <div className="flex-1 flex flex-col gap-2">
+                        <button
+                          onClick={() => generateInterconsultaPDF()}
+                          disabled={processingId !== null}
+                          className={`flex-1 flex items-center justify-center space-x-2 text-white py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50
+                            ${processingId === 'interconsulta' ? 'bg-indigo-600' : 'bg-indigo-700 hover:bg-indigo-800'}`}
+                        >
+                          {processingId === 'interconsulta' ? <Loader2 className="animate-spin" size={14}/> : <Share2 size={14}/>}
+                          <span>Generar PDF</span>
+                        </button>
+                        <div className="flex items-start gap-2 p-2 bg-indigo-50 border border-indigo-100 rounded text-[9px] text-indigo-700">
+                          <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
+                          <p>Genera un resumen clínico completo con cronología para interconsultas y derivaciones.</p>
                         </div>
                     </div>
                 ) : (
