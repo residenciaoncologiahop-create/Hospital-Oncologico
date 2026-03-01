@@ -29,25 +29,59 @@ interface CallGeminiResult {
 }
 
 // ──────────────────────────────────────────────
+// CONSTANTES DE TIMEOUT
+// ──────────────────────────────────────────────
+// La Cloud Function tiene timeoutSeconds: 300 (5 min).
+// El cliente espera 270s (4.5 min) para detectar timeout
+// antes de que Firebase corte, y mostrar un mensaje claro.
+const CLIENT_TIMEOUT_MS = 270_000; // 4.5 minutos
+
+// Mensajes de error clínicamente seguros (sin jerga técnica)
+const SAFE_ERROR_MESSAGES: Record<string, string> = {
+  timeout:           "El análisis tardó demasiado. Intentá con un documento más corto o reintentá en un momento.",
+  "resource-exhausted": "Límite de uso alcanzado. Esperá un momento antes de continuar.",
+  unauthenticated:   "Sesión expirada. Recargá la página e iniciá sesión nuevamente.",
+  "invalid-argument":"El contenido enviado no pudo procesarse. Verificá el archivo e intentá nuevamente.",
+  default:           "No se pudo completar el análisis. El resultado anterior sigue siendo válido. Reintentá en un momento.",
+};
+
+function getSafeMessage(error: any): string {
+  // Timeout de Firebase o del AbortController
+  if (error?.name === "AbortError" || error?.code === "functions/deadline-exceeded")
+    return SAFE_ERROR_MESSAGES.timeout;
+  // Códigos de error de Firebase Functions
+  const code = error?.code?.replace("functions/", "") as string;
+  return SAFE_ERROR_MESSAGES[code] ?? SAFE_ERROR_MESSAGES.default;
+}
+
+// ──────────────────────────────────────────────
 // FUNCIÓN PRINCIPAL
 // ──────────────────────────────────────────────
 export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiResult> => {
   const user = auth.currentUser;
   if (!user) {
-    throw new Error("Usuario no autenticado. Inicie sesión para continuar.");
+    throw new Error(SAFE_ERROR_MESSAGES.unauthenticated);
   }
 
   const functions = getFunctions();
-  
-  // ⏳ SOLUCIÓN TIMEOUT: Le decimos al navegador que espere hasta 9 minutos (540000 ms)
   const callGeminiFn = httpsCallable<CallGeminiParams, CallGeminiResult>(
-    functions, 
+    functions,
     "callGemini",
-    { timeout: 540000 } 
+    { timeout: CLIENT_TIMEOUT_MS }
   );
 
-  const result = await callGeminiFn(params);
-  return result.data;
+  // AbortController para detectar timeout antes de Firebase
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+
+  try {
+    const result = await callGeminiFn(params);
+    return result.data;
+  } catch (error: any) {
+    throw new Error(getSafeMessage(error));
+  } finally {
+    clearTimeout(timeoutId);
+  }
 };
 
 // ──────────────────────────────────────────────
