@@ -958,14 +958,26 @@ CONTEXTO CLÍNICO: ${historyText}
       alert("⚠️ Suba la Historia Clínica primero.");
       return;
     }
+
+    // CORRECCIÓN 3: preguntar servicio y motivo antes de procesar
+    const servicioDestino = window.prompt('¿A qué servicio se deriva? (ej: Cirugía, Radiología, Ginecología, etc.)');
+    if (!servicioDestino || !servicioDestino.trim()) return;
+
+    const motivoSolicitud = window.prompt('¿Cuál es el motivo de la interconsulta / derivación?');
+    if (!motivoSolicitud || !motivoSolicitud.trim()) return;
+
     setProcessingId('interconsulta');
     setStatus('Analizando historia clínica...');
     try {
       const today = new Date().toLocaleDateString('es-AR');
 
       // 1. Extracción estructurada vía IA
+      // CORRECCIÓN 1 y 2: narración en párrafo + unidades sin duplicar
       const extractPrompt = `
 Actúa como oncólogo experto. Hoy es ${today}.
+SERVICIO AL QUE SE DERIVA: ${servicioDestino}
+MOTIVO INDICADO POR EL MÉDICO: ${motivoSolicitud}
+
 Analizá la historia clínica y devolvé ÚNICAMENTE este JSON sin markdown:
 {
   "nombre": "",
@@ -976,21 +988,19 @@ Analizá la historia clínica y devolvé ÚNICAMENTE este JSON sin markdown:
   "cobertura": "",
   "diagnostico": "",
   "estadio": "",
-  "ecog": "",
-  "peso": "",
-  "talla": "",
-  "cronologia": [
-    { "fecha": "DD/MM/AAAA", "categoria": "Diagnóstico|Imagen|Laboratorio|Cirugía|Quimioterapia|Radioterapia|Seguimiento|Otro", "descripcion": "" }
-  ],
+  "ecog": "0/1/2/3/4",
+  "peso": "solo el número, sin unidad. Ej: 68",
+  "talla": "solo el número en cm, sin unidad. Ej: 165",
   "tratamiento_actual": "",
   "laboratorio_reciente": "",
   "comorbilidades": "",
-  "motivo_derivacion": "Resumen del estado actual y motivo de la interconsulta/derivación. Máx 300 chars."
+  "resumen_clinico": "Narrativa cronológica fluida en párrafos. Incluir: antecedentes relevantes, diagnóstico con fecha y método, tratamientos realizados con fechas y dosis, estudios de imagen con resultados clave, estado actual. Máx 1200 chars. SIN bullets, SIN asteriscos.",
+  "motivo_derivacion": "Redactá el motivo de derivación al servicio de ${servicioDestino} integrando el motivo clínico indicado: '${motivoSolicitud}'. Contexto clínico resumido + justificación. Máx 400 chars."
 }
-REGLAS:
-- cronologia: incluir TODOS los eventos relevantes ordenados por fecha, máximo 20 items.
-- descripcion de cada evento: concisa, máx 120 chars, con datos clave (dosis, tamaño, resultado).
-- laboratorio_reciente: últimos valores relevantes en formato "Hb 12, Cr 0.8, LDH 180".
+REGLAS ESTRICTAS:
+- ecog: devolver SOLO el número (0, 1, 2, 3 o 4). Sin letras ni prefijos.
+- peso: SOLO el número sin "kg" ni ninguna unidad.
+- talla: SOLO el número en centímetros, sin "cm" ni "m".
 - Si un dato no está disponible devolver "".
 CONTEXTO: ${historyText}
       `;
@@ -1003,7 +1013,17 @@ CONTEXTO: ${historyText}
       const si = clean.indexOf('{'), ei = clean.lastIndexOf('}');
       if (si !== -1 && ei !== -1) clean = clean.substring(si, ei + 1);
       const d = JSON.parse(clean);
-      const bsa = calculateBSA(d.peso, d.talla);
+
+      // Sanear valores numéricos: quitar unidades si la IA las incluyó igual
+      const rawPeso  = String(d.peso  || '').replace(/[^0-9.,]/g, '').replace(',', '.');
+      const rawTalla = String(d.talla || '').replace(/[^0-9.,]/g, '').replace(',', '.');
+      // Convertir talla a cm si vino en metros
+      let tallaNum = parseFloat(rawTalla);
+      if (!isNaN(tallaNum) && tallaNum < 3) tallaNum = tallaNum * 100;
+      const tallaCm = isNaN(tallaNum) ? '' : String(Math.round(tallaNum));
+      const bsa = calculateBSA(rawPeso, tallaCm);
+      // Sanear ECOG: quitar "PS", "ECOG", espacios, quedarse solo con el número
+      const ecogVal = String(d.ecog || '').replace(/[^0-4]/g, '').trim();
 
       setStatus('Generando PDF...');
 
@@ -1012,16 +1032,15 @@ CONTEXTO: ${historyText}
       const font     = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-      const W = 595.28; // A4 width pts
-      const H = 841.89; // A4 height pts
-      const mX = 45;    // margen horizontal
+      const W = 595.28;
+      const H = 841.89;
+      const mX = 45;
       const mBottom = 50;
       const bodyW = W - mX * 2;
 
       let page = pdfDoc.addPage([W, H]);
       let y = H - 30;
 
-      // Helper: nueva página automática
       const checkPage = (needed = 20) => {
         if (y < mBottom + needed) {
           page = pdfDoc.addPage([W, H]);
@@ -1029,7 +1048,6 @@ CONTEXTO: ${historyText}
         }
       };
 
-      // Helper: texto con wrap automático, devuelve nueva Y
       const drawWrapped = (
         text: string, x: number, startY: number,
         maxW: number, fs: number, f = font, lineH = fs * 1.4
@@ -1055,12 +1073,10 @@ CONTEXTO: ${historyText}
         return cy;
       };
 
-      // Helper: línea horizontal
       const hLine = (yPos: number, thickness = 0.5, c = rgb(0.7, 0.7, 0.7)) => {
         page.drawLine({ start: { x: mX, y: yPos }, end: { x: W - mX, y: yPos }, thickness, color: c });
       };
 
-      // Helper: encabezado de sección
       const sectionHeader = (label: string) => {
         checkPage(30);
         y -= 10;
@@ -1082,7 +1098,6 @@ CONTEXTO: ${historyText}
         }
       } catch (_) {}
       if (logoH === 0) {
-        // fallback texto
         const ht = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
         page.drawText(ht, { x: (W - fontBold.widthOfTextAtSize(ht, 13)) / 2, y, size: 13, font: fontBold });
         logoH = 20;
@@ -1097,6 +1112,10 @@ CONTEXTO: ${historyText}
       page.drawText(title, { x: (W - fontBold.widthOfTextAtSize(title, 13)) / 2, y, size: 13, font: fontBold });
       y -= 16;
 
+      const subServicio = `Dirigido a: Servicio de ${servicioDestino}`;
+      page.drawText(subServicio, { x: (W - fontBold.widthOfTextAtSize(subServicio, 9)) / 2, y, size: 9, font: fontBold, color: rgb(0.12, 0.22, 0.40) });
+      y -= 13;
+
       const sub = "Hospital Oncológico Provincial · Córdoba";
       page.drawText(sub, { x: (W - font.widthOfTextAtSize(sub, 9)) / 2, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
       y -= 12;
@@ -1110,7 +1129,6 @@ CONTEXTO: ${historyText}
       // ── DATOS DEL PACIENTE ────────────────────────────────────────────────────
       sectionHeader("DATOS DEL PACIENTE");
 
-      // Dos columnas
       const col1x = mX;
       const col2x = mX + bodyW / 2 + 5;
       const labelFs = 7.5;
@@ -1131,15 +1149,17 @@ CONTEXTO: ${historyText}
       y -= rowH * 1.8;
 
       drawField(col1x, 'Cobertura', d.cobertura || '—', y);
-      drawField(col2x, 'ECOG', d.ecog !== undefined && d.ecog !== '' ? `PS ${d.ecog}` : '—', y);
+      // CORRECCIÓN 1: ECOG saneado, sin duplicar "PS"
+      drawField(col2x, 'ECOG', ecogVal !== '' ? `PS ${ecogVal}` : '—', y);
       y -= rowH * 1.8;
 
-      if (d.peso || d.talla || bsa) {
-        drawField(col1x, 'Peso / Talla / SC', `${d.peso || '?'} kg · ${d.talla || '?'} cm · ${bsa || '?'} m²`, y);
+      // CORRECCIÓN 2: unidades limpias, sin duplicar
+      if (rawPeso || tallaCm || bsa) {
+        drawField(col1x, 'Peso / Talla / SC',
+          `${rawPeso ? rawPeso + ' kg' : '?'} · ${tallaCm ? tallaCm + ' cm' : '?'} · ${bsa ? bsa + ' m²' : '?'}`, y);
         y -= rowH * 1.8;
       }
 
-      // Diagnóstico (ancho completo)
       page.drawText('DIAGNÓSTICO', { x: mX, y, size: labelFs, font, color: rgb(0.5, 0.5, 0.5) });
       y -= 10;
       y = drawWrapped(`${d.diagnostico || '—'}${d.estadio ? ' · ' + d.estadio : ''}`, mX, y, bodyW, 10, fontBold);
@@ -1155,51 +1175,13 @@ CONTEXTO: ${historyText}
       hLine(y);
       y -= 8;
 
-      // ── CRONOLOGÍA ────────────────────────────────────────────────────────────
-      sectionHeader("CRONOLOGÍA CLÍNICA");
-
-      // Colores por categoría
-      const catColor: Record<string, [number, number, number]> = {
-        'Diagnóstico':   [0.55, 0.0,  0.0],
-        'Imagen':        [0.0,  0.35, 0.55],
-        'Laboratorio':   [0.1,  0.45, 0.1],
-        'Cirugía':       [0.5,  0.25, 0.0],
-        'Quimioterapia': [0.45, 0.0,  0.45],
-        'Radioterapia':  [0.6,  0.4,  0.0],
-        'Seguimiento':   [0.25, 0.25, 0.25],
-        'Otro':          [0.3,  0.3,  0.3],
-      };
-
-      const cronologia: any[] = Array.isArray(d.cronologia) ? d.cronologia : [];
-
-      for (const ev of cronologia) {
-        checkPage(22);
-        const cat = ev.categoria || 'Otro';
-        const [r, g, b2] = catColor[cat] || catColor['Otro'];
-        const catColor2 = rgb(r, g, b2);
-
-        // Bullet colorido
-        page.drawCircle({ x: mX + 5, y: y - 3, size: 5, color: catColor2 });
-
-        // Fecha
-        page.drawText(ev.fecha || '', { x: mX + 14, y, size: 8, font: fontBold });
-
-        // Categoría badge
-        const catX = mX + 70;
-        const catW = fontBold.widthOfTextAtSize(cat, 7) + 8;
-        page.drawRectangle({ x: catX, y: y - 3, width: catW, height: 12, color: catColor2, opacity: 0.12 });
-        page.drawText(cat.toUpperCase(), { x: catX + 4, y, size: 7, font: fontBold, color: catColor2 });
-
-        // Descripción
-        const descX = catX + catW + 8;
-        const descW = W - mX - descX;
-        y = drawWrapped(ev.descripcion || '', descX, y, descW, 8.5);
-        y -= 4;
-        hLine(y, 0.3, rgb(0.9, 0.9, 0.9));
-        y -= 4;
+      // ── RESUMEN CLÍNICO (párrafo narrativo) ───────────────────────────────────
+      // CORRECCIÓN 3: reemplaza la línea de tiempo por texto narrativo
+      if (d.resumen_clinico) {
+        sectionHeader("ANTECEDENTES Y EVOLUCIÓN CLÍNICA");
+        y = drawWrapped(d.resumen_clinico, mX, y, bodyW, 9);
+        y -= 8;
       }
-
-      y -= 4;
 
       // ── TRATAMIENTO ACTUAL ────────────────────────────────────────────────────
       if (d.tratamiento_actual) {
@@ -1216,11 +1198,9 @@ CONTEXTO: ${historyText}
       }
 
       // ── MOTIVO DE DERIVACIÓN ──────────────────────────────────────────────────
-      if (d.motivo_derivacion) {
-        sectionHeader("MOTIVO DE INTERCONSULTA / DERIVACIÓN");
-        y = drawWrapped(d.motivo_derivacion, mX, y, bodyW, 9);
-        y -= 12;
-      }
+      sectionHeader(`MOTIVO DE INTERCONSULTA — SERVICIO DE ${servicioDestino.toUpperCase()}`);
+      y = drawWrapped(d.motivo_derivacion || motivoSolicitud, mX, y, bodyW, 9);
+      y -= 12;
 
       // ── FIRMA ─────────────────────────────────────────────────────────────────
       checkPage(70);
@@ -1229,38 +1209,33 @@ CONTEXTO: ${historyText}
       y -= 18;
 
       if (doctorData.nombre) {
-        page.drawText('Médico tratante:', { x: mX, y, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
+        page.drawText('Médico solicitante:', { x: mX, y, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
         y -= 11;
         page.drawText(doctorData.nombre, { x: mX, y, size: 10, font: fontBold });
-        if (doctorData.especialidad) {
+        if (doctorData.especialidad)
           page.drawText(doctorData.especialidad, { x: mX, y: y - 12, size: 8.5, font });
-        }
-        if (doctorData.matricula) {
+        if (doctorData.matricula)
           page.drawText(`Mat. ${doctorData.matricula}`, { x: mX, y: y - 22, size: 8.5, font });
-        }
-        if (doctorData.email) {
+        if (doctorData.email)
           page.drawText(doctorData.email, { x: mX, y: y - 32, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
-        }
       }
 
-      // Línea de firma a la derecha
       const sigX = W - mX - 160;
       page.drawLine({ start: { x: sigX, y: y - 30 }, end: { x: W - mX, y: y - 30 }, thickness: 0.8, color: rgb(0, 0, 0) });
       page.drawText('Firma y sello', { x: sigX + 42, y: y - 42, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
 
-      // Número de página en cada página
+      // Pie de página en cada hoja
       const pageCount = pdfDoc.getPageCount();
       for (let pi = 0; pi < pageCount; pi++) {
         const pg = pdfDoc.getPage(pi);
         pg.drawText(`Página ${pi + 1} de ${pageCount}`, {
           x: W - mX - 60, y: 22, size: 7.5, font, color: rgb(0.6, 0.6, 0.6)
         });
-        pg.drawText('Hospital Oncológico Provincial · Córdoba', {
+        pg.drawText('Hospital Oncológico Provincial · Córdoba ', {
           x: mX, y: 22, size: 7.5, font, color: rgb(0.6, 0.6, 0.6)
         });
       }
 
-      // 3. Descargar
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
