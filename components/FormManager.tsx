@@ -886,41 +886,41 @@ draw(p1, 91,  393.5, alturaCorregida ? `${alturaCorregida} cm` : '');
 draw(p1, 191, 393.5, d.peso ? `${d.peso} kg` : '');
 draw(p1, 362, 397.5, bsa ? `${bsa} m²` : '');
 
-      draw(p1, 253, 429.4, doctorData.nombre);
-      draw(p1, 124, 441.4, doctorData.especialidad || 'Oncología Clínica');
-      draw(p1, 100, 453.4, 'Oncología');
-      draw(p1, 226, 477.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
-      draw(p1, 96,  489.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
-      draw(p1, 358, 489.4, doctorData.email);
+      draw(p1, 253, 433.4, doctorData.nombre);
+      draw(p1, 124, 444.4, doctorData.especialidad || 'Oncología Clínica');
+      draw(p1, 100, 457.4, 'Oncología');
+      draw(p1, 226, 481.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 96,  493.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 358, 493.4, doctorData.email);
 
-      draw(p1, 121, 533.2, d.diagnostico);
+      draw(p1, 121, 537.2, d.diagnostico);
       const [fdd, fdm, fda] = (cleanDate(d.fecha_diagnostico) || '').split('/');
-draw(p1, 490, 533.2, fdd || '');
-draw(p1, 507, 533.2, fdm || '');
-draw(p1, 524, 533.2, fda || '');
+draw(p1, 490, 537.2, fdd || '');
+draw(p1, 507, 537.2, fdm || '');
+draw(p1, 524, 537.2, fda || '');
 
-      drawLines(p1, 57, 584.0, d.resumen_hc, 6);
-drawLines(p1, 57, 692.0, d.metodos_complementarios, 5);
+      drawLines(p1, 57, 589.0, d.resumen_hc, 6);
+drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
 
       // ── PÁGINA 2 ──
-      drawLines(p2, 57, 83.0, d.estado_general, 3);
+      drawLines(p2, 57, 88.0, d.estado_general, 3);
 
       const movilidad = (d.movilidad || 'ambulante').toLowerCase();
-      if (movilidad.includes('no')) markX(p2, 418, 158.0);
-else if (movilidad.includes('semi')) markX(p2, 253, 158.0);
-else markX(p2, 103, 158.0);
-
-      drawLines(p2, 57, 213.5, d.tratamientos_previos, 3);
-      drawLines(p2, 57, 286.7, d.tipo_terapia_previa, 4);
+      if (movilidad.includes('no')) markX(p2, 418, 164.0);
+else if (movilidad.includes('semi')) markX(p2, 253, 164.0);
+else markX(p2, 103, 164.0);
+      
+      drawLines(p2, 57, 218.5, d.tratamientos_previos, 3);
+      drawLines(p2, 57, 291.7, d.tipo_terapia_previa, 4);
 
       const tipoActual = (d.tipo_terapia_actual || '').toLowerCase();
-      if (tipoActual.includes('neoadyu')) markX(p2, 63, 372.0);
-else if (tipoActual.includes('adyu')) markX(p2, 172, 372.0);
-else if (tipoActual.includes('avanzado')) markX(p2, 271, 372.0);
+      if (tipoActual.includes('neoadyu')) markX(p2, 63, 378.0);
+else if (tipoActual.includes('adyu')) markX(p2, 172, 378.0);
+else if (tipoActual.includes('avanzado')) markX(p2, 271, 378.0);
 const linea = String(d.linea || '1');
-if (linea === '1') markX(p2, 360, 372.0);
-else if (linea === '2') markX(p2, 423, 372.0);
-else if (linea === '3') markX(p2, 486, 372.0);
+if (linea === '1') markX(p2, 360, 378.0);
+else if (linea === '2') markX(p2, 423, 378.0);
+else if (linea === '3') markX(p2, 486, 378.0);
 
       draw(p2, 173, 440.0, d.numero_ciclos);
       draw(p2, 178, 452.0, d.frecuencia_ciclos);
@@ -937,7 +937,7 @@ draw(p2, 333, 480.0, fia || '');
       draw(p2, 344, 528.0, d.dias_admin);
       draw(p2, 447, 528.0, d.intervalo);
 
-      drawLines(p2, 57, 564.0, d.fundamentacion, 3);
+      drawLines(p2, 57, 569.0, d.fundamentacion, 3);
 
       // CAMBIO 2: fecha de prescripción en slots DD / MM / AAAA separados
       const [pd, pm, pa] = today.split('/');
