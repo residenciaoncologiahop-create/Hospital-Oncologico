@@ -1255,7 +1255,7 @@ CONTEXTO: ${historyText}
         pg.drawText(`Página ${pi + 1} de ${pageCount}`, {
           x: W - mX - 60, y: 22, size: 7.5, font, color: rgb(0.6, 0.6, 0.6)
         });
-        pg.drawText('Hospital Oncológico Provincial · Córdoba · OncoGuide', {
+        pg.drawText('Hospital Oncológico Provincial · Córdoba', {
           x: mX, y: 22, size: 7.5, font, color: rgb(0.6, 0.6, 0.6)
         });
       }
