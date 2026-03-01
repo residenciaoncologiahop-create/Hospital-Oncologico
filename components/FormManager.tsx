@@ -45,6 +45,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   const calculateBSA = (weight: string, height: string) => {
     let w = parseFloat(weight?.toString().replace(',', '.'));
     let h = parseFloat(height?.toString().replace(',', '.'));
+    // Corregir talla en metros si viene mal (ej: 1.60 en vez de 160)
     if (h > 0 && h < 3) h = h * 100;
     if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) return Math.sqrt((w * h) / 3600).toFixed(2);
     return '';
@@ -93,13 +94,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             strategyPrompt = `ESTRATEGIA: ADMISIÓN / SOLICITUD DE ${drugName.toUpperCase()}. Objetivo: Justificar indicación inicial (ignorar continuidad si ya la tomó).`;
         }
 
-        // CAMBIO 3: subtítulo correcto según entidad
-        const entityLabel = context === 'SOLICITUD'
-          ? 'DINADIC - Dir. de Asistencia Directa por Situaciones Especiales'
-          : `${context} - BANCO DE DROGAS`;
-
         const prompt = `
-        Actúa como un Oncólogo Experto. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${entityLabel}.
+        Actúa como un Oncólogo Experto. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${context} BANCO DE DROGAS.
         
         ${strategyPrompt}
         
@@ -129,6 +125,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
         setStatus('Generando PDF...');
 
+        // --- CREACIÓN DEL PDF ---
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -141,6 +138,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         const marginBottom = 50; 
         let y = height - marginTop;
 
+        // 1. LOGO
         let logoLoaded = false;
         try {
             const logoUrl = window.location.origin + '/img/header_logo.png';
@@ -171,7 +169,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         y -= 25;
 
         const docTitle = "RESUMEN DE HISTORIA CLÍNICA";
-        const docSubTitle = entityLabel;
+        const docSubTitle = `${context} - BANCO DE DROGAS`;
         const dateText = `Córdoba Capital, ${today}`;
 
         const titleWidth = fontBold.widthOfTextAtSize(docTitle, 14);
@@ -255,13 +253,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  // CAMBIO 4: extractPamiData recibe drugName
-  const extractPamiData = async (drugName: string) => {
+  const extractPamiData = async () => {
     const today = new Date().toLocaleDateString('es-AR');
     
     const promptText = `
         Actúa como un ONCÓLOGO EXPERTO. Hoy es ${today}.
-        FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}. Completar droga_1 con este fármaco exacto.
         OBJETIVO: Extraer datos para completar formulario PAMI oncológico.
         IDIOMA: Todo en español.
         
@@ -271,11 +267,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         - estadio_actual: estado clínico actual (ej: "Remisión completa", "Progresión", "Estable").
         - linea_tratamiento: número de línea actual (ej: "1ra línea", "2da línea", "Seguimiento", "Adyuvancia").
         - antecedentes_qx: Resumen CONCISO de cirugías usando abreviaturas médicas estándar (Cx=cirugía, Nef=nefrectomía, LAP=laparotomía, etc). Incluir fecha y lado. Máximo 120 caracteres. Ej: "Nef izq (02/2024), Extracción implante subdérmico (05/2024)".
-        - antecedentes_radio: Resumen CONCISO usando abreviaturas (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis si está disponible y fecha. Máximo 120 caracteres. Ej: "QRT (Cisplatino) + BT (09-10/2023)".
+- antecedentes_radio: Resumen CONCISO usando abreviaturas (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis si está disponible y fecha. Máximo 120 caracteres. Ej: "QRT (Cisplatino) + BT (09-10/2023)".
         - informe_clinico_detallado: resumen clínico completo, máximo 800 caracteres, sin DNI ni nombre completo.
         - laboratorio_formateado: SOLO parámetros oncológicamente relevantes para este diagnóstico (hemograma, función renal/hepática, marcadores tumorales específicos). Excluir hormonas de fertilidad, lípidos u otros no relacionados. Formato conciso: "Hb 12g/dl, Cr 0.8, LDH 180". Máximo 100 caracteres.
         - Si un dato no está disponible, devolver cadena vacía "".
-        - droga_1: usar EXACTAMENTE el fármaco indicado arriba.
+        - Para droga_1/droga_2: si el paciente está en seguimiento sin tratamiento activo, devolver "".
         
         Devolver ÚNICAMENTE este JSON, sin markdown:
         {
@@ -318,24 +314,21 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     const lastBrace = cleanText.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) cleanText = cleanText.substring(firstBrace, lastBrace + 1);
     return JSON.parse(cleanText);
-  };
+};
 
   const fillPamiPDF = async (formDef: any) => {
     if ((!files || files.length === 0) && !historyText) {
         alert("⚠️ Suba la Historia Clínica primero.");
         return;
     }
-    // CAMBIO 4: pedir droga antes de procesar
-    const drugName = window.prompt('Ingrese el/los fármaco/s a solicitar en el formulario PAMI:');
-    if (!drugName || !drugName.trim()) return;
-
     setProcessingId(formDef.id);
     setStatus('Procesando PAMI...');
 
     try {
-      const aiData = await extractPamiData(drugName);
+      const aiData = await extractPamiData();
       const bsa = calculateBSA(aiData.peso, aiData.talla);
       const finalName = aiData.paciente_nombre_real || patient.name;
+      const cleanFnac = cleanDate(aiData.paciente_fnac);
 
       const formUrl = window.location.origin + formDef.file;
       const res = await fetch(formUrl);
@@ -344,12 +337,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
 
+      // Auto-fit: shrink font until text fits within field width
       const setText = (name: string, val: string, maxFontSize: number = 10, minFontSize: number = 6) => {
         try {
           const f = form.getTextField(name);
           if (!val || !String(val).trim()) return;
           const text = String(val).trim();
-          let fieldWidth = 350;
+
+          // Get actual field width from PDF widget
+          let fieldWidth = 350; // fallback default
           try {
             const widgets = (f as any).acroField.getWidgets();
             if (widgets && widgets.length > 0) {
@@ -357,6 +353,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
               fieldWidth = Math.max(rect.width - 6, 50);
             }
           } catch {}
+
+          // Calculate font size that fits: Helvetica avg char ≈ 0.52 * fontSize wide
           let fontSize = maxFontSize;
           const AVG_CHAR_RATIO = 0.52;
           while (fontSize > minFontSize) {
@@ -364,6 +362,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
             if (estimatedWidth <= fieldWidth) break;
             fontSize = Math.round((fontSize - 0.5) * 10) / 10;
           }
+
           f.setText(text);
           f.setFontSize(fontSize);
         } catch {}
@@ -388,7 +387,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 9, 7);
       setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 9, 7);
       setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 9, 7.5);
-      setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 9, 7.5);
+      setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 9, 7.5);;
       setText('Peso', aiData.peso);
       setText('Talla', aiData.talla);
       setText('Sup. Corporal', bsa);
@@ -416,6 +415,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
       }
 
+      // Datos del médico
       setText('Apellido y Nombre_2', doctorData.nombre);
       setText('Matricula', doctorData.matricula);
       setText('Especialidad', doctorData.especialidad);
@@ -442,14 +442,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  // CAMBIO 4: extractBancoDrogasData recibe drugName
-  const extractBancoDrogasData = async (context: string, drugName: string) => {
+  const extractBancoDrogasData = async (context: string) => {
     const today = new Date().toLocaleDateString('es-AR');
     const isRenovacion = context === 'RENOVACIÓN';
 
     const prompt = `
       Actúa como oncólogo experto. Hoy es ${today}. Analizá la historia clínica y extraé datos para el formulario Banco de Drogas ${context}.
-      FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}. Usar en droga_1.
       IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown.
 
       ${isRenovacion ? `
@@ -499,7 +497,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         "ecog": "0",
         "tipo_tratamiento": "adyuvante/neoadyuvante/avanzado",
         "linea": "1",
-        "droga_1": "${drugName}", "dosis_1": "", "dias_1": "", "total_dia_1": "",
+        "droga_1": "", "dosis_1": "", "dias_1": "", "total_dia_1": "",
         "droga_2": "", "dosis_2": "", "dias_2": "", "total_dia_2": "",
         "droga_3": "", "dosis_3": "", "dias_3": "", "total_dia_3": "",
         "intervalo_ciclo": "",
@@ -540,14 +538,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const fillAdmisionPDF = async (formDef: any) => {
     if (!historyText && (!files || files.length === 0)) { alert("⚠️ Suba la Historia Clínica primero."); return; }
-    // CAMBIO 4: pedir droga antes de procesar
-    const drugName = window.prompt('Ingrese el/los fármaco/s para la Admisión Banco de Drogas:');
-    if (!drugName || !drugName.trim()) return;
-
     setProcessingId(formDef.id);
     setStatus('Procesando Admisión...');
     try {
-      const d = await extractBancoDrogasData('ADMISIÓN', drugName);
+      const d = await extractBancoDrogasData('ADMISIÓN');
       const bsa = calculateBSA(d.peso, d.talla);
       const [fnd, fnm, fna] = (cleanDate(d.fnac) || '').split('/');
       const [dxd, dxm, dxa] = (cleanDate(d.fecha_diagnostico) || '').split('/');
@@ -571,6 +565,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       };
       const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch {} };
 
+      // Datos del paciente
       setT('Text1', d.nombre_apellido);
       setT('Text2', 'Argentina');
       setT('Text3', fnd); setT('Text4', fnm); setT('Text5', fna);
@@ -585,46 +580,59 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       setT('Text18', d.diagnostico);
       setT('Text19', d.cie10);
 
+      // Sexo
       if (d.sexo === 'F') setBtn('Button9'); else setBtn('Button8');
 
+      // Receptores
       setT('Text20', d.receptor_RE);
       setT('Text21', d.receptor_RP);
       setT('Text22', d.receptor_HER2);
       setT('Text23', d.receptor_KRAS);
       setT('Text24', d.receptor_EGER);
 
+      // Fecha diagnóstico y TNM
       setT('Text27', dxd); setT('Text28', dxm); setT('Text29', dxa);
       setT('Text30', d.tnm_t); setT('Text31', d.tnm_n); setT('Text32', d.tnm_m);
       setT('Text33', d.estadio);
 
+      // Anatomía patológica (2 líneas)
       const ap = d.anatomia_patologica || '';
       setT('Text34', ap.substring(0, 220), 9, 6.5);
       if (ap.length > 220) setT('Text35', ap.substring(220, 440), 9, 6.5);
 
+      // Sup Corporal / Peso / Talla
       setT('Text36', bsa || d.sup_corporal);
       setT('Text37', d.peso);
       setT('Text38', d.talla);
 
+      // ECOG
       const ecogBtn = ['Button39','Button40','Button41','Button42'];
       const ecogIdx = parseInt(d.ecog || '0');
       if (ecogIdx >= 0 && ecogIdx <= 3) setBtn(ecogBtn[ecogIdx]);
 
+      // Tratamientos previos
       if (d.tratamientos_sistemicos_si) setBtn('Button44'); else setBtn('Button45');
       setT('Text46', d.qt_droga, 9, 6.5);
 
+      // RT
       if (d.rt_primario_si) setBtn('Button52'); else setBtn('Button53');
       if (d.rt_localizacion) setT('Text54', d.rt_localizacion, 9, 7);
 
+      // Tratamiento a realizar
       const tipo = (d.tipo_tratamiento || '').toLowerCase();
       if (tipo.includes('adyuvante') && !tipo.includes('neo')) setBtn('Button68');
       else if (tipo.includes('neoadyuvante')) setBtn('Button70');
+      else if (tipo.includes('avanzado')) { /* Button para avanzado */ }
 
+      // Nº línea
       const lineaBtns: Record<string, string> = {'1':'Button89','2':'Button90','3':'Button91'};
       if (lineaBtns[d.linea]) setBtn(lineaBtns[d.linea]);
 
+      // Intervalo y ciclos
       setT('Text92', d.intervalo_ciclo);
       setT('Text94', d.ciclos_programados);
 
+      // Tabla de drogas
       const drugRows = [
         [d.droga_1, d.dosis_1, d.dias_1, d.total_dia_1, 'Text95','Text96','Text97','Text98'],
         [d.droga_2, d.dosis_2, d.dias_2, d.total_dia_2, 'Text99','Text100','Text101','Text102'],
@@ -634,6 +642,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         if (drg) { setT(td, String(drg).toUpperCase(), 9, 7); setT(tds, String(dos)); setT(tdi, String(dias)); setT(tto, String(tot)); }
       });
 
+      // Lugar y fecha
       setT('Text141', d.lugar_fecha);
       setT('Text142', `Hospital Oncológico Prov. Cba - ${doctorData.nombre} Mat.${doctorData.matricula}`);
 
@@ -648,14 +657,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
 
   const fillRenovacionPDF = async (formDef: any) => {
     if (!historyText && (!files || files.length === 0)) { alert("⚠️ Suba la Historia Clínica primero."); return; }
-    // CAMBIO 4: pedir droga antes de procesar
-    const drugName = window.prompt('Ingrese el/los fármaco/s para la Renovación Banco de Drogas:');
-    if (!drugName || !drugName.trim()) return;
-
     setProcessingId(formDef.id);
     setStatus('Procesando Renovación...');
     try {
-      const d = await extractBancoDrogasData('RENOVACIÓN', drugName);
+      const d = await extractBancoDrogasData('RENOVACIÓN');
       const bsa = calculateBSA(d.peso, d.talla);
       const [fnd, fnm, fna] = (cleanDate(d.fnac) || '').split('/');
 
@@ -678,6 +683,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       };
       const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch {} };
 
+      // Datos del paciente
       setT('Text2', d.nombre_apellido);
       setT('Text3', 'Argentina');
       setT('Text4', fnd); setT('Text5', fnm); setT('Text6', fna);
@@ -692,43 +698,54 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       setT('Text20', d.diagnostico);
       setT('Text21', d.cie10);
 
+      // Sexo
       if (d.sexo === 'F') setBtn('Button10'); else setBtn('Button9');
 
+      // Motivo renovación
       if ((d.motivo_renovacion || '').includes('continua')) setBtn('Button23'); else setBtn('Button24');
 
+      // Sitio de progresión
       if (d.sitio_progresion) setT('Text31', d.sitio_progresion, 9, 6.5);
 
+      // Receptores
       setT('Text32', d.receptor_RE);
       setT('Text33', d.receptor_RP);
       setT('Text34', d.receptor_HER2);
       setT('Text35', d.receptor_KRAS);
       setT('Text36', d.receptor_EGER);
 
+      // Sup Corporal / Peso / Talla
       setT('Text51', bsa || d.sup_corporal);
       setT('Text52', d.peso);
       setT('Text53', d.talla);
 
+      // ECOG
       const ecogBtn = ['Button57','Button58','Button59','Button60'];
       const ecogIdx = parseInt(d.ecog || '0');
       if (ecogIdx >= 0 && ecogIdx <= 3) setBtn(ecogBtn[ecogIdx]);
 
+      // Tipo tratamiento
       const tipo = (d.tipo_tratamiento || '').toLowerCase();
       if (tipo.includes('adyuvante') && !tipo.includes('neo')) { setBtn('Button62'); }
       else if (tipo.includes('neoadyuvante')) { setBtn('Button64'); }
       else if (tipo.includes('avanzado')) { setBtn('Button66'); }
 
+      // Nº línea
       const lineaBtns: Record<string, string> = {'1':'Button68','2':'Button69','3':'Button70'};
       if (lineaBtns[d.linea]) setBtn(lineaBtns[d.linea]);
 
+      // Ciclos
       setT('Text71', d.intervalo_ciclo);
       setT('Text72', d.ciclos_realizados);
       setT('Text73', d.ciclos_programados);
 
+      // Valoración de respuesta
       const resp = (d.respuesta || '').toLowerCase();
       if (resp.includes('estable')) setBtn('Button137');
       else if (resp.includes('parcial')) setBtn('Button138');
       else if (resp.includes('completa')) setBtn('Button139');
 
+      // Tabla de drogas
       const drugRows = [
         [d.droga_1, d.dosis_1, d.dias_1, d.total_dia_1, 'Text76','Text79','Text80','Text81'],
         [d.droga_2, d.dosis_2, d.dias_2, d.total_dia_2, 'Text82','Text83','Text84','Text85'],
@@ -738,6 +755,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
         if (drg) { setT(td, String(drg).toUpperCase(), 9, 7); setT(tds, String(dos)); setT(tdi, String(dias)); setT(tto, String(tot)); }
       });
 
+      // Lugar y fecha
       setT('Text140', d.lugar_fecha);
       setT('Text141', `Hospital Oncológico Prov. Cba - ${doctorData.nombre} Mat.${doctorData.matricula}`);
 
@@ -755,19 +773,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
       alert("⚠️ Suba la Historia Clínica primero.");
       return;
     }
-    // CAMBIO 4: pedir droga antes de procesar
-    const drugName = window.prompt('Ingrese el/los fármaco/s a solicitar en el formulario DINADIC:');
-    if (!drugName || !drugName.trim()) return;
-
     setProcessingId('dinadic');
     setStatus('Analizando historia clínica...');
     try {
       const today = new Date().toLocaleDateString('es-AR');
 
+      // 1. EXTRACCIÓN DE DATOS VÍA IA
       const extractPrompt = `
 Actúa como oncólogo experto. Hoy es ${today}.
 Analizá la historia clínica y extraé datos para el formulario DINADIC (Solicitud de Medicamentos - DADSE).
-FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}. Usar EXACTAMENTE este valor en el campo "medicamentos".
 IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de código.
 
 {
@@ -799,7 +813,7 @@ IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de c
   "frecuencia_ciclos": "",
   "tiempo_tratamiento": "",
   "fecha_inicio": "DD/MM/AAAA",
-  "medicamentos": "${drugName}",
+  "medicamentos": "Nombre genérico. Máx 345 chars (3 líneas).",
   "dosis_m2": "",
   "dosis_total_ciclo": "",
   "dias_admin": "",
@@ -822,6 +836,7 @@ CONTEXTO CLÍNICO: ${historyText}
 
       setStatus('Generando PDF...');
 
+      // 2. CARGAR PDF ORIGINAL Y SUPERPONER TEXTO
       const formUrl = window.location.origin + '/forms/nuevo_dinadic.pdf';
       const pdfRes = await fetch(formUrl);
       if (!pdfRes.ok) throw new Error('No se encontró el formulario DINADIC.');
@@ -832,18 +847,20 @@ CONTEXTO CLÍNICO: ${historyText}
       const pages = pdfDoc.getPages();
       const p1 = pages[0];
       const p2 = pages[1];
-      const pH = 841.9;
-      const FS = 8;
-      const maxW = 480;
-      const lineSpacing = 12;
+      const pH = 841.9; // altura A4
+      const FS = 8;     // font size base
+      const maxW = 480; // ancho útil de texto
+      const lineSpacing = 12; // espaciado entre líneas de puntos
 
-      // CAMBIO 1: offset corregido a +3 (encima de la línea de puntos)
+      // Helper: dibujar texto simple en coordenadas absolutas
+      // pdfplumber top → pdf-lib y: y = pH - top - 3 (ajustado para que no se superponga a los puntos)
       const draw = (page: any, x: number, top: number, text: string, fs = FS, f = font) => {
         if (!text?.trim()) return;
         const str = String(text).trim();
-        page.drawText(str, { x, y: pH - top + 3, size: fs, font: f });
+        page.drawText(str, { x, y: pH - top - 3, size: fs, font: f });
       };
 
+      // Helper: wrap text into multiple dot-line rows
       const drawLines = (page: any, x: number, firstTop: number, text: string, maxLines: number, fs = FS) => {
         if (!text?.trim()) return;
         const charPerLine = Math.floor(maxW / (0.52 * fs));
@@ -858,15 +875,17 @@ CONTEXTO CLÍNICO: ${historyText}
         }
         if (cur && lines.length < maxLines) lines.push(cur);
         lines.forEach((line, i) => {
-          page.drawText(line, { x, y: pH - firstTop + 3 - i * lineSpacing, size: fs, font });
+          page.drawText(line, { x, y: pH - firstTop - 3 - i * lineSpacing, size: fs, font });
         });
       };
 
+      // Helper: marcar checkbox dibujando X
       const markX = (page: any, x: number, top: number) => {
-        page.drawText('X', { x, y: pH - top + 3, size: 9, font: fontBold });
+        page.drawText('X', { x, y: pH - top - 3, size: 9, font: fontBold });
       };
 
-      // ── PÁGINA 1 ──
+      // ── PÁGINA 1 ──────────────────────────────────────────────
+      // Datos del paciente
       draw(p1, 153, 277.5, d.nombre_apellido);
       draw(p1, 276, 289.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
       draw(p1, 87,  301.5, d.edad);
@@ -883,30 +902,42 @@ CONTEXTO CLÍNICO: ${historyText}
       draw(p1, 191, 385.5, d.peso ? `${d.peso} kg` : '');
       draw(p1, 362, 385.5, bsa ? `${bsa} m²` : '');
 
+      // Datos del médico
       draw(p1, 253, 429.4, doctorData.nombre);
       draw(p1, 124, 441.4, doctorData.especialidad || 'Oncología Clínica');
       draw(p1, 100, 453.4, 'Oncología');
+      draw(p1, 239, 465.4, '');  // Jefe de servicio — no disponible
       draw(p1, 226, 477.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
       draw(p1, 96,  489.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
       draw(p1, 358, 489.4, doctorData.email);
 
+      // Diagnóstico que justifica (línea corta hasta ~374)
       draw(p1, 121, 533.2, d.diagnostico);
       draw(p1, 490, 533.2, cleanDate(d.fecha_diagnostico) || d.fecha_diagnostico || '');
 
+      // Resumen HC — 6 líneas (top: 569.2, 581.2, 593.2, 605.2, 617.2, 629.2)
       drawLines(p1, 57, 569.2, d.resumen_hc, 6);
+
+      // Métodos complementarios — 5 líneas (top: 677.2 … 725.2)
       drawLines(p1, 57, 677.2, d.metodos_complementarios, 5);
 
-      // ── PÁGINA 2 ──
+      // ── PÁGINA 2 ──────────────────────────────────────────────
+      // Estado general — 3 líneas (top: 83, 95, 107)
       drawLines(p2, 57, 83.0, d.estado_general, 3);
 
+      // Movilidad checkbox
       const movilidad = (d.movilidad || 'ambulante').toLowerCase();
       if (movilidad.includes('no')) markX(p2, 411, 154.3);
       else if (movilidad.includes('semi')) markX(p2, 246, 154.3);
       else markX(p2, 96, 154.3);
 
+      // Tratamientos previos — 3 líneas (top: 213.5, 225.5, 237.5)
       drawLines(p2, 57, 213.5, d.tratamientos_previos, 3);
+
+      // Tipo terapia previa — 4 líneas (top: 286.7, 298.7, 310.7, 322.7)
       drawLines(p2, 57, 286.7, d.tipo_terapia_previa, 4);
 
+      // Tipo de terapia (NEOADYUVANCIA / ADYUVANCIA / AVANZADO) + Línea
       const tipoActual = (d.tipo_terapia_actual || '').toLowerCase();
       if (tipoActual.includes('neoadyu')) markX(p2, 57, 368.1);
       else if (tipoActual.includes('adyu')) markX(p2, 166, 368.1);
@@ -916,26 +947,28 @@ CONTEXTO CLÍNICO: ${historyText}
       else if (linea === '2') markX(p2, 417, 368.1);
       else if (linea === '3') markX(p2, 480, 368.1);
 
+      // Esquema terapéutico
       draw(p2, 173, 444.0, d.numero_ciclos);
       draw(p2, 178, 456.0, d.frecuencia_ciclos);
       draw(p2, 176, 468.0, d.tiempo_tratamiento);
       draw(p2, 277, 480.0, cleanDate(d.fecha_inicio) || d.fecha_inicio || '');
 
+      // Medicamentos — línea principal + 2 líneas extra (top: 492, 504, 516)
       drawLines(p2, 57, 492.0, d.medicamentos, 3);
 
+      // Dosis / m2, Dosis total ciclo, Días admin, Intervalo
       draw(p2, 57,  528.0, d.dosis_m2);
       draw(p2, 230, 528.0, d.dosis_total_ciclo);
       draw(p2, 344, 528.0, d.dias_admin);
       draw(p2, 447, 528.0, d.intervalo);
 
+      // Fundamentación — 3 líneas (top: 564, 576, 588)
       drawLines(p2, 57, 564.0, d.fundamentacion, 3);
 
-      // CAMBIO 2: fecha de prescripción en slots DD / MM / AAAA separados
-      const [pd, pm, pa] = today.split('/');
-      draw(p2, 171, 725.4, pd || '');
-      draw(p2, 240, 725.4, pm || '');
-      draw(p2, 308, 725.4, pa || '');
+      // Fecha de prescripción
+      draw(p2, 171, 725.4, today);
 
+      // Guardar y descargar
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
@@ -950,6 +983,7 @@ CONTEXTO CLÍNICO: ${historyText}
       setStatus('');
     }
   };
+
 
   const generateFieldMap = async (formDef: any) => {
     setProcessingId('map-' + formDef.id);
