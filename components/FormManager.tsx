@@ -903,15 +903,15 @@ draw(p1, 524, 537.2, fda || '');
 drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
 
       // ── PÁGINA 2 ──
-      drawLines(p2, 57, 88.0, d.estado_general, 3);
+      drawLines(p2, 57, 89.5, d.estado_general, 3);
 
       const movilidad = (d.movilidad || 'ambulante').toLowerCase();
       if (movilidad.includes('no')) markX(p2, 418, 164.0);
 else if (movilidad.includes('semi')) markX(p2, 253, 164.0);
 else markX(p2, 103, 164.0);
       
-      drawLines(p2, 57, 218.5, d.tratamientos_previos, 3);
-      drawLines(p2, 57, 291.7, d.tipo_terapia_previa, 4);
+      drawLines(p2, 57, 220.0, d.tratamientos_previos, 3);
+      drawLines(p2, 57, 293.2, d.tipo_terapia_previa, 4);
 
       const tipoActual = (d.tipo_terapia_actual || '').toLowerCase();
       if (tipoActual.includes('neoadyu')) markX(p2, 63, 378.0);
