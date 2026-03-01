@@ -886,18 +886,18 @@ draw(p1, 91,  393.5, alturaCorregida ? `${alturaCorregida} cm` : '');
 draw(p1, 191, 393.5, d.peso ? `${d.peso} kg` : '');
 draw(p1, 362, 397.5, bsa ? `${bsa} m²` : '');
 
-      draw(p1, 253, 433.4, doctorData.nombre);
-      draw(p1, 124, 444.4, doctorData.especialidad || 'Oncología Clínica');
-      draw(p1, 100, 457.4, 'Oncología');
-      draw(p1, 226, 481.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
-      draw(p1, 96,  493.4, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
-      draw(p1, 358, 493.4, doctorData.email);
+      draw(p1, 253, 434.9, doctorData.nombre);
+      draw(p1, 124, 445.9, doctorData.especialidad || 'Oncología Clínica');
+      draw(p1, 100, 458.9, 'Oncología');
+      draw(p1, 226, 482.9, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 96,  494.9, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 358, 494.9, doctorData.email);
 
-      draw(p1, 121, 537.2, d.diagnostico);
+      draw(p1, 121, 538.7, d.diagnostico);
       const [fdd, fdm, fda] = (cleanDate(d.fecha_diagnostico) || '').split('/');
-draw(p1, 490, 537.2, fdd || '');
-draw(p1, 507, 537.2, fdm || '');
-draw(p1, 524, 537.2, fda || '');
+draw(p1, 490, 538.7, fdd || '');
+draw(p1, 507, 538.7, fdm || '');
+draw(p1, 524, 538.7, fda || '');
 
       drawLines(p1, 57, 589.0, d.resumen_hc, 6);
 drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
@@ -926,24 +926,23 @@ else if (linea === '3') markX(p2, 486, 378.0);
       draw(p2, 178, 452.0, d.frecuencia_ciclos);
       draw(p2, 176, 464.0, d.tiempo_tratamiento);
       const [fid, fim, fia] = (cleanDate(d.fecha_inicio) || '').split('/');
-draw(p2, 277, 480.0, fid || '');
-draw(p2, 305, 480.0, fim || '');
-draw(p2, 333, 480.0, fia || '');
+draw(p2, 277, 486.0, fid || '');
+draw(p2, 315, 486.0, fim || '');
+draw(p2, 348, 486.0, fia || '');
 
-      drawLines(p2, 57, 502.0, d.medicamentos, 3);
+      drawLines(p2, 57, 508.0, d.medicamentos, 3);
 
-      draw(p2, 57,  528.0, d.dosis_m2);
-      draw(p2, 230, 528.0, d.dosis_total_ciclo);
-      draw(p2, 344, 528.0, d.dias_admin);
-      draw(p2, 447, 528.0, d.intervalo);
+      draw(p2, 230, 534.0, d.dosis_total_ciclo);
+      draw(p2, 344, 534.0, d.dias_admin);
+      draw(p2, 447, 534.0, d.intervalo);
 
       drawLines(p2, 57, 569.0, d.fundamentacion, 3);
 
       // CAMBIO 2: fecha de prescripción en slots DD / MM / AAAA separados
       const [pd, pm, pa] = today.split('/');
-      draw(p2, 171, 725.4, pd || '');
-      draw(p2, 240, 725.4, pm || '');
-      draw(p2, 308, 725.4, pa || '');
+      draw(p2, 171, 730.4, pd || '');
+      draw(p2, 185, 730.4, pm || '');
+      draw(p2, 200, 730.4, pa || '');
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
