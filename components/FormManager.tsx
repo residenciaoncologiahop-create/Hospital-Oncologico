@@ -38,7 +38,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
   const forms = [
     { id: 'pami', name: 'Formulario PAMI Oncológico', file: '/forms/pami.pdf', type: 'auto' },
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'auto_banco', context: 'ADMISIÓN' },
-{ id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'auto_banco', context: 'RENOVACIÓN' },
+    { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'auto_banco', context: 'RENOVACIÓN' },
     { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/nuevo_dinadic.pdf', type: 'auto_dinadic', context: 'SOLICITUD' },
   ];
 
@@ -367,6 +367,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
           f.setFontSize(fontSize);
         } catch {}
       };
+      const setCheck = (name: string, shouldCheck: boolean) => { try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {} };
 
       setText('Apellido y Nombre', finalName);
       setText('Fecha de nacimiento', cleanDate(aiData.paciente_fnac) || aiData.paciente_fnac);
@@ -852,11 +853,11 @@ CONTEXTO CLÍNICO: ${historyText}
       const lineSpacing = 12; // espaciado entre líneas de puntos
 
       // Helper: dibujar texto simple en coordenadas absolutas
-      // pdfplumber top → pdf-lib y: y = pH - top - 9 (para FS=8, queda sobre la línea de puntos)
+      // pdfplumber top → pdf-lib y: y = pH - top - 3 (ajustado para que no se superponga a los puntos)
       const draw = (page: any, x: number, top: number, text: string, fs = FS, f = font) => {
         if (!text?.trim()) return;
         const str = String(text).trim();
-        page.drawText(str, { x, y: pH - top - 9, size: fs, font: f });
+        page.drawText(str, { x, y: pH - top - 3, size: fs, font: f });
       };
 
       // Helper: wrap text into multiple dot-line rows
@@ -874,13 +875,13 @@ CONTEXTO CLÍNICO: ${historyText}
         }
         if (cur && lines.length < maxLines) lines.push(cur);
         lines.forEach((line, i) => {
-          page.drawText(line, { x, y: pH - firstTop - 9 - i * lineSpacing, size: fs, font });
+          page.drawText(line, { x, y: pH - firstTop - 3 - i * lineSpacing, size: fs, font });
         });
       };
 
       // Helper: marcar checkbox dibujando X
       const markX = (page: any, x: number, top: number) => {
-        page.drawText('X', { x, y: pH - top - 9, size: 9, font: fontBold });
+        page.drawText('X', { x, y: pH - top - 3, size: 9, font: fontBold });
       };
 
       // ── PÁGINA 1 ──────────────────────────────────────────────
@@ -1103,6 +1104,14 @@ CONTEXTO CLÍNICO: ${historyText}
                           className="flex-1 flex items-center justify-center space-x-2 bg-gray-100 text-gray-700 hover:bg-gray-200 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
                         >
                           <Download size={14}/><span>Plantilla Vacía</span>
+                        </button>
+                        <button
+                          onClick={() => generateClinicalSummary(form.context || 'SOLICITUD')}
+                          disabled={processingId !== null}
+                          className="flex-1 flex items-center justify-center space-x-2 bg-purple-600 text-white hover:bg-purple-700 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                        >
+                          {processingId === 'summary' ? <Loader2 className="animate-spin" size={14}/> : <FilePlus size={14}/>}
+                          <span>Resumen Clínico</span>
                         </button>
                         <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-100 rounded text-[9px] text-yellow-700">
                             <AlertTriangle size={10} className="shrink-0 mt-0.5"/>
