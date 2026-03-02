@@ -915,10 +915,10 @@ draw(p2, 176, 475.2, esquema.tiempo_tratamiento);
       
       const [fid, fim, fia] = (cleanDate(esquema.fecha_inicio) || esquema.fecha_inicio || '').split('/');
 draw(p2, 277, 487.2, fid || '');
-draw(p2, 330, 487.2, fim || '');
-draw(p2, 375, 487.2, fia || '');
+draw(p2, 340, 487.2, fim || '');
+draw(p2, 385, 487.2, fia || '');
 
-      drawLines(p2, 57, 508.5, esquema.medicamentos, 3);
+      drawLines(p2, 57, 510.5, esquema.medicamentos, 3);
 draw(p2, 230, 534.2, esquema.dosis_total_ciclo);
 draw(p2, 344, 534.2, esquema.dias_admin);
 draw(p2, 447, 534.2, esquema.intervalo);
