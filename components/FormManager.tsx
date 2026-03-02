@@ -889,47 +889,46 @@ draw(p1, 91,  393.5, alturaCorregida ? `${alturaCorregida} cm` : '');
 draw(p1, 191, 393.5, d.peso ? `${d.peso} kg` : '');
 draw(p1, 362, 393.5, bsa ? `${bsa} m²` : '');
 
-      draw(p1, 253, 434.9, doctorData.nombre);
-      draw(p1, 124, 446.4, doctorData.especialidad || 'Oncología Clínica');
-      draw(p1, 100, 459.4, 'Oncología');
-      draw(p1, 226, 482.9, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
-      draw(p1, 96,  494.9, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
-      draw(p1, 358, 495.4, doctorData.email);
+      draw(p1, 253, 435.1, doctorData.nombre);
+      draw(p1, 124, 446.6, doctorData.especialidad || 'Oncología Clínica');
+      draw(p1, 100, 459.6, 'Oncología');
+      draw(p1, 226, 483.1, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 96,  495.1, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 358, 495.6, doctorData.email);
 
-      draw(p1, 121, 538.7, d.diagnostico);
+      draw(p1, 121, 538.9, d.diagnostico);
       const [fdd, fdm, fda] = (cleanDate(d.fecha_diagnostico) || '').split('/');
-draw(p1, 490, 538.7, fdd || '');
-draw(p1, 512, 538.7, fdm || '');
-draw(p1, 530, 538.7, fda || '');
+draw(p1, 490, 538.9, fdd || '');
+draw(p1, 512, 538.9, fdm || '');
+draw(p1, 530, 538.9, fda || '');
 
       drawLines(p1, 57, 589.0, d.resumen_hc, 6);
 drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
 
       // ── PÁGINA 2 ──
-      drawLines(p2, 57, 89.5, d.estado_general, 3);  
-      drawLines(p2, 57, 220.0, d.tratamientos_previos, 3);
-      drawLines(p2, 57, 293.2, d.tipo_terapia_previa, 4);
-      draw(p2, 173, 440.0, esquema.numero_ciclos);
-draw(p2, 178, 452.0, esquema.frecuencia_ciclos);
-draw(p2, 176, 464.0, esquema.tiempo_tratamiento);
+      drawLines(p2, 57, 89.6, d.estado_general, 3);  
+      drawLines(p2, 57, 220.1, d.tratamientos_previos, 3);
+      drawLines(p2, 57, 293.3, d.tipo_terapia_previa, 4);
+      draw(p2, 173, 446.2, esquema.numero_ciclos);
+draw(p2, 178, 458.2, esquema.frecuencia_ciclos);
+draw(p2, 176, 472.2, esquema.tiempo_tratamiento);
       
       const [fid, fim, fia] = (cleanDate(esquema.fecha_inicio) || esquema.fecha_inicio || '').split('/');
-draw(p2, 277, 480.0, fid || '');
-draw(p2, 305, 480.0, fim || '');
-draw(p2, 333, 480.0, fia || '');
+draw(p2, 277, 486.2, fid || '');
+draw(p2, 320, 486.2, fim || '');
+draw(p2, 348, 486.2, fia || '');
 
-      drawLines(p2, 57, 502.0, esquema.medicamentos, 3);
-draw(p2, 57,  528.0, esquema.dosis_m2);
-draw(p2, 230, 528.0, esquema.dosis_total_ciclo);
-draw(p2, 344, 528.0, esquema.dias_admin);
-draw(p2, 447, 528.0, esquema.intervalo);
+      drawLines(p2, 57, 508.2, esquema.medicamentos, 3);
+draw(p2, 230, 534.2, esquema.dosis_total_ciclo);
+draw(p2, 344, 534.2, esquema.dias_admin);
+draw(p2, 447, 534.2, esquema.intervalo);
 
       const fundTrunc = d.fundamentacion
   ? d.fundamentacion.length > 220
     ? d.fundamentacion.substring(0, d.fundamentacion.lastIndexOf(' ', 220)) + '.'
     : d.fundamentacion
   : '';
-drawLines(p2, 57, 570.2, fundTrunc, 3);
+drawLines(p2, 57, 570.4, fundTrunc, 3);
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
