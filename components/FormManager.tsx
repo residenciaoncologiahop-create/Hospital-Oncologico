@@ -805,7 +805,7 @@ IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de c
   "dosis_total_ciclo": "",
   "dias_admin": "",
   "intervalo": "",
-  "fundamentacion": "Justificación oncológica del tratamiento. Máx 345 chars (3 líneas)."
+  "fundamentacion": "Justificación oncológica MUY CONCISA. Máximo 2 oraciones. No más de 200 caracteres. Sin cortes abruptos, terminar siempre con punto final."
 }
 
 CONTEXTO CLÍNICO: ${historyText}
@@ -911,13 +911,17 @@ drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
       draw(p2, 178, 458.0, d.frecuencia_ciclos);
       draw(p2, 176, 470.0, d.tiempo_tratamiento);
       
-      drawLines(p2, 57, 510, d.medicamentos, 3);
 
       draw(p2, 230, 534.0, d.dosis_total_ciclo);
       draw(p2, 344, 534.0, d.dias_admin);
       draw(p2, 447, 534.0, d.intervalo);
 
-      drawLines(p2, 57, 570.2, d.fundamentacion, 3);
+      const fundTrunc = d.fundamentacion
+  ? d.fundamentacion.length > 220
+    ? d.fundamentacion.substring(0, d.fundamentacion.lastIndexOf(' ', 220)) + '.'
+    : d.fundamentacion
+  : '';
+drawLines(p2, 57, 570.2, fundTrunc, 3);
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
