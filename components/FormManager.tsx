@@ -112,7 +112,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
            3. JUSTIFICACIÓN
         
         CONTENIDO REQUERIDO:
-        - **Fechas exactas (DD/MM/AAAA)** para todo evento mencionado.
+        - **s exactas (DD/MM/AAAA)** para todo evento mencionado.
         - Detalle explícito de cirugías (especialmente **AMPUTACIONES**) y resultados de patología.
         
         **IMPORTANTE:** NO incluyas ninguna firma ni datos de contacto al final. El documento termina con el punto final de la justificación.
@@ -903,46 +903,21 @@ draw(p1, 524, 538.7, fda || '');
 drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
 
       // ── PÁGINA 2 ──
-      drawLines(p2, 57, 89.5, d.estado_general, 3);
-
-      const movilidad = (d.movilidad || 'ambulante').toLowerCase();
-      if (movilidad.includes('no')) markX(p2, 418, 164.0);
-else if (movilidad.includes('semi')) markX(p2, 253, 164.0);
-else markX(p2, 103, 164.0);
-      
+      drawLines(p2, 57, 89.5, d.estado_general, 3);  
       drawLines(p2, 57, 220.0, d.tratamientos_previos, 3);
       drawLines(p2, 57, 293.2, d.tipo_terapia_previa, 4);
 
-      const tipoActual = (d.tipo_terapia_actual || '').toLowerCase();
-      if (tipoActual.includes('neoadyu')) markX(p2, 63, 378.0);
-else if (tipoActual.includes('adyu')) markX(p2, 172, 378.0);
-else if (tipoActual.includes('avanzado')) markX(p2, 271, 378.0);
-const linea = String(d.linea || '1');
-if (linea === '1') markX(p2, 360, 378.0);
-else if (linea === '2') markX(p2, 423, 378.0);
-else if (linea === '3') markX(p2, 486, 378.0);
-
-      draw(p2, 173, 440.0, d.numero_ciclos);
-      draw(p2, 178, 452.0, d.frecuencia_ciclos);
-      draw(p2, 176, 464.0, d.tiempo_tratamiento);
-      const [fid, fim, fia] = (cleanDate(d.fecha_inicio) || '').split('/');
-draw(p2, 277, 486.0, fid || '');
-draw(p2, 315, 486.0, fim || '');
-draw(p2, 348, 486.0, fia || '');
-
-      drawLines(p2, 57, 508.0, d.medicamentos, 3);
+           draw(p2, 173, 446.0, d.numero_ciclos);
+      draw(p2, 178, 458.0, d.frecuencia_ciclos);
+      draw(p2, 176, 470.0, d.tiempo_tratamiento);
+      
+      drawLines(p2, 57, 510, d.medicamentos, 3);
 
       draw(p2, 230, 534.0, d.dosis_total_ciclo);
       draw(p2, 344, 534.0, d.dias_admin);
       draw(p2, 447, 534.0, d.intervalo);
 
-      drawLines(p2, 57, 569.0, d.fundamentacion, 3);
-
-      // CAMBIO 2: fecha de prescripción en slots DD / MM / AAAA separados
-      const [pd, pm, pa] = today.split('/');
-      draw(p2, 171, 730.4, pd || '');
-      draw(p2, 185, 730.4, pm || '');
-      draw(p2, 200, 730.4, pa || '');
+      drawLines(p2, 57, 570.2, d.fundamentacion, 3);
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
