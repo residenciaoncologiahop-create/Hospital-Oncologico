@@ -902,10 +902,14 @@ draw(p1, 490, 539.1, fdd || '');
 draw(p1, 512, 539.1, fdm || '');
 draw(p1, 530, 539.1, fda || '');
 
-      drawLines(p1, 57, 589.0, d.resumen_hc, 6);
-drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
+drawLines(p1, 57, 589.0, truncate(d.resumen_hc,              500), 5);
+drawLines(p1, 57, 697.0, truncate(d.metodos_complementarios, 400), 4);
 
       // ── PÁGINA 2 ──
+      const truncate = (text: string, maxChars: number) =>
+  text && text.length > maxChars
+    ? text.substring(0, text.lastIndexOf(' ', maxChars)) + '.'
+    : text || '';
       drawLines(p2, 57, 89.6, d.estado_general, 3);  
       drawLines(p2, 57, 220.1, d.tratamientos_previos, 3);
       drawLines(p2, 57, 293.3, d.tipo_terapia_previa, 4);
@@ -925,7 +929,7 @@ draw(p2, 447, 534.2, esquema.intervalo);
 
       const fundTrunc = d.fundamentacion
   ? d.fundamentacion.length > 220
-    ? d.fundamentacion.substring(0, d.fundamentacion.lastIndexOf(' ', 220)) + '.'
+    ? d.fundamentacion.substring(0, d.fundamentacion.lastIndexOf(' ', 120)) + '.'
     : d.fundamentacion
   : '';
 drawLines(p2, 57, 570.6, fundTrunc, 3);
