@@ -1511,8 +1511,7 @@ CONTEXTO: ${historyText}
   );
 };
 
-export default FormManager;
-    </div>
+</div>
   );
 };
 
