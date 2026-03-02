@@ -14,6 +14,13 @@ interface FormManagerProps {
 const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+  const [showEsquemaModal, setShowEsquemaModal] = useState(false);
+const [esquemaData, setEsquemaData] = useState({
+  numero_ciclos: '', frecuencia_ciclos: '', tiempo_tratamiento: '',
+  fecha_inicio: '', medicamentos: '', dosis_m2: '',
+  dosis_total_ciclo: '', dias_admin: '', intervalo: ''
+});
+const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
   
   const [showDocConfig, setShowDocConfig] = useState(false);
   const [doctorData, setDoctorData] = useState({
@@ -751,16 +758,24 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  const generateDinadicPDF = async () => {
-    if (!historyText && (!files || files.length === 0)) {
-      alert("⚠️ Suba la Historia Clínica primero.");
-      return;
-    }
-    // CAMBIO 4: pedir droga antes de procesar
+  const generateDinadicPDF = async (esquema?: typeof esquemaData) => {
+  if (!historyText && (!files || files.length === 0)) {
+    alert("⚠️ Suba la Historia Clínica primero.");
+    return;
+  }
+
+  // Si no viene esquema, es el primer llamado: pedir droga y abrir modal
+  if (!esquema) {
     const drugName = window.prompt('Ingrese el/los fármaco/s a solicitar en el formulario DINADIC:');
     if (!drugName || !drugName.trim()) return;
+    setPendingDinadicDrug(drugName);
+    setEsquemaData(prev => ({ ...prev, medicamentos: drugName }));
+    setShowEsquemaModal(true);
+    return;
+  }
 
-    setProcessingId('dinadic');
+  const drugName = pendingDinadicDrug;
+  setProcessingId('dinadic');
     setStatus('Analizando historia clínica...');
     try {
       const today = new Date().toLocaleDateString('es-AR');
@@ -791,21 +806,9 @@ IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de c
   "resumen_hc": "Resumen clínico con estadio e inmunohistoquímica. Narrativa cronológica. Máx 690 chars (6 líneas × 115).",
   "metodos_complementarios": "Estudios de imagen y laboratorio con fechas y resultados clave. Máx 575 chars (5 líneas).",
   "estado_general": "ECOG y comorbilidades relevantes. Máx 345 chars (3 líneas).",
-  "movilidad": "ambulante/semi ambulante/no ambulante",
   "tratamientos_previos": "Tratamientos oncológicos previos con fechas. Máx 345 chars (3 líneas).",
   "tipo_terapia_previa": "Cx, QT, RT, etc con fechas. Abreviaturas médicas. Máx 460 chars (4 líneas).",
-  "tipo_terapia_actual": "adyuvancia/neoadyuvancia/avanzado",
-  "linea": "1/2/3",
-  "numero_ciclos": "",
-  "frecuencia_ciclos": "",
-  "tiempo_tratamiento": "",
-  "fecha_inicio": "DD/MM/AAAA",
-  "medicamentos": "${drugName}",
-  "dosis_m2": "",
-  "dosis_total_ciclo": "",
-  "dias_admin": "",
-  "intervalo": "",
-  "fundamentacion": "Justificación oncológica MUY CONCISA. Máximo 2 oraciones. No más de 200 caracteres. Sin cortes abruptos, terminar siempre con punto final."
+  "fundamentacion": "Justificación oncológica MUY CONCISA. Máximo 2 oraciones. No más de 200 caracteres. Sin cortes abruptos, terminar siempre con punto final y con coherencia."
 }
 
 CONTEXTO CLÍNICO: ${historyText}
@@ -884,20 +887,20 @@ draw(p1, 121, 369.5, d.diagnostico);
 draw(p1, 114, 381.5, d.n_ciclo || '1');
 draw(p1, 91,  393.5, alturaCorregida ? `${alturaCorregida} cm` : '');
 draw(p1, 191, 393.5, d.peso ? `${d.peso} kg` : '');
-draw(p1, 362, 397.5, bsa ? `${bsa} m²` : '');
+draw(p1, 362, 393.5, bsa ? `${bsa} m²` : '');
 
       draw(p1, 253, 434.9, doctorData.nombre);
-      draw(p1, 124, 445.9, doctorData.especialidad || 'Oncología Clínica');
-      draw(p1, 100, 458.9, 'Oncología');
+      draw(p1, 124, 446.4, doctorData.especialidad || 'Oncología Clínica');
+      draw(p1, 100, 459.4, 'Oncología');
       draw(p1, 226, 482.9, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
       draw(p1, 96,  494.9, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
-      draw(p1, 358, 494.9, doctorData.email);
+      draw(p1, 358, 495.4, doctorData.email);
 
       draw(p1, 121, 538.7, d.diagnostico);
       const [fdd, fdm, fda] = (cleanDate(d.fecha_diagnostico) || '').split('/');
 draw(p1, 490, 538.7, fdd || '');
-draw(p1, 507, 538.7, fdm || '');
-draw(p1, 524, 538.7, fda || '');
+draw(p1, 512, 538.7, fdm || '');
+draw(p1, 530, 538.7, fda || '');
 
       drawLines(p1, 57, 589.0, d.resumen_hc, 6);
 drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
@@ -906,15 +909,20 @@ drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
       drawLines(p2, 57, 89.5, d.estado_general, 3);  
       drawLines(p2, 57, 220.0, d.tratamientos_previos, 3);
       drawLines(p2, 57, 293.2, d.tipo_terapia_previa, 4);
-
-           draw(p2, 173, 446.0, d.numero_ciclos);
-      draw(p2, 178, 458.0, d.frecuencia_ciclos);
-      draw(p2, 176, 470.0, d.tiempo_tratamiento);
+      draw(p2, 173, 440.0, esquema.numero_ciclos);
+draw(p2, 178, 452.0, esquema.frecuencia_ciclos);
+draw(p2, 176, 464.0, esquema.tiempo_tratamiento);
       
+      const [fid, fim, fia] = (cleanDate(esquema.fecha_inicio) || esquema.fecha_inicio || '').split('/');
+draw(p2, 277, 480.0, fid || '');
+draw(p2, 305, 480.0, fim || '');
+draw(p2, 333, 480.0, fia || '');
 
-      draw(p2, 230, 534.0, d.dosis_total_ciclo);
-      draw(p2, 344, 534.0, d.dias_admin);
-      draw(p2, 447, 534.0, d.intervalo);
+      drawLines(p2, 57, 502.0, esquema.medicamentos, 3);
+draw(p2, 57,  528.0, esquema.dosis_m2);
+draw(p2, 230, 528.0, esquema.dosis_total_ciclo);
+draw(p2, 344, 528.0, esquema.dias_admin);
+draw(p2, 447, 528.0, esquema.intervalo);
 
       const fundTrunc = d.fundamentacion
   ? d.fundamentacion.length > 220
@@ -1449,6 +1457,61 @@ CONTEXTO: ${historyText}
       </div>
 
       {status && <div className="mt-4 text-center"><span className="inline-block px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full animate-pulse">{status}</span></div>}
+
+      {showEsquemaModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-black text-sm uppercase tracking-widest text-gray-800">
+                Esquema Terapéutico
+              </h3>
+              <button onClick={() => setShowEsquemaModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18}/>
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-500 mb-4 uppercase tracking-wide">
+              Complete los datos del esquema antes de generar el formulario DINADIC
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Medicamento/s', key: 'medicamentos', span: true },
+                { label: 'Dosis/m² o kg', key: 'dosis_m2' },
+                { label: 'Dosis total por ciclo', key: 'dosis_total_ciclo' },
+                { label: 'Días de administración', key: 'dias_admin' },
+                { label: 'Intervalo', key: 'intervalo' },
+                { label: 'N° total de ciclos', key: 'numero_ciclos' },
+                { label: 'Frecuencia de ciclos', key: 'frecuencia_ciclos' },
+                { label: 'Tiempo de tratamiento', key: 'tiempo_tratamiento' },
+                { label: 'Fecha inicio (DD/MM/AAAA)', key: 'fecha_inicio', span: true },
+              ].map(({ label, key, span }) => (
+                <div key={key} className={span ? 'col-span-2' : ''}>
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">{label}</label>
+                  <input
+                    className="w-full p-2 border rounded-lg text-xs"
+                    value={(esquemaData as any)[key]}
+                    onChange={e => setEsquemaData(prev => ({ ...prev, [key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                setShowEsquemaModal(false);
+                generateDinadicPDF(esquemaData);
+              }}
+              className="mt-5 w-full bg-blue-700 hover:bg-blue-800 text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+            >
+              <Wand2 size={14}/> Generar DINADIC
+            </button>
+          </div>
+        </div>
+      )}
+
+    </div>   {/* ← esta es la última línea del return */}
+  );
+};
+
+export default FormManager;
     </div>
   );
 };
