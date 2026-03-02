@@ -896,11 +896,11 @@ draw(p1, 362, 393.5, bsa ? `${bsa} m²` : '');
       draw(p1, 96,  495.1, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
       draw(p1, 358, 495.6, doctorData.email);
 
-      draw(p1, 121, 538.9, d.diagnostico);
+      draw(p1, 121, 539.1, d.diagnostico);
       const [fdd, fdm, fda] = (cleanDate(d.fecha_diagnostico) || '').split('/');
-draw(p1, 490, 538.9, fdd || '');
-draw(p1, 512, 538.9, fdm || '');
-draw(p1, 530, 538.9, fda || '');
+draw(p1, 490, 539.1, fdd || '');
+draw(p1, 512, 539.1, fdm || '');
+draw(p1, 530, 539.1, fda || '');
 
       drawLines(p1, 57, 589.0, d.resumen_hc, 6);
 drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
@@ -909,14 +909,14 @@ drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
       drawLines(p2, 57, 89.6, d.estado_general, 3);  
       drawLines(p2, 57, 220.1, d.tratamientos_previos, 3);
       drawLines(p2, 57, 293.3, d.tipo_terapia_previa, 4);
-      draw(p2, 173, 446.2, esquema.numero_ciclos);
-draw(p2, 178, 458.2, esquema.frecuencia_ciclos);
-draw(p2, 176, 472.2, esquema.tiempo_tratamiento);
+      draw(p2, 173, 449.2, esquema.numero_ciclos);
+draw(p2, 178, 461.2, esquema.frecuencia_ciclos);
+draw(p2, 176, 475.2, esquema.tiempo_tratamiento);
       
       const [fid, fim, fia] = (cleanDate(esquema.fecha_inicio) || esquema.fecha_inicio || '').split('/');
-draw(p2, 277, 486.2, fid || '');
-draw(p2, 320, 486.2, fim || '');
-draw(p2, 348, 486.2, fia || '');
+draw(p2, 277, 487.2, fid || '');
+draw(p2, 330, 487.2, fim || '');
+draw(p2, 365, 487.2, fia || '');
 
       drawLines(p2, 57, 508.2, esquema.medicamentos, 3);
 draw(p2, 230, 534.2, esquema.dosis_total_ciclo);
@@ -928,7 +928,7 @@ draw(p2, 447, 534.2, esquema.intervalo);
     ? d.fundamentacion.substring(0, d.fundamentacion.lastIndexOf(' ', 220)) + '.'
     : d.fundamentacion
   : '';
-drawLines(p2, 57, 570.4, fundTrunc, 3);
+drawLines(p2, 57, 570.6, fundTrunc, 3);
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
