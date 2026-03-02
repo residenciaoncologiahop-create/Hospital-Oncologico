@@ -1507,7 +1507,7 @@ CONTEXTO: ${historyText}
         </div>
       )}
 
-    </div>   {/* ← esta es la última línea del return */}
+    </div>
   );
 };
 
