@@ -803,12 +803,12 @@ IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de c
   "peso": "",
   "n_ciclo": "1",
   "fecha_diagnostico": "DD/MM/AAAA",
-  "resumen_hc": "Resumen clínico con estadio e inmunohistoquímica. MÁXIMO 5 líneas de 100 caracteres cada una = 500 chars total. Sé muy conciso.",
-  "metodos_complementarios": "Estudios clave con fechas. MÁXIMO 4 líneas de 100 chars = 400 chars. Solo los más relevantes.",
-  "estado_general": "ECOG y comorbilidades. MÁXIMO 2 líneas de 100 chars = 200 chars.",
-  "tratamientos_previos": "Tratamientos previos con fechas. MÁXIMO 2 líneas de 100 chars = 200 chars. Abreviaturas médicas.",
-  "tipo_terapia_previa": "Cx, QT, RT, etc con fechas. Abreviaturas. MÁXIMO 3 líneas de 100 chars = 300 chars.",
-  "fundamentacion": "Justificación oncológica MUY CONCISA. Máximo 2 oraciones. MÁXIMO 120 caracteres. Terminar con punto."
+    "resumen_hc": "Resumen clínico con estadio e inmunohistoquímica. Narrativa cronológica. Máx 690 chars (6 líneas × 115).",
+  "metodos_complementarios": "Estudios de imagen y laboratorio con fechas y resultados clave. Máx 575 chars (5 líneas).",
+  "estado_general": "ECOG y comorbilidades relevantes. Máx 345 chars (3 líneas).",
+ "tratamientos_previos": "Tratamientos oncológicos previos con fechas. Máx 345 chars (3 líneas).",
+  "tipo_terapia_previa": "Cx, QT, RT, etc con fechas. Abreviaturas médicas. Máx 460 chars (4 líneas).",
+  "fundamentacion": "Justificación oncológica MUY CONCISA. Máximo 2 oraciones. No más de 200 caracteres. Sin cortes abruptos, terminar siempre con punto final y con coherencia."
 }
 
 CONTEXTO CLÍNICO: ${historyText}
@@ -902,14 +902,10 @@ draw(p1, 490, 539.1, fdd || '');
 draw(p1, 512, 539.1, fdm || '');
 draw(p1, 530, 539.1, fda || '');
 
-drawLines(p1, 57, 589.0, truncate(d.resumen_hc,              500), 5);
-drawLines(p1, 57, 697.0, truncate(d.metodos_complementarios, 400), 4);
+      drawLines(p1, 57, 589.0, d.resumen_hc, 6);
+drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
 
       // ── PÁGINA 2 ──
-      const truncate = (text: string, maxChars: number) =>
-  text && text.length > maxChars
-    ? text.substring(0, text.lastIndexOf(' ', maxChars)) + '.'
-    : text || '';
       drawLines(p2, 57, 89.6, d.estado_general, 3);  
       drawLines(p2, 57, 220.1, d.tratamientos_previos, 3);
       drawLines(p2, 57, 293.3, d.tipo_terapia_previa, 4);
@@ -929,7 +925,7 @@ draw(p2, 447, 534.2, esquema.intervalo);
 
       const fundTrunc = d.fundamentacion
   ? d.fundamentacion.length > 220
-    ? d.fundamentacion.substring(0, d.fundamentacion.lastIndexOf(' ', 120)) + '.'
+    ? d.fundamentacion.substring(0, d.fundamentacion.lastIndexOf(' ', 220)) + '.'
     : d.fundamentacion
   : '';
 drawLines(p2, 57, 570.6, fundTrunc, 3);
