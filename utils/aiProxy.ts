@@ -71,17 +71,12 @@ export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiRe
   );
 
   // AbortController para detectar timeout antes de Firebase
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
-
   try {
-    const result = await callGeminiFn(params);
-    return result.data;
-  } catch (error: any) {
-    throw new Error(getSafeMessage(error));
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  const result = await callGeminiFn(params);
+  return result.data;
+} catch (error: any) {
+  throw new Error(getSafeMessage(error));
+}
 };
 
 // ──────────────────────────────────────────────
