@@ -11,7 +11,7 @@ import { extractImagingFromHistorySecure } from './utils/aiProxy';
 import { requestNotificationPermission } from './utils/notificationService';
 
 // --- FIREBASE IMPORTS ---
-import { db } from './firebase'; 
+import { db } from './lib/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
 
 import { 

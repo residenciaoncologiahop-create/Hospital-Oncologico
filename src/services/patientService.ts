@@ -1,7 +1,7 @@
-import { db, storage } from './firebase';
+import { db, storage } from '../lib/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { ImagingStudy } from './components/ImagingPanel'; // Asegúrate de importar la interfaz
+import { ImagingStudy } from '../components/ImagingPanel'; // Asegúrate de importar la interfaz
 
 export interface Patient {
     id?: string;

@@ -9,7 +9,7 @@
  */
 
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { auth } from "../firebase";
+import { auth } from "../lib/firebase";
 
 // Tipos
 interface GeminiPart {

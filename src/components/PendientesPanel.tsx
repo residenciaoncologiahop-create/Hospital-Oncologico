@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
-import { db } from '../firebase';
+import { db } from '../lib/firebase';
 import { Plus, Check, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { notifyPendientesHoy, notifyPendientesManana } from '../utils/notificationService';
 

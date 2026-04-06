@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth } from '../lib/firebase';
 import AuthScreen from './AuthScreen';
 import { Loader2 } from 'lucide-react';
 

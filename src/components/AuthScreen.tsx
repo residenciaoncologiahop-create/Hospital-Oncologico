@@ -4,7 +4,7 @@ import {
   signInWithEmailAndPassword,
   updateProfile
 } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth } from '../lib/firebase';
 import { Activity, Mail, Lock, User, Loader2, ShieldCheck } from 'lucide-react';
 
 type AuthMode = 'login' | 'register';

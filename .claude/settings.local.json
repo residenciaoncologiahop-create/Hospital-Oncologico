@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp components/* src/components/)",
+      "Bash(cp utils/* src/utils/)",
+      "Bash(cp mocks/* src/mocks/)",
+      "Bash(npm run:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)"
+    ]
+  }
+}
