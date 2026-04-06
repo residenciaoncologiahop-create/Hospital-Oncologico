@@ -1,6 +1,16 @@
 # OncoGuide AI — Asistente Clínico para Oncología
 
+![Deploy](https://img.shields.io/badge/deploy-Vercel-black?logo=vercel)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue?logo=typescript)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![Firebase](https://img.shields.io/badge/Firebase-10-FFCA28?logo=firebase)
+![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-4285F4?logo=google)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/estado-MVP_en_uso_interno-yellow)
+
 Herramienta de apoyo a la discusión clínica y la docencia en oncología, desarrollada en el contexto de la residencia médica del Hospital Oncológico Provincial de Córdoba.
+
+> **Versión activa:** [hospital-oncologico.vercel.app](https://hospital-oncologico.vercel.app)
 
 ---
 
@@ -37,6 +47,51 @@ Modo de aprendizaje con casos clínicos educativos, generación de preguntas de 
 
 ---
 
+## Tecnologías
+
+| Tecnología | Rol |
+|---|---|
+| ⚛️ React 19 + TypeScript | Frontend |
+| 🔥 Firebase Firestore | Base de datos |
+| 🔐 Firebase Auth | Autenticación |
+| ☁️ Firebase Cloud Functions | Proxy seguro para IA |
+| 🤖 Gemini 2.5 Flash | Motor de IA |
+| ⚡ Vite 6 | Build tool |
+| 🎨 Tailwind CSS | Estilos |
+| 📄 pdf-lib | Generación de PDFs |
+
+---
+
+## Desarrollo local
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/residenciaoncologiahop-create/Hospital-Oncologico.git
+cd Hospital-Oncologico
+
+# 2. Instalar dependencias
+npm install
+
+# 3. Configurar variables de entorno
+cp .env.example .env.local
+# Completar .env.local con los valores de Firebase
+
+# 4. Iniciar en desarrollo
+npm run dev
+```
+
+### Scripts disponibles
+
+| Comando | Descripción |
+|---|---|
+| `npm run dev` | Servidor de desarrollo |
+| `npm run build` | Build de producción |
+| `npm run lint` | Verificar código con ESLint |
+| `npm run lint:fix` | Corregir errores automáticamente |
+| `npm run format` | Formatear con Prettier |
+
+---
+
 ## Privacidad y protección de datos
 
 OncoGuide fue diseñado con privacidad por defecto en cumplimiento con la **Ley 25.326 de Protección de Datos Personales (Argentina)**.
@@ -48,11 +103,34 @@ OncoGuide fue diseñado con privacidad por defecto en cumplimiento con la **Ley 
 
 ---
 
-## Tecnología
+## Seguridad
 
-La aplicación utiliza el modelo **Gemini 2.5 Flash** de Google como motor de inteligencia artificial. Las llamadas a la IA se realizan exclusivamente a través de un servidor intermediario (Cloud Function de Firebase), nunca directamente desde el navegador. La clave de API nunca está expuesta al usuario final.
+- La API key de Gemini nunca está expuesta al cliente — reside en Firebase Secret Manager.
+- Todas las llamadas a IA pasan por una Cloud Function autenticada con rate limiting.
+- Las reglas de Firestore garantizan que cada profesional solo accede a sus propios casos.
+- Sin datos identificatorios de pacientes en ningún servidor externo.
 
-Los datos clínicos se almacenan en **Firebase Firestore** con reglas de acceso que garantizan que cada profesional solo puede ver sus propios casos.
+---
+
+## Roadmap
+
+- [ ] Soporte multi-hospital
+- [ ] Export a Google Drive / OneDrive
+- [ ] Módulo de seguimiento de toxicidades
+- [ ] Integración con guías NCCN actualizadas automáticamente
+- [ ] App móvil (React Native)
+- [ ] Tests unitarios e integración
+
+---
+
+## Contribuir
+
+Este proyecto es de uso interno de la residencia. Si sos residente o profesional del HOP y querés reportar un bug o sugerir una mejora:
+
+1. Abrí un **Issue** en GitHub describiendo el problema o la idea.
+2. Para cambios de código, creá una rama `feature/nombre-de-la-mejora` desde `main`.
+3. **Nunca commitear `.env` ni `.env.local`** — usar `.env.example` como referencia.
+4. Asegurate de que `npm run build` pase antes de hacer un PR.
 
 ---
 
@@ -67,5 +145,3 @@ Toda decisión clínica es responsabilidad exclusiva del profesional médico tra
 ## Contacto y desarrollo
 
 Desarrollado por la residencia de Oncología Clínica — Hospital Oncológico Provincial, Córdoba, Argentina.
-
-Versión activa: [hospital-oncologico.vercel.app](https://hospital-oncologico.vercel.app)
