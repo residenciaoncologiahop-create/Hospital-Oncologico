@@ -51,7 +51,7 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
   ];
 
   const calculateBSA = (weight: string, height: string) => {
-    let w = parseFloat(weight?.toString().replace(',', '.'));
+    const w = parseFloat(weight?.toString().replace(',', '.'));
     let h = parseFloat(height?.toString().replace(',', '.'));
     if (h > 0 && h < 3) h = h * 100;
     if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) return Math.sqrt((w * h) / 3600).toFixed(2);
