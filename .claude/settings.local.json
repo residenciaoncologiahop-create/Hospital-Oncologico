@@ -6,7 +6,16 @@
       "Bash(cp mocks/* src/mocks/)",
       "Bash(npm run:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m ':*)"
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git rebase:*)",
+      "Bash(git cherry-pick:*)",
+      "Bash(git checkout:*)",
+      "Bash(git clean:*)",
+      "Bash(npm install:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
