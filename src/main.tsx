@@ -728,7 +728,7 @@ const App = ({ user }: AppProps) => {
                                                         <Presentation size={16} className="text-amber-600 mb-1"/> Comité
                                                     </button>
                                                 </div>
-                                                <FileUploader label="Guías NCCN / Protocolos" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf"/>
+                                                <FileUploader label="Guías NCCN / Protocolos" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" onClearAll={() => setGuidelineFiles([])} clearAllLabel="Limpiar guías"/>
                                             </section>
                                         </>
                                     )}
