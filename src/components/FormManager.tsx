@@ -60,7 +60,7 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
 
   const cleanDate = (val: string) => {
     if (!val) return "";
-    const match = val.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    const match = val.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
     if (match) return `${match[1].padStart(2, '0')}/${match[2].padStart(2, '0')}/${match[3]}`;
     return "";
   };
@@ -166,7 +166,7 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
                 y -= (pngDims.height + 20); 
                 logoLoaded = true;
             }
-        } catch (e) {}
+        } catch { /* logo load failed, use text fallback */ }
 
         if (!logoLoaded) {
             const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
@@ -364,7 +364,7 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
               const rect = widgets[0].getRectangle();
               fieldWidth = Math.max(rect.width - 6, 50);
             }
-          } catch {}
+          } catch { /* field rect unavailable, use default width */ }
           let fontSize = maxFontSize;
           const AVG_CHAR_RATIO = 0.52;
           while (fontSize > minFontSize) {
@@ -374,9 +374,9 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
           }
           f.setText(text);
           f.setFontSize(fontSize);
-        } catch {}
+        } catch { /* field not found in form, skip */ }
       };
-      const setCheck = (name: string, shouldCheck: boolean) => { try { if (shouldCheck) form.getCheckBox(name).check(); } catch (e) {} };
+      const setCheck = (name: string, shouldCheck: boolean) => { try { if (shouldCheck) form.getCheckBox(name).check(); } catch { /* field not found */ } };
 
       setText('Apellido y Nombre', finalName);
       setText('Fecha de nacimiento', cleanDate(aiData.paciente_fnac) || aiData.paciente_fnac);
@@ -572,12 +572,12 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
           if (!val?.trim()) return;
           const text = String(val).trim();
           let fs = max, w = 350;
-          try { const r = (f as any).acroField.getWidgets()[0].getRectangle(); w = Math.max(r.width - 4, 30); } catch {}
+          try { const r = (f as any).acroField.getWidgets()[0].getRectangle(); w = Math.max(r.width - 4, 30); } catch { /* widget rect unavailable */ }
           while (fs > min && text.length * 0.52 * fs > w) fs = Math.round((fs - 0.5) * 10) / 10;
           f.setText(text); f.setFontSize(fs);
-        } catch {}
+        } catch { /* field not found in form, skip */ }
       };
-      const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch {} };
+      const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch { /* field not found */ } };
 
       setT('Text1', d.nombre_apellido);
       setT('Text2', 'Argentina');
@@ -679,12 +679,12 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
           if (!val?.trim()) return;
           const text = String(val).trim();
           let fs = max, w = 350;
-          try { const r = (f as any).acroField.getWidgets()[0].getRectangle(); w = Math.max(r.width - 4, 30); } catch {}
+          try { const r = (f as any).acroField.getWidgets()[0].getRectangle(); w = Math.max(r.width - 4, 30); } catch { /* widget rect unavailable */ }
           while (fs > min && text.length * 0.52 * fs > w) fs = Math.round((fs - 0.5) * 10) / 10;
           f.setText(text); f.setFontSize(fs);
-        } catch {}
+        } catch { /* field not found in form, skip */ }
       };
-      const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch {} };
+      const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch { /* field not found */ } };
 
       setT('Text2', d.nombre_apellido);
       setT('Text3', 'Argentina');
@@ -1089,7 +1089,7 @@ CONTEXTO: ${historyText}
           page.drawImage(img, { x: (W - dims.width) / 2, y: y - dims.height, width: dims.width, height: dims.height });
           logoH = dims.height + 10;
         }
-      } catch (_) {}
+      } catch { /* logo load failed, use text fallback */ }
       if (logoH === 0) {
         const ht = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
         page.drawText(ht, { x: (W - fontBold.widthOfTextAtSize(ht, 13)) / 2, y, size: 13, font: fontBold });
