@@ -126,27 +126,37 @@ export const extractTimelineSecure = async (
 
   const instructionText = `
     Eres un asistente médico argentino. Analiza los documentos y extrae la cronología clínica.
-    
-    IDIOMA OBLIGATORIO: Todo el contenido de los campos "professional", "category" y "note" DEBE estar en español, sin excepción. Si el documento fuente está en inglés, traduce el contenido al español.
-    
+
+    IDIOMA OBLIGATORIO: Todo el contenido de los campos "professional", "category", "note" y "detail" DEBE estar en español, sin excepción. Si el documento fuente está en inglés, traduce el contenido al español.
+
     REGLA DE PRIVACIDAD: NO incluyas DNI, nombre del paciente ni datos personales.
-    
+
     Fechas: formato DD/MM/YYYY.
-    
+
     Categorías permitidas (usar exactamente estas palabras): Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
-    
+
+    CRITERIO isKey:
+    isKey = true para: diagnóstico inicial, biopsia con resultado, inicio de tratamiento sistémico, cambio de línea terapéutica, progresión de enfermedad, cirugía mayor, recaída, respuesta a tratamiento (RC/RP/EE/PE), toxicidad grave (≥ grado 3), fallecimiento.
+    isKey = false para: controles rutinarios, laboratorios sin cambios significativos, imágenes estables, consultas de seguimiento.
+
+    NIVEL DE DETALLE EN "note":
+    - Eventos con isKey = true: note DEBE ser detallado. Incluir hallazgos específicos, valores numéricos relevantes, estadio TNM, resultado histológico/inmunohistoquímico, biomarcadores, dosis, decisiones clínicas tomadas. MÁXIMO 400 caracteres.
+    - Eventos con isKey = false: note puede ser conciso, 1-2 líneas con el hallazgo principal. MÁXIMO 120 caracteres.
+
+    CAMPO "detail" (solo para isKey = true):
+    Si hay información adicional relevante que no cabe en "note" (ej: informe anatomopatológico completo, resultado detallado de imagen, esquema de quimioterapia con dosis, estadificación completa), incluirla en el campo "detail". Si no hay información adicional, omitir el campo.
+
     ESTRUCTURA JSON REQUERIDA — devolver ÚNICAMENTE el array:
     [
       {
         "date": "DD/MM/YYYY",
         "professional": "especialidad o nombre del profesional en español",
         "category": "una de las categorías permitidas",
-        "note": "resumen conciso del evento clínico EN ESPAÑOL",
-        "isKey": true o false
+        "note": "resumen del evento según nivel de detalle indicado",
+        "isKey": true o false,
+        "detail": "información extendida opcional, solo para eventos clave"
       }
     ]
-    
-    isKey = true solo para: diagnóstico inicial, recaída, cirugía mayor, inicio de quimioterapia, fallecimiento.
   `;
 
 

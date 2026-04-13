@@ -17,7 +17,7 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where
 import { 
     User as LucideUser, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
-    List, File, Loader2, AlertCircle, Info, Terminal,
+    List, File, Loader2, AlertCircle, Info, Terminal, ChevronDown,
     Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation,
     PanelLeftClose, PanelLeftOpen, FileInput, Image
 } from 'lucide-react';
@@ -59,7 +59,7 @@ const logAction = async (action: string, patientId: string | null, doctorName: s
 
 // --- TYPES ---
 interface ChatMessage { role: 'user' | 'model'; text: string; timestamp: number; }
-interface ClinicalEvent { date: string; professional: string; category: string; note: string; isKey: boolean; }
+interface ClinicalEvent { date: string; professional: string; category: string; note: string; isKey: boolean; detail?: string; }
 
 interface Patient {
     id: string;
@@ -171,6 +171,7 @@ const App = ({ user }: AppProps) => {
     const [historyText, setHistoryText] = useState('');
     const [historyFiles, setHistoryFiles] = useState<FileData[]>([]);
     const [timeline, setTimeline] = useState<ClinicalEvent[]>([]);
+    const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
     const [guidelineFiles, setGuidelineFiles] = useState<FileData[]>([]);
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -761,6 +762,12 @@ const App = ({ user }: AppProps) => {
                                                     </div>
                                                 ) : sorted.map((ev, i) => {
                                                     const s = getStyle(ev);
+                                                    const isExpanded = expandedEvents.has(i);
+                                                    const toggleExpand = () => setExpandedEvents(prev => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(i)) next.delete(i); else next.add(i);
+                                                        return next;
+                                                    });
                                                     return (
                                                         <div key={i} className="relative pl-9 pb-6 group">
                                                             {i < sorted.length - 1 && <div className="absolute left-[13px] top-6 bottom-0 w-px bg-gray-100"/>}
@@ -779,6 +786,20 @@ const App = ({ user }: AppProps) => {
                                                                     </div>
                                                                 </div>
                                                                 <p className="text-xs font-medium text-gray-600 leading-relaxed">{ev.note}</p>
+                                                                {ev.isKey && ev.detail && (
+                                                                    <div className="mt-2">
+                                                                        <button
+                                                                            onClick={toggleExpand}
+                                                                            className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-700 transition-colors"
+                                                                        >
+                                                                            <ChevronDown size={11} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}/>
+                                                                            {isExpanded ? 'Ocultar detalle' : 'Ver detalle completo'}
+                                                                        </button>
+                                                                        {isExpanded && (
+                                                                            <p className="mt-2 text-[11px] text-gray-500 leading-relaxed border-t border-red-100 pt-2 whitespace-pre-wrap">{ev.detail}</p>
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     );
