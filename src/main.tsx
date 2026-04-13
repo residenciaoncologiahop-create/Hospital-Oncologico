@@ -224,26 +224,27 @@ const App = ({ user }: AppProps) => {
     }, [chatMessages, isTyping]);
 
     useEffect(() => {
-        if (selectedPatientId) {
-            const p = patients.find(pat => pat.id === selectedPatientId);
-            if (p) {
-                setTimeline(p.timeline || []);
-                setChatMessages(p.chatHistory || []);
-                setHistoryFiles([]); setGuidelineFiles([]);
-                setLastError(null);
-                setActiveTab('docs');
-                setManualDate(new Date().toISOString().split('T')[0]);
-                setManualDoctor(doctorName || '');
-                setImagingStudies(p.imagingStudies || []);
-                setExpandedEvents(new Set());
-                // Load persisted clinical context; fall back to legacy historyText
-                getClinicalContext(selectedPatientId).then(({ text, updatedAt }) => {
-                    setHistoryText(text || p.historyText || '');
-                    setClinicalContextUpdatedAt(updatedAt);
-                });
-            }
-        }
-    }, [selectedPatientId]);
+        if (!selectedPatientId) return;
+        const p = patients.find(pat => pat.id === selectedPatientId);
+        if (!p) return;
+
+        setTimeline(p.timeline || []);
+        setChatMessages(p.chatHistory || []);
+        setHistoryFiles([]); setGuidelineFiles([]);
+        setLastError(null);
+        setActiveTab('docs');
+        setManualDate(new Date().toISOString().split('T')[0]);
+        setManualDoctor(doctorName || '');
+        setImagingStudies(p.imagingStudies || []);
+        setExpandedEvents(new Set());
+
+        // Use clinicalContext from snapshot (already in memory — no extra Firestore call needed).
+        // Fall back to legacy historyText field for cases processed before this feature.
+        const context = p.clinicalContext || p.historyText || '';
+        console.log('clinicalContext loaded:', context?.substring(0, 100));
+        setHistoryText(context);
+        setClinicalContextUpdatedAt(p.clinicalContextUpdatedAt || null);
+    }, [selectedPatientId, patients]);
 
     const getAnonContext = (p: Patient) => `Paciente en rango etario: ${p.ageRange} años.\nDiagnóstico: ${p.diagnosis}.\nHistorial cronológico: ${JSON.stringify(p.timeline || [])}.\nNotas Clínicas: ${p.historyText || ''}`;
 
@@ -725,10 +726,10 @@ const App = ({ user }: AppProps) => {
                                                 />
                                                 {/* Indicador de contexto clínico persistido */}
                                                 <div className="flex items-center justify-between px-1">
-                                                    {clinicalContextUpdatedAt ? (
+                                                    {historyText ? (
                                                         <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-bold">
                                                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>
-                                                            Contexto clínico guardado · {new Date(clinicalContextUpdatedAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                            Contexto clínico guardado{clinicalContextUpdatedAt ? ` · ${new Date(clinicalContextUpdatedAt).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
                                                         </div>
                                                     ) : (
                                                         <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-bold">
@@ -736,7 +737,7 @@ const App = ({ user }: AppProps) => {
                                                             Sin contexto guardado — subí documentación
                                                         </div>
                                                     )}
-                                                    {clinicalContextUpdatedAt && (
+                                                    {historyText && (
                                                         <button
                                                             onClick={handleClearContext}
                                                             className="text-[10px] text-gray-300 hover:text-red-400 font-black uppercase tracking-widest transition-colors"
