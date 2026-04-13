@@ -193,6 +193,7 @@ const App = ({ user }: AppProps) => {
     const [isAuditing, setIsAuditing] = useState(false);
 
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const isProcessingRef = useRef(false);
 
     useEffect(() => {
         getOrInitFingerprint();
@@ -225,6 +226,10 @@ const App = ({ user }: AppProps) => {
 
     useEffect(() => {
         if (!selectedPatientId) return;
+        // Skip snapshot-driven resets while handleProcessDocuments is running.
+        // Without this guard, every updateDoc call inside processing triggers onSnapshot,
+        // which updates `patients`, which re-fires this effect and overwrites extracted results.
+        if (isProcessingRef.current) return;
         const p = patients.find(pat => pat.id === selectedPatientId);
         if (!p) return;
 
@@ -278,6 +283,7 @@ const App = ({ user }: AppProps) => {
 
     const handleProcessDocuments = async () => {
         if (!historyText && historyFiles.length === 0) return;
+        isProcessingRef.current = true;
         setIsProcessingDocs(true);
         setLastError(null);
         try {
@@ -293,7 +299,8 @@ const App = ({ user }: AppProps) => {
                 professional: e.professional || e.profesional || e.medico || "N/A",
                 category: e.category || e.categoria || e.tipo || "General",
                 note: e.note || e.nota || e.descripcion || "Evento",
-                isKey: !!e.isKey || !!e.clave || !!e.importante
+                isKey: !!e.isKey || !!e.clave || !!e.importante,
+                ...(e.detail ? { detail: e.detail } : {}),
             }));
             const combinedTimeline = sortTimeline([...(timeline || []), ...events]);
             setTimeline(combinedTimeline);
@@ -334,16 +341,16 @@ const App = ({ user }: AppProps) => {
                 // Persistir contexto clínico acumulado para evitar re-subida de PDFs
                 if (historyText) {
                     await saveClinicalContext(selectedPatientId, historyText);
-                    const { updatedAt } = await getClinicalContext(selectedPatientId);
-                    setClinicalContextUpdatedAt(updatedAt);
+                    setClinicalContextUpdatedAt(Date.now());
                 }
                 logAction("PROCESS_DOCS_AND_LABS", selectedPatientId, doctorName);
             }
 
             alert(`Procesado: ${events.length} eventos y ${extractedLabs.length} laboratorios.`);
-            } catch (e: any) {
+        } catch (e: any) {
             setLastError(e.message);
         } finally {
+            isProcessingRef.current = false;
             setIsProcessingDocs(false);
         }
     };
