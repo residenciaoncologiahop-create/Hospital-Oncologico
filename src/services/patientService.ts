@@ -1,5 +1,5 @@
 import { db, storage } from '../lib/firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { ImagingStudy } from '../components/ImagingPanel'; // Asegúrate de importar la interfaz
 
@@ -9,12 +9,14 @@ export interface Patient {
     age: number;
     diagnosis: string;
     historyText: string;
-    clinicalNotes?: ClinicalNote[]; 
+    clinicalNotes?: ClinicalNote[];
     timeline: any[];
     chatHistory: any[];
     lastUpdated: number;
-    fileUrls?: string[]; 
-    imagingStudies?: ImagingStudy[]; // <--- NUEVA LÍNEA: Añade esto
+    fileUrls?: string[];
+    imagingStudies?: ImagingStudy[];
+    clinicalContext?: string;
+    clinicalContextUpdatedAt?: number;
 }
 
 // Definición de una Evolución Médica
@@ -29,12 +31,14 @@ export interface Patient {
     name: string;
     age: number;
     diagnosis: string;
-    historyText: string; // Resumen general
-    clinicalNotes?: ClinicalNote[]; // NUEVO: Lista de evoluciones
+    historyText: string;
+    clinicalNotes?: ClinicalNote[];
     timeline: any[];
     chatHistory: any[];
     lastUpdated: number;
-    fileUrls?: string[]; 
+    fileUrls?: string[];
+    clinicalContext?: string;
+    clinicalContextUpdatedAt?: number;
 }
 
 const PATIENTS_COLLECTION = 'patients';
@@ -68,6 +72,42 @@ export const deletePatient = async (id: string) => {
 // Subir archivos
 export const uploadFile = async (fileBase64: string, fileName: string, patientId: string) => {
     const storageRef = ref(storage, `patients/${patientId}/${Date.now()}_${fileName}`);
-    await uploadString(storageRef, fileBase64, 'base64'); 
+    await uploadString(storageRef, fileBase64, 'base64');
     return await getDownloadURL(storageRef);
+};
+
+// Persistir contexto clínico acumulado (sin datos personales)
+export const saveClinicalContext = async (patientId: string, newText: string): Promise<void> => {
+    const docRef = doc(db, 'patients', patientId);
+    const snap = await getDoc(docRef);
+    const existing = snap.exists() ? (snap.data().clinicalContext || '') : '';
+    const date = new Date().toLocaleString('es-AR', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+    });
+    const accumulated = existing
+        ? `${existing}\n\n--- Actualización ${date} ---\n\n${newText}`
+        : newText;
+    await updateDoc(docRef, {
+        clinicalContext: accumulated,
+        clinicalContextUpdatedAt: Date.now(),
+        lastUpdated: Date.now(),
+    });
+};
+
+// Obtener contexto clínico guardado
+export const getClinicalContext = async (patientId: string): Promise<{ text: string; updatedAt: number | null }> => {
+    const docRef = doc(db, 'patients', patientId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+        const data = snap.data();
+        return { text: data.clinicalContext || '', updatedAt: data.clinicalContextUpdatedAt || null };
+    }
+    return { text: '', updatedAt: null };
+};
+
+// Borrar contexto clínico
+export const clearClinicalContext = async (patientId: string): Promise<void> => {
+    const docRef = doc(db, 'patients', patientId);
+    await updateDoc(docRef, { clinicalContext: '', clinicalContextUpdatedAt: null, lastUpdated: Date.now() });
 };

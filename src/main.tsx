@@ -28,6 +28,7 @@ import ClinicalAuditModal from './components/ClinicalAuditModal';
 import { User } from 'firebase/auth';
 import AuthWrapper, { logout } from './components/AuthWrapper';
 import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, generateTextSecure } from './utils/aiProxy';
+import { saveClinicalContext, getClinicalContext, clearClinicalContext } from './services/patientService';
 
 // --- RANGOS ETARIOS ---
 const AGE_RANGES = ['0-18', '19-30', '31-40', '41-50', '51-60', '61-70', '71-80', '80+'];
@@ -172,6 +173,7 @@ const App = ({ user }: AppProps) => {
     const [historyFiles, setHistoryFiles] = useState<FileData[]>([]);
     const [timeline, setTimeline] = useState<ClinicalEvent[]>([]);
     const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
+    const [clinicalContextUpdatedAt, setClinicalContextUpdatedAt] = useState<number | null>(null);
     const [guidelineFiles, setGuidelineFiles] = useState<FileData[]>([]);
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -225,7 +227,6 @@ const App = ({ user }: AppProps) => {
         if (selectedPatientId) {
             const p = patients.find(pat => pat.id === selectedPatientId);
             if (p) {
-                setHistoryText(p.historyText || '');
                 setTimeline(p.timeline || []);
                 setChatMessages(p.chatHistory || []);
                 setHistoryFiles([]); setGuidelineFiles([]);
@@ -234,6 +235,12 @@ const App = ({ user }: AppProps) => {
                 setManualDate(new Date().toISOString().split('T')[0]);
                 setManualDoctor(doctorName || '');
                 setImagingStudies(p.imagingStudies || []);
+                setExpandedEvents(new Set());
+                // Load persisted clinical context; fall back to legacy historyText
+                getClinicalContext(selectedPatientId).then(({ text, updatedAt }) => {
+                    setHistoryText(text || p.historyText || '');
+                    setClinicalContextUpdatedAt(updatedAt);
+                });
             }
         }
     }, [selectedPatientId]);
@@ -257,6 +264,15 @@ const App = ({ user }: AppProps) => {
     const handleImagingStudiesChange = (studies: ImagingStudy[]) => {
         setImagingStudies(studies);
         saveImagingStudies(studies);
+    };
+
+    const handleClearContext = async () => {
+        if (!selectedPatientId) return;
+        if (!window.confirm('¿Limpiar el contexto clínico guardado? Esto eliminará el texto acumulado de todos los documentos procesados. Los eventos y laboratorios extraídos no se verán afectados.')) return;
+        await clearClinicalContext(selectedPatientId);
+        setHistoryText('');
+        setClinicalContextUpdatedAt(null);
+        logAction("CLEAR_CLINICAL_CONTEXT", selectedPatientId, doctorName);
     };
 
     const handleProcessDocuments = async () => {
@@ -314,6 +330,12 @@ const App = ({ user }: AppProps) => {
 
                 // Un solo updateDoc con todo junto
                 await updateDoc(patientRef, updateData);
+                // Persistir contexto clínico acumulado para evitar re-subida de PDFs
+                if (historyText) {
+                    await saveClinicalContext(selectedPatientId, historyText);
+                    const { updatedAt } = await getClinicalContext(selectedPatientId);
+                    setClinicalContextUpdatedAt(updatedAt);
+                }
                 logAction("PROCESS_DOCS_AND_LABS", selectedPatientId, doctorName);
             }
 
@@ -701,6 +723,28 @@ const App = ({ user }: AppProps) => {
                                                     onChange={e => setHistoryText(e.target.value)}
                                                     onBlur={savePatientDetails}
                                                 />
+                                                {/* Indicador de contexto clínico persistido */}
+                                                <div className="flex items-center justify-between px-1">
+                                                    {clinicalContextUpdatedAt ? (
+                                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-bold">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>
+                                                            Contexto clínico guardado · {new Date(clinicalContextUpdatedAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-bold">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-gray-300"/>
+                                                            Sin contexto guardado — subí documentación
+                                                        </div>
+                                                    )}
+                                                    {clinicalContextUpdatedAt && (
+                                                        <button
+                                                            onClick={handleClearContext}
+                                                            className="text-[10px] text-gray-300 hover:text-red-400 font-black uppercase tracking-widest transition-colors"
+                                                        >
+                                                            Limpiar contexto
+                                                        </button>
+                                                    )}
+                                                </div>
                                                 <button
                                                     onClick={handleProcessDocuments}
                                                     disabled={isProcessingDocs}
