@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle, CheckCircle2, Map, Share2
+import {
+  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle, CheckCircle2, Map, Share2, RefreshCcw
 } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../utils/aiProxy';
@@ -14,6 +14,15 @@ interface FormManagerProps {
 const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+  const [formGenerated, setFormGenerated] = useState<Record<string, boolean>>({});
+  const [formCorrections, setFormCorrections] = useState<Record<string, string>>({});
+  const [lastRegenParams, setLastRegenParams] = useState<Record<string, {
+    drugName?: string;
+    context?: string;
+    servicioDestino?: string;
+    motivoSolicitud?: string;
+    accumulatedCorrections: string;
+  }>>({});
   const [showEsquemaModal, setShowEsquemaModal] = useState(false);
 const [esquemaData, setEsquemaData] = useState({
   numero_ciclos: '', frecuencia_ciclos: '', tiempo_tratamiento: '',
@@ -21,6 +30,7 @@ const [esquemaData, setEsquemaData] = useState({
   dosis_total_ciclo: '', dias_admin: '', intervalo: ''
 });
 const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
+const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
   
   const [showDocConfig, setShowDocConfig] = useState(false);
   const [doctorData, setDoctorData] = useState({
@@ -79,15 +89,19 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
   };
 
   // --- GENERADOR DE RESUMEN CLÍNICO ---
-  const generateClinicalSummary = async (context: string) => {
+  const generateClinicalSummary = async (
+    context: string,
+    regenParams?: { drugName: string; formId: string; accumulatedCorrections: string }
+  ) => {
     if (!historyText && (!files || files.length === 0)) {
         alert("⚠️ Falta documentación para generar el resumen.");
         return;
     }
 
-    const drugName = window.prompt(`Ingrese el nombre de la droga/medicación para el trámite de ${context}:`);
-    if (!drugName || drugName.trim() === "") return; 
+    const drugName = regenParams?.drugName ?? window.prompt(`Ingrese el nombre de la droga/medicación para el trámite de ${context}:`);
+    if (!drugName || drugName.trim() === "") return;
 
+    const panelId = regenParams?.formId ?? ('summary-' + context);
     setProcessingId('summary');
     setStatus('Analizando historia clínica...');
 
@@ -124,7 +138,7 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
         
         **IMPORTANTE:** NO incluyas ninguna firma ni datos de contacto al final. El documento termina con el punto final de la justificación.
         
-        CONTEXTO: ${historyText || ''}
+        CONTEXTO: ${historyText || ''}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar todas):\n${regenParams.accumulatedCorrections}` : ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
@@ -258,13 +272,17 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
         link.download = `Resumen_${context}_${patient.name}.pdf`;
         link.click();
         setStatus('¡Listo!');
+        const newAccumulated = regenParams?.accumulatedCorrections ?? '';
+        setLastRegenParams(prev => ({ ...prev, [panelId]: { drugName: drugName.trim(), context, formId: panelId, accumulatedCorrections: newAccumulated } }));
+        setFormGenerated(prev => ({ ...prev, [panelId]: true }));
+        setFormCorrections(prev => ({ ...prev, [panelId]: '' }));
 
-    } catch (e: any) { alert("Error: " + e.message); } 
+    } catch (e: any) { alert("Error: " + e.message); }
     finally { setProcessingId(null); setStatus(''); }
   };
 
   // CAMBIO 4: extractPamiData recibe drugName
-  const extractPamiData = async (drugName: string) => {
+  const extractPamiData = async (drugName: string, correction?: string) => {
     const today = new Date().toLocaleDateString('es-AR');
     
     const promptText = `
@@ -316,7 +334,8 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
         }
     `;
 
-    const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${historyText}` }];
+    const correctionNote = correction ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${correction}. Incorporar en los campos correspondientes.` : '';
+    const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${historyText}${correctionNote}` }];
     if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
     const res = await callGemini({ parts, responseMimeType: "application/json" });
@@ -328,20 +347,19 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
     return JSON.parse(cleanText);
   };
 
-  const fillPamiPDF = async (formDef: any) => {
+  const fillPamiPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }) => {
     if ((!files || files.length === 0) && !historyText) {
         alert("⚠️ Suba la Historia Clínica primero.");
         return;
     }
-    // CAMBIO 4: pedir droga antes de procesar
-    const drugName = window.prompt('Ingrese el/los fármaco/s a solicitar en el formulario PAMI:');
+    const drugName = regenParams?.drugName ?? window.prompt('Ingrese el/los fármaco/s a solicitar en el formulario PAMI:');
     if (!drugName || !drugName.trim()) return;
 
     setProcessingId(formDef.id);
     setStatus('Procesando PAMI...');
 
     try {
-      const aiData = await extractPamiData(drugName);
+      const aiData = await extractPamiData(drugName, regenParams?.correction);
       const bsa = calculateBSA(aiData.peso, aiData.talla);
       const finalName = aiData.paciente_nombre_real || patient.name;
 
@@ -446,12 +464,20 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
       link.download = `PAMI_${finalName}.pdf`;
       link.click();
       setStatus('¡Listo!');
-    } catch (e: any) { alert('Error: ' + e.message); } 
+      const newAccumulated = regenParams
+        ? (lastRegenParams[formDef.id]?.accumulatedCorrections
+            ? `${lastRegenParams[formDef.id].accumulatedCorrections}\n- ${regenParams.correction}`
+            : `- ${regenParams.correction}`)
+        : '';
+      setLastRegenParams(prev => ({ ...prev, [formDef.id]: { drugName: drugName.trim(), accumulatedCorrections: newAccumulated } }));
+      setFormGenerated(prev => ({ ...prev, [formDef.id]: true }));
+      setFormCorrections(prev => ({ ...prev, [formDef.id]: '' }));
+    } catch (e: any) { alert('Error: ' + e.message); }
     finally { setProcessingId(null); setStatus(''); }
   };
 
   // CAMBIO 4: extractBancoDrogasData recibe drugName
-  const extractBancoDrogasData = async (context: string, drugName: string) => {
+  const extractBancoDrogasData = async (context: string, drugName: string, correction?: string) => {
     const today = new Date().toLocaleDateString('es-AR');
     const isRenovacion = context === 'RENOVACIÓN';
 
@@ -533,7 +559,7 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
         `}
       }
 
-      CONTEXTO CLÍNICO: ${historyText}
+      CONTEXTO CLÍNICO: ${historyText}${correction ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${correction}. Incorporar en los campos correspondientes.` : ''}
     `;
 
     const parts: any[] = [{ text: prompt }];
@@ -546,16 +572,15 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
     return JSON.parse(clean);
   };
 
-  const fillAdmisionPDF = async (formDef: any) => {
+  const fillAdmisionPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }) => {
     if (!historyText && (!files || files.length === 0)) { alert("⚠️ Suba la Historia Clínica primero."); return; }
-    // CAMBIO 4: pedir droga antes de procesar
-    const drugName = window.prompt('Ingrese el/los fármaco/s para la Admisión Banco de Drogas:');
+    const drugName = regenParams?.drugName ?? window.prompt('Ingrese el/los fármaco/s para la Admisión Banco de Drogas:');
     if (!drugName || !drugName.trim()) return;
 
     setProcessingId(formDef.id);
     setStatus('Procesando Admisión...');
     try {
-      const d = await extractBancoDrogasData('ADMISIÓN', drugName);
+      const d = await extractBancoDrogasData('ADMISIÓN', drugName, regenParams?.correction);
       const bsa = calculateBSA(d.peso, d.talla);
       const [fnd, fnm, fna] = (cleanDate(d.fnac) || '').split('/');
       const [dxd, dxm, dxa] = (cleanDate(d.fecha_diagnostico) || '').split('/');
@@ -650,20 +675,27 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
       const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
       link.download = `Admision_BancoDrogas_${d.nombre_apellido || patient.name}.pdf`; link.click();
       setStatus('¡Listo!');
+      const newAccumulated = regenParams
+        ? (lastRegenParams[formDef.id]?.accumulatedCorrections
+            ? `${lastRegenParams[formDef.id].accumulatedCorrections}\n- ${regenParams.correction}`
+            : `- ${regenParams.correction}`)
+        : '';
+      setLastRegenParams(prev => ({ ...prev, [formDef.id]: { drugName: drugName.trim(), accumulatedCorrections: newAccumulated } }));
+      setFormGenerated(prev => ({ ...prev, [formDef.id]: true }));
+      setFormCorrections(prev => ({ ...prev, [formDef.id]: '' }));
     } catch (e: any) { alert('Error: ' + e.message); }
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  const fillRenovacionPDF = async (formDef: any) => {
+  const fillRenovacionPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }) => {
     if (!historyText && (!files || files.length === 0)) { alert("⚠️ Suba la Historia Clínica primero."); return; }
-    // CAMBIO 4: pedir droga antes de procesar
-    const drugName = window.prompt('Ingrese el/los fármaco/s para la Renovación Banco de Drogas:');
+    const drugName = regenParams?.drugName ?? window.prompt('Ingrese el/los fármaco/s para la Renovación Banco de Drogas:');
     if (!drugName || !drugName.trim()) return;
 
     setProcessingId(formDef.id);
     setStatus('Procesando Renovación...');
     try {
-      const d = await extractBancoDrogasData('RENOVACIÓN', drugName);
+      const d = await extractBancoDrogasData('RENOVACIÓN', drugName, regenParams?.correction);
       const bsa = calculateBSA(d.peso, d.talla);
       const [fnd, fnm, fna] = (cleanDate(d.fnac) || '').split('/');
 
@@ -754,6 +786,14 @@ const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
       const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
       link.download = `Renovacion_BancoDrogas_${d.nombre_apellido || patient.name}.pdf`; link.click();
       setStatus('¡Listo!');
+      const newAccumulated = regenParams
+        ? (lastRegenParams[formDef.id]?.accumulatedCorrections
+            ? `${lastRegenParams[formDef.id].accumulatedCorrections}\n- ${regenParams.correction}`
+            : `- ${regenParams.correction}`)
+        : '';
+      setLastRegenParams(prev => ({ ...prev, [formDef.id]: { drugName: drugName.trim(), accumulatedCorrections: newAccumulated } }));
+      setFormGenerated(prev => ({ ...prev, [formDef.id]: true }));
+      setFormCorrections(prev => ({ ...prev, [formDef.id]: '' }));
     } catch (e: any) { alert('Error: ' + e.message); }
     finally { setProcessingId(null); setStatus(''); }
   };
@@ -811,7 +851,7 @@ IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de c
   "fundamentacion": "Justificación oncológica MUY CONCISA. Máximo 2 oraciones. No más de 200 caracteres. Sin cortes abruptos, terminar siempre con punto final y con coherencia."
 }
 
-CONTEXTO CLÍNICO: ${historyText}
+CONTEXTO CLÍNICO: ${historyText}${pendingDinadicCorrection ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${pendingDinadicCorrection}. Incorporar en los campos correspondientes.` : ''}
       `;
 
       const parts: any[] = [{ text: extractPrompt }];
@@ -937,6 +977,14 @@ drawLines(p2, 57, 570.6, fundTrunc, 3);
       link.download = `DINADIC_${d.nombre_apellido || patient.name}_${today.replace(/\//g, '-')}.pdf`;
       link.click();
       setStatus('¡Listo!');
+      const prevDinadicCorrections = lastRegenParams['dinadic']?.accumulatedCorrections ?? '';
+      const newDinadicAccumulated = pendingDinadicCorrection
+        ? (prevDinadicCorrections ? `${prevDinadicCorrections}\n- ${pendingDinadicCorrection}` : `- ${pendingDinadicCorrection}`)
+        : prevDinadicCorrections;
+      setLastRegenParams(prev => ({ ...prev, dinadic: { drugName: drugName, accumulatedCorrections: newDinadicAccumulated } }));
+      setPendingDinadicCorrection('');
+      setFormGenerated(prev => ({ ...prev, dinadic: true }));
+      setFormCorrections(prev => ({ ...prev, dinadic: '' }));
     } catch (e: any) {
       alert("Error al generar DINADIC: " + e.message);
     } finally {
@@ -946,17 +994,16 @@ drawLines(p2, 57, 570.6, fundTrunc, 3);
   };
 
   // ─── INTERCONSULTA / DERIVACIÓN ─────────────────────────────────────────────
-  const generateInterconsultaPDF = async () => {
+  const generateInterconsultaPDF = async (regenParams?: { servicioDestino: string; motivoSolicitud: string; accumulatedCorrections: string }) => {
     if (!historyText && (!files || files.length === 0)) {
       alert("⚠️ Suba la Historia Clínica primero.");
       return;
     }
 
-    // CORRECCIÓN 3: preguntar servicio y motivo antes de procesar
-    const servicioDestino = window.prompt('¿A qué servicio se deriva? (ej: Cirugía, Radiología, Ginecología, etc.)');
+    const servicioDestino = regenParams?.servicioDestino ?? window.prompt('¿A qué servicio se deriva? (ej: Cirugía, Radiología, Ginecología, etc.)');
     if (!servicioDestino || !servicioDestino.trim()) return;
 
-    const motivoSolicitud = window.prompt('¿Cuál es el motivo de la interconsulta / derivación?');
+    const motivoSolicitud = regenParams?.motivoSolicitud ?? window.prompt('¿Cuál es el motivo de la interconsulta / derivación?');
     if (!motivoSolicitud || !motivoSolicitud.trim()) return;
 
     setProcessingId('interconsulta');
@@ -995,7 +1042,7 @@ REGLAS ESTRICTAS:
 - peso: SOLO el número sin "kg" ni ninguna unidad.
 - talla: SOLO el número en centímetros, sin "cm" ni "m".
 - Si un dato no está disponible devolver "".
-CONTEXTO: ${historyText}
+CONTEXTO: ${historyText}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar en los campos correspondientes):\n${regenParams.accumulatedCorrections}` : ''}
       `;
 
       const parts: any[] = [{ text: extractPrompt }];
@@ -1236,6 +1283,10 @@ CONTEXTO: ${historyText}
       link.download = `Interconsulta_${d.nombre || patient.name}_${today.replace(/\//g, '-')}.pdf`;
       link.click();
       setStatus('¡Listo!');
+      const newAccumulated = regenParams?.accumulatedCorrections ?? '';
+      setLastRegenParams(prev => ({ ...prev, interconsulta: { servicioDestino: servicioDestino.trim(), motivoSolicitud: motivoSolicitud.trim(), accumulatedCorrections: newAccumulated } }));
+      setFormGenerated(prev => ({ ...prev, interconsulta: true }));
+      setFormCorrections(prev => ({ ...prev, interconsulta: '' }));
     } catch (e: any) {
       alert("Error al generar interconsulta: " + e.message);
     } finally {
@@ -1365,7 +1416,7 @@ CONTEXTO: ${historyText}
                           <Download size={14}/><span>Plantilla Vacía</span>
                         </button>
                         <button
-                          onClick={() => generateClinicalSummary(form.context || 'SOLICITUD')}
+                          onClick={() => generateClinicalSummary(form.context || 'SOLICITUD', undefined)}
                           disabled={processingId !== null}
                           className="flex-1 flex items-center justify-center space-x-2 bg-purple-600 text-white hover:bg-purple-700 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
                         >
@@ -1395,7 +1446,7 @@ CONTEXTO: ${historyText}
                           <Download size={14}/><span>Plantilla Vacía</span>
                         </button>
                         <button
-                          onClick={() => generateClinicalSummary(form.context || 'SOLICITUD')}
+                          onClick={() => generateClinicalSummary(form.context || 'SOLICITUD', undefined)}
                           disabled={processingId !== null}
                           className="flex-1 flex items-center justify-center space-x-2 bg-purple-600 text-white hover:bg-purple-700 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
                         >
@@ -1434,7 +1485,7 @@ CONTEXTO: ${historyText}
                         </button>
                         
                         <button 
-                          onClick={() => generateClinicalSummary(form.context || 'SOLICITUD')}
+                          onClick={() => generateClinicalSummary(form.context || 'SOLICITUD', undefined)}
                           disabled={processingId !== null}
                           className="flex-1 flex items-center justify-center space-x-2 bg-purple-600 text-white hover:bg-purple-700 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
                         >
@@ -1451,6 +1502,132 @@ CONTEXTO: ${historyText}
                     </div>
                 )}
             </div>
+
+            {/* PANEL DE CORRECCIÓN — se muestra después de la primera generación */}
+            {(() => {
+              const MAX_C = 300;
+              const isRegen = processingId !== null;
+
+              // Correction panels for direct form fills (PAMI, Admision, Renovacion)
+              if ((form.type === 'auto' || form.type === 'auto_banco') && formGenerated[form.id]) {
+                const correction = formCorrections[form.id] || '';
+                const params = lastRegenParams[form.id];
+                const handleRegen = () => {
+                  if (!correction.trim() || !params?.drugName) return;
+                  const newAccumulated = params.accumulatedCorrections
+                    ? `${params.accumulatedCorrections}\n- ${correction}`
+                    : `- ${correction}`;
+                  if (form.type === 'auto') fillPamiPDF(form, { drugName: params.drugName, correction });
+                  else if (form.id === 'admision') fillAdmisionPDF(form, { drugName: params.drugName, correction });
+                  else fillRenovacionPDF(form, { drugName: params.drugName, correction });
+                  setLastRegenParams(prev => ({ ...prev, [form.id]: { ...params, accumulatedCorrections: newAccumulated } }));
+                };
+                return (
+                  <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl space-y-2">
+                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest">¿Algo incorrecto en el formulario generado?</p>
+                    <div className="relative">
+                      <textarea value={correction} onChange={e => setFormCorrections(prev => ({ ...prev, [form.id]: e.target.value.slice(0, MAX_C) }))}
+                        placeholder="Ej: El estadio es T3N2M1, corregir el ECOG a 1..."
+                        rows={2} disabled={isRegen}
+                        className="w-full p-2 text-[10px] border border-amber-200 rounded-lg bg-white resize-none outline-none focus:border-amber-400"/>
+                      <span className="absolute bottom-1.5 right-2 text-[9px] text-amber-400 font-bold">{MAX_C - correction.length}</span>
+                    </div>
+                    <button onClick={handleRegen} disabled={!correction.trim() || isRegen}
+                      className="w-full flex items-center justify-center gap-1.5 bg-amber-600 text-white py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 disabled:opacity-40">
+                      {isRegen ? <Loader2 size={11} className="animate-spin"/> : <RefreshCcw size={11}/>}
+                      Regenerar con corrección
+                    </button>
+                  </div>
+                );
+              }
+
+              // Correction panel for DINADIC
+              if (form.type === 'auto_dinadic' && formGenerated['dinadic']) {
+                const correction = formCorrections['dinadic'] || '';
+                return (
+                  <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl space-y-2">
+                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest">¿Algo incorrecto en el formulario DINADIC?</p>
+                    <div className="relative">
+                      <textarea value={correction} onChange={e => setFormCorrections(prev => ({ ...prev, dinadic: e.target.value.slice(0, MAX_C) }))}
+                        placeholder="Ej: La dosis debe ser 175mg/m², corregir el diagnóstico..."
+                        rows={2} disabled={isRegen}
+                        className="w-full p-2 text-[10px] border border-amber-200 rounded-lg bg-white resize-none outline-none focus:border-amber-400"/>
+                      <span className="absolute bottom-1.5 right-2 text-[9px] text-amber-400 font-bold">{MAX_C - correction.length}</span>
+                    </div>
+                    <button
+                      onClick={() => { if (!correction.trim()) return; setPendingDinadicCorrection(correction); generateDinadicPDF(); }}
+                      disabled={!correction.trim() || isRegen}
+                      className="w-full flex items-center justify-center gap-1.5 bg-amber-600 text-white py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 disabled:opacity-40">
+                      {isRegen ? <Loader2 size={11} className="animate-spin"/> : <RefreshCcw size={11}/>}
+                      Regenerar con corrección
+                    </button>
+                  </div>
+                );
+              }
+
+              // Correction panel for Interconsulta
+              if (form.type === 'interconsulta' && formGenerated['interconsulta']) {
+                const correction = formCorrections['interconsulta'] || '';
+                const params = lastRegenParams['interconsulta'];
+                return (
+                  <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl space-y-2">
+                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest">¿Algo incorrecto en la interconsulta?</p>
+                    <div className="relative">
+                      <textarea value={correction} onChange={e => setFormCorrections(prev => ({ ...prev, interconsulta: e.target.value.slice(0, MAX_C) }))}
+                        placeholder="Ej: Agregar comorbilidades, corregir el ECOG..."
+                        rows={2} disabled={isRegen}
+                        className="w-full p-2 text-[10px] border border-amber-200 rounded-lg bg-white resize-none outline-none focus:border-amber-400"/>
+                      <span className="absolute bottom-1.5 right-2 text-[9px] text-amber-400 font-bold">{MAX_C - correction.length}</span>
+                    </div>
+                    <button
+                      onClick={() => { if (!correction.trim() || !params) return;
+                        const newAcc = params.accumulatedCorrections ? `${params.accumulatedCorrections}\n- ${correction}` : `- ${correction}`;
+                        generateInterconsultaPDF({ servicioDestino: params.servicioDestino!, motivoSolicitud: params.motivoSolicitud!, accumulatedCorrections: newAcc });
+                        setLastRegenParams(prev => ({ ...prev, interconsulta: { ...params, accumulatedCorrections: newAcc } }));
+                      }}
+                      disabled={!correction.trim() || isRegen}
+                      className="w-full flex items-center justify-center gap-1.5 bg-amber-600 text-white py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 disabled:opacity-40">
+                      {isRegen ? <Loader2 size={11} className="animate-spin"/> : <RefreshCcw size={11}/>}
+                      Regenerar con corrección
+                    </button>
+                  </div>
+                );
+              }
+
+              return null;
+            })()}
+
+            {/* Correction panels for Resumen Clínico (shown per form that triggers summary) */}
+            {(form.type === 'auto_dinadic' || form.type === 'auto_banco') && (() => {
+              const panelId = 'summary-' + (form.context || 'SOLICITUD');
+              if (!formGenerated[panelId]) return null;
+              const MAX_C = 300;
+              const correction = formCorrections[panelId] || '';
+              const params = lastRegenParams[panelId];
+              const isRegen = processingId !== null;
+              return (
+                <div className="p-3 bg-purple-50 border border-purple-100 rounded-xl space-y-2">
+                  <p className="text-[10px] font-black text-purple-700 uppercase tracking-widest">¿Algo incorrecto en el Resumen Clínico?</p>
+                  <div className="relative">
+                    <textarea value={correction} onChange={e => setFormCorrections(prev => ({ ...prev, [panelId]: e.target.value.slice(0, MAX_C) }))}
+                      placeholder="Ej: Falta mencionar la cirugía de 2023, corregir el estadio..."
+                      rows={2} disabled={isRegen}
+                      className="w-full p-2 text-[10px] border border-purple-200 rounded-lg bg-white resize-none outline-none focus:border-purple-400"/>
+                    <span className="absolute bottom-1.5 right-2 text-[9px] text-purple-400 font-bold">{MAX_C - correction.length}</span>
+                  </div>
+                  <button
+                    onClick={() => { if (!correction.trim() || !params?.drugName || !params?.context) return;
+                      const newAcc = params.accumulatedCorrections ? `${params.accumulatedCorrections}\n- ${correction}` : `- ${correction}`;
+                      generateClinicalSummary(params.context!, { drugName: params.drugName, formId: panelId, accumulatedCorrections: newAcc });
+                    }}
+                    disabled={!correction.trim() || isRegen}
+                    className="w-full flex items-center justify-center gap-1.5 bg-purple-600 text-white py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 disabled:opacity-40">
+                    {isRegen ? <Loader2 size={11} className="animate-spin"/> : <RefreshCcw size={11}/>}
+                    Regenerar Resumen con corrección
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         ))}
       </div>

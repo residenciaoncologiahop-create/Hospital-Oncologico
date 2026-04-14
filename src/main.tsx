@@ -185,7 +185,11 @@ const App = ({ user }: AppProps) => {
     const [manualDoctor, setManualDoctor] = useState(doctorName || '');
     const [manualNote, setManualNote] = useState('');
 
-    const [reportModal, setReportModal] = useState({ isOpen: false, title: '', content: '' as string | null, isLoading: false });
+    const [reportModal, setReportModal] = useState<{
+        isOpen: boolean; title: string; content: string | null; isLoading: boolean;
+        generatorFn: ((text: string, files: FileData[]) => Promise<string>) | null;
+        accumulatedCorrections: string;
+    }>({ isOpen: false, title: '', content: null, isLoading: false, generatorFn: null, accumulatedCorrections: '' });
     const [showAuditModal, setShowAuditModal] = useState(false);
     const [showPendientesModal, setShowPendientesModal] = useState(false);
     const [pendientesTodayCount, setPendientesTodayCount] = useState(0);
@@ -484,13 +488,29 @@ const App = ({ user }: AppProps) => {
     const runReportGeneration = async (title: string, generatorFn: (text: string, files: FileData[]) => Promise<string>) => {
         if (!selectedPatientId) return;
         const p = patients.find(p => p.id === selectedPatientId);
-        if (!p || (!p.historyText && historyFiles.length === 0)) { alert("Sin documentación para procesar."); return; }
-        setReportModal({ isOpen: true, title, content: null, isLoading: true });
+        if (!p || (!historyText && historyFiles.length === 0)) { alert("Sin documentación para procesar."); return; }
+        setReportModal({ isOpen: true, title, content: null, isLoading: true, generatorFn, accumulatedCorrections: '' });
         try {
-            const result = await generatorFn(p.historyText, historyFiles);
+            const result = await generatorFn(historyText, historyFiles);
             setReportModal(prev => ({ ...prev, content: result, isLoading: false }));
         } catch {
             setReportModal(prev => ({ ...prev, content: `<div class="p-4 text-red-600 bg-red-50 rounded-lg">Error al generar el informe.</div>`, isLoading: false }));
+        }
+    };
+
+    const handleRegenerateReport = async (correction: string) => {
+        if (!reportModal.generatorFn) return;
+        const newCorrections = reportModal.accumulatedCorrections
+            ? `${reportModal.accumulatedCorrections}\n- ${correction}`
+            : `- ${correction}`;
+        const contextWithCorrections = historyText +
+            `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar todas en el nuevo informe):\n${newCorrections}`;
+        setReportModal(prev => ({ ...prev, isLoading: true, accumulatedCorrections: newCorrections }));
+        try {
+            const result = await reportModal.generatorFn(contextWithCorrections, historyFiles);
+            setReportModal(prev => ({ ...prev, content: result, isLoading: false }));
+        } catch {
+            setReportModal(prev => ({ ...prev, content: `<div class="p-4 text-red-600 bg-red-50 rounded-lg">Error al regenerar el informe.</div>`, isLoading: false }));
         }
     };
 
@@ -1109,7 +1129,14 @@ const App = ({ user }: AppProps) => {
                 )}
 
                 <ClinicalAuditModal isOpen={showAuditModal} onClose={() => setShowAuditModal(false)} content={auditContent} isLoading={isAuditing} mode="professional"/>
-                <ClinicalReportModal isOpen={reportModal.isOpen} onClose={() => setReportModal({ ...reportModal, isOpen: false })} title={reportModal.title} content={reportModal.content} isLoading={reportModal.isLoading}/>
+                <ClinicalReportModal
+                    isOpen={reportModal.isOpen}
+                    onClose={() => setReportModal(prev => ({ ...prev, isOpen: false }))}
+                    title={reportModal.title}
+                    content={reportModal.content}
+                    isLoading={reportModal.isLoading}
+                    onRegenerate={reportModal.generatorFn ? handleRegenerateReport : undefined}
+                />
             </div>
         </>
     );
