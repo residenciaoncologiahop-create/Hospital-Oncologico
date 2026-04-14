@@ -281,6 +281,12 @@ const App = ({ user }: AppProps) => {
         logAction("CLEAR_CLINICAL_CONTEXT", selectedPatientId, doctorName);
     };
 
+    const deduplicateByKey = <T,>(existing: T[], incoming: T[], keyFn: (item: T) => string): T[] => {
+        const existingKeys = new Set(existing.map(keyFn));
+        const newItems = incoming.filter(item => !existingKeys.has(keyFn(item)));
+        return [...existing, ...newItems];
+    };
+
     const handleProcessDocuments = async () => {
         if (!historyText && historyFiles.length === 0) return;
         isProcessingRef.current = true;
@@ -302,11 +308,21 @@ const App = ({ user }: AppProps) => {
                 isKey: !!e.isKey || !!e.clave || !!e.importante,
                 ...(e.detail ? { detail: e.detail } : {}),
             }));
-            const combinedTimeline = sortTimeline([...(timeline || []), ...events]);
+            const combinedTimeline = sortTimeline(
+                deduplicateByKey(
+                    timeline || [],
+                    events,
+                    e => `${e.date}|${e.category}|${e.note.substring(0, 50)}`
+                )
+            );
             setTimeline(combinedTimeline);
 
             const currentLabs = patients.find(p => p.id === selectedPatientId)?.labResults || [];
-            const combinedLabs = [...currentLabs, ...extractedLabs];
+            const combinedLabs = deduplicateByKey(
+                currentLabs,
+                extractedLabs,
+                (l: any) => `${l.date}|${l.test}`
+            );
 
             if (selectedPatientId) {
                 const patientRef = doc(db, "patients", selectedPatientId);
@@ -331,7 +347,11 @@ const App = ({ user }: AppProps) => {
                         newLesions: !!d.newLesions,
                         extractedAt: Date.now(),
                     }));
-                    const combinedImaging = [...currentImaging, ...newStudies];
+                    const combinedImaging = deduplicateByKey(
+                        currentImaging,
+                        newStudies,
+                        (s: ImagingStudy) => `${s.date}|${s.type}|${s.bodyRegion}`
+                    );
                     setImagingStudies(combinedImaging);
                     updateData.imagingStudies = combinedImaging;
                 }
