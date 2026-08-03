@@ -64,8 +64,10 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
   const calculateBSA = (weight: string, height: string) => {
     const w = parseFloat(weight?.toString().replace(',', '.'));
     let h = parseFloat(height?.toString().replace(',', '.'));
-    if (h > 0 && h < 3) h = h * 100;
-    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) return Math.sqrt((w * h) / 3600).toFixed(2);
+    if (!isNaN(h) && h > 0 && h < 3) h = Math.round(h * 100);
+    if (!isNaN(w) && !isNaN(h) && w > 0 && w <= 350 && h >= 40 && h <= 250) {
+      return Math.sqrt((w * h) / 3600).toFixed(2);
+    }
     return '';
   };
 
