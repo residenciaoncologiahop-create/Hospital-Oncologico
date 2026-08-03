@@ -326,14 +326,16 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
         IDIOMA: Todo en español.
         
         REGLAS DE EXTRACCIÓN:
+        - fecha_diagnostico_inicial: DEDUCE OBLIGATORIAMENTE la fecha de diagnóstico analizando la fecha del primer estudio patológico, biopsia o consulta inicial en los eventos de la Línea de Tiempo o Historia Clínica (Formato DD/MM/AAAA).
+        - histopatologico: Resumen MUY CONCISO Y SINTÉTICO de la anatomía patológica e inmunohistoquímica (tipo tumoral, grado, RE, RP, HER2, Ki67). MÁXIMO 180-200 caracteres. ❌ NO explayarse en párrafos extensos.
+        - antecedentes_qx: EXCLUSIVAMENTE procedimientos QUIRÚRGICOS (ej: "Mastectomía (02/2024)", "Nefrectomía (05/2023)"). ❌ NUNCA colocar tratamientos sistémicos (quimioterapia, drogas o esquemas como AC-T) en antecedentes quirúrgicos.
+        - antecedentes_radio: Resumen CONCISO usando abreviaturas (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis si está disponible y fecha. Máximo 120 caracteres. Ej: "QRT (Cisplatino) + BT (09-10/2023)".
         - fecha_nacimiento: buscar "Fecha nac.:", "Fecha de nacimiento:", "F. Nac" en el documento. Formato DD/MM/AAAA.
         - estadio_inicial: estadio FIGO o TNM al momento del diagnóstico (ej: "FIGO IVB", "T2N1M0"). NO el actual.
         - estadio_actual: estado clínico actual (ej: "Remisión completa", "Progresión", "Estable").
         - linea_tratamiento: número de línea actual (ej: "1ra línea", "2da línea", "Seguimiento", "Adyuvancia").
-        - antecedentes_qx: Resumen CONCISO de cirugías usando abreviaturas médicas estándar (Cx=cirugía, Nef=nefrectomía, LAP=laparotomía, etc). Incluir fecha y lado. Máximo 120 caracteres. Ej: "Nef izq (02/2024), Extracción implante subdérmico (05/2024)".
-        - antecedentes_radio: Resumen CONCISO usando abreviaturas (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis si está disponible y fecha. Máximo 120 caracteres. Ej: "QRT (Cisplatino) + BT (09-10/2023)".
         - informe_clinico_detallado: resumen clínico completo, máximo 800 caracteres, sin DNI ni nombre completo.
-        - laboratorio_formateado: SOLO parámetros oncológicamente relevantes para este diagnóstico (hemograma, función renal/hepática, marcadores tumorales específicos). Excluir hormonas de fertilidad, lípidos u otros no relacionados. Formato conciso: "Hb 12g/dl, Cr 0.8, LDH 180". Máximo 100 caracteres.
+        - laboratorio_formateado: SOLO parámetros oncológicamente relevantes para este diagnóstico (hemograma, función renal/hepática, marcadores tumorales específicos). Formato conciso: "Hb 12g/dl, Cr 0.8, LDH 180". Máximo 100 caracteres.
         - Si un dato no está disponible, devolver cadena vacía "".
         - droga_1: usar EXACTAMENTE el fármaco indicado arriba.
         
@@ -520,6 +522,9 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
       FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}. Usar en droga_1.
       IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown.
 
+      REGLAS DE EXTRACCIÓN Y DEDUCCIÓN:
+      - fecha_diagnostico: DEDUCE OBLIGATORIAMENTE la fecha de diagnóstico inicial analizando las fechas del primer estudio patológico, biopsia o consulta diagnóstica inicial en los eventos de la Línea de Tiempo o Historia Clínica (Formato DD/MM/AAAA).
+
       ${isRenovacion ? `
       CONTEXTO RENOVACIÓN: El paciente ya tiene tratamiento aprobado y solicita continuarlo.
       - motivo_renovacion: "continua" si sigue igual, "cambio" si hubo toxicidad o progresión
@@ -529,11 +534,11 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
       - sitio_progresion: si hubo progresión, dónde
       ` : `
       CONTEXTO ADMISIÓN: Primera solicitud del tratamiento.
-      - anatomia_patologica: hallazgos histológicos/IHQ completos, máx 400 chars
+      - anatomia_patologica: Resumen MUY CONCISO Y SINTÉTICO de la patología e inmunohistoquímica (tipo tumoral, grado, RE, RP, HER2, Ki67). MÁXIMO 180-200 caracteres. ❌ NO explayarse en párrafos extensos.
       - tnm_t, tnm_n, tnm_m: clasificación TNM si existe
       - receptor_RE, receptor_RP, receptor_HER2, receptor_KRAS, receptor_EGER: positivo/negativo/no aplica
       - tratamiento_previo_cx_si: true si tuvo cirugía de tumor primario
-      - cx_especificar: descripción concisa de la cirugía
+      - cx_especificar: EXCLUSIVAMENTE la descripción del procedimiento QUIRÚRGICO (ej: "Mastectomía radical", "Resección de colon", "Nefrectomía"). ❌ NUNCA colocar tratamientos sistémicos (quimioterapia, esquemas de drogas como AC-T o inmunoterapia) en cx_especificar.
       - cx_ganglios_resecados: número si aplica
       - cx_ganglios_comprometidos: número si aplica
       - cx_metastasis_si: true si tuvo cirugía de metástasis
@@ -542,7 +547,7 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
       - rt_localizacion: dónde
       - tratamientos_sistemicos_si: true si tuvo quimio/hormonoterapia/biologicos previos
       - qt_tipo: "neoadyuvante", "adyuvante" o "avanzado"
-      - qt_droga: nombre de la droga
+      - qt_droga: nombre de la droga de quimioterapia o tratamiento sistémico
       `}
 
       Campos comunes requeridos:
@@ -559,6 +564,7 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
         "pais": "Argentina",
         "institucion": "Hospital Oncológico Provincial - Córdoba",
         "diagnostico": "",
+        "fecha_diagnostico": "DD/MM/AAAA",
         "cie10": "",
         "estadio": "",
         "sup_corporal": "",
