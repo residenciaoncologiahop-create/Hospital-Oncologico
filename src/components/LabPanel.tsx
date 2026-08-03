@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Plus, TestTube, AlertCircle, Activity } from 'lucide-react';
+import { normalizeLabTestName } from '../utils/aiProxy';
 
 export interface LabResult {
   date: string;
@@ -17,9 +18,44 @@ interface Props {
   isResident?: boolean; // Si es true, oculta valores exactos y autor
 }
 
+const PREFERRED_LAB_ORDER = [
+  // 1. Hemograma
+  'Hemoglobina', 'Hematocrito', 'Leucocitos', 'Neutrófilos', 'Plaquetas',
+  // 2. Función renal
+  'Creatinina', 'Urea',
+  // 3. Función hepática
+  'Bilirrubina total', 'Bilirrubina directa', 'Bilirrubina indirecta', 'GOT', 'GPT', 'FAL', 'GGT', 'Albúmina',
+  // 4. Electrolitos
+  'Sodio', 'Potasio', 'Calcio', 'Magnesio',
+  // 5. Coagulación
+  'INR', 'TTPA', 'Fibrinógeno',
+  // 6. Marcadores tumorales
+  'CEA', 'CA 19-9', 'CA 125', 'CA 15-3', 'PSA', 'AFP', 'β-HCG', 'Calcitonina', 'Tireoglobulina',
+  // 7. Otros
+  'PCR', 'VSG'
+];
+
 const LabPanel: React.FC<Props> = ({ results, onAddManual, isResident = false }) => {
-  // Obtener lista única de tests disponibles
-  const availableTests = useMemo(() => Array.from(new Set(results.map(r => r.test))), [results]);
+  // Normalizar y obtener lista única de tests ordenados por categoría clínica (Regla 6)
+  const normalizedResults = useMemo(() => {
+    return results.map(r => ({
+      ...r,
+      test: normalizeLabTestName(r.test)
+    }));
+  }, [results]);
+
+  const availableTests = useMemo(() => {
+    const rawSet = Array.from(new Set(normalizedResults.map(r => r.test)));
+    return rawSet.sort((a, b) => {
+      const idxA = PREFERRED_LAB_ORDER.indexOf(a);
+      const idxB = PREFERRED_LAB_ORDER.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [normalizedResults]);
+
   const [selectedTest, setSelectedTest] = useState<string>(availableTests[0] || '');
   
   // Estado para carga manual
@@ -31,14 +67,14 @@ const LabPanel: React.FC<Props> = ({ results, onAddManual, isResident = false })
   // Filtrar y ordenar datos para el gráfico
   const chartData = useMemo(() => {
     if (!selectedTest) return [];
-    return results
+    return normalizedResults
       .filter(r => r.test === selectedTest)
       .sort((a, b) => {
         const dateA = a.date.split('/').reverse().join('-');
         const dateB = b.date.split('/').reverse().join('-');
         return new Date(dateA).getTime() - new Date(dateB).getTime();
       });
-  }, [results, selectedTest]);
+  }, [normalizedResults, selectedTest]);
 
   const handleAdd = () => {
     if (!onAddManual || !manualTest || !manualValue) return;

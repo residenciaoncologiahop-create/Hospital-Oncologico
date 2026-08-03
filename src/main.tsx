@@ -27,7 +27,7 @@ import ClinicalAuditModal from './components/ClinicalAuditModal';
 
 import { User } from 'firebase/auth';
 import AuthWrapper, { logout } from './components/AuthWrapper';
-import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, generateTextSecure } from './utils/aiProxy';
+import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, generateTextSecure, normalizeLabTestName } from './utils/aiProxy';
 import { saveClinicalContext, getClinicalContext, clearClinicalContext } from './services/patientService';
 
 // --- RANGOS ETARIOS ---
@@ -355,7 +355,7 @@ const App = ({ user }: AppProps) => {
             const combinedLabs = deduplicateByKey(
                 currentLabs,
                 extractedLabs,
-                (l: any) => `${l.date}|${l.test}`
+                (l: any) => `${l.date}|${normalizeLabTestName(l.test)}`
             );
 
             if (selectedPatientId) {

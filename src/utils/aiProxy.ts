@@ -185,6 +185,58 @@ export const extractTimelineSecure = async (
   }
 };
 
+// ── Normalización de Parámetros de Laboratorio ─────────────────
+export const normalizeLabTestName = (rawName: string): string => {
+  if (!rawName) return '';
+  const name = rawName.trim();
+  const lower = name.toLowerCase();
+
+  // Hemograma
+  if (/^(hb|hgb|hemog|hemo|hg)$/i.test(lower) || lower.includes('hemoglobina')) return 'Hemoglobina';
+  if (/^(hto|hct)$/i.test(lower) || lower.includes('hematocrito')) return 'Hematocrito';
+  if (/^(gb|g\.b\.|wbc|blancos)$/i.test(lower) || lower.includes('leucocito') || lower.includes('glóbulos blancos')) return 'Leucocitos';
+  if (/^(plaq|plt|platelets)$/i.test(lower) || lower.includes('plaqueta')) return 'Plaquetas';
+  if (/^(neut|neu|anc|pmn|segmentados)$/i.test(lower) || lower.includes('neutrófilo')) return 'Neutrófilos';
+
+  // Función renal
+  if (/^(cr|crea|creat)$/i.test(lower) || lower.includes('creatinina')) return 'Creatinina';
+  if (/^(bun|azoemia)$/i.test(lower) || lower.includes('urea')) return 'Urea';
+
+  // Función hepática
+  if (/^(bt|bil t|bil total)$/i.test(lower) || lower.includes('bilirrubina total')) return 'Bilirrubina total';
+  if (lower.includes('bilirrubina directa')) return 'Bilirrubina directa';
+  if (lower.includes('bilirrubina indirecta')) return 'Bilirrubina indirecta';
+  if (/^(got|ast)$/i.test(lower)) return 'GOT';
+  if (/^(gpt|alt)$/i.test(lower)) return 'GPT';
+  if (/^(fal|alp)$/i.test(lower) || lower.includes('fosfatasa alcalina')) return 'FAL';
+  if (/^(ggt)$/i.test(lower)) return 'GGT';
+  if (lower.includes('albúmina') || lower.includes('albumina')) return 'Albúmina';
+
+  // Electrolitos
+  if (/^(na|sodio)$/i.test(lower)) return 'Sodio';
+  if (/^(k|potasio)$/i.test(lower)) return 'Potasio';
+  if (/^(ca|calcio)$/i.test(lower)) return 'Calcio';
+  if (/^(mg|magnesio)$/i.test(lower)) return 'Magnesio';
+
+  // Coagulación
+  if (/^(inr)$/i.test(lower)) return 'INR';
+  if (/^(ttpa|kptt)$/i.test(lower)) return 'TTPA';
+  if (lower.includes('fibrinógeno') || lower.includes('fibrinogeno')) return 'Fibrinógeno';
+
+  // Marcadores tumorales
+  if (/^(cea)$/i.test(lower) || lower.includes('antígeno carcinoembrionario')) return 'CEA';
+  if (/^(ca 19-9|ca19-9|ca 19.9)$/i.test(lower)) return 'CA 19-9';
+  if (/^(ca 125|ca125)$/i.test(lower)) return 'CA 125';
+  if (/^(ca 15-3|ca15-3|ca 15.3)$/i.test(lower)) return 'CA 15-3';
+  if (/^(psa)$/i.test(lower)) return 'PSA';
+  if (/^(afp)$/i.test(lower) || lower.includes('alfafetoproteína')) return 'AFP';
+  if (/^(beta-hcg|b-hcg|bhcg|β-hcg)$/i.test(lower)) return 'β-HCG';
+  if (lower.includes('calcitonina')) return 'Calcitonina';
+  if (lower.includes('tireoglobulina')) return 'Tireoglobulina';
+
+  return name;
+};
+
 // ── Extracción de Laboratorios ─────────────────
 export const extractLabsSecure = async (
   text: string,
@@ -193,13 +245,46 @@ export const extractLabsSecure = async (
   if (!text && files.length === 0) return [];
 
   const instructionText = `
-    Extrae resultados de laboratorio del texto clínico y documentos.
-    Normaliza abreviaciones (hb → Hemoglobina, plaq → Plaquetas, etc).
-    SALIDA: ÚNICAMENTE ARRAY JSON: [{ "date": "DD/MM/YYYY", "test": "nombre", "value": number, "unit": "unidad" }]
+    Eres un oncólogo y bioquímico clínico experto. Analiza la historia clínica y extrae los resultados de laboratorio clínico.
+
+    REGLA 0: NORMALIZACIÓN INTELIGENTE DE PARÁMETROS:
+    Antes de extraer, interpreta los nombres de los parámetros utilizando razonamiento clínico.
+    Identifica qué analito representa cada término y normalízalo a su nombre estándar único en español:
+    - Hb, hb, HB, HGB, Hgb, Hemog, Hemo, Hg -> "Hemoglobina"
+    - Hto, HTO, Hct, HCT, Hematocrito -> "Hematocrito"
+    - GB, G.B., WBC, Blancos, Leucocitos, Glóbulos blancos -> "Leucocitos"
+    - Plaq, Plaquetas, PLT, Platelets -> "Plaquetas"
+    - Neut, Neu, ANC, PMN, Segmentados, Neutrófilos -> "Neutrófilos"
+    - Cr, CREA, Creat, Creatinina -> "Creatinina"
+    - Urea, BUN, Azoemia -> "Urea"
+    - BT, Bil T, Bil Total, Bilirrubina Total -> "Bilirrubina total"
+    - GOT, GPT, FAL, GGT, Albúmina, Sodio, Potasio, Calcio, Magnesio, PCR, VSG, INR, TTPA, Fibrinógeno, CEA, CA 19-9, CA 125, CA 15-3, PSA, AFP, β-HCG, Calcitonina, Tireoglobulina.
+
+    REGLA 1: EXTRAER ÚNICAMENTE LABORATORIO CLÍNICO (parámetros bioquímicos, hematológicos, microbiológicos o marcadores tumorales).
+
+    REGLA 2: EXCLUSIONES ESTRICTAS — ❌ NUNCA INCLUIR EN LABORATORIO:
+    - SUV, SUVmax, SUVpeak, MTV, TLG, RECIST, TNM, cTNM, pTNM.
+    - Biomarcadores moleculares e inmunohistoquímica: PD-L1, TPS, CPS, TMB, MSI, dMMR, HER2, EGFR, KRAS, NRAS, BRAF, ALK, ROS1, MET, RET, FGFR, NTRK, ESR1, BRCA, PIK3CA, Ki67.
+    - Porcentajes de expresión de inmunohistoquímica, hallazgos anatomopatológicos, resultados de PET, TC o RMN.
+
+    REGLA 3 Y 4: DEDUPLICACIÓN INTELIGENTE Y ÚNICA ENTRADA POR FECHA:
+    - Si el mismo parámetro aparece escrito con diferentes nombres o abreviaturas para la misma fecha (ej. 20/05/2025: Hb 12.4, Hemoglobina 12,4 y HGB 12.4), devuélvelo como UN ÚNICO resultado sobre el nombre normalizado ("Hemoglobina").
+
+    REGLA 5: AGRUPAR POR FECHA (formato DD/MM/YYYY).
+
+    SALIDA JSON ARRAY ÚNICAMENTE:
+    [
+      {
+        "date": "DD/MM/YYYY",
+        "test": "Nombre Normalizado Estándar",
+        "value": número_o_decimal,
+        "unit": "unidad estándar"
+      }
+    ]
   `;
 
   const parts = buildParts(instructionText, []);
-  if (text) parts.push({ text: `Notas: ${text}` });
+  if (text) parts.push({ text: `Notas clínicas:\n${text}` });
   files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
   const res = await callGemini({ parts, responseMimeType: "application/json" });
@@ -209,7 +294,37 @@ export const extractLabsSecure = async (
     const start = clean.indexOf('[');
     const end = clean.lastIndexOf(']');
     const raw = start !== -1 ? JSON.parse(clean.substring(start, end + 1)) : JSON.parse(clean);
-    return raw.filter((l: any) => l.value !== 0 && !isNaN(parseFloat(l.value)));
+
+    const EXCLUDED_TERMS = [
+      'suv', 'suvmax', 'suvpeak', 'mtv', 'tlg', 'recist', 'tnm', 'ctnm', 'ptnm',
+      'pd-l1', 'tps', 'cps', 'tmb', 'msi', 'dmmr', 'her2', 'egfr', 'kras', 'nras',
+      'braf', 'alk', 'ros1', 'met', 'ret', 'fgfr', 'ntrk', 'esr1', 'brca', 'pik3ca', 'ki67'
+    ];
+
+    const resultMap = new Map<string, any>();
+    for (const item of raw) {
+      if (!item || !item.test || typeof item.test !== 'string') continue;
+      const tLower = item.test.toLowerCase().trim();
+
+      // Exclusión estricta de biomarcadores/imágenes
+      if (EXCLUDED_TERMS.some(ex => tLower.includes(ex))) continue;
+
+      const normTest = normalizeLabTestName(item.test);
+      const date = item.date ? item.date.trim() : 'S/F';
+      const key = `${date}|${normTest.toLowerCase()}`;
+      const valNum = parseFloat(String(item.value).replace(',', '.'));
+
+      if (!isNaN(valNum) && valNum !== 0 && !resultMap.has(key)) {
+        resultMap.set(key, {
+          ...item,
+          test: normTest,
+          value: valNum,
+          unit: item.unit || ''
+        });
+      }
+    }
+
+    return Array.from(resultMap.values());
   } catch {
     return [];
   }
@@ -285,36 +400,42 @@ export const extractImagingFromHistorySecure = async (
   if (!text && files.length === 0) return [];
 
   const instructionText = `
-Sos un radiólogo oncológico experto en criterios RECIST 1.1.
+    Sos un radiólogo oncólogo experimentado. Tu objetivo es sintetizar la EVOLUCIÓN RADIOLÓGICA del paciente.
 
-Analizá TODOS los documentos adjuntos y el texto clínico. Buscá TODOS los informes de imágenes oncológicas (TC, RMN, PET-TC). Puede haber múltiples estudios en un mismo documento o en documentos distintos.
+    OBJETIVO: Generar un resumen evolutivo sin copiar informes completos ni resumir estudio por estudio literalmente. Reconstruir la evolución clínica de lesiones y respuestas radiológicas.
 
-REGLAS ESTRICTAS:
-- Medidas SIEMPRE en milímetros (mm). Si dice "2.3 cm" → 23. Si dice "12 mm" → 12.
-- Fechas en DD/MM/YYYY. Si solo hay mes/año, usar "01/MM/YYYY".
-- Tipo: SOLO "TC", "RMN" o "PET-TC". Si es "TAC" o "tomografía" → "TC".
-- Lesiones diana: medibles según RECIST 1.1 (>10mm tejidos blandos, >15mm ganglios).
-- Lesiones no diana: no medibles o no seleccionadas como diana.
-- Tratamiento: esquema activo AL MOMENTO del estudio según contexto clínico cercano. Si no está claro → null.
-- NO incluyas datos identificatorios (nombres, DNI, nro de historia clínica).
-- Si no hay ningún informe de imagen, devolvé [].
+    REGLAS ESTRICTAS DE EXTRACCIÓN E INTERPRETACIONAL:
+    1. NO REPETIR HALLAZGOS: Si distintos métodos (TC, RMN, PET-TC) describen exactamente el mismo hallazgo, conserva una única descripción sin duplicar datos. El PET-TC aporta únicamente la información metabólica (SUV) sobre la lesión anatómica ya conocida. La RMN aporta la información diferencial (ej: SNC o pelvis).
+    2. AGRUPAR POR LOCALIZACIÓN ANATÓMICA (órganos/sitios): Organiza por localización ("Pulmón", "Hígado", "Ganglios", "Hueso", "Sistema Nervioso Central", "Peritoneo", "Suprarrenales", "Otros"), NO por método de estudio. Dentro de cada órgano muestra la evolución cronológica.
+    3. MOSTRAR SOLO CAMBIOS CLÍNICAMENTE RELEVANTES: Conserva aparición de nuevas lesiones, desaparición, aumento/disminución de tamaño en mm, respuesta parcial (RP), respuesta completa (RC), enfermedad progresiva (EP) o estabilidad (EE) cuando modifique la conducta. Omite hallazgos repetitivos o inespecíficos.
+    4. ELIMINAR FRASES SIN VALOR CLÍNICO: ❌ NUNCA incluyas "correlacionar clínicamente", "estudio técnicamente adecuado", "se recomienda seguimiento", "calidad diagnóstica aceptable", "hallazgos inespecíficos" o "sin cambios respecto al previo" si no aporta información asistencial.
+    5. PRIORIZAR EL ESTUDIO CON MAYOR INFORMACIÓN:
+       - RMN tiene prioridad para Sistema Nervioso Central (SNC) y pelvis.
+       - PET-TC tiene prioridad para actividad metabólica (SUV).
+       - TC tiene prioridad para anatomía toracoabdominal.
+    6. EVITAR CRONOLOGÍAS REDUNDANTES: Si 3 o más estudios consecutivos describen la misma lesión sin cambios, conserva el primero y el último indicando estabilidad en el intervalo.
 
-SALIDA: ÚNICAMENTE ARRAY JSON:
-[
-  {
-    "type": "TC" | "RMN" | "PET-TC",
-    "date": "DD/MM/YYYY",
-    "bodyRegion": "región anatómica estudiada",
-    "treatment": "esquema de tratamiento activo o null",
-    "targetLesions": [
-      { "location": "localización anatómica precisa", "measurement": número_en_mm }
-    ],
-    "nonTargetLesions": [
-      { "location": "localización", "status": "presente|ausente|aumentado|disminuido|estable" }
-    ],
-    "newLesions": true | false
-  }
-]
+    FORMATO Y MEDIDAS:
+    - Medidas SIEMPRE en milímetros (mm). Fechas en DD/MM/YYYY.
+    - Tipo: SOLO "TC", "RMN" o "PET-TC".
+    - NO incluyas datos identificatorios (nombres, DNI).
+
+    SALIDA: ÚNICAMENTE ARRAY JSON DE ESTUDIOS EVOLUTIVOS:
+    [
+      {
+        "type": "TC" | "RMN" | "PET-TC",
+        "date": "DD/MM/YYYY",
+        "bodyRegion": "región anatómica estudiada",
+        "treatment": "esquema de tratamiento activo o null",
+        "targetLesions": [
+          { "location": "Órgano / Localización (Pulmón, Hígado, Ganglios, Hueso, SNC, Peritoneo, Suprarrenales, Otros)", "measurement": número_en_mm }
+        ],
+        "nonTargetLesions": [
+          { "location": "Órgano / Localización", "status": "presente|ausente|aumentado|disminuido|estable" }
+        ],
+        "newLesions": true | false
+      }
+    ]
   `;
 
   const parts = buildParts(instructionText, []);
