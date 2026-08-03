@@ -88,7 +88,7 @@ const parseDate = (dateStr: string) => {
 const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 
 // --- COMPONENTS ---
-const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/*" }: { label: string, files: FileData[], setFiles: (f: FileData[]) => void, accept?: string }) => {
+const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/*", onClearAll, clearAllLabel }: { label: string, files: FileData[], setFiles: (f: FileData[]) => void, accept?: string, onClearAll?: () => void, clearAllLabel?: string }) => {
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const newFiles: FileData[] = [];
@@ -112,7 +112,14 @@ const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/
 
     return (
         <div className="mb-3">
-            <label className="block text-[10px] font-black text-gray-400 mb-1.5 uppercase tracking-widest">{label}</label>
+            <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</label>
+                {onClearAll && files.length > 0 && (
+                    <button onClick={onClearAll} className="text-[10px] text-red-500 hover:text-red-700 font-bold">
+                        {clearAllLabel || "Limpiar todo"}
+                    </button>
+                )}
+            </div>
             <div className="flex flex-wrap gap-2 mb-2">
                 {files.map((f, i) => (
                     <div key={i} className="flex items-center bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg text-[10px] border border-blue-100 font-bold">
@@ -903,7 +910,7 @@ const App = ({ user }: AppProps) => {
                                     {/* FORMS */}
                                     {activeTab === 'forms' && (
                                         <div className="h-full overflow-y-auto">
-                                            <FormManager patient={selP} historyText={historyText} files={historyFiles}/>
+                                            <FormManager patient={selP} historyText={historyText} files={historyFiles} timeline={timeline}/>
                                         </div>
                                     )}
 

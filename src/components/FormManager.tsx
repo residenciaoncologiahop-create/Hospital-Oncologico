@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle, CheckCircle2, Map, Share2, RefreshCcw
+  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle, CheckCircle2, Map, Share2, RefreshCcw, Clock
 } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../utils/aiProxy';
@@ -9,9 +9,10 @@ interface FormManagerProps {
   patient: any;
   historyText: string;
   files: any[];
+  timeline?: any[];
 }
 
-const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files }) => {
+const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, timeline }) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
   const [formGenerated, setFormGenerated] = useState<Record<string, boolean>>({});
@@ -88,13 +89,46 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
     } catch (e) { alert(`No se encontró el archivo "${formDef.file}". Verifique la carpeta public/forms/`); }
   };
 
+  // --- INTEGRACIÓN DE LÍNEA DE TIEMPO Y HISTORIA CLÍNICA ---
+  const getEffectiveClinicalContext = () => {
+    let combined = historyText ? historyText.trim() : '';
+    const effectiveTimeline = timeline || patient?.timeline || [];
+    if (effectiveTimeline && effectiveTimeline.length > 0) {
+      const timelineStr = effectiveTimeline
+        .map((e: any) => {
+          const date = e.date || e.fecha || 'Sin fecha';
+          const category = e.category || e.categoria || e.type || 'Evento';
+          const prof = e.professional || e.profesional || e.doctor || '';
+          const note = e.note || e.nota || e.description || e.descripcion || '';
+          const detail = e.detail || e.details || e.detalle || '';
+          const keyMarker = e.isKey ? ' [CLAVE]' : '';
+
+          let line = `• [${date}] ${category}${keyMarker}: ${note}`;
+          if (prof && prof !== 'N/A' && prof !== '') line += ` (Prof: ${prof})`;
+          if (detail) line += `\n  Detalles: ${detail}`;
+          return line;
+        })
+        .join('\n');
+
+      if (combined) {
+        combined += `\n\n--- LÍNEA DE TIEMPO / HISTORIAL DE EVENTOS ---\n${timelineStr}`;
+      } else {
+        combined = `LÍNEA DE TIEMPO / HISTORIAL DE EVENTOS:\n${timelineStr}`;
+      }
+    }
+    return combined;
+  };
+
+  const effectiveTimeline = timeline || patient?.timeline || [];
+  const hasClinicalData = !!(historyText?.trim() || (files && files.length > 0) || (effectiveTimeline && effectiveTimeline.length > 0));
+
   // --- GENERADOR DE RESUMEN CLÍNICO ---
   const generateClinicalSummary = async (
     context: string,
     regenParams?: { drugName: string; formId: string; accumulatedCorrections: string }
   ) => {
-    if (!historyText && (!files || files.length === 0)) {
-        alert("⚠️ Falta documentación para generar el resumen.");
+    if (!hasClinicalData) {
+        alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
         return;
     }
 
@@ -103,7 +137,7 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
 
     const panelId = regenParams?.formId ?? ('summary-' + context);
     setProcessingId('summary');
-    setStatus('Analizando historia clínica...');
+    setStatus('Analizando historia clínica y línea de tiempo...');
 
     try {
         const today = new Date().toLocaleDateString('es-AR'); 
@@ -133,12 +167,12 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
            3. JUSTIFICACIÓN
         
         CONTENIDO REQUERIDO:
-        - **s exactas (DD/MM/AAAA)** para todo evento mencionado.
+        - **Fechas exactas (DD/MM/AAAA)** para todo evento mencionado.
         - Detalle explícito de cirugías (especialmente **AMPUTACIONES**) y resultados de patología.
         
         **IMPORTANTE:** NO incluyas ninguna firma ni datos de contacto al final. El documento termina con el punto final de la justificación.
         
-        CONTEXTO: ${historyText || ''}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar todas):\n${regenParams.accumulatedCorrections}` : ''}
+        CONTEXTO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar todas):\n${regenParams.accumulatedCorrections}` : ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
@@ -335,7 +369,7 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
     `;
 
     const correctionNote = correction ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${correction}. Incorporar en los campos correspondientes.` : '';
-    const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${historyText}${correctionNote}` }];
+    const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${getEffectiveClinicalContext()}${correctionNote}` }];
     if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
     const res = await callGemini({ parts, responseMimeType: "application/json" });
@@ -348,8 +382,8 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
   };
 
   const fillPamiPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }) => {
-    if ((!files || files.length === 0) && !historyText) {
-        alert("⚠️ Suba la Historia Clínica primero.");
+    if (!hasClinicalData) {
+        alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
         return;
     }
     const drugName = regenParams?.drugName ?? window.prompt('Ingrese el/los fármaco/s a solicitar en el formulario PAMI:');
@@ -559,7 +593,7 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
         `}
       }
 
-      CONTEXTO CLÍNICO: ${historyText}${correction ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${correction}. Incorporar en los campos correspondientes.` : ''}
+      CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${correction ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${correction}. Incorporar en los campos correspondientes.` : ''}
     `;
 
     const parts: any[] = [{ text: prompt }];
@@ -573,7 +607,7 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
   };
 
   const fillAdmisionPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }) => {
-    if (!historyText && (!files || files.length === 0)) { alert("⚠️ Suba la Historia Clínica primero."); return; }
+    if (!hasClinicalData) { alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero."); return; }
     const drugName = regenParams?.drugName ?? window.prompt('Ingrese el/los fármaco/s para la Admisión Banco de Drogas:');
     if (!drugName || !drugName.trim()) return;
 
@@ -688,7 +722,7 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
   };
 
   const fillRenovacionPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }) => {
-    if (!historyText && (!files || files.length === 0)) { alert("⚠️ Suba la Historia Clínica primero."); return; }
+    if (!hasClinicalData) { alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero."); return; }
     const drugName = regenParams?.drugName ?? window.prompt('Ingrese el/los fármaco/s para la Renovación Banco de Drogas:');
     if (!drugName || !drugName.trim()) return;
 
@@ -799,8 +833,8 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
   };
 
   const generateDinadicPDF = async (esquema?: typeof esquemaData) => {
-  if (!historyText && (!files || files.length === 0)) {
-    alert("⚠️ Suba la Historia Clínica primero.");
+  if (!hasClinicalData) {
+    alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
     return;
   }
 
@@ -816,7 +850,7 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
 
   const drugName = pendingDinadicDrug;
   setProcessingId('dinadic');
-    setStatus('Analizando historia clínica...');
+    setStatus('Analizando historia clínica y línea de tiempo...');
     try {
       const today = new Date().toLocaleDateString('es-AR');
 
@@ -851,7 +885,7 @@ IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de c
   "fundamentacion": "Justificación oncológica MUY CONCISA. Máximo 2 oraciones. No más de 200 caracteres. Sin cortes abruptos, terminar siempre con punto final y con coherencia."
 }
 
-CONTEXTO CLÍNICO: ${historyText}${pendingDinadicCorrection ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${pendingDinadicCorrection}. Incorporar en los campos correspondientes.` : ''}
+CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${pendingDinadicCorrection}. Incorporar en los campos correspondientes.` : ''}
       `;
 
       const parts: any[] = [{ text: extractPrompt }];
@@ -995,8 +1029,8 @@ drawLines(p2, 57, 570.6, fundTrunc, 3);
 
   // ─── INTERCONSULTA / DERIVACIÓN ─────────────────────────────────────────────
   const generateInterconsultaPDF = async (regenParams?: { servicioDestino: string; motivoSolicitud: string; accumulatedCorrections: string }) => {
-    if (!historyText && (!files || files.length === 0)) {
-      alert("⚠️ Suba la Historia Clínica primero.");
+    if (!hasClinicalData) {
+      alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
       return;
     }
 
@@ -1007,7 +1041,7 @@ drawLines(p2, 57, 570.6, fundTrunc, 3);
     if (!motivoSolicitud || !motivoSolicitud.trim()) return;
 
     setProcessingId('interconsulta');
-    setStatus('Analizando historia clínica...');
+    setStatus('Analizando historia clínica y línea de tiempo...');
     try {
       const today = new Date().toLocaleDateString('es-AR');
 
@@ -1042,7 +1076,7 @@ REGLAS ESTRICTAS:
 - peso: SOLO el número sin "kg" ni ninguna unidad.
 - talla: SOLO el número en centímetros, sin "cm" ni "m".
 - Si un dato no está disponible devolver "".
-CONTEXTO: ${historyText}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar en los campos correspondientes):\n${regenParams.accumulatedCorrections}` : ''}
+CONTEXTO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar en los campos correspondientes):\n${regenParams.accumulatedCorrections}` : ''}
       `;
 
       const parts: any[] = [{ text: extractPrompt }];
@@ -1314,8 +1348,8 @@ CONTEXTO: ${historyText}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONE
             const textField = form.getTextField(name);
             textField.setText(name); 
             textField.setFontSize(6);
-            textField.setFont(helveticaFont);
-            textField.setTextColor(rgb(1, 0, 0));
+            (textField as any).setFont?.(helveticaFont);
+            (textField as any).setTextColor?.(rgb(1, 0, 0));
         }
       });
 
@@ -1361,11 +1395,25 @@ CONTEXTO: ${historyText}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONE
         </div>
       )}
       
-      {(!files || files.length === 0) && !historyText && (
+      {hasClinicalData ? (
+        effectiveTimeline.length > 0 && (
+          <div className="mb-6 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Clock className="text-blue-600 shrink-0" size={16} />
+              <p className="text-[10px] text-blue-800 font-bold">
+                Conectado a la Línea de Tiempo: {effectiveTimeline.length} evento{effectiveTimeline.length !== 1 ? 's' : ''} disponible{effectiveTimeline.length !== 1 ? 's' : ''} para autocompletar formularios.
+              </p>
+            </div>
+            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 font-black text-[9px] rounded-full uppercase tracking-wider shrink-0">
+              Línea de Tiempo Activa
+            </span>
+          </div>
+        )
+      ) : (
         <div className="mb-6 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2">
-            <AlertTriangle className="text-orange-500" size={16} />
+            <AlertTriangle className="text-orange-500 shrink-0" size={16} />
             <p className="text-[10px] text-orange-700 font-bold">
-                Cargue la Historia Clínica en "Documentación" para habilitar el autocompletado PAMI y los resúmenes.
+                Cargue la Historia Clínica en "Documentación" o agregue eventos en "Eventos" para habilitar la generación de formularios.
             </p>
         </div>
       )}

@@ -326,7 +326,7 @@ const ResidentApp = () => {
                 )}
 
                 {activeTab === 'forms' && (
-                  <FormManager patient={selectedPatient as any} historyText={selectedPatient.historyText} files={selectedPatient.files} />
+                  <FormManager patient={selectedPatient as any} historyText={selectedPatient.historyText} files={selectedPatient.files} timeline={selectedPatient?.timeline} />
                 )}
 
                 {activeTab === 'learning' && (
