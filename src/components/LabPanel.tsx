@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Plus, TestTube, AlertCircle, Activity } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Plus, TestTube, Activity } from 'lucide-react';
 import { normalizeLabTestName } from '../utils/aiProxy';
 
 export interface LabResult {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BookOpen, GraduationCap, Loader2, Sparkles, AlertCircle, RefreshCw, Maximize2, Minimize2, MessageCircle, Play, User, CheckCircle2, MousePointerClick } from 'lucide-react';
+import { BookOpen, GraduationCap, Loader2, Sparkles, RefreshCw, Maximize2, Minimize2, Play, User, CheckCircle2, MousePointerClick } from 'lucide-react';
 // IMPORTACIÓN NUEVA: Usamos el proxy seguro en lugar del SDK de Gemini
 import { callGemini } from '../utils/aiProxy';
 

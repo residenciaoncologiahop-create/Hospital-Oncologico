@@ -1,7 +1,6 @@
 import LabPanel, { LabResult } from './components/LabPanel';
-import { labMocks } from "./mocks/labMocks";
 import ClinicalReportModal from './components/ClinicalReportModal';
-import { generateResidentClinicalSummary, generateFollowUpPlan, generateTumorBoardAnalysis } from './utils/residentAI';
+import { generateResidentClinicalSummary, generateFollowUpPlan } from './utils/residentAI';
 import RootOrchestrator from './RootOrchestrator';
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -15,11 +14,11 @@ import { db } from './lib/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
 
 import { 
-    User as LucideUser, FileText, MessageSquare, Plus, LogOut, Search, ChevronRight,
-    Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
-    List, File, Loader2, AlertCircle, Info, Terminal, ChevronDown,
-    Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation,
-    PanelLeftClose, PanelLeftOpen, FileInput, Image, Maximize2, Minimize2
+    FileText, MessageSquare, Plus, LogOut, Search,
+    Upload, Activity, Trash2, Menu, X, Clock,
+    Loader2, AlertCircle, Info, Terminal, ChevronDown,
+    Calendar, PenTool, ClipboardCheck,
+    PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -27,8 +26,8 @@ import ClinicalAuditModal from './components/ClinicalAuditModal';
 
 import { User } from 'firebase/auth';
 import AuthWrapper, { logout } from './components/AuthWrapper';
-import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, generateTextSecure, normalizeLabTestName } from './utils/aiProxy';
-import { saveClinicalContext, getClinicalContext, clearClinicalContext } from './services/patientService';
+import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, normalizeLabTestName } from './utils/aiProxy';
+import { saveClinicalContext, clearClinicalContext } from './services/patientService';
 
 // --- RANGOS ETARIOS ---
 const AGE_RANGES = ['0-18', '19-30', '31-40', '41-50', '51-60', '61-70', '71-80', '80+'];

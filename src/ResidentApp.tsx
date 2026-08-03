@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Activity, Plus, Search, Trash2, LogOut, Menu, X, 
-  FileText, Clock, FileOutput, GraduationCap, Calculator, Pill, 
-  Stethoscope, User, ChevronRight, MessageSquare, Loader2, AlertCircle, Sparkles, ClipboardList, ShieldCheck, Users, CalendarHeart, Info, Maximize2, Minimize2
+  FileText, Clock, GraduationCap, Calculator, Pill, 
+  MessageSquare, Loader2, AlertCircle, ClipboardList, CalendarHeart, Info, Maximize2, Minimize2
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -18,7 +18,6 @@ import {
   extractResidentTimeline, 
   generateResidentClinicalSummary,
   generateFollowUpPlan,
-  generateTumorBoardAnalysis,
   generateOncologyVerification 
 } from './utils/residentAI';
 
@@ -33,14 +32,6 @@ interface ResidentPatient {
   chatHistory: { role: 'user' | 'model'; text: string; timestamp: number }[];
   lastUpdated: number;
 }
-
-// Helper para parsear fechas DD/MM/AAAA
-const parseDate = (dateStr: string) => {
-  if (!dateStr) return 0;
-  const parts = dateStr.split('/');
-  if (parts.length === 3) return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
-  return 0;
-};
 
 const ResidentApp = () => {
   const [patients, setPatients] = useState<ResidentPatient[]>([]);

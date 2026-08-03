@@ -6,7 +6,6 @@ interface ChatMessage { role: 'user' | 'model'; text: string; timestamp: number;
 interface ClinicalEvent { date: string; professional: string; category: string; note: string; isKey: boolean; }
 
 // --- CONFIGURACIÓN ---
-const MODEL_NAME = 'gemini-2.5-flash';
 
 // --- UTILS ---
 const parseDate = (dateStr: string) => {
@@ -85,7 +84,7 @@ export const extractResidentTimeline = async (text: string, files: FileData[]): 
             return events.sort((a: any, b: any) => parseDate(a.date) - parseDate(b.date));
         }
         return [];
-    } catch (e) {
+    } catch {
         return [];
     }
 };

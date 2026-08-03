@@ -14,7 +14,7 @@ export const calculateMostellerBSA = (weightKg: number | string, heightCmOrM: nu
   formulaStep: string;
   error: string | null;
 } => {
-  let w = parseFloat(weightKg?.toString().replace(',', '.'));
+  const w = parseFloat(weightKg?.toString().replace(',', '.'));
   let h = parseFloat(heightCmOrM?.toString().replace(',', '.'));
 
   if (isNaN(w) || w <= 0 || w > 350) {

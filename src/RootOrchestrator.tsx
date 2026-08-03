@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Stethoscope, GraduationCap, ChevronRight, Calculator, Pill, X } from 'lucide-react';
+import { Stethoscope, GraduationCap, ChevronRight, Calculator, Pill } from 'lucide-react';
 import ResidentApp from './ResidentApp';
 import OncoCalculator from './components/OncoCalculator';
 import DrugReference from './components/DrugReference';

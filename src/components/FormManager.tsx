@@ -88,7 +88,7 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    } catch (e) { alert(`No se encontró el archivo "${formDef.file}". Verifique la carpeta public/forms/`); }
+    } catch { alert(`No se encontró el archivo "${formDef.file}". Verifique la carpeta public/forms/`); }
   };
 
   // --- INTEGRACIÓN DE LÍNEA DE TIEMPO Y HISTORIA CLÍNICA ---
@@ -950,9 +950,9 @@ const bsa = calculateBSA(d.peso, alturaCorregida);
         });
       };
 
-      const markX = (page: any, x: number, top: number) => {
-        page.drawText('X', { x, y: pH - top + 3, size: 9, font: fontBold });
-      };
+      // const markX = (page: any, x: number, top: number) => {
+      //   page.drawText('X', { x, y: pH - top + 3, size: 9, font: fontBold });
+      // };
 
       // ── PÁGINA 1 ──
       draw(p1, 153, 285.5, d.nombre_apellido);

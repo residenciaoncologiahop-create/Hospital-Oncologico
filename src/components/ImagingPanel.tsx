@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Upload, X, Loader2, Image, Zap, ChevronDown, ChevronUp, Trash2, Edit2, Check } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, ReferenceLine
+  Legend, ResponsiveContainer
 } from 'recharts';
 import { extractImagingFromHistorySecure as extractImagingDataSecure, compareRecistSecure } from '../utils/aiProxy';
 
@@ -42,11 +42,6 @@ const TYPE_COLORS: Record<string, string> = {
   'RMN':    'bg-purple-50 text-purple-700 border-purple-200',
   'PET-TC': 'bg-orange-50 text-orange-700 border-orange-200',
 };
-
-const LINE_COLORS = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
-  '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'
-];
 
 const parseDate = (dateStr: string): number => {
   if (!dateStr) return 0;
