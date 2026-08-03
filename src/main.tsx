@@ -191,6 +191,8 @@ const App = ({ user }: AppProps) => {
     const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
     const [manualDoctor, setManualDoctor] = useState(doctorName || '');
     const [manualNote, setManualNote] = useState('');
+    const [manualCategory, setManualCategory] = useState('Evolución');
+    const [manualIsKey, setManualIsKey] = useState(false);
 
     const [reportModal, setReportModal] = useState<{
         isOpen: boolean; title: string; content: string | null; isLoading: boolean;
@@ -419,16 +421,18 @@ const App = ({ user }: AppProps) => {
     const handleAddManualEvolution = async () => {
         if (!manualNote.trim() || !selectedPatientId) return;
         const [y, m, d] = manualDate.split('-');
+        const formattedDate = (y && m && d) ? `${d}/${m}/${y}` : manualDate;
         const newEvent: ClinicalEvent = {
-            date: `${d}/${m}/${y}`,
-            professional: manualDoctor,
-            category: "Evolución Manual",
-            note: manualNote,
-            isKey: false
+            date: formattedDate,
+            professional: manualDoctor || doctorName || 'Manual',
+            category: manualCategory || 'Evolución',
+            note: manualNote.trim(),
+            isKey: manualIsKey
         };
         const updatedTimeline = sortTimeline([...timeline, newEvent]);
         setTimeline(updatedTimeline);
         setManualNote('');
+        setManualIsKey(false);
         await updateDoc(doc(db, "patients", selectedPatientId), { timeline: updatedTimeline, lastUpdated: Date.now() });
         logAction("ADD_MANUAL_EVOLUTION", selectedPatientId, doctorName);
     };
@@ -786,42 +790,56 @@ const App = ({ user }: AppProps) => {
                                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Documentación del Caso</h3>
                                                 </div>
                                                 <FileUploader label="Archivos Digitales" files={historyFiles} setFiles={setHistoryFiles}/>
-                                                <div className="flex items-center space-x-2 text-gray-400 mb-2">
-                                                    <PenTool size={13}/>
-                                                    <h3 className="text-xs font-black uppercase tracking-widest">Registro de evolución clínica (resumen)</h3>
+                                                <div className="flex items-center space-x-2 text-gray-500 pt-2 mb-1">
+                                                    <PenTool size={14}/>
+                                                    <h3 className="text-xs font-black uppercase tracking-widest">Agregar evento a mano</h3>
                                                 </div>
-                                                <div className="flex space-x-2 mb-2">
-                                                    <input type="date" className="bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 focus:border-blue-200 outline-none" value={manualDate} onChange={e => setManualDate(e.target.value)}/>
-                                                    <input type="text" className="flex-1 bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 focus:border-blue-200 outline-none" placeholder="Médico responsable" value={manualDoctor} onChange={e => setManualDoctor(e.target.value)}/>
-                                                </div>
-                                                <textarea
-                                                    className="w-full h-32 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-blue-200 transition-all outline-none resize-none shadow-inner"
-                                                    placeholder="Registrar información relevante para la comprensión del caso (no constituye evolución en historia clínica)."
-                                                    value={historyText}
-                                                    onChange={e => setHistoryText(e.target.value)}
-                                                    onBlur={savePatientDetails}
-                                                />
-                                                {/* Indicador de contexto clínico persistido */}
-                                                <div className="flex items-center justify-between px-1">
-                                                    {historyText ? (
-                                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-bold">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>
-                                                            Contexto clínico guardado{clinicalContextUpdatedAt ? ` · ${new Date(clinicalContextUpdatedAt).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                                                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-3">
+                                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                                        <div>
+                                                            <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Fecha del evento</label>
+                                                            <input type="date" className="w-full bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 focus:border-blue-200 outline-none" value={manualDate} onChange={e => setManualDate(e.target.value)}/>
                                                         </div>
-                                                    ) : (
-                                                        <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-bold">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-gray-300"/>
-                                                            Sin contexto guardado — subí documentación
+                                                        <div>
+                                                            <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Categoría</label>
+                                                            <select className="w-full bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 focus:border-blue-200 outline-none cursor-pointer" value={manualCategory} onChange={e => setManualCategory(e.target.value)}>
+                                                                <option value="Evolución">Evolución</option>
+                                                                <option value="Consulta">Consulta</option>
+                                                                <option value="Cirugía">Cirugía</option>
+                                                                <option value="Quimio">Quimio</option>
+                                                                <option value="Radio">Radio</option>
+                                                                <option value="Imagen">Imagen</option>
+                                                                <option value="Lab">Lab</option>
+                                                            </select>
                                                         </div>
-                                                    )}
-                                                    {historyText && (
+                                                        <div className="col-span-2 md:col-span-1">
+                                                            <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Profesional (opcional)</label>
+                                                            <input type="text" className="w-full bg-white px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 focus:border-blue-200 outline-none" placeholder="Ej: Oncología" value={manualDoctor} onChange={e => setManualDoctor(e.target.value)}/>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Nota / Descripción del evento</label>
+                                                        <textarea
+                                                            className="w-full h-24 p-3 border border-gray-200 rounded-xl text-xs font-medium bg-white focus:border-blue-300 transition-all outline-none resize-none shadow-sm"
+                                                            placeholder="Escribí la nota o evolución del evento (ej: Inicio de 2do ciclo de QT)..."
+                                                            value={manualNote}
+                                                            onChange={e => setManualNote(e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between pt-1">
+                                                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                            <input type="checkbox" checked={manualIsKey} onChange={e => setManualIsKey(e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" />
+                                                            <span className="text-xs font-bold text-gray-600">Marcar como Hito Clave</span>
+                                                        </label>
                                                         <button
-                                                            onClick={handleClearContext}
-                                                            className="text-[10px] text-gray-300 hover:text-red-400 font-black uppercase tracking-widest transition-colors"
+                                                            onClick={handleAddManualEvolution}
+                                                            disabled={!manualNote.trim()}
+                                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-40 shadow-md shadow-blue-100 flex items-center gap-2"
                                                         >
-                                                            Limpiar contexto
+                                                            <Plus size={14}/>
+                                                            <span>Agregar a Línea de Tiempo</span>
                                                         </button>
-                                                    )}
+                                                    </div>
                                                 </div>
                                                 <button
                                                     onClick={handleProcessDocuments}
