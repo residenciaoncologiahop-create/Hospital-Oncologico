@@ -60,8 +60,17 @@ export const extractResidentTimeline = async (text: string, files: FileData[]): 
     
     try {
         const parts: any[] = [{ text: `
-            Extrae eventos clínicos clave (Fecha, Profesional, Categoría, Nota).
-            Salida JSON array.
+            Eres un oncólogo experto. Extrae los eventos clínicos del paciente sin duplicados.
+            
+            REGLAS:
+            1. ❌ NO DUPLICAR eventos para la misma fecha o el mismo acontecimiento.
+            2. HITOS ONCOLÓGICOS CLAVE (isKey = true): Biopsia/Diagnóstico, Inmunohistoquímica, Estadio TNM, Cirugías oncológicas, inicio/cambio de Quimioterapia/Inmunoterapia/RT, progresión/respuesta. "note" DEBE SER MUY DETALLADO (fechas, esquema, dosis, estadios, marcadores).
+            3. EVENTOS SECUNDARIOS (isKey = false): Controles o laboratorios estables. "note" DEBE SER CONCISO (1 oración corta, máx 100 caracteres).
+            
+            Format JSON array:
+            [
+              { "date": "DD/MM/YYYY", "professional": "Especialidad", "category": "Consulta|Imagen|Lab|Cirugía|Quimio|Radio|Evolución", "note": "resumen", "isKey": true/false, "detail": "detalle opcional" }
+            ]
         `}];
         
         if (text) parts.push({ text: `Notas: ${text}` });

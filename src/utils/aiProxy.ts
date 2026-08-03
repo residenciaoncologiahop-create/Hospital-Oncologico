@@ -125,26 +125,34 @@ export const extractTimelineSecure = async (
   if (!text && files.length === 0) return [];
 
   const instructionText = `
-    Eres un asistente médico argentino. Analiza los documentos y extrae la cronología clínica.
+    Eres un asistente médico experto en oncología. Analiza la documentación y extrae la cronología clínica del paciente.
 
-    IDIOMA OBLIGATORIO: Todo el contenido de los campos "professional", "category", "note" y "detail" DEBE estar en español, sin excepción. Si el documento fuente está en inglés, traduce el contenido al español.
+    REGLAS ESTRICTAS DE NO DUPLICACIÓN:
+    1. ❌ NUNCA generes eventos duplicados para la misma fecha ni repitas la misma consulta, cirugía, estudio o tratamiento.
+    2. Si en la misma fecha ocurren varios sucesos o hay múltiples menciones del mismo evento, agrupa la información en UN SOLO evento en la línea de tiempo.
 
-    REGLA DE PRIVACIDAD: NO incluyas DNI, nombre del paciente ni datos personales.
+    IDIOMA OBLIGATORIO: Todo en español. Si el documento está en inglés, traduce el contenido.
+
+    REGLA DE PRIVACIDAD: NO incluyas DNI, nombres reales ni datos personales.
 
     Fechas: formato DD/MM/YYYY.
 
     Categorías permitidas (usar exactamente estas palabras): Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
 
-    CRITERIO isKey:
-    isKey = true para: diagnóstico inicial, biopsia con resultado, inicio de tratamiento sistémico, cambio de línea terapéutica, progresión de enfermedad, cirugía mayor, recaída, respuesta a tratamiento (RC/RP/EE/PE), toxicidad grave (≥ grado 3), fallecimiento.
-    isKey = false para: controles rutinarios, laboratorios sin cambios significativos, imágenes estables, consultas de seguimiento.
+    CRITERIO DE HITOS ONCOLÓGICOS CLAVE (isKey):
+    - isKey = true EXCLUSIVAMENTE para HITOS ONCOLÓGICOS DETERMINANTES:
+      • Diagnóstico patológico / biopsia inicial con inmunohistoquímica (RE, RP, HER2, Ki67, etc.) y marcadores moleculares (EGFR, KRAS, BRAF, BRCA, PD-L1).
+      • Estadificación TNM y Estadio clínico.
+      • Cirugías mayores u oncológicas (tipo de resección, márgenes, ganglios examinados/comprometidos).
+      • Inicio, cambio de esquema o finalización de tratamientos sistémicos (Quimioterapia, Inmunoterapia, Terapia Dirigida, Hormonoterapia), especificando fármacos, dosis y número de ciclos.
+      • Radioterapia (sitio, dosis en Gy, fracciones).
+      • Progresión de enfermedad, recidiva, o respuesta objetiva (RC, RP, EE, PE).
+      • Toxicidades severas (Grado ≥ 3) o desenlaces críticos.
+    - isKey = false para: Controles de rutina estables, laboratorios generales normales, consultas de seguimiento sin cambios terapéuticos o trámites administrativos.
 
-    NIVEL DE DETALLE EN "note":
-    - Eventos con isKey = true: note DEBE ser detallado. Incluir hallazgos específicos, valores numéricos relevantes, estadio TNM, resultado histológico/inmunohistoquímico, biomarcadores, dosis, decisiones clínicas tomadas. MÁXIMO 400 caracteres.
-    - Eventos con isKey = false: note puede ser conciso, 1-2 líneas con el hallazgo principal. MÁXIMO 120 caracteres.
-
-    CAMPO "detail" (solo para isKey = true):
-    Si hay información adicional relevante que no cabe en "note" (ej: informe anatomopatológico completo, resultado detallado de imagen, esquema de quimioterapia con dosis, estadificación completa), incluirla en el campo "detail". Si no hay información adicional, omitir el campo.
+    NIVEL DE DETALLE EN "note" Y "detail":
+    - HITOS CLAVE (isKey = true): "note" DEBE SER MUY DETALLADO, EXHAUSTIVO Y RIGUROSO (incluir fechas exactas, esquema de tratamiento, dosis, estadios, resultados histológicos completos y conducta). Si la información es extensa, incluir extractos extendidos en el campo "detail".
+    - EVENTOS SECUNDARIOS (isKey = false): "note" DEBE SER MUY CONCISO (1 sola frase breve, máx 80-100 caracteres). NO recargar la línea de tiempo con detalles secundarios irrelevantes.
 
     ESTRUCTURA JSON REQUERIDA — devolver ÚNICAMENTE el array:
     [

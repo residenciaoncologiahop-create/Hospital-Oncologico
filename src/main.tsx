@@ -298,6 +298,33 @@ const App = ({ user }: AppProps) => {
         return [...existing, ...newItems];
     };
 
+    const deduplicateTimelineEvents = (eventsList: ClinicalEvent[]): ClinicalEvent[] => {
+        const seen = new Map<string, ClinicalEvent>();
+        for (const ev of eventsList) {
+            const normDate = (ev.date || 'S/F').trim();
+            const normCat = (ev.category || 'General').toLowerCase().trim();
+            const normNoteSnippet = (ev.note || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]/g, '')
+                .substring(0, 35);
+            const key = `${normDate}|${normCat}|${normNoteSnippet}`;
+
+            if (!seen.has(key)) {
+                seen.set(key, ev);
+            } else {
+                const existing = seen.get(key)!;
+                const existingScore = (existing.isKey ? 10 : 0) + (existing.note?.length || 0) + (existing.detail?.length || 0);
+                const newScore = (ev.isKey ? 10 : 0) + (ev.note?.length || 0) + (ev.detail?.length || 0);
+                if (newScore > existingScore) {
+                    seen.set(key, ev);
+                }
+            }
+        }
+        return Array.from(seen.values());
+    };
+
     const handleProcessDocuments = async () => {
         if (!historyText && historyFiles.length === 0) return;
         isProcessingRef.current = true;
@@ -320,11 +347,7 @@ const App = ({ user }: AppProps) => {
                 ...(e.detail ? { detail: e.detail } : {}),
             }));
             const combinedTimeline = sortTimeline(
-                deduplicateByKey(
-                    timeline || [],
-                    events,
-                    e => `${e.date}|${e.category}|${e.note.substring(0, 50)}`
-                )
+                deduplicateTimelineEvents([...(timeline || []), ...events])
             );
             setTimeline(combinedTimeline);
 
