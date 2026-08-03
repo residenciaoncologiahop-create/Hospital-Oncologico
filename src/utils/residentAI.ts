@@ -150,107 +150,122 @@ export const generateResidentClinicalSummary = async (text: string, files: FileD
     }
 };
 
-// 2. PLAN DE SEGUIMIENTO
+// 2. PLAN DE SEGUIMIENTO Y VIGILANCIA CLÍNICA ACCIONABLE
 export const generateFollowUpPlan = async (text: string, files: FileData[]) => {
     try {
         const guideline = findNCCNGuideline(text);
+        const today = new Date().toLocaleDateString('es-AR');
 
-        let guidelineContext: string;
-        let guidelineInstruction: string;
-
+        let guidelineContext = '';
         if (guideline) {
             guidelineContext = `
 === GUÍA NCCN DE REFERENCIA OBLIGATORIA ===
 Patología: ${guideline.pathology}
 Fuente: ${guideline.source}
-
-INTENCIÓN DEL SEGUIMIENTO:
-${guideline.intention}
-
-CRONOGRAMA DE CONTROLES:
-${guideline.schedule}
-
-IMÁGENES RECOMENDADAS:
-${guideline.imaging}
-
-LABORATORIOS:
-${guideline.labs}
-
-SIGNOS DE ALARMA:
-${guideline.alarmSigns}
-
-CONSIDERACIONES ESPECIALES:
-${guideline.specialConsiderations}
+Cronograma: ${guideline.schedule}
+Imágenes: ${guideline.imaging}
+Laboratorio/Marcadores: ${guideline.labs}
 ==========================================`;
-
-            guidelineInstruction = `
-INSTRUCCIÓN CRÍTICA: Debes redactar el plan de seguimiento usando EXCLUSIVAMENTE la guía NCCN
-provista arriba (${guideline.source}) como referencia para las recomendaciones generales.
-NO inventes ni uses recomendaciones de otras fuentes no citadas.
-Luego INDIVIDUALIZA cada sección según los datos específicos del paciente que aparecen en la
-historia clínica: estadio tumoral, tratamiento recibido, comorbilidades y estado funcional (ECOG).
-Menciona explícitamente la fuente guía al final del plan.`;
-        } else {
-            guidelineContext = '';
-            guidelineInstruction = `
-INSTRUCCIÓN CRÍTICA: No se encontró una guía NCCN específica para el diagnóstico de este
-paciente en la base de datos interna. Redacta el plan basándote en tu conocimiento clínico
-actualizado e indica EXPLÍCITAMENTE en el texto la fuente bibliográfica de cada recomendación
-(ej. NCCN, ESMO, ASCO, guías nacionales) para que el equipo tratante pueda verificarla.`;
         }
 
         const prompt = `
-            ACTÚA COMO: Oncólogo Clínico experto en guías internacionales de práctica clínica.
-            TAREA: Redactar Plan de Seguimiento Oncológico basado en evidencia.
+            ACTÚA COMO: Oncólogo Clínico experto elaborando un PLAN DE VIGILANCIA CLÍNICA, CONCRETO Y ACCIONABLE según guías NCCN vigentes.
+            HOY ES: ${today}.
 
             ${guidelineContext}
 
-            ${guidelineInstruction}
+            OBJETIVO PRINCIPAL:
+            Construir un plan de vigilancia clínico, concreto y accionable para la toma de decisiones asistenciales durante la consulta.
+            Responde principalmente a la pregunta: "¿Qué estudios necesita este paciente, cuándo corresponden y con qué frecuencia deben realizarse según NCCN?".
 
-            ${AUDIT_STYLE_INSTRUCTIONS}
+            REGLA DE RAZONAMIENTO PREVIO (Resumir explícitamente al inicio):
+            Identificar automáticamente a partir de la historia y línea de tiempo:
+            - Diagnóstico principal y subtipo histológico / inmunohistoquímica.
+            - Sitio primario y estadio TNM actual.
+            - Estado de la enfermedad (Libre de enfermedad / NED, Respuesta Completa, Respuesta Parcial, Enfermedad Estable, Progresión, etc.).
+            - Tratamiento recibido y tratamiento activo actual.
+            - Tiempo transcurrido desde cirugía o finalización de tratamiento curativo.
+            - Fecha de última consulta, última TC/RMN/PET y últimos laboratorios/marcadores.
+            - Situaciones especiales (Port-a-cath, ostomías, hormonoterapia prolongada, etc.).
+            * Si algún dato no puede determinarse con certeza, indícalo explícitamente como "Dato no documentado (requiere confirmación)".
 
-            ESTRUCTURA HTML REQUERIDA (SIN NUMERALES EN TÍTULOS):
+            CONSTRUCCIÓN DEL PLAN DE VIGILANCIA (TABLA ESTRUCTURADA):
+            Genera una TABLA ESTRUCTURADA con las siguientes columnas exactas:
+            1. Estudio / Control
+            2. Última Fecha Documentada
+            3. Próxima Fecha Sugerida (CÁLCULO INTELIGENTE de fecha exacta o mes/año usando la cronología y fecha de hoy ${today})
+            4. Frecuencia Posterior (según ventana de tiempo 0-2 años, 3-5 años o >5 años)
+            5. Motivo Clínico y Fundamento NCCN (breve explicación de 1 frase del por qué)
 
-            <div class="space-y-4 font-sans text-gray-800 text-sm">
+            ESTUDIOS A INCLUIR (solamente los indicados por NCCN para el tumor y escenario específico):
+            - Consulta Oncológica
+            - TC de Tórax / Abdomen / Pelvis
+            - RMN (ej: SNC o Pelvis si corresponde)
+            - Laboratorio Clínico General (función renal/hepática/hemograma)
+            - Marcadores Tumorales (ej: CEA, CA 19-9, CA 125, PSA, etc. ÚNICAMENTE si indicados por NCCN)
+            - Estudios endoscópicos / mamografía / ecografía (según patología)
 
-                <div class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
-                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b pb-1">Objetivo del Seguimiento</h3>
-                    <p class="mb-2 leading-relaxed text-gray-700">
-                        El seguimiento se orienta con intención <strong class="font-bold text-gray-900">[Curativa/Paliativa/Control]</strong>, priorizando [objetivos individualizados según estadio y tratamiento del paciente].
-                    </p>
+            REGLAS ESTRICTAS DE CÁLCULO Y ADAPTACIÓN:
+            1. CÁLCULO INTELIGENTE DE FECHAS: Si la cirugía fue 15/04/2025 y corresponde TC cada 6 meses, y la última fue 12/02/2026, calcula la fecha o mes de la próxima TC ("Agosto 2026 - Corresponde realizar"). Utiliza la fecha actual (${today}) como referencia.
+            2. ADAPTACIÓN POR TIEMPO DE SEGUIMIENTO:
+               - 0–2 años: Controles más frecuentes.
+               - 3–5 años: Reducir frecuencia.
+               - >5 años: Seguimiento anual cuando corresponda.
+            3. ADAPTACIÓN SEGÚN ESCENARIO CLÍNICO: Diferenciar si es seguimiento curativo post-tratamiento, enfermedad metastásica en tratamiento activo, enfermedad estable, watch & wait o cuidados paliativos.
+            4. PRIORIZAR LO ÚTIL: NO solicitar PET/TC o marcadores innecesarios si las guías NCCN no los indican de rutina para ese tumor y situación.
+
+            FORMATO DE SALIDA:
+            Devuelve ÚNICAMENTE HTML puro en un <div> contenedor con estilos Tailwind CSS. Sin bloques markdown \`\`\`html.
+
+            ESTRUCTURA HTML DE SALIDA:
+            <div class="space-y-5 font-sans text-gray-800 text-xs">
+                <!-- Alertas de datos faltantes (si aplica) -->
+
+                <!-- Resumen de Razonamiento Clínico -->
+                <div class="bg-blue-50/70 p-4 rounded-xl border border-blue-100">
+                    <h3 class="text-xs font-black text-blue-900 uppercase tracking-widest mb-2">Perfil y Escenario Clínico del Paciente</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px]">
+                        <div><span class="font-bold text-blue-700">Diagnóstico:</span> [Diagnóstico]</div>
+                        <div><span class="font-bold text-blue-700">Estadio:</span> [Estadio]</div>
+                        <div><span class="font-bold text-blue-700">Estado Actual:</span> [NED / Activa / PR / EP]</div>
+                        <div><span class="font-bold text-blue-700">Tratamiento Activo:</span> [Fármaco / Ninguno]</div>
+                        <div><span class="font-bold text-blue-700">Tiempo de Seguimiento:</span> [Meses / Años]</div>
+                        <div><span class="font-bold text-blue-700">Escenario:</span> [Curativo / Avanzado]</div>
+                    </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
-                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b pb-1">Cronograma de Controles</h3>
-                    <p class="mb-2 leading-relaxed text-gray-700">
-                        Según la guía de referencia y las características del paciente, se propone control clínico con frecuencia de <strong class="font-bold text-gray-900">[Frecuencia individualizada]</strong> durante [Tiempo].
-                    </p>
+                <!-- Tabla del Plan de Vigilancia -->
+                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                        <h3 class="text-xs font-black text-gray-700 uppercase tracking-widest">Cronograma de Vigilancia Oncológica (NCCN)</h3>
+                        <span class="text-[10px] text-gray-400 font-bold">Hoy: ${today}</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-gray-100/70 text-gray-500 uppercase text-[9px] font-black tracking-wider border-b">
+                                <tr>
+                                    <th class="py-2.5 px-3">Estudio / Control</th>
+                                    <th class="py-2.5 px-3">Último Realizado</th>
+                                    <th class="py-2.5 px-3">Próxima Fecha Sugerida</th>
+                                    <th class="py-2.5 px-3">Frecuencia Posterior</th>
+                                    <th class="py-2.5 px-3">Motivo y Fundamento NCCN</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                ...
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
-                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b pb-1">Solicitud de Estudios</h3>
-                    <p class="mb-2 leading-relaxed text-gray-700">
-                        Respecto a imágenes, se solicita <strong class="font-bold text-gray-900">[Tipo de estudio con periodicidad]</strong> según guía. En laboratorio monitorear [Marcadores y función individualizados].
-                    </p>
+                <!-- Pautas de Alarma y Consideraciones Especiales -->
+                <div class="bg-amber-50/60 p-3.5 rounded-xl border border-amber-100">
+                    <h4 class="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Pautas de Alarma & Consideraciones Especiales</h4>
+                    <p class="text-amber-900 text-[11px] leading-relaxed">...</p>
                 </div>
-
-                <div class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
-                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b pb-1">Pautas de Alarma</h3>
-                    <p class="mb-2 leading-relaxed text-gray-700">
-                        Instruir al paciente a consultar inmediatamente ante la aparición de [síntomas específicos de recaída o toxicidad según patología].
-                    </p>
-                </div>
-
-                <div class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
-                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b pb-1">Consideraciones Especiales</h3>
-                    <p class="mb-0 leading-relaxed text-gray-700">
-                        [Consideraciones individualizadas: comorbilidades, toxicidades del tratamiento recibido, estado funcional, necesidades de soporte]. <strong class="font-bold text-gray-900">Fuente:</strong> [Citar guía utilizada].
-                    </p>
-                </div>
-
             </div>
 
-            HISTORIA CLÍNICA DEL PACIENTE:
+            HISTORIA CLÍNICA Y EVENTOS DEL PACIENTE:
             "${text}"
         `;
 
