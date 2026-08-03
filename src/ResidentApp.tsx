@@ -177,21 +177,36 @@ const ResidentApp = () => {
     }
   };
 
+  const getEffectiveClinicalText = () => {
+    if (!selectedPatient) return '';
+    const timelineContext = selectedPatient.timeline && selectedPatient.timeline.length > 0
+      ? `LÍNEA DE TIEMPO DE EVENTOS DEL PACIENTE:\n` +
+        selectedPatient.timeline.map((e: any) => `- [${e.date}] (${e.category || 'Evento'} - ${e.professional || 'Médico'}): ${e.note}${e.detail ? ` | ${e.detail}` : ''}${e.isKey ? ' (HITO CLAVE)' : ''}`).join('\n')
+      : '';
+    return [selectedPatient.historyText, timelineContext].filter(Boolean).join('\n\n');
+  };
+
   const runReportGeneration = async (title: string, generatorFn: (text: string, files: any[]) => Promise<string>) => {
     if (!selectedPatient) return;
-    if (!selectedPatient.historyText && selectedPatient.files.length === 0) { 
-      alert("Sin datos para procesar."); 
+    const effectiveText = getEffectiveClinicalText();
+    if (!effectiveText && selectedPatient.files.length === 0) { 
+      alert("Sin datos ni eventos para procesar."); 
       return; 
     }
     setReportModal({ isOpen: true, title, content: null, isLoading: true });
-    const htmlResult = await generatorFn(selectedPatient.historyText, selectedPatient.files);
+    const htmlResult = await generatorFn(effectiveText, selectedPatient.files);
     setReportModal({ isOpen: true, title, content: htmlResult, isLoading: false });
   };
 
   const handleRunAudit = async () => {
     if (!selectedPatient) return;
+    const effectiveText = getEffectiveClinicalText();
+    if (!effectiveText && selectedPatient.files.length === 0) {
+      alert("Sin datos ni eventos para auditar.");
+      return;
+    }
     setShowAuditModal(true); setIsAuditing(true); setAuditContent(null);
-    const result = await generateOncologyVerification(selectedPatient.historyText, selectedPatient.files);
+    const result = await generateOncologyVerification(effectiveText, selectedPatient.files);
     setAuditContent(result); setIsAuditing(false);
   };
 
@@ -278,7 +293,7 @@ const ResidentApp = () => {
                   <div className="space-y-6">
                     <FileUploader label="Documentos del Caso" files={selectedPatient.files} setFiles={(newFiles) => updateCurrentPatient({ files: newFiles })} />
                     
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <button 
                         onClick={handleRunAudit} disabled={isAuditing}
                         className="flex flex-col items-center justify-center gap-1 bg-gray-800 text-white hover:bg-gray-700 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all shadow-lg"
@@ -296,12 +311,6 @@ const ResidentApp = () => {
                         className="flex flex-col items-center justify-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-emerald-100"
                       >
                         <CalendarHeart size={16} className="mb-1" /> Seguimiento
-                      </button>
-                      <button 
-                        onClick={() => runReportGeneration('Presentación Comité de Tumores', generateTumorBoardAnalysis)} 
-                        className="flex flex-col items-center justify-center gap-1 bg-amber-50 text-amber-700 hover:bg-amber-100 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-amber-100"
-                      >
-                        <Users size={16} className="mb-1" /> Comité
                       </button>
                     </div>
 

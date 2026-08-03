@@ -503,14 +503,23 @@ const App = ({ user }: AppProps) => {
         }
     };
 
+    const getEffectiveClinicalText = () => {
+        const timelineContext = timeline && timeline.length > 0
+            ? `LÍNEA DE TIEMPO DE EVENTOS DEL PACIENTE:\n` +
+              timeline.map((e: any) => `- [${e.date}] (${e.category || 'Evento'} - ${e.professional || 'Médico'}): ${e.note}${e.detail ? ` | ${e.detail}` : ''}${e.isKey ? ' (HITO CLAVE)' : ''}`).join('\n')
+            : '';
+        return [historyText, timelineContext].filter(Boolean).join('\n\n');
+    };
+
     const handleRunClinicalAudit = async () => {
-        if (!selectedPatientId || (!historyText && historyFiles.length === 0)) {
-            alert("No hay documentación clínica para auditar.");
+        const effectiveText = getEffectiveClinicalText();
+        if (!selectedPatientId || (!effectiveText && historyFiles.length === 0)) {
+            alert("No hay información clínica ni eventos en la línea de tiempo para auditar.");
             return;
         }
         setShowAuditModal(true); setIsAuditing(true); setAuditContent(null);
         try {
-            const result = await generateClinicalAuditSecure(historyText, historyFiles);
+            const result = await generateClinicalAuditSecure(effectiveText, historyFiles);
             setAuditContent(result);
             logAction("RUN_CLINICAL_AUDIT", selectedPatientId, doctorName);
         } catch {
@@ -522,11 +531,11 @@ const App = ({ user }: AppProps) => {
 
     const runReportGeneration = async (title: string, generatorFn: (text: string, files: FileData[]) => Promise<string>) => {
         if (!selectedPatientId) return;
-        const p = patients.find(p => p.id === selectedPatientId);
-        if (!p || (!historyText && historyFiles.length === 0)) { alert("Sin documentación para procesar."); return; }
+        const effectiveText = getEffectiveClinicalText();
+        if (!effectiveText && historyFiles.length === 0) { alert("Sin información clínica ni eventos para procesar."); return; }
         setReportModal({ isOpen: true, title, content: null, isLoading: true, generatorFn, accumulatedCorrections: '' });
         try {
-            const result = await generatorFn(historyText, historyFiles);
+            const result = await generatorFn(effectiveText, historyFiles);
             setReportModal(prev => ({ ...prev, content: result, isLoading: false }));
         } catch {
             setReportModal(prev => ({ ...prev, content: `<div class="p-4 text-red-600 bg-red-50 rounded-lg">Error al generar el informe.</div>`, isLoading: false }));
@@ -538,7 +547,8 @@ const App = ({ user }: AppProps) => {
         const newCorrections = reportModal.accumulatedCorrections
             ? `${reportModal.accumulatedCorrections}\n- ${correction}`
             : `- ${correction}`;
-        const contextWithCorrections = historyText +
+        const effectiveText = getEffectiveClinicalText();
+        const contextWithCorrections = effectiveText +
             `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar todas en el nuevo informe):\n${newCorrections}`;
         setReportModal(prev => ({ ...prev, isLoading: true, accumulatedCorrections: newCorrections }));
         try {
@@ -856,7 +866,7 @@ const App = ({ user }: AppProps) => {
                                             </section>
 
                                             <section className="space-y-4 pt-4 border-t border-gray-100">
-                                                <div className="grid grid-cols-4 gap-2">
+                                                <div className="grid grid-cols-3 gap-2">
                                                     <button onClick={handleRunClinicalAudit} disabled={isAuditing} className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm">
                                                         <ClipboardCheck size={16} className="text-blue-600 mb-1"/> Control Calidad
                                                     </button>
@@ -865,9 +875,6 @@ const App = ({ user }: AppProps) => {
                                                     </button>
                                                     <button onClick={() => runReportGeneration('Plan de Seguimiento', generateFollowUpPlan)} className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm">
                                                         <Calendar size={16} className="text-emerald-600 mb-1"/> Seguimiento
-                                                    </button>
-                                                    <button onClick={() => runReportGeneration('Presentación Comité de Tumores', generateTumorBoardAnalysis)} className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm">
-                                                        <Presentation size={16} className="text-amber-600 mb-1"/> Comité
                                                     </button>
                                                 </div>
                                                 <FileUploader label="Guías NCCN / Protocolos" files={guidelineFiles} setFiles={setGuidelineFiles} accept=".pdf" onClearAll={() => setGuidelineFiles([])} clearAllLabel="Limpiar guías"/>
