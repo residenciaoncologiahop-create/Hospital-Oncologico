@@ -60,7 +60,7 @@ const sumMeasurements = (lesions: TargetLesion[]) =>
   lesions.reduce((acc, l) => acc + (l.measurement || 0), 0);
 
 // ── Gráfico de evolución de lesiones ──────────────────────────────────
-const CLINICAL_COLORS = ['#2563eb','#dc2626','#059669','#d97706','#7c3aed','#0891b2','#c2410c','#4d7c0f'];
+const CLINICAL_COLORS = ['#4F7EA8','#dc2626','#059669','#d97706','#7c3aed','#0891b2','#c2410c','#4d7c0f'];
 
 const LesionEvolutionChart = ({ studies }: { studies: ImagingStudy[] }) => {
   const allLocations = Array.from(new Set(studies.flatMap(s => s.targetLesions.map(l => l.location))));

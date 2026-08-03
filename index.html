@@ -5,11 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OncoGuide AI - Asistente Clínico</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        blue: {
+                            50: '#EAF3FA',
+                            100: '#D7E5F1',
+                            200: '#B5CEE3',
+                            300: '#8FB4D5',
+                            400: '#6B98C3',
+                            500: '#4F7EA8',
+                            600: '#3F6E98',
+                            700: '#356288',
+                            800: '#284B68',
+                            900: '#1D364B',
+                            950: '#11212F'
+                        },
+                        indigo: {
+                            50: '#EAF3FA',
+                            100: '#D7E5F1',
+                            200: '#B5CEE3',
+                            300: '#8FB4D5',
+                            400: '#6B98C3',
+                            500: '#4F7EA8',
+                            600: '#3F6E98',
+                            700: '#356288',
+                            800: '#284B68',
+                            900: '#1D364B',
+                            950: '#11212F'
+                        },
+                        medical: {
+                            primary: '#4F7EA8',
+                            hover: '#3F6E98',
+                            active: '#356288',
+                            bg: '#EAF3FA',
+                            border: '#D7E5F1',
+                            textMuted: '#5F7388'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
+            background-color: #f8fafc;
+            color: #334155;
         }
         /* Custom scrollbar for chat */
         .scrollbar-hide::-webkit-scrollbar {

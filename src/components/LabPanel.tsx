@@ -152,9 +152,9 @@ const LabPanel: React.FC<Props> = ({ results, onAddManual, isResident = false })
               <Line 
                 type="monotone" 
                 dataKey="value" 
-                stroke="#4f46e5" 
+                stroke="#4F7EA8" 
                 strokeWidth={3} 
-                dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} 
+                dot={{ r: 4, fill: '#4F7EA8', strokeWidth: 2, stroke: '#fff' }} 
                 activeDot={{ r: 6 }} 
                 animationDuration={1000}
               />
