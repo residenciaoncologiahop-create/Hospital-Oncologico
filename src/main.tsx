@@ -19,7 +19,7 @@ import {
     Upload, Stethoscope, Activity, Trash2, Save, Menu, X, Clock,
     List, File, Loader2, AlertCircle, Info, Terminal, ChevronDown,
     Calendar, PenTool, FileOutput, FileDown, ClipboardCheck, Presentation,
-    PanelLeftClose, PanelLeftOpen, FileInput, Image
+    PanelLeftClose, PanelLeftOpen, FileInput, Image, Maximize2, Minimize2
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -185,6 +185,7 @@ const App = ({ user }: AppProps) => {
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [chatInput, setChatInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
+    const [isChatFullScreen, setIsChatFullScreen] = useState(false);
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -989,7 +990,7 @@ const App = ({ user }: AppProps) => {
                             {showChat && (
                                 <div className="fixed inset-0 z-50 flex justify-end">
                                     <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm" onClick={closeChat}/>
-                                    <div className={`relative w-full max-w-lg bg-gray-50 flex flex-col h-full shadow-2xl ${closingChat ? 'animate-out slide-out-to-right duration-300' : 'animate-in slide-in-from-right duration-300'}`}>
+                                    <div className={`relative bg-gray-50 flex flex-col h-full shadow-2xl transition-all duration-300 ${isChatFullScreen ? 'w-full max-w-full' : 'w-full max-w-lg'} ${closingChat ? 'animate-out slide-out-to-right duration-300' : 'animate-in slide-in-from-right duration-300'}`}>
                                         <div className="flex items-center justify-between px-6 py-4 bg-white border-b">
                                             <div className="flex items-center gap-2.5">
                                                 <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center shadow-md shadow-blue-100">
@@ -1000,9 +1001,18 @@ const App = ({ user }: AppProps) => {
                                                     <p className="text-[9px] text-gray-400 font-medium">HC-{selP.hcNumber} · {selP.diagnosis}</p>
                                                 </div>
                                             </div>
-                                            <button onClick={closeChat} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all">
-                                                <X size={16}/>
-                                            </button>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={() => setIsChatFullScreen(prev => !prev)}
+                                                    className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+                                                    title={isChatFullScreen ? "Restaurar tamaño normal" : "Pantalla completa"}
+                                                >
+                                                    {isChatFullScreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
+                                                </button>
+                                                <button onClick={closeChat} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all" title="Cerrar">
+                                                    <X size={16}/>
+                                                </button>
+                                            </div>
                                         </div>
 
                                         {lastError && (

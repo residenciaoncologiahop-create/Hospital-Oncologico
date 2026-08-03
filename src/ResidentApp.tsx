@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Activity, Plus, Search, Trash2, LogOut, Menu, X, 
   FileText, Clock, FileOutput, GraduationCap, Calculator, Pill, 
-  Stethoscope, User, ChevronRight, MessageSquare, Loader2, AlertCircle, Sparkles, ClipboardList, ShieldCheck, Users, CalendarHeart, Info
+  Stethoscope, User, ChevronRight, MessageSquare, Loader2, AlertCircle, Sparkles, ClipboardList, ShieldCheck, Users, CalendarHeart, Info, Maximize2, Minimize2
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -62,6 +62,7 @@ const ResidentApp = () => {
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [isChatFullScreen, setIsChatFullScreen] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -384,7 +385,7 @@ const ResidentApp = () => {
             {showChat && !isLearningMode && (
               <div className="fixed inset-0 z-50 flex justify-end">
                 <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm" onClick={() => setShowChat(false)}/>
-                <div className="relative w-full max-w-lg bg-gray-50 flex flex-col h-full shadow-2xl">
+                <div className={`relative bg-gray-50 flex flex-col h-full shadow-2xl transition-all duration-300 ${isChatFullScreen ? 'w-full max-w-full' : 'w-full max-w-lg'}`}>
                   {/* Header */}
                   <div className="flex items-center justify-between px-6 py-4 bg-white border-b">
                     <div className="flex items-center gap-2.5">
@@ -396,9 +397,18 @@ const ResidentApp = () => {
                         <p className="text-[9px] text-gray-400 font-medium">{selectedPatient.name} · {selectedPatient.diagnosis}</p>
                       </div>
                     </div>
-                    <button onClick={() => setShowChat(false)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all">
-                      <X size={16}/>
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setIsChatFullScreen(prev => !prev)}
+                        className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+                        title={isChatFullScreen ? "Restaurar tamaño normal" : "Pantalla completa"}
+                      >
+                        {isChatFullScreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
+                      </button>
+                      <button onClick={() => setShowChat(false)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all" title="Cerrar">
+                        <X size={16}/>
+                      </button>
+                    </div>
                   </div>
                   {/* Mensajes */}
                   <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
