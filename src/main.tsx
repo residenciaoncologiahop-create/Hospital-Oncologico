@@ -972,7 +972,7 @@ const App = ({ user }: AppProps) => {
                                     {/* IMAGING */}
                                     {activeTab === 'imaging' && (
                                         <div className="h-full p-6 overflow-y-auto">
-                                            <ImagingPanel studies={imagingStudies} onStudiesChange={handleImagingStudiesChange}/>
+                                            <ImagingPanel studies={imagingStudies} onStudiesChange={handleImagingStudiesChange} patientHistoryText={getEffectiveClinicalText()}/>
                                         </div>
                                     )}
                                 </div>

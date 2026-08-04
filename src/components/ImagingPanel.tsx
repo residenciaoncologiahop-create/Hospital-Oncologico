@@ -34,6 +34,7 @@ interface FileData { name: string; type: string; data: string; }
 interface ImagingPanelProps {
   studies: ImagingStudy[];
   onStudiesChange: (studies: ImagingStudy[]) => void;
+  patientHistoryText?: string;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -242,8 +243,229 @@ const LesionEvolutionChart = ({ studies }: { studies: ImagingStudy[] }) => {
   );
 };
 
+// ── Evaluación Automática RECIST / iRECIST ──────────────────────────────
+const IMMUNOTHERAPY_KEYWORDS = [
+  'inmunoterapia', 'pembrolizumab', 'keytruda', 'nivolumab', 'opdivo',
+  'atezolizumab', 'tecentriq', 'durvalumab', 'imfinzi', 'ipilimumab', 'yervoy',
+  'anti-pd1', 'anti-pdl1', 'anti-ctla4', 'checkpoint', 'pd-1', 'pd-l1', 'ctla-4'
+];
+
+export interface RecistResult {
+  criterion: 'RECIST 1.1' | 'iRECIST';
+  criterionNote?: string;
+  status: string;
+  badgeColor: 'green' | 'yellow' | 'red' | 'gray';
+  confidence: 'Alta' | 'Media' | 'Baja';
+  explanation: string;
+  insufficientData?: boolean;
+}
+
+export const evaluateRecistResponse = (
+  studies: ImagingStudy[],
+  patientHistoryText?: string
+): RecistResult => {
+  if (!studies || studies.length === 0) {
+    return {
+      criterion: 'RECIST 1.1',
+      status: 'Información insuficiente para sugerir una evaluación RECIST',
+      badgeColor: 'gray',
+      confidence: 'Baja',
+      explanation: 'No existen estudios radiológicos registrados en la historia del paciente.',
+      insufficientData: true
+    };
+  }
+
+  // Detect Immunotherapy in patient history or study details
+  const allText = [
+    patientHistoryText || '',
+    ...studies.map(s => `${s.treatment || ''} ${s.bodyRegion || ''}`)
+  ].join(' ').toLowerCase();
+
+  const isImmuno = IMMUNOTHERAPY_KEYWORDS.some(kw => allText.includes(kw));
+  const criterion = isImmuno ? 'iRECIST' : 'RECIST 1.1';
+  const criterionNote = isImmuno ? 'Inmunoterapia' : 'Criterio estándar';
+
+  const sorted = [...studies].sort((a, b) => parseDate(a.date) - parseDate(b.date));
+  const latest = sorted[sorted.length - 1];
+  const baseline = sorted[0];
+
+  const hasTargetLesions = sorted.some(s => s.targetLesions.length > 0);
+  const hasNonTargetLesions = sorted.some(s => s.nonTargetLesions.length > 0);
+
+  // Confidence calculation
+  let confidence: 'Alta' | 'Media' | 'Baja' = 'Alta';
+  if (sorted.length < 2) confidence = 'Media';
+  if (!hasTargetLesions) confidence = 'Media';
+  if (sorted.length === 1 && !hasTargetLesions && !hasNonTargetLesions) confidence = 'Baja';
+
+  // Check if data is insufficient for evaluation
+  if (!hasTargetLesions && !hasNonTargetLesions && !latest.newLesions) {
+    return {
+      criterion,
+      criterionNote,
+      status: 'Información insuficiente para sugerir una evaluación RECIST',
+      badgeColor: 'gray',
+      confidence: 'Baja',
+      explanation: 'Los informes radiológicos disponibles no contienen mediciones cuantitativas de lesiones ni descripción detallada de respuesta.',
+      insufficientData: true
+    };
+  }
+
+  const baselineSum = sumMeasurements(baseline.targetLesions);
+  const latestSum = sumMeasurements(latest.targetLesions);
+  const anyNewLesions = latest.newLesions || sorted.some(s => s.newLesions);
+
+  // Baseline study only
+  if (sorted.length === 1) {
+    return {
+      criterion,
+      criterionNote,
+      status: 'Estudio Basal Registrado',
+      badgeColor: 'gray',
+      confidence: 'Media',
+      explanation: `Estudio inicial (${latest.date}) registrado como línea de base. Se requiere un estudio de seguimiento para clasificar la respuesta.`
+    };
+  }
+
+  // Check for new lesions
+  if (anyNewLesions) {
+    return {
+      criterion,
+      criterionNote,
+      status: isImmuno ? '🔴 iUPD (Progresión No Confirmada)' : '🔴 Progresión de enfermedad (PD)',
+      badgeColor: 'red',
+      confidence,
+      explanation: isImmuno
+        ? 'Aparición de nuevas lesiones respecto al estudio previo/basal. En iRECIST se clasifica como iUPD a confirmar en 4-8 semanas.'
+        : 'Progresión de enfermedad por aparición de nuevas lesiones observadas en los estudios radiológicos.'
+    };
+  }
+
+  // Check Target Lesions
+  if (hasTargetLesions && baselineSum > 0) {
+    const pctChange = ((latestSum - baselineSum) / baselineSum) * 100;
+
+    if (latestSum === 0) {
+      return {
+        criterion,
+        criterionNote,
+        status: isImmuno ? '🟢 Respuesta Completa (iCR)' : '🟢 Respuesta Completa (CR)',
+        badgeColor: 'green',
+        confidence,
+        explanation: 'Desaparición total de todas las lesiones diana registradas sin aparición de nuevas lesiones.'
+      };
+    }
+
+    if (pctChange <= -30) {
+      return {
+        criterion,
+        criterionNote,
+        status: isImmuno ? '🟢 Respuesta Parcial (iPR)' : '🟢 Respuesta Parcial (PR)',
+        badgeColor: 'green',
+        confidence,
+        explanation: `Respuesta parcial. Disminución del tamaño de las lesiones diana (${Math.abs(pctChange).toFixed(0)}% respecto al baseline) sin aparición de nuevas lesiones.`
+      };
+    }
+
+    if (pctChange >= 20 && (latestSum - baselineSum) >= 5) {
+      return {
+        criterion,
+        criterionNote,
+        status: isImmuno ? '🔴 iUPD (Progresión No Confirmada)' : '🔴 Progresión de enfermedad (PD)',
+        badgeColor: 'red',
+        confidence,
+        explanation: `Progresión de enfermedad. Aumento del ${pctChange.toFixed(0)}% en la suma de diámetros diana respecto a la línea de base.`
+      };
+    }
+
+    return {
+      criterion,
+      criterionNote,
+      status: isImmuno ? '🟡 Enfermedad Estable (iSD)' : '🟡 Enfermedad Estable (SD)',
+      badgeColor: 'yellow',
+      confidence,
+      explanation: `Enfermedad estable. Lesiones pulmonares, hepáticas u órganos diana sin cambios significativos respecto al estudio previo.`
+    };
+  }
+
+  // Check Non-Target Lesions
+  const nonTargetText = latest.nonTargetLesions.map(l => l.status).join(' ').toLowerCase();
+  if (nonTargetText.includes('progreso') || nonTargetText.includes('progresion') || nonTargetText.includes('aumento')) {
+    return {
+      criterion,
+      criterionNote,
+      status: isImmuno ? '🔴 iUPD (Progresión No Confirmada)' : '🔴 Progresión de enfermedad (PD)',
+      badgeColor: 'red',
+      confidence: 'Media',
+      explanation: 'Progresión inequívoca observada en el comportamiento de las lesiones no diana.'
+    };
+  }
+
+  return {
+    criterion,
+    criterionNote,
+    status: isImmuno ? '🟡 Enfermedad Estable (iSD)' : '🟡 Enfermedad Estable (SD)',
+    badgeColor: 'yellow',
+    confidence: 'Media',
+    explanation: 'Lesiones registradas estables sin signos de progresión ni aparición de nuevas metástasis.'
+  };
+};
+
+const ResponseEvaluationCard = ({
+  studies,
+  patientHistoryText
+}: {
+  studies: ImagingStudy[];
+  patientHistoryText?: string;
+}) => {
+  if (!studies || studies.length === 0) return null;
+
+  const evaluation = evaluateRecistResponse(studies, patientHistoryText);
+
+  const BADGE_STYLES: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+    green:  { bg: 'bg-emerald-50/90', text: 'text-emerald-900', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+    yellow: { bg: 'bg-amber-50/90',   text: 'text-amber-900',   border: 'border-amber-200',   dot: 'bg-amber-500' },
+    red:    { bg: 'bg-rose-50/90',    text: 'text-rose-900',    border: 'border-rose-200',    dot: 'bg-rose-500' },
+    gray:   { bg: 'bg-slate-50',      text: 'text-slate-800',   border: 'border-slate-200',   dot: 'bg-slate-400' }
+  };
+
+  const style = BADGE_STYLES[evaluation.badgeColor] || BADGE_STYLES.gray;
+
+  return (
+    <div className={`p-4 rounded-2xl border shadow-sm transition-all mb-4 ${style.bg} ${style.border}`}>
+      <div className="flex items-center justify-between gap-2 mb-1.5 border-b border-black/5 pb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className={`w-2.5 h-2.5 rounded-full ${style.dot}`}/>
+          <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Evaluación de respuesta</h4>
+          <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/90 border border-slate-200 text-slate-600 shadow-2xs">
+            {evaluation.criterion} ({evaluation.criterionNote})
+          </span>
+        </div>
+        <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+          <span>Confianza:</span>
+          <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+            evaluation.confidence === 'Alta' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+            evaluation.confidence === 'Media' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-200 text-slate-700'
+          }`}>
+            {evaluation.confidence}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <div className={`text-xs font-black tracking-tight ${style.text}`}>
+          {evaluation.status}
+        </div>
+        <p className="text-[11px] text-slate-700 font-medium leading-relaxed">
+          {evaluation.explanation}
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // ── Componente principal ───────────────────────────────────────────────
-const ImagingPanel: React.FC<ImagingPanelProps> = ({ studies, onStudiesChange }) => {
+const ImagingPanel: React.FC<ImagingPanelProps> = ({ studies, onStudiesChange, patientHistoryText }) => {
 
   const [reportText, setReportText] = useState('');
   const [reportFiles, setReportFiles] = useState<FileData[]>([]);
@@ -403,6 +625,8 @@ const ImagingPanel: React.FC<ImagingPanelProps> = ({ studies, onStudiesChange })
       {/* ── Estudios registrados ───────────────────────────────── */}
       {studies.length > 0 && (
         <section className="space-y-4">
+          <ResponseEvaluationCard studies={studies} patientHistoryText={patientHistoryText} />
+
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2">
             Estudios Registrados — {studies.length} total
           </h3>
