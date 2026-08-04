@@ -487,3 +487,63 @@ NO incluyas nombres ni datos identificatorios.
   const res = await callGemini({ prompt });
   return res.text.replace(/```html|```/g, '').trim();
 };
+
+// ── Extracción de informe radiológico individual ─────────────────────────
+export const extractSingleImagingReportSecure = async (
+  text: string,
+  files: FileData[]
+): Promise<any[]> => {
+  if (!text && files.length === 0) return [];
+
+  const instructionText = `
+Sos un radiólogo oncólogo. Extraé datos estructurados de el/los informe(s) radiológico(s) proporcionado(s).
+REGLAS:
+
+1. Extraé TODOS los estudios presentes en el material (puede haber más de uno).
+2. Medidas SIEMPRE en milímetros (mm). Si viene en cm, convertí a mm.
+3. Fechas en DD/MM/YYYY.
+4. type: SOLO "TC" | "RMN" | "PET-TC" | "Ecografía".
+5. Para cada lesión diana: location anatómica precisa + measurement numérico en mm + lesionKey estable (snake_case, ej: "pulmon_lsd", "higado_seg_vi", "ganglio_mediastino").
+6. nonTargetLesions: location + status ("presente"|"ausente"|"aumentado"|"disminuido"|"estable").
+7. newLesions: true si el informe menciona lesiones nuevas respecto a estudio previo.
+8. treatment: esquema activo si se menciona, si no null.
+9. NO inventes medidas. Si no hay medición cuantitativa, dejá targetLesions vacío.
+10. NO incluyas nombres, DNI ni datos identificatorios.
+11. NO copies el informe completo; solo datos estructurados.
+
+SALIDA: ÚNICAMENTE array JSON:
+[
+  {
+    "type": "TC" | "RMN" | "PET-TC" | "Ecografía",
+    "date": "DD/MM/YYYY",
+    "bodyRegion": "string",
+    "treatment": "string|null",
+    "targetLesions": [
+      { "location": "string", "measurement": number, "lesionKey": "string" }
+    ],
+    "nonTargetLesions": [
+      { "location": "string", "status": "string" }
+    ],
+    "newLesions": boolean
+  }
+]
+  `;
+
+  const parts = buildParts(instructionText, []);
+  if (text) parts.push({ text: `Informe radiológico:\n${text}` });
+  files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+
+  const res = await callGemini({ parts, responseMimeType: "application/json" });
+
+  try {
+    const clean = res.text.replace(/```json|```/g, '').trim();
+    const start = clean.indexOf('[');
+    const end = clean.lastIndexOf(']');
+    if (start !== -1 && end !== -1) return JSON.parse(clean.substring(start, end + 1));
+    const parsed = JSON.parse(clean);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+

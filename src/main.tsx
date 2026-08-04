@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
+import ImagingPanel, { mergeImagingStudies, generateLesionKey } from './components/ImagingPanel';
 import ClinicalAuditModal from './components/ClinicalAuditModal';
 
 import { User } from 'firebase/auth';
@@ -373,21 +374,21 @@ const App = ({ user }: AppProps) => {
                 if (extractedImaging.length > 0) {
                     const currentImaging = patients.find(p => p.id === selectedPatientId)?.imagingStudies || [];
                     const newStudies: ImagingStudy[] = extractedImaging.map((d: any) => ({
-                        id: `img-${Date.now()}-${Math.random().toString(36).substr(2,5)}`,
+                        id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
                         type: d.type || 'TC',
                         date: d.date || 'S/F',
                         bodyRegion: d.bodyRegion || 'No especificado',
                         treatment: d.treatment || null,
-                        targetLesions: d.targetLesions || [],
+                        targetLesions: (d.targetLesions || []).map((l: any) => ({
+                            location: l.location || 'Lesión',
+                            measurement: Number(l.measurement) || 0,
+                            lesionKey: l.lesionKey || generateLesionKey(l.location || 'lesion')
+                        })),
                         nonTargetLesions: d.nonTargetLesions || [],
                         newLesions: !!d.newLesions,
                         extractedAt: Date.now(),
                     }));
-                    const combinedImaging = deduplicateByKey(
-                        currentImaging,
-                        newStudies,
-                        (s: ImagingStudy) => `${s.date}|${s.type}|${s.bodyRegion}`
-                    );
+                    const combinedImaging = mergeImagingStudies(currentImaging, newStudies);
                     setImagingStudies(combinedImaging);
                     updateData.imagingStudies = combinedImaging;
                 }
