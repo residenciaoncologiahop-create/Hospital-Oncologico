@@ -976,7 +976,7 @@ const App = ({ user }: AppProps) => {
                                                 studies={imagingStudies}
                                                 onStudiesChange={handleImagingStudiesChange}
                                                 patientHistoryText={getEffectiveClinicalText()}
-                                                timelineEvents={selectedPatient?.timeline || []}
+                                                timelineEvents={selP?.timeline || []}
                                             />
                                         </div>
                                     )}
