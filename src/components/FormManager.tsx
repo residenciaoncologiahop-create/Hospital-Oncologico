@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle, CheckCircle2, Map, Share2, RefreshCcw, Clock
+  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, AlertTriangle, CheckCircle2, Map, Share2, RefreshCcw, Clock, Plus, Trash2, HelpCircle, Check, Edit3, Pill, Sparkles, AlertCircle
 } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../utils/aiProxy';
@@ -25,13 +25,57 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     accumulatedCorrections: string;
   }>>({});
   const [showEsquemaModal, setShowEsquemaModal] = useState(false);
-const [esquemaData, setEsquemaData] = useState({
-  numero_ciclos: '', frecuencia_ciclos: '', tiempo_tratamiento: '',
-  fecha_inicio: '', medicamentos: '', dosis_m2: '',
-  dosis_total_ciclo: '', dias_admin: '', intervalo: ''
-});
-const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
-const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
+  const [esquemaData, setEsquemaData] = useState({
+    numero_ciclos: '', frecuencia_ciclos: '', tiempo_tratamiento: '',
+    fecha_inicio: '', medicamentos: '', dosis_m2: '',
+    dosis_total_ciclo: '', dias_admin: '', intervalo: ''
+  });
+  const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
+  const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
+
+  // PAMI State
+  const [showPamiDrugModal, setShowPamiDrugModal] = useState(false);
+  const [pamiDrugInput, setPamiDrugInput] = useState('');
+  const [showPamiReviewModal, setShowPamiReviewModal] = useState(false);
+  const [pamiFormData, setPamiFormData] = useState({
+    paciente_nombre_real: '',
+    paciente_fnac: '',
+    paciente_celular: '',
+    diagnostico_cie10: '',
+    histopatologico: '',
+    peso: '',
+    talla: '',
+    ecog: '',
+    estadio_inicial: '',
+    estadio_actual: '',
+    fecha_diagnostico_inicial: '',
+    linea_tratamiento: '',
+    antecedentes_qx: '',
+    antecedentes_radio: '',
+    laboratorio_formateado: '',
+    informe_clinico_detallado: '',
+    motivo_solicitud: 'Inicio',
+    tipo_tratamiento: 'Avanzado',
+    ciclos_planeados: '',
+    frecuencia_dias: '',
+    esquema_tratamiento_solicitado: '',
+    droga_1: '',
+    presentacion_1: '',
+    dosis_1: '',
+    duracion_dias_1: '',
+    droga_2: '',
+    presentacion_2: '',
+    dosis_2: '',
+    duracion_dias_2: '',
+    droga_3: '',
+    presentacion_3: '',
+    dosis_3: '',
+    duracion_dias_3: '',
+    droga_4: '',
+    presentacion_4: '',
+    dosis_4: '',
+    duracion_dias_4: '',
+  });
   
   const [showDocConfig, setShowDocConfig] = useState(false);
   const [doctorData, setDoctorData] = useState({
@@ -317,31 +361,42 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  // CAMBIO 4: extractPamiData recibe drugName
+  // --- AUTOMATIZACIÓN Y FLUJO AVANZADO PAMI ---
   const extractPamiData = async (drugName: string, correction?: string) => {
     const today = new Date().toLocaleDateString('es-AR');
     
     const promptText = `
-        Actúa como un ONCÓLOGO EXPERTO. Hoy es ${today}.
-        FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}. Completar droga_1 con este fármaco exacto.
-        OBJETIVO: Extraer datos para completar formulario PAMI oncológico.
+        Actúa como un MÉDICO ONCÓLOGO EXPERTO. Hoy es ${today}.
+        FÁRMACO O ESQUEMA SOLICITADO POR EL MÉDICO: "${drugName}".
+        OBJETIVO: Extraer y deducir de forma experta todos los datos requeridos para completar el formulario PAMI Oncológico oficial de provisión de medicamentos.
         IDIOMA: Todo en español.
         
-        REGLAS DE EXTRACCIÓN:
-        - fecha_diagnostico_inicial: DEDUCE OBLIGATORIAMENTE la fecha de diagnóstico analizando la fecha del primer estudio patológico, biopsia o consulta inicial en los eventos de la Línea de Tiempo o Historia Clínica (Formato DD/MM/AAAA).
-        - histopatologico: Resumen MUY CONCISO Y SINTÉTICO de la anatomía patológica e inmunohistoquímica (tipo tumoral, grado, RE, RP, HER2, Ki67). MÁXIMO 180-200 caracteres. ❌ NO explayarse en párrafos extensos.
-        - antecedentes_qx: EXCLUSIVAMENTE procedimientos QUIRÚRGICOS (ej: "Mastectomía (02/2024)", "Nefrectomía (05/2023)"). ❌ NUNCA colocar tratamientos sistémicos (quimioterapia, drogas o esquemas como AC-T) en antecedentes quirúrgicos.
-        - antecedentes_radio: Resumen CONCISO usando abreviaturas (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis si está disponible y fecha. Máximo 120 caracteres. Ej: "QRT (Cisplatino) + BT (09-10/2023)".
-        - fecha_nacimiento: buscar "Fecha nac.:", "Fecha de nacimiento:", "F. Nac" en el documento. Formato DD/MM/AAAA.
-        - estadio_inicial: estadio FIGO o TNM al momento del diagnóstico (ej: "FIGO IVB", "T2N1M0"). NO el actual.
-        - estadio_actual: estado clínico actual (ej: "Remisión completa", "Progresión", "Estable").
-        - linea_tratamiento: número de línea actual (ej: "1ra línea", "2da línea", "Seguimiento", "Adyuvancia").
-        - informe_clinico_detallado: resumen clínico completo, máximo 800 caracteres, sin DNI ni nombre completo.
-        - laboratorio_formateado: SOLO parámetros oncológicamente relevantes para este diagnóstico (hemograma, función renal/hepática, marcadores tumorales específicos). Formato conciso: "Hb 12g/dl, Cr 0.8, LDH 180". Máximo 100 caracteres.
-        - Si un dato no está disponible, devolver cadena vacía "".
-        - droga_1: usar EXACTAMENTE el fármaco indicado arriba.
+        REGLAS DE EXTRACCIÓN Y DEDUCCIÓN CLÍNICA:
+        1. fecha_diagnostico_inicial: DEDUCE OBLIGATORIAMENTE la fecha de diagnóstico analizando la fecha del primer estudio patológico, biopsia o consulta inicial en los eventos de la Línea de Tiempo o Historia Clínica (Formato DD/MM/AAAA).
+        2. histopatologico: Resumen MUY CONCISO Y SINTÉTICO de la anatomía patológica e inmunohistoquímica (tipo tumoral, grado, RE, RP, HER2, Ki67, mutaciones si aplican). MÁXIMO 180-200 caracteres. ❌ NO explayarse en párrafos extensos.
+        3. antecedentes_qx: EXCLUSIVAMENTE procedimientos QUIRÚRGICOS con fecha aproximada (ej: "Mastectomía radical mod. (02/2024)", "Nefrectomía (05/2023)"). ❌ NUNCA colocar tratamientos sistémicos (quimioterapia o drogas) en antecedentes quirúrgicos.
+        4. antecedentes_radio: Resumen CONCISO usando abreviaturas médicas estándar (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis y fecha si están disponibles. Máximo 120 caracteres. Ej: "RT adyuvante 50 Gy + boost (09-10/2023)".
+        5. fecha_nacimiento (paciente_fnac): Buscar "Fecha nac.:", "Fecha de nacimiento:", "F. Nac" o deducir si está disponible. Formato DD/MM/AAAA.
+        6. estadio_inicial: Estadio FIGO o TNM al momento del diagnóstico inicial (ej: "FIGO IVB", "T2N1M0 Estadio IIB"). NO el actual.
+        7. estadio_actual: Estado de la enfermedad actual (ej: "Enfermedad avanzada metastásica", "Progresión", "Respuesta parcial", "Remisión completa").
+        8. linea_tratamiento: Línea de tratamiento actual (ej: "1ra línea", "2da línea", "Adyuvancia", "Mantenimiento").
+        9. laboratorio_formateado: SOLO parámetros oncológicamente relevantes o positivos (hemograma, función renal/hepática, marcadores tumorales como CEA, CA125, PSA). Formato conciso: "Hb 12g/dl, Cr 0.8, TGO 22, CEA 14.2". Máximo 110 caracteres.
+        10. INFORME CLÍNICO Y JUSTIFICACIÓN DE LA DROGA (informe_clinico_detallado):
+            - Redactar un resumen clínico detallado y bien estructurado con SÓLIDA JUSTIFICACIÓN ONCOLÓGICA para la indicación del fármaco/esquema solicitado ("${drugName}").
+            - Incluir: diagnóstico, estadio, biomarcadores clave, línea actual, antecedente de respuesta/progresión a esquemas previos o criterio de inicio, estado funcional/ECOG y fundamentación de la prescripción.
+            - EXTENSIÓN ESTRICTA: Entre 450 y 650 caracteres (aproximadamente 4 a 6 líneas compactas). No debe ser tan corto que no justifique adecuadamente, ni exceder los 650 caracteres para evitar desbordar el cuadro del formulario PAMI.
+        11. TABLA DE MEDICAMENTOS / DROGAS SOLICITADAS (Inferir automáticamente para el fármaco o combinación indicada "${drugName}", hasta 4 drogas):
+            - Para cada fármaco identificado en la solicitud (ej: si solicitan "Pembrolizumab", llenar droga_1; si solicitan "Carboplatino + Paclitaxel", llenar droga_1 y droga_2; etc.):
+              * droga_N: Nombre genérico oficial (ej: "Pembrolizumab", "Trastuzumab", "Paclitaxel", "Osimertinib").
+              * presentacion_N: Presentación farmacéutica habitual en Argentina (ej: "Fco amp 100 mg / 4 ml", "Fco amp 440 mg", "Comp 80 mg", "Fco amp 300 mg / 50 ml").
+              * dosis_N: Dosis posológica recomendada estándar o calculada según BSA/peso si aplica (ej: "200 mg EV cada 21 días", "80 mg/día VO continuo", "AUC 5 (750 mg) EV d1", "175 mg/m² (295 mg) EV d1").
+              * duracion_dias_N: Número de ciclos y duración o frecuencia en días (ej: "6 ciclos / c 21 días", "Hasta progresión / c 21 días", "12 meses / diario").
+        12. motivo_solicitud: Elegir EXACTAMENTE uno: "Inicio", "Renovación", "Cambio de Toxicidad", "Cambio por Progresión".
+        13. tipo_tratamiento: Elegir EXACTAMENTE uno: "Adyuvante", "Neoadyuvante", "Avanzado".
+        14. esquema_tratamiento_solicitado: Nombre del esquema o fármacos solicitados (ej: "${drugName}").
+        15. Si un dato no se encuentra disponible en la historia clínica o eventos, devolver cadena vacía "" para permitir al médico completarlo interactivamente.
         
-        Devolver ÚNICAMENTE este JSON, sin markdown:
+        Devolver ÚNICAMENTE este objeto JSON sin markdown:
         {
           "paciente_nombre_real": "",
           "paciente_fnac": "DD/MM/AAAA",
@@ -359,21 +414,32 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
           "antecedentes_radio": "",
           "laboratorio_formateado": "",
           "informe_clinico_detallado": "",
-          "motivo_solicitud": "",
-          "tipo_tratamiento": "",
+          "motivo_solicitud": "Inicio",
+          "tipo_tratamiento": "Avanzado",
           "ciclos_planeados": "",
           "frecuencia_dias": "",
+          "esquema_tratamiento_solicitado": "",
           "droga_1": "",
           "presentacion_1": "",
           "dosis_1": "",
+          "duracion_dias_1": "",
           "droga_2": "",
           "presentacion_2": "",
-          "dosis_2": ""
+          "dosis_2": "",
+          "duracion_dias_2": "",
+          "droga_3": "",
+          "presentacion_3": "",
+          "dosis_3": "",
+          "duracion_dias_3": "",
+          "droga_4": "",
+          "presentacion_4": "",
+          "dosis_4": "",
+          "duracion_dias_4": ""
         }
     `;
 
     const correctionNote = correction ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${correction}. Incorporar en los campos correspondientes.` : '';
-    const parts: any[] = [{ text: promptText + `\nCONTEXTO: ${getEffectiveClinicalContext()}${correctionNote}` }];
+    const parts: any[] = [{ text: promptText + `\nCONTEXTO CLÍNICO:\n${getEffectiveClinicalContext()}${correctionNote}` }];
     if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
     const res = await callGemini({ parts, responseMimeType: "application/json" });
@@ -385,25 +451,90 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
     return JSON.parse(cleanText);
   };
 
-  const fillPamiPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }) => {
+  const handleStartPamiFlow = (formDef?: any) => {
     if (!hasClinicalData) {
-        alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
-        return;
+      alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
+      return;
     }
-    const drugName = regenParams?.drugName ?? window.prompt('Ingrese el/los fármaco/s a solicitar en el formulario PAMI:');
-    if (!drugName || !drugName.trim()) return;
+    const previousDrug = lastRegenParams['pami']?.drugName || '';
+    setPamiDrugInput(previousDrug);
+    setShowPamiDrugModal(true);
+  };
 
-    setProcessingId(formDef.id);
-    setStatus('Procesando PAMI...');
+  const handleRunPamiExtraction = async (drugName: string, correction?: string) => {
+    if (!drugName || !drugName.trim()) {
+      alert("Por favor ingrese al menos un fármaco o esquema a solicitar.");
+      return;
+    }
+    setShowPamiDrugModal(false);
+    setProcessingId('pami');
+    setStatus('Analizando historia clínica e infiriendo esquema de drogas para PAMI...');
 
     try {
-      const aiData = await extractPamiData(drugName, regenParams?.correction);
-      const bsa = calculateBSA(aiData.peso, aiData.talla);
-      const finalName = aiData.paciente_nombre_real || patient.name;
+      const aiData = await extractPamiData(drugName.trim(), correction);
+      
+      // Merge with patient base data if AI returned empty
+      const mergedData = {
+        paciente_nombre_real: aiData.paciente_nombre_real || patient.name || '',
+        paciente_fnac: cleanDate(aiData.paciente_fnac) || aiData.paciente_fnac || patient.birthDate || '',
+        paciente_celular: aiData.paciente_celular || patient.phone || '',
+        diagnostico_cie10: aiData.diagnostico_cie10 || patient.primaryDiagnosis || '',
+        histopatologico: aiData.histopatologico || '',
+        peso: aiData.peso || patient.weight || '',
+        talla: aiData.talla || patient.height || '',
+        ecog: aiData.ecog || patient.ecog || '',
+        estadio_inicial: aiData.estadio_inicial || patient.stage || '',
+        estadio_actual: aiData.estadio_actual || '',
+        fecha_diagnostico_inicial: cleanDate(aiData.fecha_diagnostico_inicial) || aiData.fecha_diagnostico_inicial || '',
+        linea_tratamiento: aiData.linea_tratamiento || '',
+        antecedentes_qx: aiData.antecedentes_qx || '',
+        antecedentes_radio: aiData.antecedentes_radio || '',
+        laboratorio_formateado: aiData.laboratorio_formateado || '',
+        informe_clinico_detallado: aiData.informe_clinico_detallado || '',
+        motivo_solicitud: aiData.motivo_solicitud || 'Inicio',
+        tipo_tratamiento: aiData.tipo_tratamiento || 'Avanzado',
+        ciclos_planeados: aiData.ciclos_planeados || '',
+        frecuencia_dias: aiData.frecuencia_dias || '',
+        esquema_tratamiento_solicitado: aiData.esquema_tratamiento_solicitado || drugName.trim(),
+        droga_1: aiData.droga_1 || drugName.trim(),
+        presentacion_1: aiData.presentacion_1 || '',
+        dosis_1: aiData.dosis_1 || '',
+        duracion_dias_1: aiData.duracion_dias_1 || aiData.frecuencia_dias || '',
+        droga_2: aiData.droga_2 || '',
+        presentacion_2: aiData.presentacion_2 || '',
+        dosis_2: aiData.dosis_2 || '',
+        duracion_dias_2: aiData.duracion_dias_2 || '',
+        droga_3: aiData.droga_3 || '',
+        presentacion_3: aiData.presentacion_3 || '',
+        dosis_3: aiData.dosis_3 || '',
+        duracion_dias_3: aiData.duracion_dias_3 || '',
+        droga_4: aiData.droga_4 || '',
+        presentacion_4: aiData.presentacion_4 || '',
+        dosis_4: aiData.dosis_4 || '',
+        duracion_dias_4: aiData.duracion_dias_4 || '',
+      };
 
-      const formUrl = window.location.origin + formDef.file;
+      setPamiFormData(mergedData);
+      setShowPamiReviewModal(true);
+    } catch (e: any) {
+      alert("Error al extraer datos para PAMI: " + e.message);
+    } finally {
+      setProcessingId(null);
+      setStatus('');
+    }
+  };
+
+  const fillPamiPDFFromData = async (data: typeof pamiFormData, originalDrugName?: string) => {
+    setProcessingId('pami');
+    setStatus('Generando PDF PAMI...');
+
+    try {
+      const bsa = calculateBSA(data.peso, data.talla);
+      const finalName = data.paciente_nombre_real || patient.name;
+
+      const formUrl = window.location.origin + '/forms/pami.pdf';
       const res = await fetch(formUrl);
-      if (!res.ok) throw new Error(`No se encontró ${formDef.file}`);
+      if (!res.ok) throw new Error(`No se encontró /forms/pami.pdf`);
       const formBytes = await res.arrayBuffer();
       const pdfDoc = await PDFDocument.load(formBytes);
       const form = pdfDoc.getForm();
@@ -420,7 +551,7 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
               const rect = widgets[0].getRectangle();
               fieldWidth = Math.max(rect.width - 6, 50);
             }
-          } catch { /* field rect unavailable, use default width */ }
+          } catch { /* field rect unavailable */ }
           let fontSize = maxFontSize;
           const AVG_CHAR_RATIO = 0.52;
           while (fontSize > minFontSize) {
@@ -430,56 +561,93 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
           }
           f.setText(text);
           f.setFontSize(fontSize);
-        } catch { /* field not found in form, skip */ }
+        } catch { /* field not found in form */ }
       };
-      const setCheck = (name: string, shouldCheck: boolean) => { try { if (shouldCheck) form.getCheckBox(name).check(); } catch { /* field not found */ } };
 
+      const setCheck = (name: string, shouldCheck: boolean) => {
+        try {
+          if (shouldCheck) form.getCheckBox(name).check();
+          else form.getCheckBox(name).uncheck();
+        } catch { /* field not found */ }
+      };
+
+      // Patient info
       setText('Apellido y Nombre', finalName);
-      setText('Fecha de nacimiento', cleanDate(aiData.paciente_fnac) || aiData.paciente_fnac);
-      setText('Diagnóstico (CIE 10)', aiData.diagnostico_cie10);
-      setText('Diagnóstico CIE 10', aiData.diagnostico_cie10);
-      setText('Histopatológico', aiData.histopatologico);
-      setText('ECOG Performance Status (0-4)', aiData.ecog);
-      setText('ECOG', aiData.ecog);
-      setText('Estadío actual', aiData.estadio_actual);
-      setText('Estadio actual', aiData.estadio_actual);
-      setText('Estadio Inicial', aiData.estadio_inicial);
-      setText('Fecha de Diagnóstico Inicial', aiData.fecha_diagnostico_inicial);
-      setText('Fecha diagnostico inicial', aiData.fecha_diagnostico_inicial);
-      setText('Línea de tratamiento', aiData.linea_tratamiento);
-      setText('Ciclos', aiData.ciclos_planeados);
-      setText('Días', aiData.frecuencia_dias);
-      setText('Antecedentes Quirúrgicos', aiData.antecedentes_qx, 9, 7);
-      setText('Antecedentes Terapia Radiante', aiData.antecedentes_radio, 9, 7);
-      setText('Informe Clínico ActualRow1', aiData.informe_clinico_detallado, 9, 7.5);
-      setText('Datos positivos Laboratorio', aiData.laboratorio_formateado, 9, 7.5);
-      setText('Peso', aiData.peso);
-      setText('Talla', aiData.talla);
+      setText('fill_21', cleanDate(data.paciente_fnac) || data.paciente_fnac);
+      setText('Fecha de nacimiento', cleanDate(data.paciente_fnac) || data.paciente_fnac);
+      setText('NUMERO CELULAR', data.paciente_celular);
+      setText('NUMERO CELULAR 1', data.paciente_celular);
+
+      // Clinical & staging
+      setText('Diagnóstico (CIE 10)', data.diagnostico_cie10);
+      setText('Diagnóstico CIE 10', data.diagnostico_cie10);
+      setText('Histopatológico', data.histopatologico, 9, 6.5);
+      setText('ECOG Performance Status (0-4)', data.ecog);
+      setText('ECOG', data.ecog);
+      setText('Estadío actual', data.estadio_actual);
+      setText('Estadio actual', data.estadio_actual);
+      setText('Estadio Inicial', data.estadio_inicial);
+      setText('Fecha de Diagnóstico Inicial', data.fecha_diagnostico_inicial);
+      setText('Fecha diagnostico inicial', data.fecha_diagnostico_inicial);
+      setText('Fecha de Diagnóstico Inicial Estadio Inicial', [data.fecha_diagnostico_inicial, data.estadio_inicial].filter(Boolean).join(' - '));
+      setText('Línea de tratamiento', data.linea_tratamiento);
+      setText('Línea tratamiento', data.linea_tratamiento);
+      setText('Ciclos', data.ciclos_planeados);
+      setText('Días', data.frecuencia_dias);
+      setText('Ciclos Días', [data.ciclos_planeados ? `${data.ciclos_planeados} ciclos` : '', data.frecuencia_dias ? `c/ ${data.frecuencia_dias} días` : ''].filter(Boolean).join(' '));
+
+      // Antecedents & labs
+      setText('Antecedentes Quirúrgicos', data.antecedentes_qx, 9, 7);
+      setText('Antecedentes Terapia Radiante', data.antecedentes_radio, 9, 7);
+      setText('Informe clínico actual', data.informe_clinico_detallado, 8.5, 7);
+      setText('Informe Clínico ActualRow1', data.informe_clinico_detallado, 8.5, 7);
+      setText('Datos positivos Laboratorio', data.laboratorio_formateado, 8.5, 7);
+      setText('Peso', data.peso);
+      setText('Talla', data.talla);
       setText('Sup. Corporal', bsa);
       setText('Sup Corpora', bsa);
+      setText('Esquema de tratamiento solicitado', data.esquema_tratamiento_solicitado || data.droga_1);
 
-      if (aiData.motivo_solicitud?.toLowerCase().includes('inicio')) setCheck('Inicio', true);
-      if (aiData.motivo_solicitud?.toLowerCase().includes('renovac')) setCheck('Renovación', true);
-      if (aiData.motivo_solicitud?.toLowerCase().includes('toxicidad')) setCheck('Cambio de Toxicidad', true);
-      if (aiData.motivo_solicitud?.toLowerCase().includes('progresi')) setCheck('Cambio por Progresión', true);
+      // Checkboxes Motivo
+      const motivo = (data.motivo_solicitud || '').toLowerCase();
+      setCheck('Inicio', motivo.includes('inicio'));
+      setCheck('Renovación', motivo.includes('renovac'));
+      setCheck('Cambio de Toxicidad', motivo.includes('toxicidad'));
+      setCheck('Cambio por Progresión', motivo.includes('progresi'));
 
-      if (aiData.tipo_tratamiento?.toLowerCase().includes('adyuvante') && !aiData.tipo_tratamiento.includes('neo')) setCheck('Adyuvante', true);
-      if (aiData.tipo_tratamiento?.toLowerCase().includes('neoadyuvante')) setCheck('Neoadyuvante', true);
-      if (aiData.tipo_tratamiento?.toLowerCase().includes('avanzado')) setCheck('Avanzado', true);
+      // Checkboxes Tipo de Tratamiento
+      const tipo = (data.tipo_tratamiento || '').toLowerCase();
+      setCheck('Adyuvante', tipo.includes('adyuvante') && !tipo.includes('neo'));
+      setCheck('Neoadyuvante', tipo.includes('neoadyuvante'));
+      setCheck('Avanzado', tipo.includes('avanzado'));
 
-      if (aiData.droga_1) {
-        setText('DrogaGenéricoRow1', aiData.droga_1);
-        setText('PresentaciónRow1', aiData.presentacion_1);
-        setText('DosisRow1', aiData.dosis_1);
-        setText('N CiclosDuración díasRow1', aiData.frecuencia_dias);
+      // Drugs Table (Rows 1 to 4)
+      if (data.droga_1) {
+        setText('DrogaGenéricoRow1', data.droga_1, 9, 7);
+        setText('PresentaciónRow1', data.presentacion_1, 8.5, 6.5);
+        setText('DosisRow1', data.dosis_1, 8.5, 6.5);
+        setText('N CiclosDuración díasRow1', data.duracion_dias_1 || data.frecuencia_dias, 8.5, 6.5);
       }
-      if (aiData.droga_2) {
-        setText('DrogaGenéricoRow2', aiData.droga_2);
-        setText('PresentaciónRow2', aiData.presentacion_2);
-        setText('DosisRow2', aiData.dosis_2);
-        setText('N CiclosDuración díasRow2', aiData.frecuencia_dias);
+      if (data.droga_2) {
+        setText('DrogaGenéricoRow2', data.droga_2, 9, 7);
+        setText('PresentaciónRow2', data.presentacion_2, 8.5, 6.5);
+        setText('DosisRow2', data.dosis_2, 8.5, 6.5);
+        setText('N CiclosDuración díasRow2', data.duracion_dias_2 || data.frecuencia_dias, 8.5, 6.5);
+      }
+      if (data.droga_3) {
+        setText('DrogaGenéricoRow3', data.droga_3, 9, 7);
+        setText('PresentaciónRow3', data.presentacion_3, 8.5, 6.5);
+        setText('DosisRow3', data.dosis_3, 8.5, 6.5);
+        setText('N CiclosDuración díasRow3', data.duracion_dias_3 || data.frecuencia_dias, 8.5, 6.5);
+      }
+      if (data.droga_4) {
+        setText('DrogaGenéricoRow4', data.droga_4, 9, 7);
+        setText('PresentaciónRow4', data.presentacion_4, 8.5, 6.5);
+        setText('DosisRow4', data.dosis_4, 8.5, 6.5);
+        setText('N CiclosDuración díasRow4', data.duracion_dias_4 || data.frecuencia_dias, 8.5, 6.5);
       }
 
+      // Doctor information
       setText('Apellido y Nombre_2', doctorData.nombre);
       setText('Matricula', doctorData.matricula);
       setText('Especialidad', doctorData.especialidad);
@@ -491,9 +659,10 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
       setText('CUIT', doctorData.cuil_prefix);
       setText('CUIT1', doctorData.cuil_dni);
       setText('CUIT2', doctorData.cuil_suffix);
+      setText('Celular', doctorData.cel_area);
       setText('Celular_2', doctorData.cel_area);
       setText('Celular1', doctorData.cel_num);
-      setText('Lugar y fecha', new Date().toLocaleDateString('es-AR'));
+      setText('Lugar y fecha', `Córdoba, ${new Date().toLocaleDateString('es-AR')}`);
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
@@ -502,16 +671,32 @@ const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
       link.download = `PAMI_${finalName}.pdf`;
       link.click();
       setStatus('¡Listo!');
-      const newAccumulated = regenParams
-        ? (lastRegenParams[formDef.id]?.accumulatedCorrections
-            ? `${lastRegenParams[formDef.id].accumulatedCorrections}\n- ${regenParams.correction}`
-            : `- ${regenParams.correction}`)
-        : '';
-      setLastRegenParams(prev => ({ ...prev, [formDef.id]: { drugName: drugName.trim(), accumulatedCorrections: newAccumulated } }));
-      setFormGenerated(prev => ({ ...prev, [formDef.id]: true }));
-      setFormCorrections(prev => ({ ...prev, [formDef.id]: '' }));
-    } catch (e: any) { alert('Error: ' + e.message); }
-    finally { setProcessingId(null); setStatus(''); }
+      
+      const effectiveDrug = originalDrugName || data.droga_1 || 'PAMI';
+      setLastRegenParams(prev => ({
+        ...prev,
+        pami: {
+          drugName: effectiveDrug,
+          accumulatedCorrections: prev['pami']?.accumulatedCorrections || ''
+        }
+      }));
+      setFormGenerated(prev => ({ ...prev, pami: true }));
+      setFormCorrections(prev => ({ ...prev, pami: '' }));
+      setShowPamiReviewModal(false);
+    } catch (e: any) {
+      alert('Error al generar PDF de PAMI: ' + e.message);
+    } finally {
+      setProcessingId(null);
+      setStatus('');
+    }
+  };
+
+  const fillPamiPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }) => {
+    if (regenParams?.drugName) {
+      handleRunPamiExtraction(regenParams.drugName, regenParams.correction);
+    } else {
+      handleStartPamiFlow(formDef);
+    }
   };
 
   // CAMBIO 4: extractBancoDrogasData recibe drugName
@@ -1738,6 +1923,438 @@ CONTEXTO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections 
           </div>
         </div>
       )}
+
+      {/* MODAL 1: SOLICITUD DE FÁRMACOS PAMI */}
+      {showPamiDrugModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-gray-100">
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
+                  <Pill size={18} />
+                </div>
+                <h3 className="font-black text-sm uppercase tracking-widest text-gray-800">
+                  Solicitud de Fármaco / Esquema PAMI
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowPamiDrugModal(false)} 
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-all"
+              >
+                <X size={18}/>
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+              Indique el/los fármacos a solicitar. La Inteligencia Artificial analizará la historia clínica, <strong className="text-gray-800">inferirá automáticamente presentación, dosis y duración</strong> de cada droga, y redactará el <strong className="text-gray-800">informe con justificación oncológica</strong>.
+            </p>
+
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  Droga(s) o Esquema a solicitar
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Ej: Trastuzumab + Pertuzumab | Pembrolizumab | Carboplatino + Paclitaxel"
+                  value={pamiDrugInput}
+                  onChange={e => setPamiDrugInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && pamiDrugInput.trim() && processingId === null) {
+                      handleRunPamiExtraction(pamiDrugInput);
+                    }
+                  }}
+                  className="w-full p-3 border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-inner"
+                />
+              </div>
+
+              <div>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
+                  Sugerencias rápidas frecuentes:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Pembrolizumab',
+                    'Trastuzumab + Pertuzumab',
+                    'Carboplatino + Paclitaxel',
+                    'Osimertinib 80mg',
+                    'Abemaciclib + Fulvestrant',
+                    'Docetaxel',
+                    'Capecitabina'
+                  ].map(sug => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => setPamiDrugInput(sug)}
+                      className="px-2.5 py-1 text-[10px] font-semibold bg-gray-100 hover:bg-blue-50 hover:text-blue-700 text-gray-700 rounded-lg border border-gray-200 transition-all"
+                    >
+                      {sug}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPamiDrugModal(false)}
+                className="w-1/3 py-2.5 px-3 border border-gray-300 text-gray-700 font-bold text-xs rounded-xl hover:bg-gray-50 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!pamiDrugInput.trim() || processingId === 'pami'}
+                onClick={() => handleRunPamiExtraction(pamiDrugInput)}
+                className="flex-1 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white font-bold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+              >
+                {processingId === 'pami' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                <span>Inferir Datos y Abrir Formulario</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: REVISIÓN Y COMPLETADO INTERACTIVO PAMI */}
+      {showPamiReviewModal && (() => {
+        const liveBSA = calculateBSA(pamiFormData.peso, pamiFormData.talla);
+        
+        // Count empty essential fields
+        const essentialFields: (keyof typeof pamiFormData)[] = [
+          'paciente_nombre_real', 'paciente_fnac', 'diagnostico_cie10', 'histopatologico',
+          'peso', 'talla', 'ecog', 'estadio_inicial', 'fecha_diagnostico_inicial',
+          'estadio_actual', 'linea_tratamiento', 'informe_clinico_detallado',
+          'droga_1', 'presentacion_1', 'dosis_1', 'duracion_dias_1'
+        ];
+        const missingCount = essentialFields.filter(f => !String(pamiFormData[f] || '').trim()).length;
+
+        const renderField = (label: string, fieldKey: keyof typeof pamiFormData, placeholder = '', isSpan2 = false) => {
+          const val = pamiFormData[fieldKey] || '';
+          const isMissing = !String(val).trim();
+          return (
+            <div className={isSpan2 ? 'col-span-2' : ''}>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wide">
+                  {label}
+                </label>
+                {isMissing && (
+                  <span className="text-[9px] font-bold text-amber-700 bg-amber-100/90 border border-amber-300 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                    <AlertCircle size={9}/> Celda vacía
+                  </span>
+                )}
+              </div>
+              <input
+                type="text"
+                placeholder={placeholder}
+                value={val}
+                onChange={e => setPamiFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                className={`w-full p-2 text-xs rounded-lg border transition-all outline-none ${
+                  isMissing
+                    ? 'border-amber-400 bg-amber-50/50 text-gray-900 focus:border-amber-600 focus:bg-white ring-1 ring-amber-200'
+                    : 'border-gray-200 bg-white text-gray-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-200'
+                }`}
+              />
+            </div>
+          );
+        };
+
+        const justificationLength = (pamiFormData.informe_clinico_detallado || '').length;
+        const isJustificationOptimal = justificationLength >= 450 && justificationLength <= 650;
+        const isJustificationTooLong = justificationLength > 650;
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-5">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-gray-100">
+              
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/80 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs">
+                    <FileText size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-black text-sm uppercase tracking-widest text-gray-800">
+                        Revisión y Completado — Formulario PAMI Oncológico
+                      </h3>
+                      {missingCount > 0 ? (
+                        <span className="px-2.5 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 rounded-full text-[10px] font-black uppercase flex items-center gap-1">
+                          <AlertTriangle size={11} className="text-amber-600" />
+                          {missingCount} {missingCount === 1 ? 'campo vacío' : 'campos vacíos'}
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-full text-[10px] font-black uppercase flex items-center gap-1">
+                          <CheckCircle2 size={11} className="text-emerald-600" />
+                          Completo
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      Verifique los datos inferidos. Las celdas resaltadas en naranja pueden completarse directamente antes de descargar el PDF.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPamiReviewModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-200 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-gray-50/30">
+                
+                {/* 1. Datos del Paciente y Antropometría */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5 pb-2 border-b border-gray-100">
+                    <span>1. Datos del Paciente & Antropometría</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                    {renderField('Apellido y Nombre', 'paciente_nombre_real', 'Nombre completo')}
+                    {renderField('Fecha de Nacimiento', 'paciente_fnac', 'DD/MM/AAAA')}
+                    {renderField('Teléfono / Celular', 'paciente_celular', 'Ej: 3511234567')}
+                    {renderField('Diagnóstico (CIE-10)', 'diagnostico_cie10', 'Ej: C50.9 Cáncer de mama')}
+                    {renderField('Peso (kg)', 'peso', 'Ej: 70')}
+                    {renderField('Talla (cm)', 'talla', 'Ej: 165')}
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wide mb-1">
+                        Sup. Corporal (Calculada)
+                      </label>
+                      <input
+                        type="text"
+                        disabled
+                        value={liveBSA ? `${liveBSA} m²` : 'Completar peso y talla'}
+                        className="w-full p-2 text-xs rounded-lg border border-gray-200 bg-gray-100 text-gray-700 font-bold"
+                      />
+                    </div>
+                    {renderField('ECOG (0 - 4)', 'ecog', 'Ej: 0 o 1')}
+                  </div>
+                </div>
+
+                {/* 2. Estadificación y Cronología */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5 pb-2 border-b border-gray-100">
+                    <span>2. Estadificación & Cronología</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {renderField('Estadio Inicial', 'estadio_inicial', 'Ej: Estadio IVB')}
+                    {renderField('Fecha Diagnóstico Inicial', 'fecha_diagnostico_inicial', 'DD/MM/AAAA')}
+                    {renderField('Estadio Actual', 'estadio_actual', 'Ej: Progresión hepática')}
+                    {renderField('Línea de Tratamiento', 'linea_tratamiento', 'Ej: 1ra línea / 2da línea / Adyuvancia')}
+                    {renderField('N° Ciclos Planeados', 'ciclos_planeados', 'Ej: 6')}
+                    {renderField('Frecuencia (Días)', 'frecuencia_dias', 'Ej: 21')}
+                  </div>
+                </div>
+
+                {/* 3. Antecedentes y Laboratorio */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5 pb-2 border-b border-gray-100">
+                    <span>3. Antecedentes Quirúrgicos, Radiantes & Laboratorio</span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {renderField('Histopatológico / Inmunohistoquímica', 'histopatologico', 'Resumen patológico e IHQ')}
+                    {renderField('Laboratorio Positivo Relevante', 'laboratorio_formateado', 'Hb 12g/dl, Cr 0.8, marcadores')}
+                    {renderField('Antecedentes Quirúrgicos', 'antecedentes_qx', 'Cirugías con fechas (Ej: Mastectomía 02/2024)')}
+                    {renderField('Antecedentes Terapia Radiante', 'antecedentes_radio', 'RT, dosis y fechas')}
+                  </div>
+                </div>
+
+                {/* 4. Clasificación del Tratamiento & Checkboxes */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5 pb-2 border-b border-gray-100">
+                    <span>4. Motivo de Solicitud y Tipo de Tratamiento</span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wide mb-1.5">
+                        Motivo de la Solicitud
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {['Inicio', 'Renovación', 'Cambio de Toxicidad', 'Cambio por Progresión'].map(opt => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setPamiFormData(prev => ({ ...prev, motivo_solicitud: opt }))}
+                            className={`px-3 py-2 text-xs font-bold rounded-lg border text-left transition-all ${
+                              pamiFormData.motivo_solicitud === opt
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wide mb-1.5">
+                        Tipo de Tratamiento
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['Adyuvante', 'Neoadyuvante', 'Avanzado'].map(opt => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setPamiFormData(prev => ({ ...prev, tipo_tratamiento: opt }))}
+                            className={`px-3 py-2 text-xs font-bold rounded-lg border text-center transition-all ${
+                              pamiFormData.tipo_tratamiento === opt
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Informe Médico y Justificación Oncológica */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-2">
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-blue-900">
+                      5. Informe Clínico & Justificación de la Droga
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        isJustificationOptimal
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : isJustificationTooLong
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}>
+                        {justificationLength} / 650 caracteres {isJustificationOptimal ? '✓ Longitud óptima' : isJustificationTooLong ? '⚠️ Excede cuadro' : ''}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <textarea
+                    rows={4}
+                    placeholder="Redacte la justificación oncológica: estadio, biomarcadores, línea de tratamiento, respuesta previa y motivo de prescripción..."
+                    value={pamiFormData.informe_clinico_detallado}
+                    onChange={e => setPamiFormData(prev => ({ ...prev, informe_clinico_detallado: e.target.value }))}
+                    className={`w-full p-3 text-xs rounded-xl border outline-none transition-all leading-relaxed ${
+                      !pamiFormData.informe_clinico_detallado.trim()
+                        ? 'border-amber-400 bg-amber-50/50 focus:bg-white focus:border-amber-600'
+                        : isJustificationTooLong
+                        ? 'border-red-400 bg-red-50/30 focus:border-red-600'
+                        : 'border-gray-200 bg-white focus:border-blue-500'
+                    }`}
+                  />
+                  <p className="text-[10px] text-gray-500">
+                    💡 Mantener entre <strong>450 y 650 caracteres</strong> asegura una fundamentación sólida y legible sin que se corte en el recuadro del formulario impreso de PAMI.
+                  </p>
+                </div>
+
+                {/* 6. Tabla de Drogas Oncológicas Inferidas */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3">
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                      <Pill size={14} className="text-blue-600"/>
+                      <span>6. Tabla de Drogas Oncológicas Solicitadas (Inferidas)</span>
+                    </h4>
+                    <span className="text-[10px] text-gray-500">
+                      Hasta 4 fármacos por formulario
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map(idx => {
+                      const drugKey = `droga_${idx}` as keyof typeof pamiFormData;
+                      const presKey = `presentacion_${idx}` as keyof typeof pamiFormData;
+                      const doseKey = `dosis_${idx}` as keyof typeof pamiFormData;
+                      const durKey = `duracion_dias_${idx}` as keyof typeof pamiFormData;
+
+                      const isFirst = idx === 1;
+                      const hasData = !!(pamiFormData[drugKey] || pamiFormData[presKey] || pamiFormData[doseKey]);
+
+                      if (!isFirst && !hasData && idx > 2) {
+                        return null; // Don't show rows 3 and 4 unless user enters them
+                      }
+
+                      return (
+                        <div key={idx} className="p-3 bg-gray-50/80 rounded-xl border border-gray-200/80 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-gray-600">
+                              Droga #{idx} {isFirst && '(Principal)'}
+                            </span>
+                            {hasData && (
+                              <button
+                                type="button"
+                                onClick={() => setPamiFormData(prev => ({
+                                  ...prev,
+                                  [drugKey]: '',
+                                  [presKey]: '',
+                                  [doseKey]: '',
+                                  [durKey]: '',
+                                }))}
+                                className="text-[10px] text-red-500 hover:text-red-700 font-bold"
+                              >
+                                Limpiar fila
+                              </button>
+                            )}
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                            {renderField(`Droga / Genérico #${idx}`, drugKey, 'Ej: Pembrolizumab')}
+                            {renderField(`Presentación #${idx}`, presKey, 'Ej: Fco amp 100 mg / 4 ml')}
+                            {renderField(`Dosis / Posología #${idx}`, doseKey, 'Ej: 200 mg EV cada 21 días')}
+                            {renderField(`N° Ciclos / Duración #${idx}`, durKey, 'Ej: 6 ciclos / c 21 días')}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 bg-gray-100/90 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div className="text-xs text-gray-600">
+                  {missingCount > 0 ? (
+                    <span className="text-amber-800 font-bold flex items-center gap-1">
+                      <AlertTriangle size={14} className="text-amber-600" />
+                      Hay {missingCount} celdas vacías. Puede completarlas ahora o generar el PDF con los datos actuales.
+                    </span>
+                  ) : (
+                    <span className="text-emerald-700 font-bold flex items-center gap-1">
+                      <CheckCircle2 size={14} className="text-emerald-600" />
+                      Todos los campos requeridos están completos y listos para exportar.
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setShowPamiReviewModal(false)}
+                    className="px-4 py-2.5 text-xs font-bold text-gray-700 border border-gray-300 rounded-xl hover:bg-gray-200 transition-all w-full sm:w-auto"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={processingId === 'pami'}
+                    onClick={() => fillPamiPDFFromData(pamiFormData, pamiDrugInput)}
+                    className="px-5 py-2.5 text-xs font-black uppercase tracking-wider text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-md flex items-center justify-center gap-2 transition-all w-full sm:w-auto disabled:opacity-50"
+                  >
+                    {processingId === 'pami' ? <Loader2 size={15} className="animate-spin"/> : <Download size={15}/>}
+                    <span>Descargar Formulario PAMI (PDF)</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );
