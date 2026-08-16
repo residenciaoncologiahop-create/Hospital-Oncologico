@@ -126,8 +126,8 @@ const ResidentApp = () => {
           </h3>
         );
       }
-      if (/^\s*[\*\-]\s+/.test(line)) {
-        const content = line.replace(/^\s*[\*\-]\s+/, '');
+      if (/^\s*[-*]\s+/.test(line)) {
+        const content = line.replace(/^\s*[-*]\s+/, '');
         return <div key={i} className="flex gap-2 mb-1 pl-1"><span className="text-indigo-500 mt-0.5 flex-shrink-0 font-bold">•</span><span dangerouslySetInnerHTML={{ __html: content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/></div>;
       }
       if (/^\d+\.\s+/.test(line)) {

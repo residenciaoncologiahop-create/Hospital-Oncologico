@@ -627,7 +627,7 @@ function normalizeStr(str: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
+    .replace(/[-.,/#!$%^&*;:{}=_`~()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -678,7 +678,7 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
       .replace(/se descarta [a-z\s]+/g, ' ');
 
     // Buscar encabezados de diagnóstico directo
-    const dxMatch = clinicalText.match(/(?:diagn[oó]stico|anatom[ií]a patol[oó]gica|biopsia|ap|tumor primario)[\s:]+([^\n\.\;]+)/i);
+    const dxMatch = clinicalText.match(/(?:diagn[oó]stico|anatom[ií]a patol[oó]gica|biopsia|ap|tumor primario)[\s:]+([^\n.;]+)/i);
     if (dxMatch && dxMatch[1]) {
       const detected = detectOrganFromStr(normalizeStr(dxMatch[1]));
       if (detected) organ = detected;
@@ -769,7 +769,7 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
 
   // 7. Fecha de cirugía
   let surgeryDate = 'No documentada';
-  const surgeryMatch = clinicalText.match(/(?:cirug[ií]a|whipple|duodenopancreatectom[ií]a|colectom[ií]a|mastectom[ií]a|prostatectom[ií]a|histerectom[ií]a|lobectom[ií]a)[^\d]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+  const surgeryMatch = clinicalText.match(/(?:cirug[ií]a|whipple|duodenopancreatectom[ií]a|colectom[ií]a|mastectom[ií]a|prostatectom[ií]a|histerectom[ií]a|lobectom[ií]a)[^\d]*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/i);
   if (surgeryMatch && surgeryMatch[1]) {
     surgeryDate = surgeryMatch[1];
   }
