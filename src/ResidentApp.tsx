@@ -108,7 +108,8 @@ const ResidentApp = () => {
   };
 
   const renderMarkdown = (text: string) => {
-    return text.split('\n').map((line, i) => {
+    const cleanText = text.replace(/\[(?:Dato Documentado|Dato Estructurado|Dato no estructurado|Inferencia|Hipótesis|Dato Clínico)\]:\s*/gi, '');
+    return cleanText.split('\n').map((line, i) => {
       if (/^###\s+/.test(line)) {
         const heading = line.replace(/^###\s+/, '');
         return (

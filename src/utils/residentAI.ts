@@ -51,7 +51,8 @@ export const getResidentChatResponse = async (msgs: ChatMessage[], newMsg: strin
             parts,
             systemInstruction: CLINICAL_CHAT_SYSTEM_INSTRUCTION 
         });
-        return res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "Error.";
+        const text = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
+        return text ? text.replace(/\[(?:Dato Documentado|Dato Estructurado|Dato no estructurado|Inferencia|Hipótesis|Dato Clínico)\]:\s*/gi, '') : "Error.";
     } catch (e: any) {
         return "Error: " + e.message;
     }
