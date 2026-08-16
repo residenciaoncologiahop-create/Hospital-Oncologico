@@ -377,20 +377,23 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         3. antecedentes_qx: EXCLUSIVAMENTE procedimientos QUIRÚRGICOS con fecha aproximada (ej: "Mastectomía radical mod. (02/2024)", "Nefrectomía (05/2023)"). ❌ NUNCA colocar tratamientos sistémicos (quimioterapia o drogas) en antecedentes quirúrgicos.
         4. antecedentes_radio: Resumen CONCISO usando abreviaturas médicas estándar (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis y fecha si están disponibles. Máximo 120 caracteres. Ej: "RT adyuvante 50 Gy + boost (09-10/2023)".
         5. fecha_nacimiento (paciente_fnac): Buscar "Fecha nac.:", "Fecha de nacimiento:", "F. Nac" o deducir si está disponible. Formato DD/MM/AAAA.
-        6. estadio_inicial: Estadio FIGO o TNM al momento del diagnóstico inicial (ej: "FIGO IVB", "T2N1M0 Estadio IIB"). NO el actual.
-        7. estadio_actual: Estado de la enfermedad actual (ej: "Enfermedad avanzada metastásica", "Progresión", "Respuesta parcial", "Remisión completa").
+        6. estadio_inicial: Estadio FIGO o TNM al momento del diagnóstico inicial (ej: "FIGO IVB", "T2N1M0 Estadio IIB", "miT3b N1 M0"). NO el actual.
+        7. estadio_actual: Estado de la enfermedad actual (ej: "Enfermedad localmente avanzada (miT3b N1 M0)", "Progresión", "Respuesta parcial", "Remisión completa").
         8. linea_tratamiento: Línea de tratamiento actual (ej: "1ra línea", "2da línea", "Adyuvancia", "Mantenimiento").
-        9. laboratorio_formateado: SOLO parámetros oncológicamente relevantes o positivos (hemograma, función renal/hepática, marcadores tumorales como CEA, CA125, PSA). Formato conciso: "Hb 12g/dl, Cr 0.8, TGO 22, CEA 14.2". Máximo 110 caracteres.
-        10. INFORME CLÍNICO Y JUSTIFICACIÓN DE LA DROGA (informe_clinico_detallado):
-            - Redactar un resumen clínico detallado y bien estructurado con SÓLIDA JUSTIFICACIÓN ONCOLÓGICA para la indicación del fármaco/esquema solicitado ("${drugName}").
-            - Incluir: diagnóstico, estadio, biomarcadores clave, línea actual, antecedente de respuesta/progresión a esquemas previos o criterio de inicio, estado funcional/ECOG y fundamentación de la prescripción.
-            - EXTENSIÓN ESTRICTA: Entre 450 y 650 caracteres (aproximadamente 4 a 6 líneas compactas). No debe ser tan corto que no justifique adecuadamente, ni exceder los 650 caracteres para evitar desbordar el cuadro del formulario PAMI.
+        9. laboratorio_formateado: SOLO parámetros oncológicamente relevantes o positivos (hemograma, función renal/hepática, marcadores tumorales como PSA, CEA, CA125). Formato conciso: "Hb 12g/dl, Cr 0.8, PSA 2.27 ng/ml". Máximo 110 caracteres.
+        10. INFORME CLÍNICO ACTUAL Y JUSTIFICACIÓN ONCOLÓGICA DETALLADA (informe_clinico_detallado):
+            - Redactar un informe clínico oncológico EXHAUSTIVO, PRECISO Y CRONOLÓGICO estructurado en párrafos claros que detalle todos los hitos diagnósticos, imagenológicos y terapéuticos del paciente para fundamentar de manera irrefutable la indicación del esquema solicitado ("${drugName}").
+            - ESTRUCTURA Y HITOS OBLIGATORIOS (adaptados a cada paciente según sus antecedentes):
+              * Párrafo 1 (Diagnóstico inicial, histología y presentación): Edad del paciente, diagnóstico oncológico exacto con histopatología completa (tipo histológico, grado, Gleason, porcentaje de patrones/ductal/cribiforme si aplica, invasión perineural/vascular, biomarcadores RE/RP/HER2/Ki67/BRCA/mutaciones), fecha exacta de biopsia y forma de presentación/marcadores iniciales (ej. PSA, CEA, CA125, etc. con fechas).
+              * Párrafo 2 (Evolución por imágenes y estadificación cronológica con fechas): Detallar cronológicamente los estudios complementarios con fechas y hallazgos clave (RMN, Centellograma, TAC, PET/CT, PET-PSMA, etc.), valores cuantitativos relevantes (SUV máx, medidas en mm/cm), estadificación TNM o FIGO inicial y reestadificación si hubo cambios de estadio o descarte/confirmación de secundarismo.
+              * Párrafo 3 (Estrategia terapéutica, justificación del esquema y plan actual): Objetivo terapéutico (intención curativa, control sistémico avanzado, adyuvancia, rescate), tratamientos previos realizados o suspendidos/modificados con sus motivos, y justificación oncológica detallada de por qué se solicita el esquema actual ("${drugName}"), detallando la combinación (ej. TDA prolongada con Leuprolide + Bicalutamida / Darolutamida / Radioterapia / Quimioterapia) con fecha de la conducta médica actual.
+            - EXTENSIÓN: Entre 850 y 1400 caracteres (aproximadamente 2 a 3 párrafos compactos y densos de información médica). Texto corrido en español con saltos de línea entre párrafos, sin asteriscos ni markdown.
         11. TABLA DE MEDICAMENTOS / DROGAS SOLICITADAS (Inferir automáticamente para el fármaco o combinación indicada "${drugName}", hasta 4 drogas):
             - Para cada fármaco identificado en la solicitud (ej: si solicitan "Pembrolizumab", llenar droga_1; si solicitan "Carboplatino + Paclitaxel", llenar droga_1 y droga_2; etc.):
-              * droga_N: Nombre genérico oficial (ej: "Pembrolizumab", "Trastuzumab", "Paclitaxel", "Osimertinib").
-              * presentacion_N: Presentación farmacéutica habitual en Argentina (ej: "Fco amp 100 mg / 4 ml", "Fco amp 440 mg", "Comp 80 mg", "Fco amp 300 mg / 50 ml").
-              * dosis_N: Dosis posológica recomendada estándar o calculada según BSA/peso si aplica (ej: "200 mg EV cada 21 días", "80 mg/día VO continuo", "AUC 5 (750 mg) EV d1", "175 mg/m² (295 mg) EV d1").
-              * duracion_dias_N: Número de ciclos y duración o frecuencia en días (ej: "6 ciclos / c 21 días", "Hasta progresión / c 21 días", "12 meses / diario").
+              * droga_N: Nombre genérico oficial (ej: "Pembrolizumab", "Trastuzumab", "Paclitaxel", "Osimertinib", "Leuprolide", "Darolutamida").
+              * presentacion_N: Presentación farmacéutica habitual en Argentina (ej: "Fco amp 100 mg / 4 ml", "Fco amp 22.5 mg", "Comp 300 mg", "Comp 80 mg").
+              * dosis_N: Dosis posológica recomendada estándar o calculada según BSA/peso si aplica (ej: "22.5 mg IM cada 3 meses", "600 mg VO cada 12 hs", "200 mg EV cada 21 días").
+              * duracion_dias_N: Número de ciclos y duración o frecuencia en días (ej: "Hasta prog/tox / c 28 días", "6 ciclos / c 21 días", "24 meses / c 84 días").
         12. motivo_solicitud: Elegir EXACTAMENTE uno: "Inicio", "Renovación", "Cambio de Toxicidad", "Cambio por Progresión".
         13. tipo_tratamiento: Elegir EXACTAMENTE uno: "Adyuvante", "Neoadyuvante", "Avanzado".
         14. esquema_tratamiento_solicitado: Nombre del esquema o fármacos solicitados (ej: "${drugName}").
@@ -589,18 +592,35 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       setText('Estadio Inicial', data.estadio_inicial);
       setText('Fecha de Diagnóstico Inicial', data.fecha_diagnostico_inicial);
       setText('Fecha diagnostico inicial', data.fecha_diagnostico_inicial);
-      setText('Fecha de Diagnóstico Inicial Estadio Inicial', [data.fecha_diagnostico_inicial, data.estadio_inicial].filter(Boolean).join(' - '));
+      setText('Fecha de Diagnóstico Inicial Estadio Inicial', data.estadio_inicial);
       setText('Línea de tratamiento', data.linea_tratamiento);
       setText('Línea tratamiento', data.linea_tratamiento);
       setText('Ciclos', data.ciclos_planeados);
       setText('Días', data.frecuencia_dias);
-      setText('Ciclos Días', [data.ciclos_planeados ? `${data.ciclos_planeados} ciclos` : '', data.frecuencia_dias ? `c/ ${data.frecuencia_dias} días` : ''].filter(Boolean).join(' '));
+      setText('Ciclos Días', data.frecuencia_dias);
 
       // Antecedents & labs
       setText('Antecedentes Quirúrgicos', data.antecedentes_qx, 9, 7);
       setText('Antecedentes Terapia Radiante', data.antecedentes_radio, 9, 7);
-      setText('Informe clínico actual', data.informe_clinico_detallado, 8.5, 7);
-      setText('Informe Clínico ActualRow1', data.informe_clinico_detallado, 8.5, 7);
+      
+      // EL INFORME CLÍNICO VA EXCLUSIVAMENTE EN EL CUADRO GRANDE (Informe Clínico ActualRow1)
+      // La tira angosta al lado del título (Informe clínico actual) se deja deliberadamente vacía.
+      try {
+        const fTitleStrip = form.getTextField('Informe clínico actual');
+        fTitleStrip.setText('');
+      } catch { /* skip */ }
+
+      try {
+        const fLargeBox = form.getTextField('Informe Clínico ActualRow1');
+        if (data.informe_clinico_detallado && data.informe_clinico_detallado.trim()) {
+          const reportText = data.informe_clinico_detallado.trim();
+          fLargeBox.enableMultiline();
+          const fontSize = reportText.length > 1300 ? 7.8 : reportText.length > 1000 ? 8.2 : 8.5;
+          fLargeBox.setFontSize(fontSize);
+          fLargeBox.setText(reportText);
+        }
+      } catch { /* skip */ }
+
       setText('Datos positivos Laboratorio', data.laboratorio_formateado, 8.5, 7);
       setText('Peso', data.peso);
       setText('Talla', data.talla);
@@ -2062,8 +2082,8 @@ CONTEXTO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections 
         };
 
         const justificationLength = (pamiFormData.informe_clinico_detallado || '').length;
-        const isJustificationOptimal = justificationLength >= 450 && justificationLength <= 650;
-        const isJustificationTooLong = justificationLength > 650;
+        const isJustificationOptimal = justificationLength >= 750 && justificationLength <= 1450;
+        const isJustificationTooLong = justificationLength > 1500;
 
         return (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-5">
@@ -2219,7 +2239,7 @@ CONTEXTO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections 
                 <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-2">
                   <div className="flex justify-between items-center pb-2 border-b border-gray-100">
                     <h4 className="text-xs font-black uppercase tracking-wider text-blue-900">
-                      5. Informe Clínico & Justificación de la Droga
+                      5. Informe Clínico & Justificación de la Droga (Cuadro Grande)
                     </h4>
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
@@ -2229,14 +2249,14 @@ CONTEXTO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections 
                           ? 'bg-red-50 text-red-700 border-red-200'
                           : 'bg-blue-50 text-blue-700 border-blue-200'
                       }`}>
-                        {justificationLength} / 650 caracteres {isJustificationOptimal ? '✓ Longitud óptima' : isJustificationTooLong ? '⚠️ Excede cuadro' : ''}
+                        {justificationLength} / ~1400 caracteres {isJustificationOptimal ? '✓ Longitud óptima' : isJustificationTooLong ? '⚠️ Puede desbordar' : ''}
                       </span>
                     </div>
                   </div>
                   
                   <textarea
-                    rows={4}
-                    placeholder="Redacte la justificación oncológica: estadio, biomarcadores, línea de tratamiento, respuesta previa y motivo de prescripción..."
+                    rows={8}
+                    placeholder="Redacte la justificación oncológica detallada: hitos diagnósticos cronológicos, RMN/PET/TAC con fechas y hallazgos, estadio/reestadificación, biopsias, respuesta o suspensión de esquemas previos y fundamentación médica del plan actual..."
                     value={pamiFormData.informe_clinico_detallado}
                     onChange={e => setPamiFormData(prev => ({ ...prev, informe_clinico_detallado: e.target.value }))}
                     className={`w-full p-3 text-xs rounded-xl border outline-none transition-all leading-relaxed ${
@@ -2248,7 +2268,7 @@ CONTEXTO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections 
                     }`}
                   />
                   <p className="text-[10px] text-gray-500">
-                    💡 Mantener entre <strong>450 y 650 caracteres</strong> asegura una fundamentación sólida y legible sin que se corte en el recuadro del formulario impreso de PAMI.
+                    💡 El cuadro grande de PAMI admite un informe exhaustivo de <strong>800 a 1400 caracteres</strong> detallando los hitos oncológicos cronológicos y la fundamentación del tratamiento.
                   </p>
                 </div>
 
