@@ -49,6 +49,7 @@ const ResidentApp = () => {
   const [isAuditing, setIsAuditing] = useState(false);
 
   const [reportModal, setReportModal] = useState({ isOpen: false, title: '', content: '' as string | null, isLoading: false });
+  const [guidelineFiles, setGuidelineFiles] = useState<{ name: string; type: string; data: string }[]>([]);
 
   const [chatInput, setChatInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -106,13 +107,59 @@ const ResidentApp = () => {
     } 
   };
 
+  const renderMarkdown = (text: string) => {
+    return text.split('\n').map((line, i) => {
+      if (/^###\s+/.test(line)) {
+        const heading = line.replace(/^###\s+/, '');
+        return (
+          <h4 key={i} className="text-xs font-black uppercase tracking-wider text-indigo-900 mt-3 mb-1.5 border-b border-indigo-100 pb-0.5">
+            {heading}
+          </h4>
+        );
+      }
+      if (/^##\s+/.test(line)) {
+        const heading = line.replace(/^##\s+/, '');
+        return (
+          <h3 key={i} className="text-xs font-black uppercase tracking-wider text-indigo-950 mt-3.5 mb-1.5">
+            {heading}
+          </h3>
+        );
+      }
+      if (/^\s*[\*\-]\s+/.test(line)) {
+        const content = line.replace(/^\s*[\*\-]\s+/, '');
+        return <div key={i} className="flex gap-2 mb-1 pl-1"><span className="text-indigo-500 mt-0.5 flex-shrink-0 font-bold">•</span><span dangerouslySetInnerHTML={{ __html: content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/></div>;
+      }
+      if (/^\d+\.\s+/.test(line)) {
+        const num = line.match(/^(\d+)\./)?.[1];
+        const content = line.replace(/^\d+\.\s+/, '');
+        return <div key={i} className="flex gap-2 mb-1 pl-1"><span className="text-indigo-500 flex-shrink-0 font-bold">{num}.</span><span dangerouslySetInnerHTML={{ __html: content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/></div>;
+      }
+      if (!line.trim()) return <div key={i} className="h-1.5"/>;
+      return <p key={i} className="mb-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/>;
+    });
+  };
+
   const handleSendMessage = async () => {
     if (!chatInput.trim() || !selectedPatient) return;
     const newMsg = { role: 'user' as const, text: chatInput, timestamp: Date.now() };
     const updatedHistory = [...selectedPatient.chatHistory, newMsg];
     updateCurrentPatient({ chatHistory: updatedHistory });
     setChatInput(''); setIsTyping(true);
-    const context = `Caso educativo. Dx: ${selectedPatient.diagnosis}.\nHistoria: ${selectedPatient.historyText}`;
+
+    const eventsText = (selectedPatient.timeline && selectedPatient.timeline.length > 0)
+      ? selectedPatient.timeline.map((e: any) => `• [${e.date}] [${e.category || 'Evento'} - ${e.professional || 'Médico'}]: ${e.note}${e.detail ? ` | Detalle: ${e.detail}` : ''}${e.isKey ? ' (HITO CLAVE)' : ''}`).join('\n')
+      : 'Sin eventos estructurados en cronología.';
+
+    const context = `[DATOS ESTRUCTURADOS DEL PACIENTE]
+Edad: ${selectedPatient.age || 'No especificada'} años.
+Diagnóstico Registrado: ${selectedPatient.diagnosis || 'No especificado'}.
+
+[CRONOLOGÍA DE EVENTOS REGISTRADOS]
+${eventsText}
+
+[NOTAS CLÍNICAS Y DOCUMENTACIÓN]
+${selectedPatient.historyText || 'Sin notas adicionales.'}`;
+
     const response = await getResidentChatResponse(updatedHistory, newMsg.text, context, selectedPatient.files);
     const aiMsg = { role: 'model' as const, text: response, timestamp: Date.now() };
     updateCurrentPatient({ chatHistory: [...updatedHistory, aiMsg] });
@@ -170,14 +217,15 @@ const ResidentApp = () => {
 
   const getEffectiveClinicalText = () => {
     if (!selectedPatient) return '';
+    const diagnosisBlock = selectedPatient.diagnosis ? `DIAGNÓSTICO ONCOLÓGICO PRINCIPAL: ${selectedPatient.diagnosis}` : '';
     const timelineContext = selectedPatient.timeline && selectedPatient.timeline.length > 0
       ? `LÍNEA DE TIEMPO DE EVENTOS DEL PACIENTE:\n` +
         selectedPatient.timeline.map((e: any) => `- [${e.date}] (${e.category || 'Evento'} - ${e.professional || 'Médico'}): ${e.note}${e.detail ? ` | ${e.detail}` : ''}${e.isKey ? ' (HITO CLAVE)' : ''}`).join('\n')
       : '';
-    return [selectedPatient.historyText, timelineContext].filter(Boolean).join('\n\n');
+    return [diagnosisBlock, selectedPatient.historyText, timelineContext].filter(Boolean).join('\n\n');
   };
 
-  const runReportGeneration = async (title: string, generatorFn: (text: string, files: any[]) => Promise<string>) => {
+  const runReportGeneration = async (title: string, generatorFn: (text: string, files: any[], guidelines?: any[], explicitDx?: string) => Promise<string>) => {
     if (!selectedPatient) return;
     const effectiveText = getEffectiveClinicalText();
     if (!effectiveText && selectedPatient.files.length === 0) { 
@@ -185,7 +233,7 @@ const ResidentApp = () => {
       return; 
     }
     setReportModal({ isOpen: true, title, content: null, isLoading: true });
-    const htmlResult = await generatorFn(effectiveText, selectedPatient.files);
+    const htmlResult = await generatorFn(effectiveText, selectedPatient.files, guidelineFiles, selectedPatient.diagnosis);
     setReportModal({ isOpen: true, title, content: htmlResult, isLoading: false });
   };
 
@@ -304,6 +352,15 @@ const ResidentApp = () => {
                         <CalendarHeart size={16} className="mb-1" /> Seguimiento
                       </button>
                     </div>
+
+                    <FileUploader 
+                      label="Guías Clínicas / Protocolos Adjuntos (NCCN, ESMO, ASCO)" 
+                      files={guidelineFiles} 
+                      setFiles={setGuidelineFiles} 
+                      accept=".pdf" 
+                      onClearAll={() => setGuidelineFiles([])} 
+                      clearAllLabel="Limpiar guías"
+                    />
 
                     <textarea 
                       className="w-full h-64 p-4 border-2 border-gray-100 rounded-2xl text-xs font-medium bg-gray-50 focus:bg-white focus:border-indigo-200 transition-all outline-none resize-none shadow-inner leading-relaxed" 
@@ -428,8 +485,8 @@ const ResidentApp = () => {
                           </div>
                         )}
                         <div className={`max-w-[82%] rounded-2xl shadow-sm ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm px-5 py-3.5' : 'bg-white border border-gray-100 rounded-bl-sm px-5 py-4'}`}>
-                          <div className={`leading-relaxed text-xs font-medium ${m.role === 'user' ? '' : 'text-gray-700'}`}>
-                            {m.text}
+                          <div className={`leading-relaxed space-y-1 ${m.role === 'user' ? 'text-xs font-semibold' : 'text-xs font-normal text-gray-700'}`}>
+                            {m.role === 'model' ? renderMarkdown(m.text) : m.text}
                           </div>
                           <div className={`text-[9px] mt-2 font-black uppercase tracking-widest ${m.role === 'user' ? 'text-indigo-200 text-right' : 'text-gray-300'}`}>
                             {new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}

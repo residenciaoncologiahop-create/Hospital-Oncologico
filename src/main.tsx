@@ -197,7 +197,7 @@ const App = ({ user }: AppProps) => {
 
     const [reportModal, setReportModal] = useState<{
         isOpen: boolean; title: string; content: string | null; isLoading: boolean;
-        generatorFn: ((text: string, files: FileData[]) => Promise<string>) | null;
+        generatorFn: ((text: string, files: FileData[], guidelines?: FileData[]) => Promise<string>) | null;
         accumulatedCorrections: string;
     }>({ isOpen: false, title: '', content: null, isLoading: false, generatorFn: null, accumulatedCorrections: '' });
     const [showAuditModal, setShowAuditModal] = useState(false);
@@ -265,7 +265,31 @@ const App = ({ user }: AppProps) => {
         setClinicalContextUpdatedAt(p.clinicalContextUpdatedAt || null);
     }, [selectedPatientId, patients]);
 
-    const getAnonContext = (p: Patient) => `Paciente en rango etario: ${p.ageRange} años.\nDiagnóstico: ${p.diagnosis}.\nHistorial cronológico: ${JSON.stringify(p.timeline || [])}.\nNotas Clínicas: ${p.historyText || ''}`;
+    const getAnonContext = (p: Patient) => {
+        const eventsText = (p.timeline && p.timeline.length > 0)
+            ? p.timeline.map((e: any) => `• [${e.date}] [${e.category || 'Evento'} - ${e.professional || 'Médico'}]: ${e.note}${e.detail ? ` | Detalle: ${e.detail}` : ''}${e.isKey ? ' (HITO CLAVE)' : ''}`).join('\n')
+            : 'Sin eventos estructurados en cronología.';
+
+        const labsText = (p.labResults && p.labResults.length > 0)
+            ? p.labResults.map((l: any) => `• [${l.date || 'S/F'}] ${l.testName}: ${l.value} ${l.unit || ''} ${l.isAbnormal ? '(Anormal/Fuera de rango)' : ''}`).join('\n')
+            : '';
+
+        const imagingText = (p.imagingStudies && p.imagingStudies.length > 0)
+            ? p.imagingStudies.map((s: any) => `• [${s.date || 'S/F'}] ${s.modality || 'Estudio'}: ${s.findings || s.summary || ''}`).join('\n')
+            : '';
+
+        return `[DATOS ESTRUCTURADOS DEL PACIENTE]
+Rango Etario: ${p.ageRange || 'No especificado'} años.
+Diagnóstico Registrado: ${p.diagnosis || 'No especificado'}.
+
+[CRONOLOGÍA DE EVENTOS REGISTRADOS]
+${eventsText}
+${labsText ? `\n[RESULTADOS DE LABORATORIO REGISTRADOS]\n${labsText}` : ''}
+${imagingText ? `\n[ESTUDIOS DE IMÁGENES REGISTRADOS]\n${imagingText}` : ''}
+
+[NOTAS CLÍNICAS Y DOCUMENTACIÓN]
+${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
+    };
 
     const savePatientDetails = async () => {
         if (selectedPatientId) {
@@ -504,11 +528,13 @@ const App = ({ user }: AppProps) => {
     };
 
     const getEffectiveClinicalText = () => {
+        const selP = patients.find(p => p.id === selectedPatientId);
+        const diagnosisBlock = selP?.diagnosis ? `DIAGNÓSTICO ONCOLÓGICO PRINCIPAL: ${selP.diagnosis}` : '';
         const timelineContext = timeline && timeline.length > 0
             ? `LÍNEA DE TIEMPO DE EVENTOS DEL PACIENTE:\n` +
               timeline.map((e: any) => `- [${e.date}] (${e.category || 'Evento'} - ${e.professional || 'Médico'}): ${e.note}${e.detail ? ` | ${e.detail}` : ''}${e.isKey ? ' (HITO CLAVE)' : ''}`).join('\n')
             : '';
-        return [historyText, timelineContext].filter(Boolean).join('\n\n');
+        return [diagnosisBlock, historyText, timelineContext].filter(Boolean).join('\n\n');
     };
 
     const handleRunClinicalAudit = async () => {
@@ -529,13 +555,14 @@ const App = ({ user }: AppProps) => {
         }
     };
 
-    const runReportGeneration = async (title: string, generatorFn: (text: string, files: FileData[]) => Promise<string>) => {
+    const runReportGeneration = async (title: string, generatorFn: (text: string, files: FileData[], guidelines?: FileData[], explicitDx?: string) => Promise<string>) => {
         if (!selectedPatientId) return;
+        const selP = patients.find(p => p.id === selectedPatientId);
         const effectiveText = getEffectiveClinicalText();
         if (!effectiveText && historyFiles.length === 0) { alert("Sin información clínica ni eventos para procesar."); return; }
         setReportModal({ isOpen: true, title, content: null, isLoading: true, generatorFn, accumulatedCorrections: '' });
         try {
-            const result = await generatorFn(effectiveText, historyFiles);
+            const result = await generatorFn(effectiveText, historyFiles, guidelineFiles, selP?.diagnosis || '');
             setReportModal(prev => ({ ...prev, content: result, isLoading: false }));
         } catch {
             setReportModal(prev => ({ ...prev, content: `<div class="p-4 text-red-600 bg-red-50 rounded-lg">Error al generar el informe.</div>`, isLoading: false }));
@@ -544,6 +571,7 @@ const App = ({ user }: AppProps) => {
 
     const handleRegenerateReport = async (correction: string) => {
         if (!reportModal.generatorFn) return;
+        const selP = patients.find(p => p.id === selectedPatientId);
         const newCorrections = reportModal.accumulatedCorrections
             ? `${reportModal.accumulatedCorrections}\n- ${correction}`
             : `- ${correction}`;
@@ -552,7 +580,7 @@ const App = ({ user }: AppProps) => {
             `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar todas en el nuevo informe):\n${newCorrections}`;
         setReportModal(prev => ({ ...prev, isLoading: true, accumulatedCorrections: newCorrections }));
         try {
-            const result = await reportModal.generatorFn(contextWithCorrections, historyFiles);
+            const result = await reportModal.generatorFn(contextWithCorrections, historyFiles, guidelineFiles, selP?.diagnosis || '');
             setReportModal(prev => ({ ...prev, content: result, isLoading: false }));
         } catch {
             setReportModal(prev => ({ ...prev, content: `<div class="p-4 text-red-600 bg-red-50 rounded-lg">Error al regenerar el informe.</div>`, isLoading: false }));
@@ -566,17 +594,33 @@ const App = ({ user }: AppProps) => {
 
     const renderMarkdown = (text: string) => {
         return text.split('\n').map((line, i) => {
-            if (/^\s*\*\s+/.test(line)) {
-                const content = line.replace(/^\s*\*\s+/, '');
-                return <div key={i} className="flex gap-2 mb-1"><span className="text-blue-300 mt-0.5 flex-shrink-0">•</span><span dangerouslySetInnerHTML={{ __html: content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/></div>;
+            if (/^###\s+/.test(line)) {
+                const heading = line.replace(/^###\s+/, '');
+                return (
+                    <h4 key={i} className="text-xs font-black uppercase tracking-wider text-blue-900 mt-3 mb-1.5 border-b border-blue-100 pb-0.5">
+                        {heading}
+                    </h4>
+                );
+            }
+            if (/^##\s+/.test(line)) {
+                const heading = line.replace(/^##\s+/, '');
+                return (
+                    <h3 key={i} className="text-xs font-black uppercase tracking-wider text-blue-950 mt-3 mb-1.5">
+                        {heading}
+                    </h3>
+                );
+            }
+            if (/^\s*[\*\-]\s+/.test(line)) {
+                const content = line.replace(/^\s*[\*\-]\s+/, '');
+                return <div key={i} className="flex gap-2 mb-1 pl-1"><span className="text-blue-500 mt-0.5 flex-shrink-0 font-bold">•</span><span dangerouslySetInnerHTML={{ __html: content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/></div>;
             }
             if (/^\d+\.\s+/.test(line)) {
                 const num = line.match(/^(\d+)\./)?.[1];
                 const content = line.replace(/^\d+\.\s+/, '');
-                return <div key={i} className="flex gap-2 mb-1"><span className="text-blue-300 flex-shrink-0 font-black">{num}.</span><span dangerouslySetInnerHTML={{ __html: content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/></div>;
+                return <div key={i} className="flex gap-2 mb-1 pl-1"><span className="text-blue-500 flex-shrink-0 font-bold">{num}.</span><span dangerouslySetInnerHTML={{ __html: content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/></div>;
             }
-            if (!line.trim()) return <div key={i} className="h-2"/>;
-            return <p key={i} className="mb-1" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/>;
+            if (!line.trim()) return <div key={i} className="h-1.5"/>;
+            return <p key={i} className="mb-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/>;
         });
     };
 
