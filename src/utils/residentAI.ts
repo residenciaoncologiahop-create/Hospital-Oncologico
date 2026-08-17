@@ -1,10 +1,6 @@
 import { callGemini, CLINICAL_CHAT_SYSTEM_INSTRUCTION, buildParts } from './aiProxy';
 import { 
-    matchGuidelineForPatient, 
-    findNCCNGuideline, 
-    validateCandidateSources,
-    NCCNGuideline, 
-    CandidateValidationResult 
+    validateCandidateSources
 } from './nccnGuidelines';
 
 interface FileData { name: string; type: string; data: string; }

@@ -92,7 +92,7 @@ export interface ClinicalScenarioProfile {
   summary: string;
 }
 
-export interface PatientTumorProfile extends ClinicalScenarioProfile {}
+export type PatientTumorProfile = ClinicalScenarioProfile;
 
 export interface CandidateValidationResult {
   canProceed: boolean;
