@@ -166,34 +166,34 @@ export const generateFollowUpPlan = async (
         // 1. VALIDACIÓN PREVIA ESTRICTA DE FUENTES CANDIDATAS (Diagnóstico -> Guía)
         const validation = validateCandidateSources(text, guidelineFiles, explicitDiagnosis);
 
-        // 2. BLOQUEO DE FUENTE (HARD STOP): Si la fuente es inválida, no coincide o el diagnóstico está incompleto
+        // 2. SI HAY BLOQUEO DE SEGURIDAD O INFORMACIÓN INCOMPLETA / INDETERMINADA
         if (!validation.canProceed) {
             return `
             <div class="space-y-4 font-sans text-gray-800 text-xs">
                 
-                <!-- PERFIL CLÍNICO ESTRUCTURADO (ANCLAJE DIAGNÓSTICO) -->
+                <!-- PERFIL DIAGNÓSTICO ESTRUCTURADO -->
                 <div class="bg-blue-50/70 p-4 rounded-xl border border-blue-200 shadow-sm">
                     <div class="flex items-center justify-between mb-2">
                         <h3 class="text-xs font-black text-blue-900 uppercase tracking-widest flex items-center gap-1.5">
-                            Perfil Clínico Estructurado
+                            Perfil Oncológico y Escenario Clínico
                         </h3>
-                        <span class="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">Fecha de Referencia: ${today}</span>
+                        <span class="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">Auditoría: ${today}</span>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-3 gap-2.5 text-[11px] mt-2">
                         <div><span class="font-bold text-blue-800">Tumor Primario:</span> ${validation.profile.organ}</div>
-                        <div><span class="font-bold text-blue-800">Estirpe Histológica:</span> ${validation.profile.histology}</div>
-                        <div><span class="font-bold text-blue-800">Estadio / Margen:</span> ${validation.profile.stage} ${validation.profile.margin !== 'No especificado' ? `(${validation.profile.margin})` : ''}</div>
-                        <div><span class="font-bold text-blue-800">Situación / Estado:</span> ${validation.profile.clinicalStatus}</div>
-                        <div><span class="font-bold text-blue-800">Tratamiento:</span> ${validation.profile.treatment}</div>
-                        <div><span class="font-bold text-blue-800">Fecha de Cirugía:</span> ${validation.profile.surgeryDate}</div>
+                        <div><span class="font-bold text-blue-800">Estirpe / Subtipo:</span> ${validation.profile.histology}</div>
+                        <div><span class="font-bold text-blue-800">Estadio:</span> ${validation.profile.stage}</div>
+                        <div><span class="font-bold text-blue-800">Escenario:</span> <span class="font-bold text-indigo-900">${validation.profile.modeLabel}</span></div>
+                        <div><span class="font-bold text-blue-800">Estado de Enfermedad:</span> ${validation.profile.diseaseStatusDescription || validation.profile.diseaseStatus}</div>
+                        <div><span class="font-bold text-blue-800">Tratamiento Actual:</span> ${validation.profile.activeTreatment}</div>
                     </div>
                 </div>
 
-                <!-- BLOQUEO CLÍNICO DE SEGURIDAD -->
+                <!-- BLOQUEO CLÍNICO DE SEGURIDAD / ESTADO INDETERMINADO -->
                 <div class="bg-red-50/90 p-5 rounded-2xl border-2 border-red-300 shadow-sm space-y-3">
                     <div class="flex items-center gap-2 text-red-900">
                         <svg class="w-5 h-5 flex-shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                        <h3 class="text-xs font-black uppercase tracking-wider">${validation.stopTitle || 'Fuente no válida para este paciente'}</h3>
+                        <h3 class="text-xs font-black uppercase tracking-wider">${validation.stopTitle || 'Bloqueo Clínico de Seguridad'}</h3>
                     </div>
                     
                     <p class="text-xs text-red-950 leading-relaxed font-medium">
@@ -210,7 +210,7 @@ export const generateFollowUpPlan = async (
                     ` : ''}
 
                     <div class="p-3 bg-red-100/70 rounded-xl border border-red-200 text-[11px] text-red-900 leading-relaxed font-medium">
-                        <strong>Principio de Seguridad Clínica:</strong> La aplicación tiene estrictamente bloqueada la generación de recomendaciones basadas en suposiciones, principios generales o conocimiento implícito no atribuible a una guía coincidente con la estirpe real del paciente.
+                        <strong>Principio de Seguridad Oncológica:</strong> El plan de seguimiento debe corresponder con exactitud al diagnóstico y al escenario clínico del paciente. No se generan cronogramas si el estado de enfermedad no puede determinarse con certeza o si la fuente no coincide.
                     </div>
                 </div>
 
@@ -218,7 +218,7 @@ export const generateFollowUpPlan = async (
             `.trim();
         }
 
-        // 3. SI HAY FUENTE VÁLIDA: CONSTRUIR EL CONTEXTO Y LLAMADA SEGURA
+        // 3. SI HAY FUENTE VÁLIDA: CONSTRUIR EL CONTEXTO Y LLAMADA SEGURA POR ESCENARIO
         let closedSourceInstruction = '';
         let guidelineContext = '';
         const validGuidelinesToPass: FileData[] = [];
@@ -233,24 +233,36 @@ El usuario ha adjuntado MANUALMENTE las siguientes guías pertinentes: [${attach
 REGLAS OBLIGATORIAS:
 1. Utiliza EXCLUSIVAMENTE la información contenida en estos documentos adjuntos.
 2. PROHIBIDO complementar con otras guías del sistema, otras versiones, conocimiento general del modelo o información de Internet.
-3. Si la guía adjuntada no contiene información para determinar una recomendación específica:
-   - Muestra claramente: "Esta guía no contiene información suficiente para determinar esta recomendación."
+3. Si la guía adjuntada no contiene información para determinar una recomendación específica para el escenario (${validation.profile.modeLabel}):
+   - Muestra claramente: "Esta guía no contiene información suficiente para determinar esta recomendación para este escenario."
    - NUNCA inventes ni completes silenciosamente la recomendación.
 4. En el pie de fuente indica: "Fuente: Guía(s) adjuntada(s) por el usuario [${attachedNames}]".
 ==========================================================`;
         } else if (validation.sourceMode === 'SYSTEM_NCCN' && validation.validSystemGuideline) {
             const g = validation.validSystemGuideline;
+            const scenarioRec = validation.activeScenarioRecommendations;
+
             guidelineContext = `
 === GUÍA NCCN DE REFERENCIA ASIGNADA (CORRESPONDENCIA EXACTA VERIFICADA) ===
 Patología: ${g.pathology} (Órgano: ${g.organ})
 Fuente Oficial: ${g.source} (Versión: ${g.version})
-Intención: ${g.intention}
-Cronograma: ${g.schedule}
+ESCENARIO ASIGNADO AL PACIENTE: ${validation.profile.modeLabel}
+${scenarioRec ? `
+--- RECOMENDACIONES ESPECÍFICAS PARA ESTE ESCENARIO (${scenarioRec.scenarioTitle}) ---
+Intención: ${scenarioRec.intention}
+Cronograma / Consultas: ${scenarioRec.schedule}
+Reevaluación por Imágenes: ${scenarioRec.imaging}
+Laboratorio y Marcadores: ${scenarioRec.labs}
+Reglas Específicas del Escenario: ${scenarioRec.specialRules}
+` : `
+Intención General: ${g.intention}
+Cronograma General: ${g.schedule}
 Imágenes: ${g.imaging}
-Laboratorio/Marcadores: ${g.labs}
+Laboratorio: ${g.labs}
+`}
 Signos de Alarma: ${g.alarmSigns}
 Consideraciones Especiales: ${g.specialConsiderations}
-REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones de esta guía (${g.source}).
+REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones aplicables al ESCENARIO ACTUAL (${validation.profile.modeLabel}).
 =============================================================================`;
         }
 
@@ -261,27 +273,40 @@ REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones de esta guí
             ${closedSourceInstruction}
             ${guidelineContext}
 
-            PRINCIPIOS FUNDAMENTALES DE SEGURIDAD ONCOLÓGICA:
-            1. CORRESPONDENCIA EXACTA VERIFICADA:
-               - Tumor del paciente: ${validation.profile.organ} — ${validation.profile.histology} (${validation.profile.stage}).
-               - Basa TODAS las recomendaciones exclusivamente en la fuente clínica asignada.
-               - PROHIBIDO inventar o usar "principios generales" o conocimiento implícito no respaldado.
-               - PROHIBIDO emitir recomendaciones para otros tumores o usar planes hipotéticos.
+            DATOS CLÍNICOS DEL PACIENTE:
+            - Diagnóstico Primario: ${validation.profile.organ} — ${validation.profile.histology}
+            - Estadio Documentado: ${validation.profile.stage}
+            - Modo / Escenario Clínico: ${validation.profile.modeLabel}
+            - Estado Actual de Enfermedad: ${validation.profile.diseaseStatusDescription}
+            - Tratamiento Sistémico Actual: ${validation.profile.activeTreatment}
+            - Intención: ${validation.profile.treatmentIntent}
+            - Fecha de Último Estudio de Imagen: ${validation.profile.lastImagingDate}
+            - Fecha de Último Ciclo / Tratamiento: ${validation.profile.lastTreatmentDate}
 
-            2. CÁLCULO INTELIGENTE DE FECHAS REALES:
-               - Utiliza las fechas reales de la historia clínica (cirugía, última quimioterapia/radioterapia, última TC/RMN, últimos análisis).
-               - Toma como referencia la fecha de hoy (${today}).
-               - NUNCA inventes fechas. Si falta la fecha de referencia, indica el intervalo aproximado (ej: "A los 6 meses de la intervención").
+            REGLAS CLÍNICAS FUNDAMENTALES DE APLICABILIDAD POR ESCENARIO:
+            
+            1. REGLA FUNDAMENTAL DE FILTRADO:
+               - Cada recomendación incluida en la tabla DEBE corresponder rigurosamente al escenario clínico actual (${validation.profile.modeLabel}).
+               - Si el paciente presenta ENFERMEDAD METASTÁSICA ACTIVA (Modo B):
+                 * El objetivo NO es "vigilancia post-resección de estadios II–III a 5 años".
+                 * El objetivo es EVALUACIÓN DE RESPUESTA AL TRATAMIENTO SISTÉMICO / CONTROL TUMORAL.
+                 * El estudio principal de imágenes es TAC de tórax, abdomen y pelvis con contraste cada 2 a 3 meses (cada 8–12 semanas o cada 4–6 ciclos de quimioterapia) con motivo "Evaluación de Respuesta al Tratamiento (RECIST 1.1)".
+                 * Marcadores tumorales (CEA / CA 19-9) como "Monitoreo de Respuesta / Progresión Bioquímica".
+                 * PROHIBIDO incluir recomendaciones exclusivas de vigilancia de estadios II–III (ej. Colonoscopía rutinaria de vigilancia de estadios II-III post-resección o TAC cada 6-12 meses de vigilancia II-III).
+                 * PROHIBIDO incluir filas que digan "No aplica directamente para estadio IV". Si no aplica, DEBE QUEDAR EXCLUIDA de la tabla.
+               - Si el paciente presenta VIGILANCIA POST-TRATAMIENTO CURATIVO (Modo A):
+                 * Aplicar recomendaciones de vigilancia post-quirúrgica (TAC cada 6-12m en estadios II-III por 3-5 años, CEA cada 3-6m por 5 años, Colonoscopía al año).
+               - Si el paciente presenta VIGILANCIA POST-METASTASECTOMÍA R0 (Modo C):
+                 * Aplicar vigilancia intensiva post-resección de metástasis (TAC/RM cada 3-6m los primeros 2 años, luego cada 6-12m; CEA cada 3m por 2 años).
 
-            3. DIFERENCIAR ESTADO DEL ESTUDIO:
-               - "Próximo programado": Si la fecha calculada es posterior a hoy (${today}).
-               - "Atrasado / Pendiente": ÚNICAMENTE si la fecha calculada ya venció con respecto a hoy (${today}) y NO existe registro de que se haya realizado en la documentación disponible.
+            2. CÁLCULO DE FECHAS PRÓXIMAS:
+               - Si existe fecha de último estudio (ej: TAC del ${validation.profile.lastImagingDate}):
+                 * Calcular la ventana sugerida según el intervalo recomendado (ej: intervalo 8–12 semanas $\rightarrow$ sugerir mes/ventana aproximada).
+                 * No inventar fechas exactas si la guía establece un intervalo (ej: "Septiembre 2026 (a las 8–12 semanas del estudio previo)").
+               - Diferenciar estado: "Próximo programado" vs "Atrasado / Pendiente" con respecto a hoy (${today}).
 
-            4. NO RECOMENDAR ESTUDIOS INNECESARIOS:
-               - NO indiques rutinariamente PET/TC, RM o marcadores tumorales si la guía de referencia no los indica expresamente para ese tumor y escenario.
-
-            5. ATRIBUCIÓN EXPLÍCITA DE FUENTE:
-               - Cada recomendación debe indicar su procedencia exacta.
+            3. NO RECOMENDAR ESTUDIOS INNECESARIOS:
+               - No indicar PET/TC de rutina salvo sospecha fundada o indicación formal de la guía.
 
             FORMATO DE SALIDA (HTML PURO CON TAILWIND CSS):
             Devuelve ÚNICAMENTE HTML dentro de un contenedor <div> sin bloques de código markdown \`\`\`html.
@@ -289,28 +314,28 @@ REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones de esta guí
             ESTRUCTURA VISUAL REQUERIDA:
             <div class="space-y-4 font-sans text-gray-800 text-xs">
                 
-                <!-- 1. PERFIL CLÍNICO Y VALIDACIÓN DE FUENTE -->
+                <!-- 1. PERFIL CLÍNICO Y ESCENARIO -->
                 <div class="bg-blue-50/70 p-4 rounded-xl border border-blue-200 shadow-sm">
                     <div class="flex items-center justify-between mb-2">
                         <h3 class="text-xs font-black text-blue-900 uppercase tracking-widest flex items-center gap-1.5">
-                            Perfil Oncológico y Fuente Asignada
+                            Perfil Oncológico y Escenario Clínico Asignado
                         </h3>
                         <span class="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">Fecha de Referencia: ${today}</span>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-3 gap-2.5 text-[11px] mt-2">
                         <div><span class="font-bold text-blue-800">Tumor Primario:</span> ${validation.profile.organ}</div>
                         <div><span class="font-bold text-blue-800">Estirpe / Subtipo:</span> ${validation.profile.histology}</div>
-                        <div><span class="font-bold text-blue-800">Estadio / Margen:</span> ${validation.profile.stage} ${validation.profile.margin !== 'No especificado' ? `(${validation.profile.margin})` : ''}</div>
-                        <div><span class="font-bold text-blue-800">Situación / Estado:</span> ${validation.profile.clinicalStatus}</div>
-                        <div><span class="font-bold text-blue-800">Tratamiento:</span> ${validation.profile.treatment}</div>
-                        <div><span class="font-bold text-blue-800">Fuente Utilizada:</span> <span class="font-bold text-emerald-800">${validation.sourceMode === 'CLOSED_SOURCE_MANUAL' ? 'Guía Adjuntada por el Usuario' : (validation.validSystemGuideline?.source || 'NCCN')}</span></div>
+                        <div><span class="font-bold text-blue-800">Estadio:</span> ${validation.profile.stage}</div>
+                        <div><span class="font-bold text-blue-800">Escenario Clínico:</span> <span class="font-bold text-indigo-900">${validation.profile.modeLabel}</span></div>
+                        <div><span class="font-bold text-blue-800">Estado de Enfermedad:</span> ${validation.profile.diseaseStatusDescription}</div>
+                        <div><span class="font-bold text-blue-800">Tratamiento Actual:</span> ${validation.profile.activeTreatment}</div>
                     </div>
                 </div>
 
-                <!-- 2. TABLA DEL PLAN DE VIGILANCIA -->
+                <!-- 2. TABLA DEL PLAN DE SEGUIMIENTO / EVALUACIÓN DE RESPUESTA -->
                 <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                     <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-                        <h3 class="text-xs font-black text-gray-700 uppercase tracking-widest">Plan de Seguimiento y Vigilancia Individualizado</h3>
+                        <h3 class="text-xs font-black text-gray-700 uppercase tracking-widest">${validation.profile.followUpMode === 'ACTIVE_METASTATIC_MONITORING' ? 'Plan de Evaluación de Respuesta y Monitoreo de Enfermedad Activa' : 'Plan de Seguimiento y Vigilancia Individualizado'}</h3>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs border-collapse">
@@ -319,21 +344,21 @@ REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones de esta guí
                                     <th class="py-2.5 px-3">Estudio / Control</th>
                                     <th class="py-2.5 px-3">Último Realizado</th>
                                     <th class="py-2.5 px-3">Próximo Sugerido</th>
-                                    <th class="py-2.5 px-3">Frecuencia</th>
-                                    <th class="py-2.5 px-3">Estado</th>
+                                    <th class="py-2.5 px-3">Frecuencia / Intervalo</th>
+                                    <th class="py-2.5 px-3">Objetivo Clínico</th>
                                     <th class="py-2.5 px-3">Fundamento y Fuente</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100">
-                                <!-- Filas de estudios según la guía -->
+                                <!-- Filas de estudios EXCLUSIVAMENTE aplicables al escenario actual -->
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- 3. PAUTAS DE ALARMA Y CONSIDERACIONES -->
+                <!-- 3. PAUTAS DE ALARMA Y CONSIDERACIONES ESPECÍFICAS -->
                 <div class="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200 shadow-sm">
-                    <h4 class="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-1.5">Signos de Alarma & Pautas Clínicas Específicas</h4>
+                    <h4 class="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-1.5">Signos de Alarma & Criterios de Toxicidad</h4>
                     <p class="text-amber-950 text-[11px] leading-relaxed mb-0">...</p>
                 </div>
 
@@ -341,7 +366,7 @@ REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones de esta guí
                 <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between text-[10px] text-slate-600">
                     <div>
                         <span class="font-black text-slate-800 uppercase tracking-wider">Fuente Oficial:</span> 
-                        <span class="font-medium text-slate-700 ml-1">${validation.sourceMode === 'CLOSED_SOURCE_MANUAL' ? 'Guía(s) adjuntada(s) por el usuario' : (validation.validSystemGuideline?.source || 'NCCN')}</span>
+                        <span class="font-medium text-slate-700 ml-1">${validation.sourceMode === 'CLOSED_SOURCE_MANUAL' ? 'Guía(s) adjuntada(s) por el usuario' : (validation.validSystemGuideline?.source || 'NCCN')} (${validation.profile.modeLabel})</span>
                     </div>
                     <div class="text-[9px] text-slate-400 font-medium mt-1 md:mt-0">
                         Criterio médico individualizado prevalece sobre guías generales.
@@ -376,7 +401,7 @@ REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones de esta guí
 
         const res = await callGemini({ parts });
         const raw = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
-        const cleaned = raw.replace(/```html|```/g, '').trim();
+        let cleaned = raw.replace(/```html|```/g, '').trim();
 
         // 4. VALIDACIÓN POSTERIOR DE SEGURIDAD (Double-Check Guardrail)
         const rawLower = cleaned.toLowerCase();
@@ -403,6 +428,12 @@ REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones de esta guí
                 </div>
             </div>
             `.trim();
+        }
+
+        // 5. FILTRADO ESTRICTO DE FILAS INCOMPATIBLES
+        // Si el paciente está en Modo B (Metastásico activo), purgamos cualquier fila que mencione "no aplica directamente para estadio iv" o "post-resección de estadios ii-iii"
+        if (validation.profile.followUpMode === 'ACTIVE_METASTATIC_MONITORING') {
+            cleaned = cleaned.replace(/<tr[^>]*>[\s\S]*?(?:no aplica directamente para estadio iv|estadios ii[–-]iii de alto riesgo|colonoscop[ií]a al a[ñn]o de la resecci[oó]n)[\s\S]*?<\/tr>/gi, '');
         }
 
         return cleaned;
