@@ -1,4 +1,4 @@
-import { callGemini, CLINICAL_CHAT_SYSTEM_INSTRUCTION, buildParts } from './aiProxy';
+import { callGemini, CLINICAL_CHAT_SYSTEM_INSTRUCTION, buildParts, parseJsonArraySafely } from './aiProxy';
 import { 
     validateCandidateSources
 } from './nccnGuidelines';
@@ -59,12 +59,13 @@ export const extractResidentTimeline = async (text: string, files: FileData[]): 
     
     try {
         const parts: any[] = [{ text: `
-            Eres un oncólogo experto. Extrae los eventos clínicos del paciente sin duplicados.
+            Eres un oncólogo experto. Extrae todos los eventos clínicos del paciente cronológicamente.
             
             REGLAS:
-            1. ❌ NO DUPLICAR eventos para la misma fecha o el mismo acontecimiento.
-            2. HITOS ONCOLÓGICOS CLAVE (isKey = true): Biopsia/Diagnóstico, Inmunohistoquímica, Estadio TNM, Cirugías oncológicas, inicio/cambio de Quimioterapia/Inmunoterapia/RT, progresión/respuesta. "note" DEBE SER MUY DETALLADO (fechas, esquema, dosis, estadios, marcadores).
-            3. EVENTOS SECUNDARIOS (isKey = false): Controles o laboratorios estables. "note" DEBE SER CONCISO (1 oración corta, máx 100 caracteres).
+            1. ❌ Extrae TODOS los eventos documentados a lo largo de toda la historia clínica.
+            2. Si en la misma fecha ocurren sucesos de distinta naturaleza, registra cada uno en su categoría sin omitir ninguno.
+            3. HITOS ONCOLÓGICOS CLAVE (isKey = true): Biopsia/Diagnóstico, Inmunohistoquímica, Estadio TNM, Cirugías oncológicas, inicio/cambio de Quimioterapia/Inmunoterapia/RT, progresión/respuesta. "note" DEBE SER MUY DETALLADO (fechas, esquema, dosis, estadios, marcadores).
+            4. EVENTOS SECUNDARIOS (isKey = false): Controles o laboratorios estables. "note" DEBE SER CONCISO Y CLARO.
             
             Format JSON array:
             [
@@ -75,16 +76,16 @@ export const extractResidentTimeline = async (text: string, files: FileData[]): 
         if (text) parts.push({ text: `Notas: ${text}` });
         files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
-        const res = await callGemini({ parts });
+        const res = await callGemini({ parts, responseMimeType: "application/json" });
 
         if (res.text) {
             const txt = typeof res.text === 'function' ? res.text() : res.text;
-            const clean = txt.replace(/```json|```/g, '').trim();
-            const events = JSON.parse(clean);
+            const events = parseJsonArraySafely(txt);
             return events.sort((a: any, b: any) => parseDate(a.date) - parseDate(b.date));
         }
         return [];
-    } catch {
+    } catch (err) {
+        console.error("Error en extractResidentTimeline:", err);
         return [];
     }
 };

@@ -330,13 +330,13 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         for (const ev of eventsList) {
             const normDate = (ev.date || 'S/F').trim();
             const normCat = (ev.category || 'General').toLowerCase().trim();
-            const normNoteSnippet = (ev.note || '')
+            const normNote = (ev.note || '')
                 .toLowerCase()
                 .normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-z0-9]/g, '')
-                .substring(0, 35);
-            const key = `${normDate}|${normCat}|${normNoteSnippet}`;
+                .replace(/[^a-z0-9]/g, '');
+            const noteSnippet = normNote.substring(0, 120);
+            const key = `${normDate}|${normCat}|${noteSnippet}`;
 
             if (!seen.has(key)) {
                 seen.set(key, ev);

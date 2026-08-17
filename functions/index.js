@@ -56,10 +56,10 @@ const ALLOWED_MIME_TYPES = new Set([
 const ALLOWED_RESPONSE_TYPES = new Set(["application/json", "text/plain"]);
 
 const LIMITS = {
-  promptMaxChars:            40_000,   // ~10k tokens de texto puro
-  systemInstructionMaxChars:  4_000,
-  maxParts:                     10,    // partes totales por request
-  maxInlineDataParts:            5,    // archivos adjuntos
+  promptMaxChars:           500_000,   // ~125k tokens de texto
+  systemInstructionMaxChars: 10_000,
+  maxParts:                     30,    // partes totales por request
+  maxInlineDataParts:           15,    // archivos adjuntos
   inlineDataMaxBytes:   20_000_000,    // 20 MB por archivo
 };
 

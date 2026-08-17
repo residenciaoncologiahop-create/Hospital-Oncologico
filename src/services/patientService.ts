@@ -76,18 +76,26 @@ export const uploadFile = async (fileBase64: string, fileName: string, patientId
     return await getDownloadURL(storageRef);
 };
 
-// Persistir contexto clínico acumulado (sin datos personales)
+// Persistir contexto clínico acumulado (sin datos personales y sin duplicación infinita)
 export const saveClinicalContext = async (patientId: string, newText: string): Promise<void> => {
     const docRef = doc(db, 'patients', patientId);
     const snap = await getDoc(docRef);
     const existing = snap.exists() ? (snap.data().clinicalContext || '') : '';
-    const date = new Date().toLocaleString('es-AR', {
-        day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-    });
-    const accumulated = existing
-        ? `${existing}\n\n--- Actualización ${date} ---\n\n${newText}`
-        : newText;
+    const trimmedNew = (newText || '').trim();
+    const trimmedExisting = (existing || '').trim();
+
+    if (!trimmedNew) return;
+    if (trimmedNew === trimmedExisting) return;
+
+    let accumulated = trimmedNew;
+    if (trimmedExisting && !trimmedNew.includes(trimmedExisting) && !trimmedExisting.includes(trimmedNew)) {
+        const date = new Date().toLocaleString('es-AR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+        });
+        accumulated = `${trimmedExisting}\n\n--- Actualización ${date} ---\n\n${trimmedNew}`;
+    }
+
     await updateDoc(docRef, {
         clinicalContext: accumulated,
         clinicalContextUpdatedAt: Date.now(),

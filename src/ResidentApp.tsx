@@ -182,17 +182,18 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
         ...(e.detail ? { detail: e.detail } : {})
       })).filter((e: any) => e.note && e.note.trim() !== '');
 
+      const allEvents = [...(selectedPatient.timeline || []), ...normalized];
       const seen = new Map<string, any>();
-      for (const ev of normalized) {
+      for (const ev of allEvents) {
         const normDate = (ev.date || 'S/F').trim();
         const normCat = (ev.category || 'General').toLowerCase().trim();
-        const normNoteSnippet = (ev.note || '')
+        const normNote = (ev.note || '')
           .toLowerCase()
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9]/g, '')
-          .substring(0, 35);
-        const key = `${normDate}|${normCat}|${normNoteSnippet}`;
+          .replace(/[^a-z0-9]/g, '');
+        const noteSnippet = normNote.substring(0, 120);
+        const key = `${normDate}|${normCat}|${noteSnippet}`;
 
         if (!seen.has(key)) {
           seen.set(key, ev);

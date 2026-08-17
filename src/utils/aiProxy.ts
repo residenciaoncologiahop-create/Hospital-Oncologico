@@ -178,6 +178,64 @@ export const getChatResponseSecure = async (
   return text.replace(/\[(?:Dato Documentado|Dato Estructurado|Dato no estructurado|Inferencia|Hipótesis|Dato Clínico)\]:\s*/gi, '');
 };
 
+// ── Parser JSON resiliente ─────────────────────
+export const parseJsonArraySafely = (rawText: string): any[] => {
+  if (!rawText) return [];
+  const clean = rawText.replace(/```json|```/g, '').trim();
+
+  // 1. Extracción directa del bloque entre corchetes
+  const start = clean.indexOf('[');
+  const end = clean.lastIndexOf(']');
+  if (start !== -1 && end !== -1 && end > start) {
+    try {
+      const parsed = JSON.parse(clean.substring(start, end + 1));
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // Continuar con recuperación
+    }
+  }
+
+  // 2. Parseo directo del texto completo
+  try {
+    const parsed = JSON.parse(clean);
+    if (Array.isArray(parsed)) return parsed;
+    if (typeof parsed === 'object' && parsed !== null) return [parsed];
+  } catch {
+    // Continuar con recuperación
+  }
+
+  // 3. Reparación de JSON truncado (cerrando con ']')
+  if (start !== -1) {
+    const lastBrace = clean.lastIndexOf('}');
+    if (lastBrace > start) {
+      try {
+        const repaired = clean.substring(start, lastBrace + 1) + ']';
+        const parsed = JSON.parse(repaired);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // Continuar con extracción por objetos
+      }
+    }
+  }
+
+  // 4. Extracción individual de objetos JSON
+  const results: any[] = [];
+  const objectRegex = /\{[\s\S]*?\}(?=\s*,\s*\{|\s*\]|\s*$)/g;
+  let match;
+  while ((match = objectRegex.exec(clean)) !== null) {
+    try {
+      const obj = JSON.parse(match[0]);
+      if (obj && typeof obj === 'object') {
+        results.push(obj);
+      }
+    } catch {
+      // Ignorar fragmentos incompletos
+    }
+  }
+
+  return results;
+};
+
 // ── Extracción de Timeline ─────────────────────
 export const extractTimelineSecure = async (
   text: string,
@@ -186,17 +244,18 @@ export const extractTimelineSecure = async (
   if (!text && files.length === 0) return [];
 
   const instructionText = `
-    Eres un asistente médico experto en oncología. Analiza la documentación y extrae la cronología clínica del paciente.
+    Eres un asistente médico experto en oncología. Analiza toda la documentación y extrae la cronología clínica completa del paciente.
 
-    REGLAS ESTRICTAS DE NO DUPLICACIÓN:
-    1. ❌ NUNCA generes eventos duplicados para la misma fecha ni repitas la misma consulta, cirugía, estudio o tratamiento.
-    2. Si en la misma fecha ocurren varios sucesos o hay múltiples menciones del mismo evento, agrupa la información en UN SOLO evento en la línea de tiempo.
+    REGLAS DE EXTRACCIÓN Y COBERTURA:
+    1. ❌ Extrae TODOS los eventos clínicos documentados a lo largo de la historia clínica sin omitir ninguno.
+    2. Si en la misma fecha ocurren sucesos de distinta índole (ej: una Cirugía y una Biopsia, o una Quimio y un Control/Estudio), registra cada acontecimiento relevante por separado en su categoría correspondiente.
+    3. No inventes eventos ni repitas el mismo acontecimiento idéntico.
 
     IDIOMA OBLIGATORIO: Todo en español. Si el documento está en inglés, traduce el contenido.
 
     REGLA DE PRIVACIDAD: NO incluyas DNI, nombres reales ni datos personales.
 
-    Fechas: formato DD/MM/YYYY.
+    Fechas: formato DD/MM/YYYY (o S/F si no figura fecha exacta).
 
     Categorías permitidas (usar exactamente estas palabras): Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
 
@@ -213,7 +272,7 @@ export const extractTimelineSecure = async (
 
     NIVEL DE DETALLE EN "note" Y "detail":
     - HITOS CLAVE (isKey = true): "note" DEBE SER MUY DETALLADO, EXHAUSTIVO Y RIGUROSO (incluir fechas exactas, esquema de tratamiento, dosis, estadios, resultados histológicos completos y conducta). Si la información es extensa, incluir extractos extendidos en el campo "detail".
-    - EVENTOS SECUNDARIOS (isKey = false): "note" DEBE SER MUY CONCISO (1 sola frase breve, máx 80-100 caracteres). NO recargar la línea de tiempo con detalles secundarios irrelevantes.
+    - EVENTOS SECUNDARIOS (isKey = false): "note" DEBE SER CONCISO Y CLARO (1 o 2 frases descriptivas).
 
     ESTRUCTURA JSON REQUERIDA — devolver ÚNICAMENTE el array:
     [
@@ -228,20 +287,15 @@ export const extractTimelineSecure = async (
     ]
   `;
 
-
   const parts = buildParts(instructionText, []);
   if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
   files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
-  const res = await callGemini({ parts, responseMimeType: "application/json" });
-
   try {
-    const clean = res.text.replace(/```json|```/g, '').trim();
-    const start = clean.indexOf('[');
-    const end = clean.lastIndexOf(']');
-    if (start !== -1 && end !== -1) return JSON.parse(clean.substring(start, end + 1));
-    return JSON.parse(clean);
-  } catch {
+    const res = await callGemini({ parts, responseMimeType: "application/json" });
+    return parseJsonArraySafely(res.text || '');
+  } catch (err) {
+    console.error("Error en extractTimelineSecure:", err);
     return [];
   }
 };
@@ -351,10 +405,7 @@ export const extractLabsSecure = async (
   const res = await callGemini({ parts, responseMimeType: "application/json" });
 
   try {
-    const clean = res.text.replace(/```json|```/g, '').trim();
-    const start = clean.indexOf('[');
-    const end = clean.lastIndexOf(']');
-    const raw = start !== -1 ? JSON.parse(clean.substring(start, end + 1)) : JSON.parse(clean);
+    const raw = parseJsonArraySafely(res.text || '');
 
     const EXCLUDED_TERMS = [
       'suv', 'suvmax', 'suvpeak', 'mtv', 'tlg', 'recist', 'tnm', 'ctnm', 'ptnm',
@@ -386,7 +437,8 @@ export const extractLabsSecure = async (
     }
 
     return Array.from(resultMap.values());
-  } catch {
+  } catch (err) {
+    console.error("Error en extractLabsSecure:", err);
     return [];
   }
 };
@@ -506,12 +558,9 @@ export const extractImagingFromHistorySecure = async (
   const res = await callGemini({ parts, responseMimeType: "application/json" });
 
   try {
-    const clean = res.text.replace(/```json|```/g, '').trim();
-    const start = clean.indexOf('[');
-    const end = clean.lastIndexOf(']');
-    if (start !== -1 && end !== -1) return JSON.parse(clean.substring(start, end + 1));
-    return JSON.parse(clean);
-  } catch {
+    return parseJsonArraySafely(res.text || '');
+  } catch (err) {
+    console.error("Error en extractImagingFromHistorySecure:", err);
     return [];
   }
 };
@@ -594,16 +643,11 @@ SALIDA: ÚNICAMENTE array JSON:
   if (text) parts.push({ text: `Informe radiológico:\n${text}` });
   files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
-  const res = await callGemini({ parts, responseMimeType: "application/json" });
-
   try {
-    const clean = res.text.replace(/```json|```/g, '').trim();
-    const start = clean.indexOf('[');
-    const end = clean.lastIndexOf(']');
-    if (start !== -1 && end !== -1) return JSON.parse(clean.substring(start, end + 1));
-    const parsed = JSON.parse(clean);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
+    const res = await callGemini({ parts, responseMimeType: "application/json" });
+    return parseJsonArraySafely(res.text || '');
+  } catch (err) {
+    console.error("Error en extractSingleImagingReportSecure:", err);
     return [];
   }
 };
