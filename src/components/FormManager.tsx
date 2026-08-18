@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, CheckCircle2, Share2, RefreshCcw, Pill, AlertCircle, Check
+  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, CheckCircle2, RefreshCcw, Pill, AlertCircle, Check
 } from 'lucide-react';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { callGemini } from '../utils/aiProxy';
@@ -132,7 +132,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     { id: 'admision', name: 'ADMISIÓN BANCO DE DROGAS', file: '/forms/admision.pdf', type: 'auto_banco', context: 'ADMISIÓN' },
     { id: 'renovacion', name: 'RENOVACIÓN BANCO DE DROGAS', file: '/forms/renovacion.pdf', type: 'auto_banco', context: 'RENOVACIÓN' },
     { id: 'banco', name: 'DINADIC (ex-DADSE)', file: '/forms/nuevo_dinadic.pdf', type: 'auto_dinadic', context: 'SOLICITUD' },
-    { id: 'interconsulta', name: 'Resumen de Interconsulta / Derivación', file: '', type: 'interconsulta' },
   ];
 
   const calculateBSA = (weight: string | number, height: string | number) => {
@@ -1393,121 +1392,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  const generateInterconsultaPDF = async () => {
-    if (!hasClinicalData) {
-      alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
-      return;
-    }
-    const destino = window.prompt("Ingrese el Servicio o Especialidad de destino (Ej: Cirugía Oncológica, Cuidados Paliativos, Radioterapia, Nutrición):");
-    if (!destino || !destino.trim()) return;
-
-    setProcessingId('interconsulta');
-    setStatus('Generando Resumen de Interconsulta...');
-
-    try {
-      const today = new Date().toLocaleDateString('es-AR');
-      const prompt = `
-        Actúa como Oncólogo Clínico en el Hospital Oncológico Provincial de Córdoba. Hoy es ${today}.
-        Redacta una SOLICITUD DE INTERCONSULTA / DERIVACIÓN MÉDICA formal para el servicio de: ${destino.toUpperCase()}.
-        
-        REGLAS DE FORMATO:
-        1. ❌ SIN ASTERISCOS ni MARKDOWN. Texto plano.
-        2. ESTRUCTURA:
-           1. MOTIVO DE INTERCONSULTA: Objetivo claro de la interconsulta con ${destino.toUpperCase()}.
-           2. DATOS DEL PACIENTE: Nombre, edad, DNI, diagnóstico principal, estadio actual, ECOG.
-           3. RESUMEN CLÍNICO ONCOLÓGICO: Narrativa cronológica fluida que integre hitos diagnósticos, cirugías, esquemas previos y estado actual.
-           4. PREGUNTA / CONDUCTA SOLICITADA AL SERVICIO DE ${destino.toUpperCase()}.
-        
-        CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}
-      `;
-
-      const parts: any[] = [{ text: prompt }];
-      if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
-
-      const res = await callGemini({ parts });
-      const summaryText = res.text || "No se pudo generar la interconsulta.";
-
-      const pdfDoc = await PDFDocument.create();
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      
-      let page = pdfDoc.addPage();
-      const { width, height } = page.getSize();
-      const marginX = 50;
-      const marginTop = 35;
-      const marginBottom = 50;
-      let y = height - marginTop;
-
-      page.drawText('HOSPITAL ONCOLÓGICO PROVINCIAL DE CÓRDOBA', { x: marginX, y, size: 12, font: fontBold });
-      y -= 16;
-      page.drawText(`SOLICITUD DE INTERCONSULTA / DERIVACIÓN — ${destino.toUpperCase()}`, { x: marginX, y, size: 10, font: fontBold });
-      y -= 14;
-      page.drawText(`Fecha: ${today}`, { x: marginX, y, size: 8.5, font });
-      y -= 22;
-
-      const cleanText = summaryText.replace(/(\r\n|\n|\r)/gm, "\n").replace(/\*\*/g, "").replace(/#/g, "");
-      const lines = cleanText.split('\n');
-      const contentWidth = width - (marginX * 2);
-
-      for (const line of lines) {
-        if (!line.trim()) { y -= 6; continue; }
-        const isHeader = line.includes('MOTIVO') || line.includes('DATOS DEL PACIENTE') || line.includes('RESUMEN CLÍNICO') || line.includes('CONDUCTA SOLICITADA');
-        const currentFont = isHeader ? fontBold : font;
-        const currentSize = isHeader ? 9.5 : 8.5;
-        const currentSpacing = isHeader ? 13 : 11;
-
-        if (isHeader) y -= 4;
-
-        const words = line.split(' ');
-        let currentLine = '';
-
-        for (const word of words) {
-          const testLine = currentLine ? `${currentLine} ${word}` : word;
-          const testWidth = currentFont.widthOfTextAtSize(testLine, currentSize);
-          if (testWidth > contentWidth) {
-            if (y < marginBottom + 50) {
-              page = pdfDoc.addPage();
-              y = height - marginTop;
-            }
-            page.drawText(currentLine, { x: marginX, y, size: currentSize, font: currentFont });
-            y -= currentSpacing;
-            currentLine = word;
-          } else {
-            currentLine = testLine;
-          }
-        }
-
-        if (currentLine) {
-          if (y < marginBottom + 50) {
-            page = pdfDoc.addPage();
-            y = height - marginTop;
-          }
-          page.drawText(currentLine, { x: marginX, y, size: currentSize, font: currentFont });
-          y -= currentSpacing;
-        }
-      }
-
-      const footerY = 60;
-      if (y < footerY + 20) page = pdfDoc.addPage();
-      const docName = doctorData.nombre ? `Dr/a. ${doctorData.nombre}` : 'Médico Oncólogo Tratante';
-      const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : '';
-      page.drawText(docName, { x: width - marginX - 180, y: footerY, size: 8.5, font: fontBold });
-      if (docMat) page.drawText(docMat, { x: width - marginX - 180, y: footerY - 11, size: 8, font });
-      page.drawText('Servicio de Oncología Clínica', { x: width - marginX - 180, y: footerY - 22, size: 8, font });
-
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `Interconsulta_${destino.replace(/\s+/g, '_')}_${(patient?.name || 'Paciente').replace(/\s+/g, '_')}.pdf`; link.click();
-      setStatus('¡Listo!');
-    } catch (e: any) {
-      alert("Error al generar interconsulta: " + e.message);
-    } finally {
-      setProcessingId(null);
-      setStatus('');
-    }
-  };
-
   const liveBSA = calculateBSA(pamiFormData.peso, pamiFormData.talla);
   const missingMandatoryList = PAMI_MANDATORY_FIELDS.filter(f => !String((pamiFormData as any)[f.key] || '').trim());
   const missingMandatoryCount = missingMandatoryList.length;
@@ -1709,17 +1593,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                     >
                       {processingId === 'summary' ? <Loader2 className="animate-spin" size={14}/> : <FilePlus size={14}/>}
                       <span>Resumen Clínico</span>
-                    </button>
-                  </div>
-                ) : form.type === 'interconsulta' ? (
-                  <div className="flex-1 flex gap-2">
-                    <button
-                      onClick={() => generateInterconsultaPDF()}
-                      disabled={processingId !== null}
-                      className="flex-1 flex items-center justify-center space-x-2 text-white py-2 px-3 rounded-lg text-xs font-bold bg-indigo-700 hover:bg-indigo-800 transition-all disabled:opacity-50"
-                    >
-                      {processingId === 'interconsulta' ? <Loader2 className="animate-spin" size={14}/> : <Share2 size={14}/>}
-                      <span>Generar Solicitud de Interconsulta (PDF)</span>
                     </button>
                   </div>
                 ) : null}
