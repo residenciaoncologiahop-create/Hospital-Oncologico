@@ -844,30 +844,56 @@ const ImagingPanel: React.FC<ImagingPanelProps> = ({
               const typeStyle = TYPE_STYLES[study.type] || TYPE_STYLES['TC'];
               const sum = sumMeasurements(study.targetLesions);
 
-              // Hallazgo oncológico relevante sintetizado
-              let synthesizedFindings = study.relevantFindings;
-              if (!synthesizedFindings) {
-                if (study.targetLesions.length > 0) {
-                  synthesizedFindings = study.targetLesions
-                    .map(l => `${l.location}: ${l.measurement} mm${l.suvMax ? ` (SUVmáx ${l.suvMax})` : ''}`)
-                    .join(' • ');
-                } else if (study.newLesions) {
-                  synthesizedFindings = 'Aparición de nuevas lesiones';
-                } else if (study.nonTargetLesions.length > 0) {
-                  synthesizedFindings = study.nonTargetLesions.map(l => `${l.location} (${l.status})`).join(' • ');
-                } else if (study.suvMax) {
-                  synthesizedFindings = `Captación hipermetabólica: SUVmáx ${study.suvMax}`;
+              // Construir lista de hallazgos oncológicos positivos individuales
+              const findingsList: string[] = [];
+
+              if (study.targetLesions && study.targetLesions.length > 0) {
+                study.targetLesions.forEach(l => {
+                  let text = `${l.location}: ${l.measurement} mm`;
+                  if (l.suvMax) {
+                    text += ` (SUVmáx ${l.suvMax})`;
+                  }
+                  findingsList.push(text);
+                });
+              }
+
+              if (study.nonTargetLesions && study.nonTargetLesions.length > 0) {
+                study.nonTargetLesions.forEach(l => {
+                  findingsList.push(`${l.location} (${l.status})`);
+                });
+              }
+
+              if (study.newLesions) {
+                findingsList.push('Aparición de nuevas lesiones');
+              }
+
+              if (study.suvMax && (!study.targetLesions || study.targetLesions.length === 0)) {
+                findingsList.push(`Captación hipermetabólica: SUVmáx ${study.suvMax}`);
+              }
+
+              // Si no hay lesiones estructuradas desglosadas, usar relevantFindings fragmentado por líneas o viñetas
+              if (findingsList.length === 0 && study.relevantFindings) {
+                const parts = study.relevantFindings
+                  .split(/\r?\n|•|;/)
+                  .map(p => p.trim())
+                  .filter(p => p.length > 0);
+                if (parts.length > 0) {
+                  findingsList.push(...parts);
                 } else {
-                  synthesizedFindings = 'Estudio con hallazgos oncológicos documentados';
+                  findingsList.push(study.relevantFindings);
                 }
+              }
+
+              if (findingsList.length === 0) {
+                findingsList.push('Estudio con hallazgos oncológicos documentados');
               }
 
               return (
                 <div
                   key={study.id}
-                  className="flex items-start justify-between gap-3 p-3 rounded-xl bg-slate-50/70 hover:bg-slate-50 border border-slate-100 transition-colors"
+                  className="flex items-start justify-between gap-3 p-3.5 rounded-xl bg-slate-50/70 hover:bg-slate-50 border border-slate-100 transition-colors"
                 >
-                  <div className="space-y-1 min-w-0">
+                  <div className="space-y-1.5 min-w-0 flex-1">
                     {/* Fecha — Modalidad Región */}
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-black text-slate-800">{study.date}</span>
@@ -887,14 +913,19 @@ const ImagingPanel: React.FC<ImagingPanelProps> = ({
                       )}
                     </div>
 
-                    {/* Hallazgo oncológico relevante y medidas */}
-                    <p className="text-xs font-semibold text-slate-700 leading-snug">
-                      {synthesizedFindings}
-                    </p>
+                    {/* Lista enumerada vertical de hallazgos oncológicos positivos */}
+                    <ul className="space-y-1 pt-0.5">
+                      {findingsList.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-xs text-slate-700 font-semibold leading-relaxed">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
 
                     {/* Tratamiento concomitante si existe */}
                     {study.treatment && (
-                      <p className="text-[10px] font-medium text-slate-500">
+                      <p className="text-[10px] font-medium text-slate-500 pt-0.5">
                         <span className="text-slate-400">Tratamiento:</span> {study.treatment}
                       </p>
                     )}
