@@ -24,6 +24,17 @@ const PAMI_MANDATORY_FIELDS: Array<{ key: string; label: string; id: string }> =
   { key: 'informe_clinico_detallado', label: 'Informe Clínico', id: 'pami-informe_clinico_detallado' },
 ];
 
+const BANCO_MANDATORY_FIELDS: Array<{ key: string; label: string; id: string }> = [
+  { key: 'nombre_apellido', label: 'Apellido y Nombre', id: 'banco-nombre_apellido' },
+  { key: 'dni', label: 'DNI', id: 'banco-dni' },
+  { key: 'fnac', label: 'Fecha de Nacimiento', id: 'banco-fnac' },
+  { key: 'diagnostico', label: 'Diagnóstico', id: 'banco-diagnostico' },
+  { key: 'peso', label: 'Peso', id: 'banco-peso' },
+  { key: 'talla', label: 'Talla', id: 'banco-talla' },
+  { key: 'ecog', label: 'ECOG', id: 'banco-ecog' },
+  { key: 'droga_1', label: 'Droga #1 (Principal)', id: 'banco-droga_1' },
+];
+
 const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, timeline }) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
@@ -76,10 +87,69 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     droga_4: '',
   });
 
-  // Banco de Drogas Modal State (Admisión y Renovación)
+  // Banco de Drogas Modal State (Admisión y Renovación Completa)
   const [showBancoModal, setShowBancoModal] = useState<'admision' | 'renovacion' | null>(null);
+  const [showBancoMissingConfirm, setShowBancoMissingConfirm] = useState(false);
   const [bancoFormData, setBancoFormData] = useState({
     context: 'admision' as 'admision' | 'renovacion',
+    // Filiación
+    nombre_apellido: '',
+    dni: '',
+    fnac: '',
+    edad: '',
+    sexo: 'M' as 'M' | 'F',
+    domicilio: '',
+    localidad: '',
+    provincia: 'Córdoba',
+    pais: 'Argentina',
+    institucion: 'Hospital Oncológico Provincial - Córdoba',
+    telefono: '',
+    profesion: '',
+    // Diagnóstico & Estadificación
+    diagnostico: '',
+    cie10: '',
+    fecha_diagnostico: '',
+    tnm_t: '',
+    tnm_n: '',
+    tnm_m: '',
+    estadio: '',
+    receptor_RE: 'no aplica',
+    receptor_RP: 'no aplica',
+    receptor_HER2: 'no aplica',
+    receptor_KRAS: 'no aplica',
+    receptor_EGER: 'no aplica',
+    receptor_otros: '',
+    anatomia_patologica: '',
+    // Antropometría
+    peso: '',
+    talla: '',
+    ecog: '0',
+    // Tratamientos Previos
+    cx_primario_si: false,
+    cx_especificar: '',
+    cx_ganglios_resecados: '',
+    cx_ganglios_comprometidos: '',
+    cx_fecha: '',
+    cx_metastasis_si: false,
+    cx_metastasis_especificar: '',
+    cx_metastasis_fecha: '',
+    rt_primario_si: false,
+    rt_metastasis_si: false,
+    rt_localizacion: '',
+    tratamientos_sistemicos_si: false,
+    hormonoterapia_tipo: '', // 'adyuvante' | 'avanzada' | ''
+    hormonoterapia_droga: '',
+    quimioterapia_tipo: '', // 'neoadyuvante' | 'adyuvante' | 'avanzada' | ''
+    quimioterapia_droga: '',
+    terapia_blanco_droga: '',
+    terapia_blanco_fecha: '',
+    inmunoterapia_droga: '',
+    inmunoterapia_fecha: '',
+    // Tratamiento a Realizar
+    tipo_tratamiento: 'avanzado' as 'adyuvante' | 'neoadyuvante' | 'avanzado',
+    linea: '1',
+    intervalo_ciclo: '21',
+    ciclos_programados: '6',
     droga_1: '',
     dosis_1: '',
     dias_1: '',
@@ -92,19 +162,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     dosis_3: '',
     dias_3: '',
     total_dia_3: '',
-    intervalo_ciclo: '21',
-    ciclos_programados: '6',
-    tipo_tratamiento: 'avanzado',
-    linea: '1',
-    peso: '',
-    talla: '',
-    ecog: '0',
-    telefono: '',
-    fnac: '',
-    motivo_renovacion: 'continua',
+    // Renovación
+    motivo_renovacion: 'continua' as 'continua' | 'cambio',
     ciclos_realizados: '',
-    respuesta: 'estable',
+    respuesta: 'estable' as 'estable' | 'parcial' | 'completa',
     sitio_progresion: '',
+    lugar_fecha: '',
   });
   
   const [showDocConfig, setShowDocConfig] = useState(false);
@@ -201,7 +264,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   const extractFallbackPatientData = () => {
     const context = getEffectiveClinicalContext();
 
-    const name = patient?.name || '';
+    let name = patient?.name || '';
+    if (!name || name.toLowerCase() === 'paciente') {
+      const nameMatch = context.match(/(?:paciente|nombre(?:\s+y\s+apellido)?|afiliado)\s*[:=]?\s*([A-Za-zÁÉÍÓÚáéíóúñÑ\s]{3,35})/i);
+      if (nameMatch && !nameMatch[1].toLowerCase().includes('historia')) {
+        name = nameMatch[1].trim();
+      } else {
+        name = '';
+      }
+    }
 
     let fnac = patient?.birthDate || '';
     if (!fnac) {
@@ -251,53 +322,217 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     return { name, fnac, dni, phone, weight, height, ecog, diagnosis, stage };
   };
 
-  // Inicio de flujo para Banco de Drogas (abre modal de carga de celdas antes de generar PDF)
-  const handleStartBancoFlow = (formType: 'admision' | 'renovacion') => {
+  // BANCO DE DROGAS: Extracción con IA profunda para pre-completar todas las celdas
+  const extractBancoDrogasData = async (context: string, correction?: string) => {
+    const today = new Date().toLocaleDateString('es-AR');
+    const isRenovacion = context === 'RENOVACIÓN';
+
+    const prompt = `
+      Actúa como MÉDICO ONCÓLOGO EXPERTO. Hoy es ${today}.
+      Analizá la historia clínica y extraé TODOS los datos posibles para el formulario Banco de Drogas ${context}.
+      IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown.
+
+      REGLAS DE EXTRACCIÓN Y DEDUCCIÓN CLÍNICA (MUY ESTRICTAS):
+      1. nombre_apellido: Extraer nombre real del paciente. NUNCA devolver "Paciente". Si no figura, dejar en blanco.
+      2. fecha_diagnostico: Deducir fecha del primer estudio patológico, biopsia o consulta diagnóstica inicial (DD/MM/AAAA).
+      3. cx_primario_si: true SOLAMENTE SI el paciente tuvo una CIRUGÍA/RESECCIÓN QUIRÚRGICA de su tumor primario (ej: Mastectomía, Biopsia escisional, Resección). Si solo tuvo tratamientos farmacológicos sistémicos o no fue operado, DEBE SER false.
+      4. cx_especificar: EXCLUSIVAMENTE el nombre del PROCEDIMIENTO QUIRÚRGICO. ❌ PROHIBIDO TERMINANTEMENTE colocar nombres de fármacos, quimioterapias o tratamientos sistémicos en campos de cirugía.
+      5. cx_metastasis_si: true SOLAMENTE si se realizó metastectomía quirúrgica.
+      6. rt_primario_si, rt_metastasis_si: true si recibió radioterapia.
+      7. tratamientos_sistemicos_si: true si recibió quimioterapia, hormonoterapia, biológicos o inmunoterapia previa.
+      8. drogas_solicitadas: Extraer el fármaco principal y secundarios indicados en el plan actual con dosis, días y total/día si figuran.
+
+      ${isRenovacion ? `
+      CONTEXTO RENOVACIÓN:
+      - motivo_renovacion: "continua" si sigue igual, "cambio" si hubo toxicidad o progresión
+      - ciclos_realizados: número de ciclos ya completados
+      - ciclos_programados: número total planificado
+      - respuesta: "estable", "parcial" o "completa"
+      - sitio_progresion: si hubo progresión, dónde
+      ` : `
+      CONTEXTO ADMISIÓN:
+      - anatomia_patologica: Resumen MUY CONCISO Y SINTÉTICO de la patología e IHQ (tipo tumoral, grado, RE, RP, HER2, Ki67). MÁXIMO 180 caracteres.
+      - tnm_t, tnm_n, tnm_m: clasificación TNM si existe
+      - receptor_RE, receptor_RP, receptor_HER2, receptor_KRAS, receptor_EGER: positivo / negativo / no aplica
+      - receptor_otros: otros marcadores como BRAF, PDL1, etc.
+      `}
+
+      Devolver este objeto JSON:
+      {
+        "nombre_apellido": "",
+        "dni": "",
+        "fnac": "DD/MM/AAAA",
+        "edad": "",
+        "sexo": "M" o "F",
+        "domicilio": "",
+        "telefono": "",
+        "localidad": "",
+        "provincia": "Córdoba",
+        "pais": "Argentina",
+        "institucion": "Hospital Oncológico Provincial - Córdoba",
+        "profesion": "",
+        "diagnostico": "",
+        "fecha_diagnostico": "DD/MM/AAAA",
+        "cie10": "",
+        "estadio": "",
+        "tnm_t": "", "tnm_n": "", "tnm_m": "",
+        "receptor_RE": "no aplica", "receptor_RP": "no aplica", "receptor_HER2": "no aplica", "receptor_KRAS": "no aplica", "receptor_EGER": "no aplica", "receptor_otros": "",
+        "anatomia_patologica": "",
+        "peso": "",
+        "talla": "",
+        "ecog": "0",
+        "cx_primario_si": false,
+        "cx_especificar": "",
+        "cx_ganglios_resecados": "",
+        "cx_ganglios_comprometidos": "",
+        "cx_fecha": "",
+        "cx_metastasis_si": false,
+        "cx_metastasis_especificar": "",
+        "cx_metastasis_fecha": "",
+        "rt_primario_si": false,
+        "rt_metastasis_si": false,
+        "rt_localizacion": "",
+        "tratamientos_sistemicos_si": false,
+        "hormonoterapia_tipo": "",
+        "hormonoterapia_droga": "",
+        "quimioterapia_tipo": "",
+        "quimioterapia_droga": "",
+        "terapia_blanco_droga": "",
+        "terapia_blanco_fecha": "",
+        "inmunoterapia_droga": "",
+        "inmunoterapia_fecha": "",
+        "tipo_tratamiento": "avanzado",
+        "linea": "1",
+        "intervalo_ciclo": "21",
+        "ciclos_programados": "6",
+        "droga_1": "", "dosis_1": "", "dias_1": "", "total_dia_1": "",
+        "droga_2": "", "dosis_2": "", "dias_2": "", "total_dia_2": "",
+        "droga_3": "", "dosis_3": "", "dias_3": "", "total_dia_3": "",
+        ${isRenovacion ? `
+        "motivo_renovacion": "continua",
+        "ciclos_realizados": "",
+        "respuesta": "estable",
+        "sitio_progresion": ""
+        ` : `
+        "motivo_renovacion": "continua",
+        "ciclos_realizados": "",
+        "respuesta": "estable",
+        "sitio_progresion": ""
+        `}
+      }
+
+      CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${correction ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${correction}. Incorporar en los campos correspondientes.` : ''}
+    `;
+
+    const parts: any[] = [{ text: prompt }];
+    if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+
+    const res = await callGemini({ parts, responseMimeType: "application/json" });
+    let clean = res.text.replace(/```json|```/g, '').trim();
+    const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
+    if (s !== -1 && e !== -1) clean = clean.substring(s, e + 1);
+    return JSON.parse(clean);
+  };
+
+  // Inicio de flujo para Banco de Drogas (abre modal completo de celdas)
+  const handleStartBancoFlow = async (formType: 'admision' | 'renovacion', correction?: string) => {
     if (!hasClinicalData) {
       alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
       return;
     }
-    const fallback = extractFallbackPatientData();
-    
-    let prefilledDrug = lastRegenParams[formType]?.drugName || '';
-    if (!prefilledDrug) {
-      const contextText = getEffectiveClinicalContext();
-      const drugMatch = contextText.match(/(?:esquema|tratamiento|indicaci[oó]n|solicita|droga|f[aá]rmaco|plan)\s*[:=]?\s*([-+A-Za-z0-9\s/]{3,40})/i);
-      if (drugMatch && !drugMatch[1].toLowerCase().includes('historia')) {
-        prefilledDrug = drugMatch[1].trim();
-      }
+    setProcessingId(formType);
+    setStatus(`Analizando historia clínica y preparando formulario Banco de Drogas ${formType.toUpperCase()}...`);
+
+    try {
+      const aiData = await extractBancoDrogasData(formType === 'admision' ? 'ADMISIÓN' : 'RENOVACIÓN', correction);
+      const fallback = extractFallbackPatientData();
+      
+      const safeName = aiData.nombre_apellido && aiData.nombre_apellido.toLowerCase() !== 'paciente'
+        ? aiData.nombre_apellido
+        : (fallback.name && fallback.name.toLowerCase() !== 'paciente' ? fallback.name : '');
+
+      setBancoFormData({
+        context: formType,
+        nombre_apellido: safeName,
+        dni: aiData.dni || fallback.dni || '',
+        fnac: cleanDate(aiData.fnac) || fallback.fnac || '',
+        edad: aiData.edad || (patient?.age ? String(patient.age) : ''),
+        sexo: aiData.sexo === 'F' ? 'F' : 'M',
+        domicilio: aiData.domicilio || '',
+        localidad: aiData.localidad || '',
+        provincia: aiData.provincia || 'Córdoba',
+        pais: aiData.pais || 'Argentina',
+        institucion: aiData.institucion || 'Hospital Oncológico Provincial - Córdoba',
+        telefono: aiData.telefono || fallback.phone || '',
+        profesion: aiData.profesion || '',
+        diagnostico: aiData.diagnostico || fallback.diagnosis || '',
+        cie10: aiData.cie10 || '',
+        fecha_diagnostico: cleanDate(aiData.fecha_diagnostico) || '',
+        tnm_t: aiData.tnm_t || '',
+        tnm_n: aiData.tnm_n || '',
+        tnm_m: aiData.tnm_m || '',
+        estadio: aiData.estadio || fallback.stage || '',
+        receptor_RE: aiData.receptor_RE || 'no aplica',
+        receptor_RP: aiData.receptor_RP || 'no aplica',
+        receptor_HER2: aiData.receptor_HER2 || 'no aplica',
+        receptor_KRAS: aiData.receptor_KRAS || 'no aplica',
+        receptor_EGER: aiData.receptor_EGER || 'no aplica',
+        receptor_otros: aiData.receptor_otros || '',
+        anatomia_patologica: aiData.anatomia_patologica || '',
+        peso: aiData.peso || fallback.weight || '',
+        talla: aiData.talla || fallback.height || '',
+        ecog: aiData.ecog || fallback.ecog || '0',
+        cx_primario_si: !!aiData.cx_primario_si,
+        cx_especificar: aiData.cx_especificar || '',
+        cx_ganglios_resecados: aiData.cx_ganglios_resecados || '',
+        cx_ganglios_comprometidos: aiData.cx_ganglios_comprometidos || '',
+        cx_fecha: cleanDate(aiData.cx_fecha) || '',
+        cx_metastasis_si: !!aiData.cx_metastasis_si,
+        cx_metastasis_especificar: aiData.cx_metastasis_especificar || '',
+        cx_metastasis_fecha: cleanDate(aiData.cx_metastasis_fecha) || '',
+        rt_primario_si: !!aiData.rt_primario_si,
+        rt_metastasis_si: !!aiData.rt_metastasis_si,
+        rt_localizacion: aiData.rt_localizacion || '',
+        tratamientos_sistemicos_si: !!aiData.tratamientos_sistemicos_si,
+        hormonoterapia_tipo: aiData.hormonoterapia_tipo || '',
+        hormonoterapia_droga: aiData.hormonoterapia_droga || '',
+        quimioterapia_tipo: aiData.quimioterapia_tipo || '',
+        quimioterapia_droga: aiData.quimioterapia_droga || '',
+        terapia_blanco_droga: aiData.terapia_blanco_droga || '',
+        terapia_blanco_fecha: cleanDate(aiData.terapia_blanco_fecha) || '',
+        inmunoterapia_droga: aiData.inmunoterapia_droga || '',
+        inmunoterapia_fecha: cleanDate(aiData.inmunoterapia_fecha) || '',
+        tipo_tratamiento: (aiData.tipo_tratamiento || 'avanzado').toLowerCase() as any,
+        linea: aiData.linea || '1',
+        intervalo_ciclo: aiData.intervalo_ciclo || '21',
+        ciclos_programados: aiData.ciclos_programados || '6',
+        droga_1: aiData.droga_1 || lastRegenParams[formType]?.drugName || '',
+        dosis_1: aiData.dosis_1 || '',
+        dias_1: aiData.dias_1 || '',
+        total_dia_1: aiData.total_dia_1 || '',
+        droga_2: aiData.droga_2 || '',
+        dosis_2: aiData.dosis_2 || '',
+        dias_2: aiData.dias_2 || '',
+        total_dia_2: aiData.total_dia_2 || '',
+        droga_3: aiData.droga_3 || '',
+        dosis_3: aiData.dosis_3 || '',
+        dias_3: aiData.dias_3 || '',
+        total_dia_3: aiData.total_dia_3 || '',
+        motivo_renovacion: (aiData.motivo_renovacion || 'continua').toLowerCase() as any,
+        ciclos_realizados: aiData.ciclos_realizados || '',
+        respuesta: (aiData.respuesta || 'estable').toLowerCase() as any,
+        sitio_progresion: aiData.sitio_progresion || '',
+        lugar_fecha: `Córdoba, ${new Date().toLocaleDateString('es-AR')}`,
+      });
+
+      setShowBancoModal(formType);
+      setShowBancoMissingConfirm(false);
+    } catch (e: any) {
+      alert("Error al preparar formulario Banco de Drogas: " + e.message);
+    } finally {
+      setProcessingId(null);
+      setStatus('');
     }
-
-    setBancoFormData({
-      context: formType,
-      droga_1: prefilledDrug,
-      dosis_1: '',
-      dias_1: '',
-      total_dia_1: '',
-      droga_2: '',
-      dosis_2: '',
-      dias_2: '',
-      total_dia_2: '',
-      droga_3: '',
-      dosis_3: '',
-      dias_3: '',
-      total_dia_3: '',
-      intervalo_ciclo: '21',
-      ciclos_programados: '6',
-      tipo_tratamiento: 'avanzado',
-      linea: '1',
-      peso: fallback.weight || '',
-      talla: fallback.height || '',
-      ecog: fallback.ecog || '0',
-      telefono: fallback.phone || '',
-      fnac: fallback.fnac || '',
-      motivo_renovacion: 'continua',
-      ciclos_realizados: '',
-      respuesta: 'estable',
-      sitio_progresion: '',
-    });
-
-    setShowBancoModal(formType);
   };
 
   // --- GENERADOR DE RESUMEN CLÍNICO ---
@@ -660,7 +895,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const bsa = calculateBSA(data.peso, data.talla);
       const finalName = data.paciente_nombre_real || patient?.name || 'Paciente';
 
-      // Resuelve automáticamente presentación, dosis y duración para las drogas indicadas
       const activeDrugs = [data.droga_1, data.droga_2, data.droga_3, data.droga_4].map(d => (d || '').trim()).filter(Boolean);
       let drugDetails: Array<{ droga: string; presentacion: string; dosis: string; duracion_dias: string }> = [];
       if (activeDrugs.length > 0) {
@@ -735,7 +969,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       setText('Antecedentes Quirúrgicos', data.antecedentes_qx, 9, 7);
       setText('Antecedentes Terapia Radiante', data.antecedentes_radio, 9, 7);
       
-      // EL INFORME CLÍNICO VA EXCLUSIVAMENTE EN EL CUADRO GRANDE (Informe Clínico ActualRow1)
       try {
         const fTitleStrip = form.getTextField('Informe clínico actual');
         fTitleStrip.setText('');
@@ -846,174 +1079,18 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     handleStartPamiFlow(regenParams?.correction);
   };
 
-  // BANCO DE DROGAS: Extracción de datos con IA + sobreescritura de celdas confirmadas
-  const extractBancoDrogasData = async (context: string, drugName: string, correction?: string, extraData?: typeof bancoFormData) => {
-    const today = new Date().toLocaleDateString('es-AR');
-    const isRenovacion = context === 'RENOVACIÓN';
-    const fallback = extractFallbackPatientData();
-
-    const prompt = `
-      Actúa como oncólogo experto. Hoy es ${today}. Analizá la historia clínica y extraé datos para el formulario Banco de Drogas ${context}.
-      FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}.
-      ${extraData?.peso ? `PESO PACIENTE: ${extraData.peso} kg` : ''}
-      ${extraData?.talla ? `TALLA PACIENTE: ${extraData.talla} cm` : ''}
-      ${extraData?.ecog ? `ECOG PACIENTE: ${extraData.ecog}` : ''}
-      ${extraData?.telefono ? `TELÉFONO: ${extraData.telefono}` : ''}
-      ${extraData?.fnac ? `FECHA NACIMIENTO: ${extraData.fnac}` : ''}
-      IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown.
-
-      REGLAS DE EXTRACCIÓN Y DEDUCCIÓN:
-      - fecha_diagnostico: DEDUCE OBLIGATORIAMENTE la fecha de diagnóstico inicial analizando las fechas del primer estudio patológico, biopsia o consulta diagnóstica inicial en los eventos de la Línea de Tiempo o Historia Clínica (Formato DD/MM/AAAA).
-      - cx_especificar: EXCLUSIVAMENTE la descripción del procedimiento QUIRÚRGICO (ej: "Mastectomía radical", "Resección de colon", "Nefrectomía"). ❌ NUNCA colocar tratamientos sistémicos ni drogas (como Carboplatino, Dabrafenib, etc.) en cx_especificar ni en campos de cirugía.
-
-      ${isRenovacion ? `
-      CONTEXTO RENOVACIÓN: El paciente ya tiene tratamiento aprobado y solicita continuarlo.
-      - motivo_renovacion: "${extraData?.motivo_renovacion || 'continua'}"
-      - ciclos_realizados: "${extraData?.ciclos_realizados || ''}"
-      - ciclos_programados: "${extraData?.ciclos_programados || ''}"
-      - respuesta: "${extraData?.respuesta || 'estable'}"
-      - sitio_progresion: "${extraData?.sitio_progresion || ''}"
-      ` : `
-      CONTEXTO ADMISIÓN: Primera solicitud del tratamiento.
-      - anatomia_patologica: Resumen MUY CONCISO Y SINTÉTICO de la patología e inmunohistoquímica (tipo tumoral, grado, RE, RP, HER2, Ki67). MÁXIMO 180-200 caracteres. ❌ NO explayarse en párrafos extensos.
-      - tnm_t, tnm_n, tnm_m: clasificación TNM si existe
-      - receptor_RE, receptor_RP, receptor_HER2, receptor_KRAS, receptor_EGER: positivo/negativo/no aplica
-      - tratamiento_previo_cx_si: true si tuvo cirugía de tumor primario
-      - cx_especificar: EXCLUSIVAMENTE descripción de cirugía (sin drogas)
-      - cx_ganglios_resecados: número si aplica
-      - cx_ganglios_comprometidos: número si aplica
-      - cx_metastasis_si: true si tuvo cirugía de metástasis
-      - rt_primario_si: true si tuvo RT en tumor primario
-      - rt_metastasis_si: true si tuvo RT en metástasis
-      - rt_localizacion: dónde
-      - tratamientos_sistemicos_si: true si tuvo quimio/inmunoterapia previa
-      - qt_tipo: "neoadyuvante", "adyuvante" o "avanzado"
-      - qt_droga: nombre de la droga sistémica previa si la tuvo
-      `}
-
-      Campos comunes requeridos:
-      {
-        "nombre_apellido": "${fallback.name || patient?.name || ''}",
-        "dni": "${fallback.dni || ''}",
-        "fnac": "${extraData?.fnac || fallback.fnac || ''}",
-        "edad": "${patient?.age || ''}",
-        "sexo": "M" o "F",
-        "domicilio": "",
-        "telefono": "${extraData?.telefono || fallback.phone || ''}",
-        "localidad": "",
-        "provincia": "Córdoba",
-        "pais": "Argentina",
-        "institucion": "Hospital Oncológico Provincial - Córdoba",
-        "diagnostico": "${fallback.diagnosis || ''}",
-        "fecha_diagnostico": "DD/MM/AAAA",
-        "cie10": "",
-        "estadio": "${fallback.stage || ''}",
-        "sup_corporal": "",
-        "peso": "${extraData?.peso || fallback.weight || ''}",
-        "talla": "${extraData?.talla || fallback.height || ''}",
-        "ecog": "${extraData?.ecog || fallback.ecog || '0'}",
-        "tipo_tratamiento": "${extraData?.tipo_tratamiento || 'avanzado'}",
-        "linea": "${extraData?.linea || '1'}",
-        "droga_1": "${extraData?.droga_1 || drugName}", "dosis_1": "${extraData?.dosis_1 || ''}", "dias_1": "${extraData?.dias_1 || ''}", "total_dia_1": "${extraData?.total_dia_1 || ''}",
-        "droga_2": "${extraData?.droga_2 || ''}", "dosis_2": "${extraData?.dosis_2 || ''}", "dias_2": "${extraData?.dias_2 || ''}", "total_dia_2": "${extraData?.total_dia_2 || ''}",
-        "droga_3": "${extraData?.droga_3 || ''}", "dosis_3": "${extraData?.dosis_3 || ''}", "dias_3": "${extraData?.dias_3 || ''}", "total_dia_3": "${extraData?.total_dia_3 || ''}",
-        "intervalo_ciclo": "${extraData?.intervalo_ciclo || '21'}",
-        "ciclos_programados": "${extraData?.ciclos_programados || '6'}",
-        "lugar_fecha": "${today} - Córdoba",
-        "contacto_institucional": "",
-        ${isRenovacion ? `
-        "motivo_renovacion": "${extraData?.motivo_renovacion || 'continua'}",
-        "ciclos_realizados": "${extraData?.ciclos_realizados || ''}",
-        "respuesta": "${extraData?.respuesta || 'estable'}",
-        "sitio_progresion": "${extraData?.sitio_progresion || ''}",
-        "receptor_RE": "", "receptor_RP": "", "receptor_HER2": "", "receptor_KRAS": "", "receptor_EGER": ""
-        ` : `
-        "anatomia_patologica": "",
-        "tnm_t": "", "tnm_n": "", "tnm_m": "",
-        "receptor_RE": "", "receptor_RP": "", "receptor_HER2": "", "receptor_KRAS": "", "receptor_EGER": "",
-        "tratamiento_previo_cx_si": false,
-        "cx_especificar": "", "cx_ganglios_resecados": "", "cx_ganglios_comprometidos": "",
-        "cx_metastasis_si": false, "cx_fecha": "",
-        "rt_primario_si": false, "rt_metastasis_si": false, "rt_localizacion": "",
-        "tratamientos_sistemicos_si": false,
-        "qt_tipo": "", "qt_droga": ""
-        `}
-      }
-
-      CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${correction ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${correction}. Incorporar en los campos correspondientes.` : ''}
-    `;
-
-    const parts: any[] = [{ text: prompt }];
-    if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
-
-    const res = await callGemini({ parts, responseMimeType: "application/json" });
-    let clean = res.text.replace(/```json|```/g, '').trim();
-    const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
-    if (s !== -1 && e !== -1) clean = clean.substring(s, e + 1);
-    const parsed = JSON.parse(clean);
-
-    // Sobreescritura estricta con datos confirmados por el médico en el modal
-    if (extraData) {
-      if (extraData.droga_1) parsed.droga_1 = extraData.droga_1;
-      if (extraData.dosis_1) parsed.dosis_1 = extraData.dosis_1;
-      if (extraData.dias_1) parsed.dias_1 = extraData.dias_1;
-      if (extraData.total_dia_1) parsed.total_dia_1 = extraData.total_dia_1;
-
-      if (extraData.droga_2) parsed.droga_2 = extraData.droga_2;
-      if (extraData.dosis_2) parsed.dosis_2 = extraData.dosis_2;
-      if (extraData.dias_2) parsed.dias_2 = extraData.dias_2;
-      if (extraData.total_dia_2) parsed.total_dia_2 = extraData.total_dia_2;
-
-      if (extraData.droga_3) parsed.droga_3 = extraData.droga_3;
-      if (extraData.dosis_3) parsed.dosis_3 = extraData.dosis_3;
-      if (extraData.dias_3) parsed.dias_3 = extraData.dias_3;
-      if (extraData.total_dia_3) parsed.total_dia_3 = extraData.total_dia_3;
-
-      if (extraData.intervalo_ciclo) parsed.intervalo_ciclo = extraData.intervalo_ciclo;
-      if (extraData.ciclos_programados) parsed.ciclos_programados = extraData.ciclos_programados;
-      if (extraData.tipo_tratamiento) parsed.tipo_tratamiento = extraData.tipo_tratamiento;
-      if (extraData.linea) parsed.linea = extraData.linea;
-
-      if (extraData.peso) parsed.peso = extraData.peso;
-      if (extraData.talla) parsed.talla = extraData.talla;
-      if (extraData.ecog) parsed.ecog = extraData.ecog;
-      if (extraData.telefono) parsed.telefono = extraData.telefono;
-      if (extraData.fnac) parsed.fnac = extraData.fnac;
-
-      if (isRenovacion) {
-        if (extraData.motivo_renovacion) parsed.motivo_renovacion = extraData.motivo_renovacion;
-        if (extraData.ciclos_realizados) parsed.ciclos_realizados = extraData.ciclos_realizados;
-        if (extraData.respuesta) parsed.respuesta = extraData.respuesta;
-        if (extraData.sitio_progresion) parsed.sitio_progresion = extraData.sitio_progresion;
-      }
-    }
-
-    if (!parsed.peso && fallback.weight) parsed.peso = fallback.weight;
-    if (!parsed.talla && fallback.height) parsed.talla = fallback.height;
-    if (!parsed.ecog && fallback.ecog) parsed.ecog = fallback.ecog;
-    if (!parsed.telefono && fallback.phone) parsed.telefono = fallback.phone;
-    if (!parsed.fnac && fallback.fnac) parsed.fnac = fallback.fnac;
-
-    return parsed;
-  };
-
-  const fillAdmisionPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }, extraData?: typeof bancoFormData) => {
-    if (!hasClinicalData) { alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero."); return; }
-    
-    const drugName = extraData?.droga_1 || regenParams?.drugName || '';
-    if (!drugName.trim()) return;
-
-    setProcessingId(formDef.id);
-    setStatus('Procesando Admisión Banco de Drogas...');
+  // BANCO DE DROGAS: Generación final de PDF ADMISIÓN desde los datos confirmados del modal
+  const fillAdmisionPDFFromData = async (d: typeof bancoFormData) => {
+    setProcessingId('admision');
+    setStatus('Generando PDF Admisión Banco de Drogas...');
     try {
-      const d = await extractBancoDrogasData('ADMISIÓN', drugName, regenParams?.correction, extraData);
       const bsa = calculateBSA(d.peso, d.talla);
       const [fnd, fnm, fna] = (cleanDate(d.fnac) || '').split('/');
       const [dxd, dxm, dxa] = (cleanDate(d.fecha_diagnostico) || '').split('/');
 
-      const formUrl = window.location.origin + formDef.file;
+      const formUrl = window.location.origin + '/forms/admision.pdf';
       const res = await fetch(formUrl);
-      if (!res.ok) throw new Error(`No se encontró ${formDef.file}`);
+      if (!res.ok) throw new Error(`No se encontró /forms/admision.pdf`);
       const pdfDoc = await PDFDocument.load(await res.arrayBuffer());
       const form = pdfDoc.getForm();
 
@@ -1028,31 +1105,45 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
           f.setText(text); f.setFontSize(fs);
         } catch { /* field not found in form, skip */ }
       };
-      const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch { /* field not found */ } };
+      const setBtn = (name: string, checked = true) => {
+        try {
+          if (checked) form.getCheckBox(name).check();
+          else form.getCheckBox(name).uncheck();
+        } catch { /* field not found */ }
+      };
 
       const finalPatientName = d.nombre_apellido || patient?.name || 'Paciente';
 
+      // 1. Filiación
       setT('Text1', finalPatientName);
-      setT('Text2', 'Argentina');
+      setT('Text2', d.nacionalidad || 'Argentina');
       setT('Text3', fnd); setT('Text4', fnm); setT('Text5', fna);
       setT('Text6', d.dni);
+      setT('Text7', d.profesion);
       setT('Text11', d.edad);
       setT('Text12', d.domicilio);
       setT('Text13', d.telefono);
       setT('Text14', d.localidad);
-      setT('Text15', d.provincia);
-      setT('Text16', d.pais);
-      setT('Text17', d.institucion);
+      setT('Text15', d.provincia || 'Córdoba');
+      setT('Text16', d.pais || 'Argentina');
+      setT('Text17', d.institucion || 'Hospital Oncológico Provincial - Córdoba');
+
+      if (d.sexo === 'F') { setBtn('Button9', true); setBtn('Button8', false); }
+      else { setBtn('Button8', true); setBtn('Button9', false); }
+
+      // 2. Diagnóstico & Estadificación
       setT('Text18', d.diagnostico);
       setT('Text19', d.cie10);
 
-      if (d.sexo === 'F') setBtn('Button9'); else setBtn('Button8');
-
-      setT('Text20', d.receptor_RE);
-      setT('Text21', d.receptor_RP);
-      setT('Text22', d.receptor_HER2);
-      setT('Text23', d.receptor_KRAS);
-      setT('Text24', d.receptor_EGER);
+      setT('Text20', d.receptor_RE || 'no aplica');
+      setT('Text21', d.receptor_RP || 'no aplica');
+      setT('Text22', d.receptor_HER2 || 'no aplica');
+      setT('Text23', d.receptor_KRAS || 'no aplica');
+      setT('Text24', d.receptor_EGER || 'no aplica');
+      if (d.receptor_otros) {
+        setT('Text25', 'SI');
+        setT('Text26', d.receptor_otros);
+      }
 
       setT('Text27', dxd); setT('Text28', dxm); setT('Text29', dxa);
       setT('Text30', d.tnm_t); setT('Text31', d.tnm_n); setT('Text32', d.tnm_m);
@@ -1062,30 +1153,91 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       setT('Text34', ap.substring(0, 220), 9, 6.5);
       if (ap.length > 220) setT('Text35', ap.substring(220, 440), 9, 6.5);
 
-      setT('Text36', bsa || d.sup_corporal);
+      // 3. Antropometría
+      setT('Text36', bsa);
       setT('Text37', d.peso);
       setT('Text38', d.talla);
 
       const ecogBtn = ['Button39','Button40','Button41','Button42'];
       const ecogIdx = parseInt(d.ecog || '0');
-      if (ecogIdx >= 0 && ecogIdx <= 3) setBtn(ecogBtn[ecogIdx]);
+      ecogBtn.forEach((b, i) => setBtn(b, i === ecogIdx));
 
-      if (d.tratamientos_sistemicos_si) setBtn('Button44'); else setBtn('Button45');
-      setT('Text46', d.qt_droga, 9, 6.5);
+      // 4. Tratamientos Previos
+      // Cirugía Tumor Primario
+      if (d.cx_primario_si) {
+        setBtn('Button44', true); setBtn('Button45', false);
+        setT('Text46', d.cx_especificar, 9, 6.5);
+        setT('Text47', d.cx_ganglios_resecados);
+        setT('Text48', d.cx_ganglios_comprometidos);
+        const [cxd, cxm, cxa] = (cleanDate(d.cx_fecha) || '').split('/');
+        setT('Text49', cxd); setT('Text50', cxm); setT('Text51', cxa);
+      } else {
+        setBtn('Button44', false); setBtn('Button45', true);
+      }
 
-      if (d.rt_primario_si) setBtn('Button52'); else setBtn('Button53');
-      if (d.rt_localizacion) setT('Text54', d.rt_localizacion, 9, 7);
+      // Cirugía Metástasis
+      if (d.cx_metastasis_si) {
+        setBtn('Button52', true); setBtn('Button53', false);
+        setT('Text54', d.cx_metastasis_especificar, 9, 7);
+        const [mxd, mxm, mxa] = (cleanDate(d.cx_metastasis_fecha) || '').split('/');
+        setT('Text55', mxd); setT('Text56', mxm); setT('Text57', mxa);
+      } else {
+        setBtn('Button52', false); setBtn('Button53', true);
+      }
 
-      const tipo = (d.tipo_tratamiento || '').toLowerCase();
-      if (tipo.includes('adyuvante') && !tipo.includes('neo')) setBtn('Button68');
-      else if (tipo.includes('neoadyuvante')) setBtn('Button70');
+      // Radioterapia
+      if (d.rt_primario_si) { setBtn('Button58', true); setBtn('Button59', false); }
+      else { setBtn('Button58', false); setBtn('Button59', true); }
+
+      if (d.rt_metastasis_si) { setBtn('Button60', true); setBtn('Button61', false); }
+      else { setBtn('Button60', false); setBtn('Button61', true); }
+
+      if (d.rt_localizacion) setT('Text62', d.rt_localizacion, 9, 7);
+
+      // Tratamientos Sistémicos
+      if (d.tratamientos_sistemicos_si) {
+        setBtn('Button63', true); setBtn('Button64', false);
+        if (d.hormonoterapia_tipo === 'adyuvante') setBtn('Button65', true);
+        if (d.hormonoterapia_tipo === 'avanzada') setBtn('Button66', true);
+        if (d.hormonoterapia_droga) setT('Text67', d.hormonoterapia_droga, 9, 6.5);
+
+        if (d.quimioterapia_tipo === 'neoadyuvante') setBtn('Button68', true);
+        if (d.quimioterapia_tipo === 'adyuvante') setBtn('Button69', true);
+        if (d.quimioterapia_tipo === 'avanzada') setBtn('Button70', true);
+        if (d.quimioterapia_droga) setT('Text71', d.quimioterapia_droga, 9, 6.5);
+
+        if (d.terapia_blanco_droga) {
+          setT('Text74', d.terapia_blanco_droga, 9, 6.5);
+          const [tbd, tbm, tba] = (cleanDate(d.terapia_blanco_fecha) || '').split('/');
+          setT('Text75', tbd); setT('Text76', tbm); setT('Text77', tba);
+        }
+        if (d.inmunoterapia_droga) {
+          setT('Text79', d.inmunoterapia_droga, 9, 6.5);
+          const [itd, itm, ita] = (cleanDate(d.inmunoterapia_fecha) || '').split('/');
+          setT('Text80', itd); setT('Text81', itm); setT('Text82', ita);
+        }
+      } else {
+        setBtn('Button63', false); setBtn('Button64', true);
+      }
+
+      // 5. Tratamiento a Realizar
+      const tipo = d.tipo_tratamiento || 'avanzado';
+      setBtn('Button83', tipo === 'adyuvante');
+      setBtn('Button84', tipo !== 'adyuvante');
+      setBtn('Button85', tipo === 'neoadyuvante');
+      setBtn('Button86', tipo !== 'neoadyuvante');
+      setBtn('Button87', tipo === 'avanzado');
+      setBtn('Button88', tipo !== 'avanzado');
 
       const lineaBtns: Record<string, string> = {'1':'Button89','2':'Button90','3':'Button91'};
-      if (lineaBtns[d.linea]) setBtn(lineaBtns[d.linea]);
+      ['1','2','3'].forEach(l => {
+        if (lineaBtns[l]) setBtn(lineaBtns[l], d.linea === l);
+      });
 
       setT('Text92', d.intervalo_ciclo);
       setT('Text94', d.ciclos_programados);
 
+      // Drogas
       const drugRows = [
         [d.droga_1, d.dosis_1, d.dias_1, d.total_dia_1, 'Text95','Text96','Text97','Text98'],
         [d.droga_2, d.dosis_2, d.dias_2, d.total_dia_2, 'Text99','Text100','Text101','Text102'],
@@ -1095,7 +1247,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         if (drg) { setT(td, String(drg).toUpperCase(), 9, 7); setT(tds, String(dos)); setT(tdi, String(dias)); setT(tto, String(tot)); }
       });
 
-      setT('Text141', d.lugar_fecha);
+      setT('Text141', d.lugar_fecha || `Córdoba, ${new Date().toLocaleDateString('es-AR')}`);
       setT('Text142', `Hospital Oncológico Prov. Cba - ${doctorData.nombre} Mat.${doctorData.matricula}`);
 
       const pdfBytes = await pdfDoc.save();
@@ -1103,35 +1255,26 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
       link.download = `Admision_BancoDrogas_${finalPatientName.replace(/\s+/g, '_')}.pdf`; link.click();
       setStatus('¡Listo!');
-      const newAccumulated = regenParams
-        ? (lastRegenParams[formDef.id]?.accumulatedCorrections
-            ? `${lastRegenParams[formDef.id].accumulatedCorrections}\n- ${regenParams.correction}`
-            : `- ${regenParams.correction}`)
-        : '';
-      setLastRegenParams(prev => ({ ...prev, [formDef.id]: { drugName: drugName.trim(), accumulatedCorrections: newAccumulated } }));
-      setFormGenerated(prev => ({ ...prev, [formDef.id]: true }));
-      setFormCorrections(prev => ({ ...prev, [formDef.id]: '' }));
+      setLastRegenParams(prev => ({ ...prev, admision: { drugName: d.droga_1.trim(), accumulatedCorrections: '' } }));
+      setFormGenerated(prev => ({ ...prev, admision: true }));
+      setFormCorrections(prev => ({ ...prev, admision: '' }));
       setShowBancoModal(null);
-    } catch (e: any) { alert('Error: ' + e.message); }
+      setShowBancoMissingConfirm(false);
+    } catch (e: any) { alert('Error al generar Admisión: ' + e.message); }
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  const fillRenovacionPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }, extraData?: typeof bancoFormData) => {
-    if (!hasClinicalData) { alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero."); return; }
-    
-    const drugName = extraData?.droga_1 || regenParams?.drugName || '';
-    if (!drugName.trim()) return;
-
-    setProcessingId(formDef.id);
-    setStatus('Procesando Renovación Banco de Drogas...');
+  // BANCO DE DROGAS: Generación final de PDF RENOVACIÓN desde los datos confirmados del modal
+  const fillRenovacionPDFFromData = async (d: typeof bancoFormData) => {
+    setProcessingId('renovacion');
+    setStatus('Generando PDF Renovación Banco de Drogas...');
     try {
-      const d = await extractBancoDrogasData('RENOVACIÓN', drugName, regenParams?.correction, extraData);
       const bsa = calculateBSA(d.peso, d.talla);
       const [fnd, fnm, fna] = (cleanDate(d.fnac) || '').split('/');
 
-      const formUrl = window.location.origin + formDef.file;
+      const formUrl = window.location.origin + '/forms/renovacion.pdf';
       const res = await fetch(formUrl);
-      if (!res.ok) throw new Error(`No se encontró ${formDef.file}`);
+      if (!res.ok) throw new Error(`No se encontró /forms/renovacion.pdf`);
       const pdfDoc = await PDFDocument.load(await res.arrayBuffer());
       const form = pdfDoc.getForm();
 
@@ -1146,61 +1289,81 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
           f.setText(text); f.setFontSize(fs);
         } catch { /* field not found in form, skip */ }
       };
-      const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch { /* field not found */ } };
+      const setBtn = (name: string, checked = true) => {
+        try {
+          if (checked) form.getCheckBox(name).check();
+          else form.getCheckBox(name).uncheck();
+        } catch { /* field not found */ }
+      };
 
       const finalPatientName = d.nombre_apellido || patient?.name || 'Paciente';
 
+      // 1. Filiación
       setT('Text2', finalPatientName);
-      setT('Text3', 'Argentina');
+      setT('Text3', d.nacionalidad || 'Argentina');
       setT('Text4', fnd); setT('Text5', fnm); setT('Text6', fna);
       setT('Text7', d.dni);
       setT('Text12', d.edad);
       setT('Text13', d.domicilio);
       setT('Text14', d.telefono);
       setT('Text15', d.localidad);
-      setT('Text16', d.provincia);
-      setT('Text17', d.pais);
-      setT('Text19', d.institucion);
-      setT('Text20', d.diagnostico);
-      setT('Text21', d.cie10);
+      setT('Text16', d.provincia || 'Córdoba');
+      setT('Text17', d.pais || 'Argentina');
+      setT('Text19', d.institucion || 'Hospital Oncológico Provincial - Córdoba');
 
-      if (d.sexo === 'F') setBtn('Button10'); else setBtn('Button9');
+      if (d.sexo === 'F') { setBtn('Button10', true); setBtn('Button9', false); }
+      else { setBtn('Button9', true); setBtn('Button10', false); }
 
-      if ((d.motivo_renovacion || '').includes('continua')) setBtn('Button23'); else setBtn('Button24');
-
+      // 2. Motivo Renovación
+      if (d.motivo_renovacion === 'continua') {
+        setBtn('Button23', true); setBtn('Button24', false);
+      } else {
+        setBtn('Button23', false); setBtn('Button24', true);
+      }
       if (d.sitio_progresion) setT('Text31', d.sitio_progresion, 9, 6.5);
 
-      setT('Text32', d.receptor_RE);
-      setT('Text33', d.receptor_RP);
-      setT('Text34', d.receptor_HER2);
-      setT('Text35', d.receptor_KRAS);
-      setT('Text36', d.receptor_EGER);
+      // 3. Diagnóstico & Receptores
+      setT('Text20', d.diagnostico);
+      setT('Text21', d.cie10);
+      setT('Text32', d.receptor_RE || 'no aplica');
+      setT('Text33', d.receptor_RP || 'no aplica');
+      setT('Text34', d.receptor_HER2 || 'no aplica');
+      setT('Text35', d.receptor_KRAS || 'no aplica');
+      setT('Text36', d.receptor_EGER || 'no aplica');
 
-      setT('Text51', bsa || d.sup_corporal);
+      // 4. Antropometría
+      setT('Text51', bsa);
       setT('Text52', d.peso);
       setT('Text53', d.talla);
 
       const ecogBtn = ['Button57','Button58','Button59','Button60'];
       const ecogIdx = parseInt(d.ecog || '0');
-      if (ecogIdx >= 0 && ecogIdx <= 3) setBtn(ecogBtn[ecogIdx]);
+      ecogBtn.forEach((b, i) => setBtn(b, i === ecogIdx));
 
-      const tipo = (d.tipo_tratamiento || '').toLowerCase();
-      if (tipo.includes('adyuvante') && !tipo.includes('neo')) { setBtn('Button62'); }
-      else if (tipo.includes('neoadyuvante')) { setBtn('Button64'); }
-      else if (tipo.includes('avanzado')) { setBtn('Button66'); }
+      // 5. Tratamiento a Realizar
+      const tipo = d.tipo_tratamiento || 'avanzado';
+      setBtn('Button62', tipo === 'adyuvante');
+      setBtn('Button63', tipo !== 'adyuvante');
+      setBtn('Button64', tipo === 'neoadyuvante');
+      setBtn('Button65', tipo !== 'neoadyuvante');
+      setBtn('Button66', tipo === 'avanzado');
+      setBtn('Button67', tipo !== 'avanzado');
 
       const lineaBtns: Record<string, string> = {'1':'Button68','2':'Button69','3':'Button70'};
-      if (lineaBtns[d.linea]) setBtn(lineaBtns[d.linea]);
+      ['1','2','3'].forEach(l => {
+        if (lineaBtns[l]) setBtn(lineaBtns[l], d.linea === l);
+      });
 
       setT('Text71', d.intervalo_ciclo);
       setT('Text72', d.ciclos_realizados);
       setT('Text73', d.ciclos_programados);
 
-      const resp = (d.respuesta || '').toLowerCase();
-      if (resp.includes('estable')) setBtn('Button137');
-      else if (resp.includes('parcial')) setBtn('Button138');
-      else if (resp.includes('completa')) setBtn('Button139');
+      // Respuesta
+      setBtn('Button137', d.respuesta === 'estable');
+      setBtn('Button138', d.respuesta === 'parcial');
+      setBtn('Button139', d.respuesta === 'completa');
 
+      // Drogas
       const drugRows = [
         [d.droga_1, d.dosis_1, d.dias_1, d.total_dia_1, 'Text76','Text79','Text80','Text81'],
         [d.droga_2, d.dosis_2, d.dias_2, d.total_dia_2, 'Text82','Text83','Text84','Text85'],
@@ -1210,7 +1373,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         if (drg) { setT(td, String(drg).toUpperCase(), 9, 7); setT(tds, String(dos)); setT(tdi, String(dias)); setT(tto, String(tot)); }
       });
 
-      setT('Text140', d.lugar_fecha);
+      setT('Text140', d.lugar_fecha || `Córdoba, ${new Date().toLocaleDateString('es-AR')}`);
       setT('Text141', `Hospital Oncológico Prov. Cba - ${doctorData.nombre} Mat.${doctorData.matricula}`);
 
       const pdfBytes = await pdfDoc.save();
@@ -1218,17 +1381,23 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
       link.download = `Renovacion_BancoDrogas_${finalPatientName.replace(/\s+/g, '_')}.pdf`; link.click();
       setStatus('¡Listo!');
-      const newAccumulated = regenParams
-        ? (lastRegenParams[formDef.id]?.accumulatedCorrections
-            ? `${lastRegenParams[formDef.id].accumulatedCorrections}\n- ${regenParams.correction}`
-            : `- ${regenParams.correction}`)
-        : '';
-      setLastRegenParams(prev => ({ ...prev, [formDef.id]: { drugName: drugName.trim(), accumulatedCorrections: newAccumulated } }));
-      setFormGenerated(prev => ({ ...prev, [formDef.id]: true }));
-      setFormCorrections(prev => ({ ...prev, [formDef.id]: '' }));
+      setLastRegenParams(prev => ({ ...prev, renovacion: { drugName: d.droga_1.trim(), accumulatedCorrections: '' } }));
+      setFormGenerated(prev => ({ ...prev, renovacion: true }));
+      setFormCorrections(prev => ({ ...prev, renovacion: '' }));
       setShowBancoModal(null);
-    } catch (e: any) { alert('Error: ' + e.message); }
+      setShowBancoMissingConfirm(false);
+    } catch (e: any) { alert('Error al generar Renovación: ' + e.message); }
     finally { setProcessingId(null); setStatus(''); }
+  };
+
+  const handleBancoDownloadClick = () => {
+    const missing = BANCO_MANDATORY_FIELDS.filter(f => !String((bancoFormData as any)[f.key] || '').trim());
+    if (missing.length > 0) {
+      setShowBancoMissingConfirm(true);
+    } else {
+      if (bancoFormData.context === 'admision') fillAdmisionPDFFromData(bancoFormData);
+      else fillRenovacionPDFFromData(bancoFormData);
+    }
   };
 
   const generateDinadicPDF = async (esquema?: typeof esquemaData) => {
@@ -1396,6 +1565,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   const missingMandatoryList = PAMI_MANDATORY_FIELDS.filter(f => !String((pamiFormData as any)[f.key] || '').trim());
   const missingMandatoryCount = missingMandatoryList.length;
 
+  const bancoLiveBSA = calculateBSA(bancoFormData.peso, bancoFormData.talla);
+  const missingBancoList = BANCO_MANDATORY_FIELDS.filter(f => !String((bancoFormData as any)[f.key] || '').trim());
+  const missingBancoCount = missingBancoList.length;
+
   const handleFocusField = (fieldId: string) => {
     const el = document.getElementById(fieldId);
     if (el) {
@@ -1514,6 +1687,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                     {form.id === 'pami' && (
                       <span className="text-[10px] text-gray-500">Revisión unificada con deducción automática de esquema</span>
                     )}
+                    {form.type === 'auto_banco' && (
+                      <span className="text-[10px] text-gray-500">Revisión guiada y completa de celdas antes de emitir PDF</span>
+                    )}
                   </div>
                 </div>
                 {isProcessing ? (
@@ -1608,13 +1784,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                   const params = lastRegenParams[form.id];
                   const handleRegen = () => {
                     if (!correction.trim() || !params?.drugName) return;
-                    const newAccumulated = params.accumulatedCorrections
-                      ? `${params.accumulatedCorrections}\n- ${correction}`
-                      : `- ${correction}`;
                     if (form.type === 'auto') fillPamiPDF(form, { drugName: params.drugName, correction });
-                    else if (form.id === 'admision') fillAdmisionPDF(form, { drugName: params.drugName, correction });
-                    else fillRenovacionPDF(form, { drugName: params.drugName, correction });
-                    setLastRegenParams(prev => ({ ...prev, [form.id]: { ...params, accumulatedCorrections: newAccumulated } }));
+                    else handleStartBancoFlow(form.id as any, correction);
                   };
                   return (
                     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
@@ -2006,7 +2177,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         );
       })()}
 
-      {/* MODAL DE CONFIRMACIÓN ANTES DE GENERAR PDF PAMI (SI FALTAN DATOS OBLIGATORIOS) */}
+      {/* MODAL DE CONFIRMACIÓN ANTES DE GENERAR PDF PAMI */}
       {showPamiMissingConfirm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-2xs flex items-center justify-center z-60 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-100 space-y-4">
@@ -2059,14 +2230,45 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         </div>
       )}
 
-      {/* MODAL DE ESQUEMA Y DATOS: BANCO DE DROGAS (ADMISIÓN Y RENOVACIÓN) */}
+      {/* MODAL DE REVISIÓN COMPLETA: BANCO DE DROGAS (ADMISIÓN Y RENOVACIÓN) */}
       {showBancoModal && (() => {
         const isAdmision = showBancoModal === 'admision';
-        const modalBSA = calculateBSA(bancoFormData.peso, bancoFormData.talla);
+
+        const renderBField = (
+          label: string,
+          fieldKey: keyof typeof bancoFormData,
+          isMandatory: boolean,
+          placeholder = '',
+          isSpan2 = false
+        ) => {
+          const val = String(bancoFormData[fieldKey] || '');
+          const isMissing = !val.trim();
+          const inputId = `banco-${fieldKey}`;
+
+          return (
+            <div className={isSpan2 ? 'sm:col-span-2' : ''}>
+              <label htmlFor={inputId} className="block text-[11px] font-semibold text-gray-700 mb-1">
+                {label} {isMandatory && <span className="text-green-700 font-bold">*</span>}
+              </label>
+              <input
+                id={inputId}
+                type="text"
+                placeholder={placeholder}
+                value={val}
+                onChange={e => setBancoFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                className={`w-full px-3 py-2 text-xs rounded-lg border transition-all outline-none ${
+                  isMandatory && isMissing
+                    ? 'border-slate-300 bg-slate-50 text-gray-900 focus:border-green-600 focus:bg-white'
+                    : 'border-gray-200 bg-white text-gray-800 focus:border-green-600'
+                }`}
+              />
+            </div>
+          );
+        };
 
         return (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-2xs flex items-center justify-center z-50 p-3 sm:p-5">
-            <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-gray-100">
+            <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-gray-100">
               
               {/* Header */}
               <div className="px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
@@ -2075,11 +2277,22 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                     <FileText size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-gray-900">
-                      {isAdmision ? 'Admisión Banco de Drogas' : 'Renovación Banco de Drogas'}
-                    </h3>
+                    <div className="flex items-center gap-2.5">
+                      <h3 className="font-bold text-sm text-gray-900">
+                        {isAdmision ? 'Solicitud de Medicamentos Oncológicos — ADMISIÓN' : 'Solicitud de Medicamentos Oncológicos — RENOVACIÓN'}
+                      </h3>
+                      {missingBancoCount > 0 ? (
+                        <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-full text-[11px] font-medium">
+                          {missingBancoCount} pendientes
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-medium flex items-center gap-1">
+                          <Check size={12} /> Celdas completas
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Indique el esquema de fármacos y dosis para completar automáticamente las celdas del formulario.
+                      Revise todas las celdas y casillas antes de generar el PDF oficial sin campos vacíos.
                     </p>
                   </div>
                 </div>
@@ -2088,154 +2301,398 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                 </button>
               </div>
 
+              {/* Resumen Superior de Faltantes */}
+              {missingBancoCount > 0 && (
+                <div className="px-6 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-semibold text-slate-700">Faltan {missingBancoCount} datos requeridos:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {missingBancoList.map(item => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => handleFocusField(item.id)}
+                          className="px-2 py-0.5 text-[11px] font-medium bg-white hover:bg-green-50 text-slate-700 hover:text-green-800 rounded border border-slate-200 transition-all"
+                        >
+                          • {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Body */}
-              <div className="p-6 space-y-4 overflow-y-auto flex-1 bg-gray-50/20 text-xs">
+              <div className="p-6 space-y-5 overflow-y-auto flex-1 bg-gray-50/20 text-xs">
                 
-                {/* 1. Tabla de Drogas y Posología */}
+                {/* 1. Filiación del Paciente */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
+                  <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
+                    1. Datos de Filiación del Paciente
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div className="sm:col-span-2">
+                      {renderBField('Apellido y Nombre', 'nombre_apellido', true, 'Nombre completo del paciente')}
+                    </div>
+                    {renderBField('DNI N°', 'dni', true, 'Ej: 12345678')}
+                    {renderBField('Fecha de Nacimiento', 'fnac', true, 'DD/MM/AAAA')}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2 border-t border-gray-50">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">Sexo</label>
+                      <div className="flex gap-2">
+                        {['M', 'F'].map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setBancoFormData(prev => ({ ...prev, sexo: s as any }))}
+                            className={`flex-1 py-1.5 text-xs font-bold rounded-lg border text-center transition-all ${
+                              bancoFormData.sexo === s ? 'bg-green-50 text-green-800 border-green-300' : 'bg-white text-gray-600 border-gray-200'
+                            }`}
+                          >
+                            {s === 'M' ? 'Masc' : 'Fem'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {renderBField('Edad', 'edad', false, 'Años')}
+                    {renderBField('Teléfono', 'telefono', false, 'Ej: 3511234567')}
+                    {renderBField('Domicilio', 'domicilio', false, 'Calle y número')}
+                    {renderBField('Localidad', 'localidad', false, 'Ciudad')}
+                  </div>
+                </div>
+
+                {/* 2. Diagnóstico, Biomarcadores & Estadificación */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
+                  <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
+                    2. Diagnóstico, Biomarcadores & Estadificación
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div className="sm:col-span-2">
+                      {renderBField('Diagnóstico', 'diagnostico', true, 'Ej: Melanoma Maligno / Cáncer de Pulmón')}
+                    </div>
+                    {renderBField('Código CIE-10', 'cie10', false, 'Ej: C43.9')}
+                    {renderBField('Fecha Diagnóstico', 'fecha_diagnostico', true, 'DD/MM/AAAA')}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-50">
+                    {renderBField('TNM T', 'tnm_t', false, 'Ej: T4b')}
+                    {renderBField('TNM N', 'tnm_n', false, 'Ej: N3')}
+                    {renderBField('TNM M', 'tnm_m', false, 'Ej: M1d')}
+                    {renderBField('Estadio', 'estadio', false, 'Ej: IV')}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 pt-2 border-t border-gray-50">
+                    {renderBField('RE', 'receptor_RE', false, 'pos/neg/no aplica')}
+                    {renderBField('RP', 'receptor_RP', false, 'pos/neg/no aplica')}
+                    {renderBField('HER2/neu', 'receptor_HER2', false, 'pos/neg/no aplica')}
+                    {renderBField('KRAS', 'receptor_KRAS', false, 'no aplica')}
+                    {renderBField('EGFR', 'receptor_EGER', false, 'no aplica')}
+                    {renderBField('Otros / BRAF', 'receptor_otros', false, 'Ej: BRAF V600E')}
+                  </div>
+                  {isAdmision && (
+                    <div className="pt-2 border-t border-gray-50">
+                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                        Anatomía Patológica (Resumen sintético)
+                      </label>
+                      <textarea
+                        rows={2}
+                        placeholder="Tipo tumoral, grado, biopsia, IHQ..."
+                        value={bancoFormData.anatomia_patologica}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, anatomia_patologica: e.target.value }))}
+                        className="w-full p-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-green-600"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Antropometría & Estado Clínico */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
+                  <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
+                    3. Antropometría & Estado Clínico
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {renderBField('Peso (kg)', 'peso', true, 'Ej: 70')}
+                    {renderBField('Talla (cm)', 'talla', true, 'Ej: 174')}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">Sup. Corporal (m²)</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={bancoLiveBSA ? `${bancoLiveBSA} m² (Calculada auto)` : 'Pendiente de peso y talla'}
+                        className="w-full p-2 border border-gray-200 rounded-lg bg-gray-100 font-bold text-gray-700 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                        ECOG Performance (0 - 3) <span className="text-green-700 font-bold">*</span>
+                      </label>
+                      <div className="flex gap-1">
+                        {['0', '1', '2', '3'].map(ec => (
+                          <button
+                            key={ec}
+                            type="button"
+                            onClick={() => setBancoFormData(prev => ({ ...prev, ecog: ec }))}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg border text-center transition-all ${
+                              bancoFormData.ecog === ec ? 'bg-green-50 text-green-800 border-green-300' : 'bg-white text-gray-600 border-gray-200'
+                            }`}
+                          >
+                            {ec}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Tratamientos Previos (Cirugía, Radioterapia, Tratamientos Sistémicos) */}
+                {isAdmision && (
+                  <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
+                    <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
+                      4. Tratamientos Previos (Cirugías, Radioterapia y Tratamientos Sistémicos)
+                    </h4>
+
+                    {/* Cirugía Tumor Primario */}
+                    <div className="p-3 bg-gray-50/50 rounded-lg border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-gray-800">¿Cirugía de Tumor Primario?</span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setBancoFormData(prev => ({ ...prev, cx_primario_si: true }))}
+                            className={`px-3 py-1 text-xs font-bold rounded-lg border ${
+                              bancoFormData.cx_primario_si ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-300'
+                            }`}
+                          >
+                            SÍ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBancoFormData(prev => ({ ...prev, cx_primario_si: false, cx_especificar: '', cx_ganglios_resecados: '', cx_ganglios_comprometidos: '', cx_fecha: '' }))}
+                            className={`px-3 py-1 text-xs font-bold rounded-lg border ${
+                              !bancoFormData.cx_primario_si ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-600 border-gray-300'
+                            }`}
+                          >
+                            NO
+                          </button>
+                        </div>
+                      </div>
+                      {bancoFormData.cx_primario_si && (
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-2 border-t border-gray-200">
+                          <div className="sm:col-span-2">
+                            {renderBField('Procedimiento Quirúrgico (Sin drogas)', 'cx_especificar', false, 'Ej: Mastectomía, Biopsia escisional')}
+                          </div>
+                          {renderBField('Ganglios resecados', 'cx_ganglios_resecados', false, 'N°')}
+                          {renderBField('Fecha Cirugía', 'cx_fecha', false, 'DD/MM/AAAA')}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Cirugía Metástasis */}
+                    <div className="p-3 bg-gray-50/50 rounded-lg border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-gray-800">¿Cirugía de Metástasis?</span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setBancoFormData(prev => ({ ...prev, cx_metastasis_si: true }))}
+                            className={`px-3 py-1 text-xs font-bold rounded-lg border ${
+                              bancoFormData.cx_metastasis_si ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-300'
+                            }`}
+                          >
+                            SÍ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBancoFormData(prev => ({ ...prev, cx_metastasis_si: false, cx_metastasis_especificar: '', cx_metastasis_fecha: '' }))}
+                            className={`px-3 py-1 text-xs font-bold rounded-lg border ${
+                              !bancoFormData.cx_metastasis_si ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-600 border-gray-300'
+                            }`}
+                          >
+                            NO
+                          </button>
+                        </div>
+                      </div>
+                      {bancoFormData.cx_metastasis_si && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-gray-200">
+                          <div className="sm:col-span-2">
+                            {renderBField('Especificar Procedimiento Metastectomía', 'cx_metastasis_especificar', false, 'Ej: Resección lesión cerebral')}
+                          </div>
+                          {renderBField('Fecha Cirugía Metástasis', 'cx_metastasis_fecha', false, 'DD/MM/AAAA')}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Radioterapia */}
+                    <div className="p-3 bg-gray-50/50 rounded-lg border border-gray-100 space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+                        <div className="flex items-center justify-between sm:justify-start gap-3">
+                          <span className="font-bold text-gray-800">RT Primario:</span>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setBancoFormData(prev => ({ ...prev, rt_primario_si: true }))}
+                              className={`px-2.5 py-1 text-xs font-bold rounded border ${bancoFormData.rt_primario_si ? 'bg-green-600 text-white' : 'bg-white text-gray-600'}`}
+                            >
+                              SÍ
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBancoFormData(prev => ({ ...prev, rt_primario_si: false }))}
+                              className={`px-2.5 py-1 text-xs font-bold rounded border ${!bancoFormData.rt_primario_si ? 'bg-slate-700 text-white' : 'bg-white text-gray-600'}`}
+                            >
+                              NO
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-start gap-3">
+                          <span className="font-bold text-gray-800">RT Metástasis:</span>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setBancoFormData(prev => ({ ...prev, rt_metastasis_si: true }))}
+                              className={`px-2.5 py-1 text-xs font-bold rounded border ${bancoFormData.rt_metastasis_si ? 'bg-green-600 text-white' : 'bg-white text-gray-600'}`}
+                            >
+                              SÍ
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBancoFormData(prev => ({ ...prev, rt_metastasis_si: false }))}
+                              className={`px-2.5 py-1 text-xs font-bold rounded border ${!bancoFormData.rt_metastasis_si ? 'bg-slate-700 text-white' : 'bg-white text-gray-600'}`}
+                            >
+                              NO
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          {renderBField('Localización RT', 'rt_localizacion', false, 'Ej: Holocraneana, Mama')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tratamientos Sistémicos Previos */}
+                    <div className="p-3 bg-gray-50/50 rounded-lg border border-gray-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-gray-800">¿Tratamientos Sistémicos Previos (Quimio/Inmuno/Biológicos)?</span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setBancoFormData(prev => ({ ...prev, tratamientos_sistemicos_si: true }))}
+                            className={`px-3 py-1 text-xs font-bold rounded-lg border ${
+                              bancoFormData.tratamientos_sistemicos_si ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-300'
+                            }`}
+                          >
+                            SÍ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBancoFormData(prev => ({
+                              ...prev,
+                              tratamientos_sistemicos_si: false,
+                              quimioterapia_droga: '', quimioterapia_tipo: '',
+                              hormonoterapia_droga: '', hormonoterapia_tipo: '',
+                              terapia_blanco_droga: '', inmunoterapia_droga: ''
+                            }))}
+                            className={`px-3 py-1 text-xs font-bold rounded-lg border ${
+                              !bancoFormData.tratamientos_sistemicos_si ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-600 border-gray-300'
+                            }`}
+                          >
+                            NO
+                          </button>
+                        </div>
+                      </div>
+
+                      {bancoFormData.tratamientos_sistemicos_si && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-200">
+                          <div>
+                            {renderBField('Quimioterapia previa (Droga/s)', 'quimioterapia_droga', false, 'Ej: Carboplatino + Paclitaxel')}
+                          </div>
+                          <div>
+                            {renderBField('Terapias Blanco previas', 'terapia_blanco_droga', false, 'Ej: Dabrafenib + Trametinib')}
+                          </div>
+                          <div>
+                            {renderBField('Inmunoterapia previa', 'inmunoterapia_droga', false, 'Ej: Pembrolizumab')}
+                          </div>
+                          <div>
+                            {renderBField('Hormonoterapia previa', 'hormonoterapia_droga', false, 'Ej: Tamoxifeno')}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                )}
+
+                {/* 5. Tratamiento a Realizar (Esquema Solicitado) */}
                 <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
                   <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100 flex items-center gap-1.5">
-                    <Pill size={14} className="text-green-700" />
-                    <span>1. Drogas Solicitadas y Dosificación</span>
+                    <Pill size={14} className="text-green-700"/>
+                    <span>5. Tratamiento a Realizar (Esquema Solicitado)</span>
                   </h4>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">Tipo de Tratamiento</label>
+                      <select
+                        value={bancoFormData.tipo_tratamiento}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, tipo_tratamiento: e.target.value as any }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-green-600"
+                      >
+                        <option value="avanzado">Avanzado / Metástasis</option>
+                        <option value="adyuvante">Adyuvante</option>
+                        <option value="neoadyuvante">Neoadyuvante</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">Línea de Tratamiento</label>
+                      <select
+                        value={bancoFormData.linea}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, linea: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-green-600"
+                      >
+                        <option value="1">1ra Línea</option>
+                        <option value="2">2da Línea</option>
+                        <option value="3">3ra Línea o posterior</option>
+                      </select>
+                    </div>
+                    {renderBField('Intervalo de Ciclo (Días)', 'intervalo_ciclo', false, 'Ej: 21')}
+                    {renderBField('Ciclos Programados', 'ciclos_programados', false, 'Ej: 6')}
+                  </div>
+
                   {/* Fila Droga 1 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-2 border-t border-gray-100">
                     <div className="sm:col-span-1">
-                      <label className="block font-semibold text-gray-700 mb-1">
-                        Droga #1 (Principal) <span className="text-blue-600">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ej: Nivolumab"
-                        value={bancoFormData.droga_1}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, droga_1: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
+                      {renderBField('Droga #1 (Principal)', 'droga_1', true, 'Ej: Nivolumab')}
                     </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Dosis (mg/m² o mg)</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: 3 mg/kg / 240 mg"
-                        value={bancoFormData.dosis_1}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, dosis_1: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Días de Admin.</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: Día 1"
-                        value={bancoFormData.dias_1}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, dias_1: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Dosis Total / Día</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: 240 mg"
-                        value={bancoFormData.total_dia_1}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, total_dia_1: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
+                    {renderBField('Dosis (mg/m² o mg)', 'dosis_1', false, 'Ej: 3 mg/kg')}
+                    {renderBField('Días de Admin.', 'dias_1', false, 'Ej: Día 1')}
+                    {renderBField('Dosis Total / Día', 'total_dia_1', false, 'Ej: 240 mg')}
                   </div>
 
                   {/* Fila Droga 2 */}
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-2 border-t border-gray-50">
                     <div className="sm:col-span-1">
-                      <label className="block font-semibold text-gray-700 mb-1">Droga #2 (Opcional)</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: Ipilimumab"
-                        value={bancoFormData.droga_2}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, droga_2: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
+                      {renderBField('Droga #2 (Opcional)', 'droga_2', false, 'Ej: Ipilimumab')}
                     </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Dosis (mg/m² o mg)</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: 1 mg/kg"
-                        value={bancoFormData.dosis_2}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, dosis_2: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Días de Admin.</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: Día 1"
-                        value={bancoFormData.dias_2}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, dias_2: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Dosis Total / Día</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: 80 mg"
-                        value={bancoFormData.total_dia_2}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, total_dia_2: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
+                    {renderBField('Dosis', 'dosis_2', false, 'Ej: 1 mg/kg')}
+                    {renderBField('Días', 'dias_2', false, 'Ej: Día 1')}
+                    {renderBField('Dosis Total / Día', 'total_dia_2', false, 'Ej: 80 mg')}
                   </div>
 
                   {/* Fila Droga 3 */}
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-2 border-t border-gray-50">
                     <div className="sm:col-span-1">
-                      <label className="block font-semibold text-gray-700 mb-1">Droga #3 (Opcional)</label>
-                      <input
-                        type="text"
-                        placeholder="Opcional"
-                        value={bancoFormData.droga_3}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, droga_3: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
+                      {renderBField('Droga #3 (Opcional)', 'droga_3', false, 'Opcional')}
                     </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Dosis</label>
-                      <input
-                        type="text"
-                        placeholder=""
-                        value={bancoFormData.dosis_3}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, dosis_3: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Días</label>
-                      <input
-                        type="text"
-                        placeholder=""
-                        value={bancoFormData.dias_3}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, dias_3: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Dosis Total / Día</label>
-                      <input
-                        type="text"
-                        placeholder=""
-                        value={bancoFormData.total_dia_3}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, total_dia_3: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
+                    {renderBField('Dosis', 'dosis_3', false, '')}
+                    {renderBField('Días', 'dias_3', false, '')}
+                    {renderBField('Dosis Total / Día', 'total_dia_3', false, '')}
                   </div>
 
                   {/* Sugerencias Rápidas */}
                   <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center gap-1.5">
                     <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mr-1">
-                      Sugerencias:
+                      Sugerencias frecuentes:
                     </span>
                     {[
                       { label: 'Nivolumab + Ipilimumab', d1: 'Nivolumab', dos1: '3 mg/kg', dias1: 'Día 1', tot1: '240 mg', d2: 'Ipilimumab', dos2: '1 mg/kg', dias2: 'Día 1', tot2: '80 mg' },
@@ -2260,201 +2717,136 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                   </div>
                 </div>
 
-                {/* 2. Parámetros del Esquema */}
-                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
-                  <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
-                    2. Parámetros del Esquema
-                  </h4>
-                  
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">N° Ciclos Programados</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: 6"
-                        value={bancoFormData.ciclos_programados}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, ciclos_programados: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Intervalo de Ciclo (Días)</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: 21"
-                        value={bancoFormData.intervalo_ciclo}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, intervalo_ciclo: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Tipo de Tratamiento</label>
-                      <select
-                        value={bancoFormData.tipo_tratamiento}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, tipo_tratamiento: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-500"
-                      >
-                        <option value="avanzado">Avanzado / Metástasis</option>
-                        <option value="adyuvante">Adyuvante</option>
-                        <option value="neoadyuvante">Neoadyuvante</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Línea de Tratamiento</label>
-                      <select
-                        value={bancoFormData.linea}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, linea: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-500"
-                      >
-                        <option value="1">1ra Línea</option>
-                        <option value="2">2da Línea</option>
-                        <option value="3">3ra Línea o posterior</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Parámetros específicos de Renovación */}
-                  {!isAdmision && (
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
+                {/* 6. Parámetros de Renovación (Solo para Renovación) */}
+                {!isAdmision && (
+                  <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
+                    <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
+                      6. Parámetros de Renovación
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <div>
-                        <label className="block font-semibold text-gray-700 mb-1">Motivo Renovación</label>
+                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">Motivo Renovación</label>
                         <select
                           value={bancoFormData.motivo_renovacion}
-                          onChange={e => setBancoFormData(prev => ({ ...prev, motivo_renovacion: e.target.value }))}
-                          className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-500"
+                          onChange={e => setBancoFormData(prev => ({ ...prev, motivo_renovacion: e.target.value as any }))}
+                          className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-green-600"
                         >
                           <option value="continua">Continúa mismo esquema</option>
                           <option value="cambio">Cambio por Progresión / Toxicidad</option>
                         </select>
                       </div>
+                      {renderBField('Ciclos Realizados', 'ciclos_realizados', false, 'Ej: 3')}
                       <div>
-                        <label className="block font-semibold text-gray-700 mb-1">Ciclos Realizados</label>
-                        <input
-                          type="text"
-                          placeholder="Ej: 3"
-                          value={bancoFormData.ciclos_realizados}
-                          onChange={e => setBancoFormData(prev => ({ ...prev, ciclos_realizados: e.target.value }))}
-                          className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-gray-700 mb-1">Respuesta Clínica</label>
+                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">Respuesta Clínica</label>
                         <select
                           value={bancoFormData.respuesta}
-                          onChange={e => setBancoFormData(prev => ({ ...prev, respuesta: e.target.value }))}
-                          className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-500"
+                          onChange={e => setBancoFormData(prev => ({ ...prev, respuesta: e.target.value as any }))}
+                          className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-green-600"
                         >
                           <option value="estable">Enfermedad Estable</option>
                           <option value="parcial">Respuesta Parcial</option>
                           <option value="completa">Respuesta Completa</option>
                         </select>
                       </div>
-                      <div>
-                        <label className="block font-semibold text-gray-700 mb-1">Sitio Progresión (si hubo)</label>
-                        <input
-                          type="text"
-                          placeholder="Ej: Hepático"
-                          value={bancoFormData.sitio_progresion}
-                          onChange={e => setBancoFormData(prev => ({ ...prev, sitio_progresion: e.target.value }))}
-                          className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Datos Clínicos & Antropometría */}
-                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
-                  <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
-                    3. Antropometría y Estado Clínico
-                  </h4>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Peso (kg)</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: 70"
-                        value={bancoFormData.peso}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, peso: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Talla (cm)</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: 165"
-                        value={bancoFormData.talla}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, talla: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Sup. Corporal</label>
-                      <input
-                        type="text"
-                        disabled
-                        value={modalBSA ? `${modalBSA} m²` : '—'}
-                        className="w-full p-2 border border-gray-200 rounded-lg bg-gray-100 font-bold text-gray-700"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">ECOG (0 - 4)</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: 0 o 1"
-                        value={bancoFormData.ecog}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, ecog: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">Teléfono</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: 3511234567"
-                        value={bancoFormData.telefono}
-                        onChange={e => setBancoFormData(prev => ({ ...prev, telefono: e.target.value }))}
-                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                      />
+                      {renderBField('Sitio Progresión (si hubo)', 'sitio_progresion', false, 'Ej: Hepático')}
                     </div>
                   </div>
-                </div>
+                )}
 
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowBancoModal(null)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  disabled={!bancoFormData.droga_1.trim() || processingId !== null}
-                  onClick={() => {
-                    const formDef = forms.find(f => f.id === showBancoModal);
-                    if (showBancoModal === 'admision') {
-                      fillAdmisionPDF(formDef, undefined, bancoFormData);
-                    } else {
-                      fillRenovacionPDF(formDef, undefined, bancoFormData);
-                    }
-                  }}
-                  className="px-5 py-2 text-xs font-bold text-white bg-green-700 hover:bg-green-800 rounded-xl shadow-xs transition-all disabled:opacity-40 flex items-center gap-2"
-                >
-                  {processingId !== null ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                  <span>Generar Formulario {isAdmision ? 'Admisión' : 'Renovación'} (PDF)</span>
-                </button>
+              <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div className="text-xs text-gray-600">
+                  {missingBancoCount > 0 ? (
+                    <span className="text-slate-600">
+                      Faltan {missingBancoCount} datos obligatorios marcados con asterisco (*).
+                    </span>
+                  ) : (
+                    <span className="text-emerald-700 font-medium">
+                      Todos los datos obligatorios están listos para el PDF oficial.
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setShowBancoModal(null)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all w-full sm:w-auto"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={processingId !== null}
+                    onClick={handleBancoDownloadClick}
+                    className="px-5 py-2 text-xs font-bold text-white bg-green-700 hover:bg-green-800 rounded-xl shadow-xs transition-all disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto"
+                  >
+                    {processingId !== null ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                    <span>Descargar Formulario Banco de Drogas (PDF)</span>
+                  </button>
+                </div>
               </div>
 
             </div>
           </div>
         );
       })()}
+
+      {/* MODAL DE CONFIRMACIÓN BANCO DE DROGAS SI FALTAN OBLIGATORIOS */}
+      {showBancoMissingConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-2xs flex items-center justify-center z-60 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-green-50 text-green-700 rounded-xl">
+                <AlertCircle size={22} />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-gray-900">Datos pendientes</h4>
+                <p className="text-xs text-gray-500">
+                  Faltan {missingBancoCount} datos obligatorios para completar el formulario.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs text-slate-700">
+              <span className="font-semibold block">Campos pendientes:</span>
+              <ul className="list-disc list-inside space-y-0.5 text-slate-600">
+                {missingBancoList.map(m => (
+                  <li key={m.key}>{m.label}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBancoMissingConfirm(false);
+                  if (missingBancoList.length > 0) {
+                    handleFocusField(missingBancoList[0].id);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-green-800 bg-green-50 hover:bg-green-100 rounded-xl border border-green-200 transition-all"
+              >
+                Completar datos
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBancoMissingConfirm(false);
+                  if (bancoFormData.context === 'admision') fillAdmisionPDFFromData(bancoFormData);
+                  else fillRenovacionPDFFromData(bancoFormData);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
+              >
+                Generar igualmente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL ESQUEMA DINADIC */}
       {showEsquemaModal && (
