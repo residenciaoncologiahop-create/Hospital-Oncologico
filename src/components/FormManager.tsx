@@ -113,11 +113,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     tnm_n: '',
     tnm_m: '',
     estadio: '',
-    receptor_RE: 'no aplica',
-    receptor_RP: 'no aplica',
-    receptor_HER2: 'no aplica',
-    receptor_KRAS: 'no aplica',
-    receptor_EGER: 'no aplica',
+    receptor_RE: '',
+    receptor_RP: '',
+    receptor_HER2: '',
+    receptor_KRAS: '',
+    receptor_EGER: '',
     receptor_otros: '',
     anatomia_patologica: '',
     // Antropometría
@@ -265,13 +265,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     const context = getEffectiveClinicalContext();
 
     let name = patient?.name || '';
-    if (!name || name.toLowerCase() === 'paciente') {
-      const nameMatch = context.match(/(?:paciente|nombre(?:\s+y\s+apellido)?|afiliado)\s*[:=]?\s*([A-Za-zÁÉÍÓÚáéíóúñÑ\s]{3,35})/i);
-      if (nameMatch && !nameMatch[1].toLowerCase().includes('historia')) {
-        name = nameMatch[1].trim();
-      } else {
-        name = '';
-      }
+    if (!name || name.toLowerCase() === 'paciente' || name.toLowerCase().includes('derivad') || name.toLowerCase().includes('consulta') || name.toLowerCase().includes('historia') || name.toLowerCase().includes('caso') || name.toLowerCase().includes('melanoma') || name.toLowerCase().includes('cancer') || name.toLowerCase().includes('tumor')) {
+      name = '';
     }
 
     let fnac = patient?.birthDate || '';
@@ -333,7 +328,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown.
 
       REGLAS DE EXTRACCIÓN Y DEDUCCIÓN CLÍNICA (MUY ESTRICTAS):
-      1. nombre_apellido: Extraer nombre real del paciente. NUNCA devolver "Paciente". Si no figura, dejar en blanco.
+      1. nombre_apellido: Dejar SIEMPRE en blanco ("") para que el médico lo ingrese manualmente en la celda correspondiente. ❌ NUNCA inventar nombres ni extraer frases clínicas (como "derivado por melanoma", "paciente", etc.).
       2. fecha_diagnostico: Deducir fecha del primer estudio patológico, biopsia o consulta diagnóstica inicial (DD/MM/AAAA).
       3. cx_primario_si: true SOLAMENTE SI el paciente tuvo una CIRUGÍA/RESECCIÓN QUIRÚRGICA de su tumor primario (ej: Mastectomía, Biopsia escisional, Resección). Si solo tuvo tratamientos farmacológicos sistémicos o no fue operado, DEBE SER false.
       4. cx_especificar: EXCLUSIVAMENTE el nombre del PROCEDIMIENTO QUIRÚRGICO. ❌ PROHIBIDO TERMINANTEMENTE colocar nombres de fármacos, quimioterapias o tratamientos sistémicos en campos de cirugía.
@@ -341,6 +336,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       6. rt_primario_si, rt_metastasis_si: true si recibió radioterapia.
       7. tratamientos_sistemicos_si: true si recibió quimioterapia, hormonoterapia, biológicos o inmunoterapia previa.
       8. drogas_solicitadas: Extraer el fármaco principal y secundarios indicados en el plan actual con dosis, días y total/día si figuran.
+      9. IHQ / RECEPTORES (RE, RP, HER2, KRAS, EGFR, Otros/BRAF):
+         - Completar ÚNICAMENTE si el marcador es POSITIVO o MUTADO (ej: "Positivo", "BRAF V600E mutado (+)").
+         - En marcadores negativos, no evaluados o no aplicables, DEJAR OBLIGATORIAMENTE EN BLANCO ("").
+         - ❌ PROHIBIDO TERMINANTEMENTE escribir "no aplica", "no aplicable", "negativo" o "no evaluado".
 
       ${isRenovacion ? `
       CONTEXTO RENOVACIÓN:
@@ -353,8 +352,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       CONTEXTO ADMISIÓN:
       - anatomia_patologica: Resumen MUY CONCISO Y SINTÉTICO de la patología e IHQ (tipo tumoral, grado, RE, RP, HER2, Ki67). MÁXIMO 180 caracteres.
       - tnm_t, tnm_n, tnm_m: clasificación TNM si existe
-      - receptor_RE, receptor_RP, receptor_HER2, receptor_KRAS, receptor_EGER: positivo / negativo / no aplica
-      - receptor_otros: otros marcadores como BRAF, PDL1, etc.
       `}
 
       Devolver este objeto JSON:
@@ -376,7 +373,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         "cie10": "",
         "estadio": "",
         "tnm_t": "", "tnm_n": "", "tnm_m": "",
-        "receptor_RE": "no aplica", "receptor_RP": "no aplica", "receptor_HER2": "no aplica", "receptor_KRAS": "no aplica", "receptor_EGER": "no aplica", "receptor_otros": "",
+        "receptor_RE": "", "receptor_RP": "", "receptor_HER2": "", "receptor_KRAS": "", "receptor_EGER": "", "receptor_otros": "",
         "anatomia_patologica": "",
         "peso": "",
         "talla": "",
@@ -447,9 +444,26 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const aiData = await extractBancoDrogasData(formType === 'admision' ? 'ADMISIÓN' : 'RENOVACIÓN', correction);
       const fallback = extractFallbackPatientData();
       
-      const safeName = aiData.nombre_apellido && aiData.nombre_apellido.toLowerCase() !== 'paciente'
-        ? aiData.nombre_apellido
-        : (fallback.name && fallback.name.toLowerCase() !== 'paciente' ? fallback.name : '');
+      const cleanIhqVal = (val: any) => {
+        if (!val) return '';
+        const str = String(val).trim();
+        const lower = str.toLowerCase();
+        if (
+          lower.includes('no aplic') ||
+          lower.includes('negativ') ||
+          lower.includes('no eval') ||
+          lower.includes('no mutad') ||
+          lower === 's/d' ||
+          lower === 'n/a' ||
+          lower === '-' ||
+          lower === 'no'
+        ) {
+          return '';
+        }
+        return str;
+      };
+
+      const safeName = (fallback.name && !fallback.name.toLowerCase().includes('paciente') && !fallback.name.toLowerCase().includes('derivad') && !fallback.name.toLowerCase().includes('historia')) ? fallback.name : '';
 
       setBancoFormData({
         context: formType,
@@ -472,12 +486,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         tnm_n: aiData.tnm_n || '',
         tnm_m: aiData.tnm_m || '',
         estadio: aiData.estadio || fallback.stage || '',
-        receptor_RE: aiData.receptor_RE || 'no aplica',
-        receptor_RP: aiData.receptor_RP || 'no aplica',
-        receptor_HER2: aiData.receptor_HER2 || 'no aplica',
-        receptor_KRAS: aiData.receptor_KRAS || 'no aplica',
-        receptor_EGER: aiData.receptor_EGER || 'no aplica',
-        receptor_otros: aiData.receptor_otros || '',
+        receptor_RE: cleanIhqVal(aiData.receptor_RE),
+        receptor_RP: cleanIhqVal(aiData.receptor_RP),
+        receptor_HER2: cleanIhqVal(aiData.receptor_HER2),
+        receptor_KRAS: cleanIhqVal(aiData.receptor_KRAS),
+        receptor_EGER: cleanIhqVal(aiData.receptor_EGER),
+        receptor_otros: cleanIhqVal(aiData.receptor_otros),
         anatomia_patologica: aiData.anatomia_patologica || '',
         peso: aiData.peso || fallback.weight || '',
         talla: aiData.talla || fallback.height || '',
@@ -1134,15 +1148,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       // 2. Diagnóstico & Estadificación
       setT('Text18', d.diagnostico);
       setT('Text19', d.cie10);
-
-      setT('Text20', d.receptor_RE || 'no aplica');
-      setT('Text21', d.receptor_RP || 'no aplica');
-      setT('Text22', d.receptor_HER2 || 'no aplica');
-      setT('Text23', d.receptor_KRAS || 'no aplica');
-      setT('Text24', d.receptor_EGER || 'no aplica');
-      if (d.receptor_otros) {
+      setT('Text20', d.receptor_RE || '');
+      setT('Text21', d.receptor_RP || '');
+      setT('Text22', d.receptor_HER2 || '');
+      setT('Text23', d.receptor_KRAS || '');
+      setT('Text24', d.receptor_EGER || '');
+      if (d.receptor_otros && d.receptor_otros.trim()) {
         setT('Text25', 'SI');
-        setT('Text26', d.receptor_otros);
+        setT('Text26', d.receptor_otros.trim());
+      } else {
+        setT('Text25', '');
+        setT('Text26', '');
       }
 
       setT('Text27', dxd); setT('Text28', dxm); setT('Text29', dxa);
@@ -1325,11 +1341,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       // 3. Diagnóstico & Receptores
       setT('Text20', d.diagnostico);
       setT('Text21', d.cie10);
-      setT('Text32', d.receptor_RE || 'no aplica');
-      setT('Text33', d.receptor_RP || 'no aplica');
-      setT('Text34', d.receptor_HER2 || 'no aplica');
-      setT('Text35', d.receptor_KRAS || 'no aplica');
-      setT('Text36', d.receptor_EGER || 'no aplica');
+      setT('Text32', d.receptor_RE || '');
+      setT('Text33', d.receptor_RP || '');
+      setT('Text34', d.receptor_HER2 || '');
+      setT('Text35', d.receptor_KRAS || '');
+      setT('Text36', d.receptor_EGER || '');
 
       // 4. Antropometría
       setT('Text51', bsa);
@@ -2381,12 +2397,12 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                     {renderBField('Estadio', 'estadio', false, 'Ej: IV')}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 pt-2 border-t border-gray-50">
-                    {renderBField('RE', 'receptor_RE', false, 'pos/neg/no aplica')}
-                    {renderBField('RP', 'receptor_RP', false, 'pos/neg/no aplica')}
-                    {renderBField('HER2/neu', 'receptor_HER2', false, 'pos/neg/no aplica')}
-                    {renderBField('KRAS', 'receptor_KRAS', false, 'no aplica')}
-                    {renderBField('EGFR', 'receptor_EGER', false, 'no aplica')}
-                    {renderBField('Otros / BRAF', 'receptor_otros', false, 'Ej: BRAF V600E')}
+                    {renderBField('RE', 'receptor_RE', false, 'Ej: Positivo 80%')}
+                    {renderBField('RP', 'receptor_RP', false, 'Ej: Positivo 60%')}
+                    {renderBField('HER2/neu', 'receptor_HER2', false, 'Ej: Positivo (3+)')}
+                    {renderBField('KRAS', 'receptor_KRAS', false, 'Ej: Mutado')}
+                    {renderBField('EGFR', 'receptor_EGER', false, 'Ej: Mutado')}
+                    {renderBField('Otros / BRAF', 'receptor_otros', false, 'Ej: BRAF V600E mutado (+)')}
                   </div>
                   {isAdmision && (
                     <div className="pt-2 border-t border-gray-50">
