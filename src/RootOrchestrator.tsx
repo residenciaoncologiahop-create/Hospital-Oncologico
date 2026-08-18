@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import { Stethoscope, GraduationCap, ChevronRight, Calculator, Pill } from 'lucide-react';
+import { Stethoscope, GraduationCap, ChevronRight } from 'lucide-react';
 import ResidentApp from './ResidentApp';
-import OncoCalculator from './components/OncoCalculator';
-import DrugReference from './components/DrugReference';
 
 // --- COMPONENTES AUXILIARES ---
 
@@ -72,17 +70,6 @@ interface RootOrchestratorProps {
 
 const RootOrchestrator: React.FC<RootOrchestratorProps> = ({ DoctorApp }) => {
   const [appMode, setAppMode] = useState<'selection' | 'doctor' | 'resident'>('selection');
-  
-  // Estados para herramientas globales (Modo Profesional)
-  const [showDocCalc, setShowDocCalc] = useState(false);
-  const [showDocDrugs, setShowDocDrugs] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-
-  React.useEffect(() => {
-    const handler = (e: any) => setChatOpen(e.detail.open);
-    window.addEventListener('oncoguide_chat', handler);
-    return () => window.removeEventListener('oncoguide_chat', handler);
-  }, []);
 
   // --- RENDERIZADO ---
 
@@ -94,44 +81,8 @@ const RootOrchestrator: React.FC<RootOrchestratorProps> = ({ DoctorApp }) => {
     return <ResidentApp />;
   }
 
-  // MODO DOCTOR + OVERLAY DE HERRAMIENTAS
-  return (
-    <div className="relative">
-      {/* 1. La App original (intacta) */}
-      <DoctorApp />
-
-      {/* 2. Botones Flotantes */}
-      {!chatOpen && (
-      <div className="fixed top-24 right-6 z-50 flex flex-col gap-3 animate-in fade-in slide-in-from-right-8 duration-500">
-        <button 
-          onClick={() => setShowDocCalc(true)}
-          className="flex items-center gap-2 bg-white text-gray-600 p-3 rounded-full shadow-lg border border-gray-100 hover:text-blue-600 hover:border-blue-200 transition-all group"
-          title="Calculadora Oncológica"
-        >
-          <Calculator size={20} />
-          <span className="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:px-2 transition-all duration-300 text-xs font-bold uppercase tracking-wider whitespace-nowrap">
-            Calculadora
-          </span>
-        </button>
-        
-        <button 
-          onClick={() => setShowDocDrugs(true)}
-          className="flex items-center gap-2 bg-white text-gray-600 p-3 rounded-full shadow-lg border border-gray-100 hover:text-purple-600 hover:border-purple-200 transition-all group"
-          title="Vademécum"
-        >
-          <Pill size={20} />
-          <span className="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:px-2 transition-all duration-300 text-xs font-bold uppercase tracking-wider whitespace-nowrap">
-            Fármacos
-          </span>
-        </button>
-      </div>
-      )}
-
-      {/* 3. Modales Globales */}
-      {showDocCalc && <OncoCalculator onClose={() => setShowDocCalc(false)} />}
-      {showDocDrugs && <DrugReference onClose={() => setShowDocDrugs(false)} />}
-    </div>
-  );
+  // MODO DOCTOR
+  return <DoctorApp />;
 };
 
 export default RootOrchestrator;

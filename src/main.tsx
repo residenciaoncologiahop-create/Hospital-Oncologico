@@ -5,9 +5,11 @@ import RootOrchestrator from './RootOrchestrator';
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import PendientesPanel from './components/PendientesPanel';
-import ImagingPanel, { ImagingStudy } from './components/ImagingPanel';
+import ImagingPanel, { mergeImagingStudies, generateLesionKey, ImagingStudy } from './components/ImagingPanel';
 import { extractImagingFromHistorySecure } from './utils/aiProxy';
 import { requestNotificationPermission } from './utils/notificationService';
+import OncoCalculator from './components/OncoCalculator';
+import DrugReference from './components/DrugReference';
 
 // --- FIREBASE IMPORTS ---
 import { db } from './lib/firebase';
@@ -17,12 +19,11 @@ import {
     FileText, MessageSquare, Plus, LogOut, Search,
     Upload, Activity, Trash2, Menu, X, Clock,
     Loader2, AlertCircle, Info, Terminal, ChevronDown,
-    Calendar, PenTool, ClipboardCheck,
+    Calendar, PenTool, ClipboardCheck, Wrench, Calculator, Pill,
     PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
-import ImagingPanel, { mergeImagingStudies, generateLesionKey } from './components/ImagingPanel';
 import ClinicalAuditModal from './components/ClinicalAuditModal';
 
 import { User } from 'firebase/auth';
@@ -203,6 +204,9 @@ const App = ({ user }: AppProps) => {
     const [showAuditModal, setShowAuditModal] = useState(false);
     const [showPendientesModal, setShowPendientesModal] = useState(false);
     const [pendientesTodayCount, setPendientesTodayCount] = useState(0);
+    const [showToolsMenu, setShowToolsMenu] = useState(false);
+    const [showCalculatorModal, setShowCalculatorModal] = useState(false);
+    const [showDrugsModal, setShowDrugsModal] = useState(false);
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
 
@@ -768,44 +772,110 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                 <h1 className="font-black text-gray-700 text-sm tracking-tight">Seleccioná un caso</h1>
                             )}
                         </div>
-                        {/* Botón PENDIENTES */}
-                        <button
-                            onClick={() => setShowPendientesModal(v => !v)}
-                            className={`mr-36 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all
-                                ${showPendientesModal
-                                    ? 'bg-blue-600 text-white shadow-md shadow-blue-100'
-                                    : 'bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600'}`}
-                        >
-                            <span>Pendientes</span>
-                            {pendientesTodayCount > 0 && (
-                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none
-                                    ${showPendientesModal ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}>
-                                    {pendientesTodayCount}
-                                </span>
-                            )}
-                        </button>
-                    </header>
+                        {/* Botones Header Derecho */}
+                        <div className="flex items-center gap-2">
+                            {/* Botón PENDIENTES */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => {
+                                        setShowToolsMenu(false);
+                                        setShowPendientesModal(v => !v);
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all
+                                        ${showPendientesModal
+                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-100'
+                                            : 'bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600'}`}
+                                >
+                                    <span>Pendientes</span>
+                                    {pendientesTodayCount > 0 && (
+                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none
+                                            ${showPendientesModal ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}>
+                                            {pendientesTodayCount}
+                                        </span>
+                                    )}
+                                </button>
 
-                    {/* ── DROPDOWN PENDIENTES / AGENDA ─────────── */}
-                    {showPendientesModal && (
-                        <>
-                            {/* Overlay transparente para cerrar al clickear afuera */}
-                            <div
-                                className="fixed inset-0 z-40"
-                                onClick={() => setShowPendientesModal(false)}
-                            />
-                            {/* Panel */}
-                            <div className="absolute top-14 right-0 z-50 w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl shadow-gray-200/80 p-4 animate-in fade-in slide-in-from-top-2 duration-200"
-                                style={{ position: 'absolute', top: '56px', right: '160px' }}
-                            >
-                                <PendientesPanel
-                                    doctorId={user.uid}
-                                    initialTab="hoy"
-                                    onCountChange={setPendientesTodayCount}
-                                />
+                                {/* ── DROPDOWN PENDIENTES / AGENDA ─────────── */}
+                                {showPendientesModal && (
+                                    <>
+                                        <div
+                                            className="fixed inset-0 z-40"
+                                            onClick={() => setShowPendientesModal(false)}
+                                        />
+                                        <div className="absolute right-0 top-full mt-2 z-50 w-80 bg-white border border-gray-100 rounded-2xl shadow-2xl shadow-gray-200/80 p-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <PendientesPanel
+                                                doctorId={user.uid}
+                                                initialTab="hoy"
+                                                onCountChange={setPendientesTodayCount}
+                                            />
+                                        </div>
+                                    </>
+                                )}
                             </div>
-                        </>
-                    )}
+
+                            {/* Botón HERRAMIENTAS */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => {
+                                        setShowPendientesModal(false);
+                                        setShowToolsMenu(v => !v);
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all
+                                        ${showToolsMenu
+                                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
+                                            : 'bg-gray-100 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600'}`}
+                                    title="Herramientas clínicas"
+                                >
+                                    <Wrench size={12} />
+                                    <span>Herramientas</span>
+                                    <ChevronDown size={12} className={`transition-transform duration-200 ${showToolsMenu ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {/* ── DROPDOWN HERRAMIENTAS ─────────── */}
+                                {showToolsMenu && (
+                                    <>
+                                        <div
+                                            className="fixed inset-0 z-40"
+                                            onClick={() => setShowToolsMenu(false)}
+                                        />
+                                        <div className="absolute right-0 top-full mt-2 z-50 w-60 bg-white border border-gray-100 rounded-2xl shadow-2xl shadow-gray-200/80 p-2 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col gap-1">
+                                            <button
+                                                onClick={() => {
+                                                    setShowToolsMenu(false);
+                                                    setShowCalculatorModal(true);
+                                                }}
+                                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-blue-50 group transition-colors"
+                                            >
+                                                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+                                                    <Calculator size={16} />
+                                                </div>
+                                                <div>
+                                                    <div className="text-xs font-black text-gray-800 group-hover:text-blue-700">Calculadora</div>
+                                                    <div className="text-[10px] text-gray-400 font-medium leading-tight">Superficie, Carboplatino...</div>
+                                                </div>
+                                            </button>
+
+                                            <button
+                                                onClick={() => {
+                                                    setShowToolsMenu(false);
+                                                    setShowDrugsModal(true);
+                                                }}
+                                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-purple-50 group transition-colors"
+                                            >
+                                                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+                                                    <Pill size={16} />
+                                                </div>
+                                                <div>
+                                                    <div className="text-xs font-black text-gray-800 group-hover:text-purple-700">Fármacos</div>
+                                                    <div className="text-[10px] text-gray-400 font-medium leading-tight">Vademécum oncológico</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </header>
 
                     {selP ? (
                         <>
@@ -1254,6 +1324,8 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                     isLoading={reportModal.isLoading}
                     onRegenerate={reportModal.generatorFn ? handleRegenerateReport : undefined}
                 />
+                {showCalculatorModal && <OncoCalculator onClose={() => setShowCalculatorModal(false)} />}
+                {showDrugsModal && <DrugReference onClose={() => setShowDrugsModal(false)} />}
             </div>
         </>
     );
