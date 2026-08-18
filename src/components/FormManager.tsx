@@ -1422,6 +1422,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       return;
     }
 
+    // Si no viene esquema, es el primer llamado: pedir droga y abrir modal
     if (!esquema) {
       const drugName = window.prompt('Ingrese el/los fármaco/s a solicitar en el formulario DINADIC:');
       if (!drugName || !drugName.trim()) return;
@@ -1438,143 +1439,172 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const today = new Date().toLocaleDateString('es-AR');
 
       const extractPrompt = `
-        Actúa como un MÉDICO ONCÓLOGO EXPERTO. Hoy es ${today}.
-        Analiza toda la información disponible (Historia Clínica, Línea de Tiempo y archivos adjuntos) y extrae TODOS los datos posibles para completar el formulario DINADIC (ex-DADSE) de solicitud de medicación de alto costo.
-        FÁRMACO SOLICITADO: ${drugName}.
-        IDIOMA: Todo en español.
-        
-        REGLAS DE EXTRACCIÓN Y DEDUCCIÓN:
-        - fecha_diagnostico: DEDUCE OBLIGATORIAMENTE la fecha de diagnóstico inicial analizando las fechas del primer estudio patológico, biopsia o consulta diagnóstica inicial en los eventos de la Línea de Tiempo o Historia Clínica (Formato DD/MM/AAAA).
-        
-        Devolver ÚNICAMENTE un objeto JSON con este esquema exacto:
-        {
-          "paciente_nombre": "",
-          "paciente_dni": "",
-          "paciente_edad": "",
-          "paciente_sexo": "M" o "F",
-          "paciente_fnac": "DD/MM/AAAA",
-          "paciente_domicilio": "",
-          "paciente_localidad": "",
-          "paciente_provincia": "Córdoba",
-          "paciente_telefono": "",
-          "paciente_email": "",
-          "paciente_cobertura": "Ninguna / Pública",
-          "diagnostico_cie10": "",
-          "diagnostico_descripcion": "",
-          "estadio": "",
-          "fecha_diagnostico": "DD/MM/AAAA",
-          "tnm_t": "", "tnm_n": "", "tnm_m": "",
-          "ecog": "0",
-          "peso": "",
-          "talla": "",
-          "linea_tratamiento": "1ra línea",
-          "intencion_tratamiento": "adyuvante/neoadyuvante/avanzado/paliativo",
-          "resumen_historia_clinica": "Breve resumen narrativo del cuadro clínico, tratamientos previos y justificación del fármaco solicitado (máx 500 caracteres).",
-          "antecedentes_relevantes": "Comorbilidades relevantes o cirugías previas.",
-          "estudios_complementarios": "Estudios diagnósticos clave (biopsia, TAC, RMN, PET) con fechas y resultados.",
-          "laboratorio_relevante": "Valores clave de laboratorio (hemograma, función renal, hepática, marcadores).",
-          "medicacion_solicitada": "${drugName}",
-          "dosis_propuesta": "",
-          "frecuencia_administracion": "",
-          "duracion_tratamiento": "",
-          "medico_solicitante": "",
-          "medico_matricula": "",
-          "medico_especialidad": "Oncología Clínica",
-          "institucion": "Hospital Oncológico Provincial - Córdoba",
-          "lugar_fecha": "Córdoba, ${today}"
-        }
+Actúa como oncólogo experto. Hoy es ${today}.
+Analizá la historia clínica y extraé datos para el formulario DINADIC (Solicitud de Medicamentos - DADSE).
+FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}. Usar EXACTAMENTE este valor en el campo "medicamentos".
+IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de código.
 
-        CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${pendingDinadicCorrection}. Incorporar en los campos correspondientes.` : ''}
+{
+  "nombre_apellido": "",
+  "tipo_documento": "DNI",
+  "numero_documento": "",
+  "edad": "",
+  "sexo": "Femenino o Masculino",
+  "domicilio": "",
+  "localidad": "",
+  "provincia": "Córdoba",
+  "telefono": "",
+  "celular": "",
+  "email": "",
+  "diagnostico": "",
+  "altura": "",
+  "peso": "",
+  "n_ciclo": "1",
+  "fecha_diagnostico": "DD/MM/AAAA",
+  "resumen_hc": "Resumen clínico con estadio e inmunohistoquímica. Narrativa cronológica. Máx 690 chars (6 líneas × 115).",
+  "metodos_complementarios": "Estudios de imagen y laboratorio con fechas y resultados clave. Máx 575 chars (5 líneas).",
+  "estado_general": "ECOG y comorbilidades relevantes. Máx 345 chars (3 líneas).",
+  "tratamientos_previos": "Tratamientos oncológicos previos con fechas. Máx 345 chars (3 líneas).",
+  "tipo_terapia_previa": "Cx, QT, RT, etc con fechas. Abreviaturas médicas. Máx 460 chars (4 líneas).",
+  "fundamentacion": "Justificación oncológica MUY CONCISA. Máximo 2 oraciones. No más de 200 caracteres. Sin cortes abruptos, terminar siempre con punto final y con coherencia."
+}
+
+CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? `\n\nCORRECCIÓN SOLICITADA POR EL MÉDICO: ${pendingDinadicCorrection}. Incorporar en los campos correspondientes.` : ''}
       `;
 
       const parts: any[] = [{ text: extractPrompt }];
       if (files && files.length > 0) files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
 
       const res = await callGemini({ parts, responseMimeType: "application/json" });
-      let clean = res.text.replace(/```json|```/g, '').trim();
-      const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
-      if (s !== -1 && e !== -1) clean = clean.substring(s, e + 1);
+      let clean = (res.text || '{}').replace(/```json|```/g, '').trim();
+      const si = clean.indexOf('{'), ei = clean.lastIndexOf('}');
+      if (si !== -1 && ei !== -1) clean = clean.substring(si, ei + 1);
       const d = JSON.parse(clean);
+      let alturaCorregida = d.altura ? String(d.altura).replace(',', '.') : '';
+      if (alturaCorregida && parseFloat(alturaCorregida) < 3) alturaCorregida = String(Math.round(parseFloat(alturaCorregida) * 100));
+      const bsa = calculateBSA(d.peso, alturaCorregida);
 
-      setStatus('Generando PDF DINADIC...');
+      setStatus('Generando PDF...');
 
       const formUrl = window.location.origin + '/forms/nuevo_dinadic.pdf';
-      const formRes = await fetch(formUrl);
-      if (!formRes.ok) throw new Error('No se encontró /forms/nuevo_dinadic.pdf');
-      const pdfDoc = await PDFDocument.load(await formRes.arrayBuffer());
-      const form = pdfDoc.getForm();
+      const pdfRes = await fetch(formUrl);
+      if (!pdfRes.ok) throw new Error('No se encontró el formulario DINADIC.');
+      const pdfDoc = await PDFDocument.load(await pdfRes.arrayBuffer());
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-      const bsa = calculateBSA(d.peso, d.talla);
-      const [fnd, fnm, fna] = (cleanDate(d.paciente_fnac) || '').split('/');
-      const [dxd, dxm, dxa] = (cleanDate(d.fecha_diagnostico) || '').split('/');
+      const pages = pdfDoc.getPages();
+      const p1 = pages[0];
+      const p2 = pages[1];
+      const pH = 841.9;
+      const FS = 8;
+      const maxW = 480;
+      const lineSpacing = 12;
 
-      const setT = (name: string, val: string, max = 9.5, min = 6.5) => {
-        try {
-          const f = form.getTextField(name);
-          if (!val?.trim()) return;
-          const text = String(val).trim();
-          let fs = max, w = 350;
-          try { const r = (f as any).acroField.getWidgets()[0].getRectangle(); w = Math.max(r.width - 4, 30); } catch { /* widget rect unavailable */ }
-          while (fs > min && text.length * 0.52 * fs > w) fs = Math.round((fs - 0.5) * 10) / 10;
-          f.setText(text); f.setFontSize(fs);
-        } catch { /* field not found in form */ }
+      // offset corregido a +3 (encima de la línea de puntos)
+      const draw = (page: any, x: number, top: number, text: string, fs = FS, f = font) => {
+        if (!text?.trim()) return;
+        const str = String(text).trim();
+        page.drawText(str, { x, y: pH - top + 3, size: fs, font: f });
       };
 
-      const finalName = d.paciente_nombre || patient?.name || 'Paciente';
+      const drawLines = (page: any, x: number, firstTop: number, text: string, maxLines: number, fs = FS) => {
+        if (!text?.trim()) return;
+        const charPerLine = Math.floor(maxW / (0.52 * fs));
+        const words = String(text).trim().split(' ');
+        const lines: string[] = [];
+        let cur = '';
+        for (const w of words) {
+          if (lines.length >= maxLines) break;
+          const test = cur ? cur + ' ' + w : w;
+          if (test.length > charPerLine && cur) { lines.push(cur); cur = w; }
+          else { cur = test; }
+        }
+        if (cur && lines.length < maxLines) lines.push(cur);
+        lines.forEach((line, i) => {
+          page.drawText(line, { x, y: pH - firstTop + 3 - i * lineSpacing, size: fs, font });
+        });
+      };
 
-      setT('APELLIDO Y NOMBRE', finalName);
-      setT('DNI', d.paciente_dni);
-      setT('EDAD', d.paciente_edad);
-      setT('DOMICILIO', d.paciente_domicilio);
-      setT('LOCALIDAD', d.paciente_localidad);
-      setT('TELEFONO', d.paciente_telefono);
-      setT('EMAIL', d.paciente_email);
-      setT('DIAGNOSTICO', d.diagnostico_descripcion || d.diagnostico_cie10);
-      setT('CIE 10', d.diagnostico_cie10);
-      setT('ESTADIO', d.estadio);
-      setT('TNM', [d.tnm_t, d.tnm_n, d.tnm_m].filter(Boolean).join(' '));
-      setT('ECOG', d.ecog);
-      setT('PESO', d.peso);
-      setT('TALLA', d.talla);
-      setT('SUP CORPORAL', bsa);
-      setT('LINEA DE TRATAMIENTO', d.linea_tratamiento);
-      setT('RESUMEN HISTORIA CLINICA', d.resumen_historia_clinica, 8.5, 6);
-      setT('ESTUDIOS', d.estudios_complementarios, 8.5, 6);
-      setT('LABORATORIO', d.laboratorio_relevante, 8.5, 6);
-      setT('MEDICACION SOLICITADA', esquema.medicamentos || drugName);
-      setT('DOSIS', esquema.dosis_m2 || d.dosis_propuesta);
-      setT('NUMERO DE CICLOS', esquema.numero_ciclos || d.duracion_tratamiento);
-      setT('FRECUENCIA', esquema.frecuencia_ciclos || d.frecuencia_administracion);
-      setT('TIEMPO DE TRATAMIENTO', esquema.tiempo_tratamiento);
-      setT('FECHA DE INICIO', cleanDate(esquema.fecha_inicio));
-      setT('DOSIS TOTAL POR CICLO', esquema.dosis_total_ciclo);
-      setT('DIAS DE ADMINISTRACION', esquema.dias_admin);
-      setT('INTERVALO ENTRE CICLOS', esquema.intervalo);
-      setT('INSTITUCION', d.institucion || 'Hospital Oncológico Provincial - Córdoba');
-      setT('LUGAR Y FECHA', d.lugar_fecha || `Córdoba, ${today}`);
-      setT('MEDICO SOLICITANTE', doctorData.nombre ? `Dr/a. ${doctorData.nombre}` : (d.medico_solicitante || ''));
-      setT('MATRICULA', doctorData.matricula || d.medico_matricula || '');
+      // ─── PÁGINA 1 ───
+      draw(p1, 153, 285.5, d.nombre_apellido);
+      draw(p1, 276, 297.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
+      draw(p1, 87,  309.5, d.edad);
+      draw(p1, 229, 309.5, d.sexo);
+      draw(p1, 115, 321.5, d.domicilio);
+      draw(p1, 110, 333.5, d.localidad);
+      draw(p1, 347, 333.5, d.provincia || 'Córdoba');
+      draw(p1, 103, 345.5, d.telefono);
+      draw(p1, 318, 345.5, d.celular);
+      draw(p1, 152, 357.5, d.email);
+      draw(p1, 121, 369.5, d.diagnostico);
+      draw(p1, 114, 381.5, d.n_ciclo || '1');
+      draw(p1, 91,  393.5, alturaCorregida ? `${alturaCorregida} cm` : '');
+      draw(p1, 191, 393.5, d.peso ? `${d.peso} kg` : '');
+      draw(p1, 362, 393.5, bsa ? `${bsa} m²` : '');
 
-      setT('FNAC_DIA', fnd); setT('FNAC_MES', fnm); setT('FNAC_ANIO', fna);
-      setT('DX_DIA', dxd); setT('DX_MES', dxm); setT('DX_ANIO', dxa);
+      draw(p1, 253, 435.1, doctorData.nombre);
+      draw(p1, 124, 446.6, doctorData.especialidad || 'Oncología Clínica');
+      draw(p1, 100, 459.6, 'Oncología');
+      draw(p1, 226, 483.1, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 96,  495.1, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+      draw(p1, 358, 495.6, doctorData.email);
+
+      draw(p1, 121, 539.1, d.diagnostico);
+      const [fdd, fdm, fda] = (cleanDate(d.fecha_diagnostico) || '').split('/');
+      draw(p1, 490, 539.1, fdd || '');
+      draw(p1, 512, 539.1, fdm || '');
+      draw(p1, 530, 539.1, fda || '');
+
+      drawLines(p1, 57, 589.0, d.resumen_hc, 6);
+      drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
+
+      // ─── PÁGINA 2 ───
+      drawLines(p2, 57, 89.6, d.estado_general, 3);  
+      drawLines(p2, 57, 220.1, d.tratamientos_previos, 3);
+      drawLines(p2, 57, 293.3, d.tipo_terapia_previa, 4);
+      draw(p2, 173, 449.2, esquema.numero_ciclos);
+      draw(p2, 178, 461.2, esquema.frecuencia_ciclos);
+      draw(p2, 176, 475.2, esquema.tiempo_tratamiento);
+      
+      const [fid, fim, fia] = (cleanDate(esquema.fecha_inicio) || esquema.fecha_inicio || '').split('/');
+      draw(p2, 277, 487.2, fid || '');
+      draw(p2, 340, 487.2, fim || '');
+      draw(p2, 385, 487.2, fia || '');
+
+      drawLines(p2, 57, 510.5, esquema.medicamentos, 3);
+      draw(p2, 230, 534.2, esquema.dosis_total_ciclo);
+      draw(p2, 344, 534.2, esquema.dias_admin);
+      draw(p2, 447, 534.2, esquema.intervalo);
+
+      const fundTrunc = d.fundamentacion
+        ? d.fundamentacion.length > 220
+          ? d.fundamentacion.substring(0, d.fundamentacion.lastIndexOf(' ', 220)) + '.'
+          : d.fundamentacion
+        : '';
+      drawLines(p2, 57, 570.6, fundTrunc, 3);
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `DINADIC_${finalName.replace(/\s+/g, '_')}_${drugName}.pdf`; link.click();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `DINADIC_${d.nombre_apellido || patient.name}_${today.replace(/\//g, '-')}.pdf`;
+      link.click();
       setStatus('¡Listo!');
-      setLastRegenParams(prev => ({
-        ...prev,
-        dinadic: {
-          drugName: drugName.trim(),
-          accumulatedCorrections: prev['dinadic']?.accumulatedCorrections || ''
-        }
-      }));
+      const prevDinadicCorrections = lastRegenParams['dinadic']?.accumulatedCorrections ?? '';
+      const newDinadicAccumulated = pendingDinadicCorrection
+        ? (prevDinadicCorrections ? `${prevDinadicCorrections}\n- ${pendingDinadicCorrection}` : `- ${pendingDinadicCorrection}`)
+        : prevDinadicCorrections;
+      setLastRegenParams(prev => ({ ...prev, dinadic: { drugName: drugName, accumulatedCorrections: newDinadicAccumulated } }));
+      setPendingDinadicCorrection('');
       setFormGenerated(prev => ({ ...prev, dinadic: true }));
       setFormCorrections(prev => ({ ...prev, dinadic: '' }));
-      setPendingDinadicCorrection('');
-    } catch (e: any) { alert('Error DINADIC: ' + e.message); }
-    finally { setProcessingId(null); setStatus(''); }
+    } catch (e: any) {
+      alert("Error al generar DINADIC: " + e.message);
+    } finally {
+      setProcessingId(null);
+      setStatus('');
+    }
   };
 
   const liveBSA = calculateBSA(pamiFormData.peso, pamiFormData.talla);
@@ -2866,62 +2896,50 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
 
       {/* MODAL ESQUEMA DINADIC */}
       {showEsquemaModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-2xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 border border-gray-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h4 className="font-bold text-sm text-gray-900">
-                Esquema Terapéutico — DINADIC
-              </h4>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-black text-sm uppercase tracking-widest text-gray-800">
+                Esquema Terapéutico
+              </h3>
               <button onClick={() => setShowEsquemaModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={18} />
+                <X size={18}/>
               </button>
             </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="col-span-2">
-                <label className="block font-semibold text-gray-700 mb-1">Medicamentos / Esquema</label>
-                <input type="text" value={esquemaData.medicamentos} onChange={e => setEsquemaData(prev => ({ ...prev, medicamentos: e.target.value }))} className="w-full p-2 border border-gray-200 rounded-lg"/>
-              </div>
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">N° de Ciclos</label>
-                <input type="text" placeholder="Ej: 6" value={esquemaData.numero_ciclos} onChange={e => setEsquemaData(prev => ({ ...prev, numero_ciclos: e.target.value }))} className="w-full p-2 border border-gray-200 rounded-lg"/>
-              </div>
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">Frecuencia</label>
-                <input type="text" placeholder="Ej: Cada 21 días" value={esquemaData.frecuencia_ciclos} onChange={e => setEsquemaData(prev => ({ ...prev, frecuencia_ciclos: e.target.value }))} className="w-full p-2 border border-gray-200 rounded-lg"/>
-              </div>
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">Dosis / m²</label>
-                <input type="text" placeholder="Ej: 175 mg/m²" value={esquemaData.dosis_m2} onChange={e => setEsquemaData(prev => ({ ...prev, dosis_m2: e.target.value }))} className="w-full p-2 border border-gray-200 rounded-lg"/>
-              </div>
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">Dosis Total por Ciclo</label>
-                <input type="text" placeholder="Ej: 300 mg" value={esquemaData.dosis_total_ciclo} onChange={e => setEsquemaData(prev => ({ ...prev, dosis_total_ciclo: e.target.value }))} className="w-full p-2 border border-gray-200 rounded-lg"/>
-              </div>
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">Días de Administración</label>
-                <input type="text" placeholder="Ej: Día 1" value={esquemaData.dias_admin} onChange={e => setEsquemaData(prev => ({ ...prev, dias_admin: e.target.value }))} className="w-full p-2 border border-gray-200 rounded-lg"/>
-              </div>
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">Intervalo entre Ciclos</label>
-                <input type="text" placeholder="Ej: 21 días" value={esquemaData.intervalo} onChange={e => setEsquemaData(prev => ({ ...prev, intervalo: e.target.value }))} className="w-full p-2 border border-gray-200 rounded-lg"/>
-              </div>
+            <p className="text-[10px] text-gray-500 mb-4 uppercase tracking-wide">
+              Complete los datos del esquema antes de generar el formulario DINADIC
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Medicamento/s', key: 'medicamentos', span: true },
+                { label: 'Dosis/m² o kg', key: 'dosis_m2' },
+                { label: 'Dosis total por ciclo', key: 'dosis_total_ciclo' },
+                { label: 'Días de administración', key: 'dias_admin' },
+                { label: 'Intervalo', key: 'intervalo' },
+                { label: 'N° total de ciclos', key: 'numero_ciclos' },
+                { label: 'Frecuencia de ciclos', key: 'frecuencia_ciclos' },
+                { label: 'Tiempo de tratamiento', key: 'tiempo_tratamiento' },
+                { label: 'Fecha inicio (DD/MM/AAAA)', key: 'fecha_inicio', span: true },
+              ].map(({ label, key, span }) => (
+                <div key={key} className={span ? 'col-span-2' : ''}>
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">{label}</label>
+                  <input
+                    className="w-full p-2 border rounded-lg text-xs"
+                    value={(esquemaData as any)[key]}
+                    onChange={e => setEsquemaData(prev => ({ ...prev, [key]: e.target.value }))}
+                  />
+                </div>
+              ))}
             </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-              <button onClick={() => setShowEsquemaModal(false)} className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl">
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  setShowEsquemaModal(false);
-                  generateDinadicPDF(esquemaData);
-                }}
-                className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl"
-              >
-                Generar Formulario
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setShowEsquemaModal(false);
+                generateDinadicPDF(esquemaData);
+              }}
+              className="mt-5 w-full bg-blue-700 hover:bg-blue-800 text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+            >
+              <Wand2 size={14}/> Generar DINADIC
+            </button>
           </div>
         </div>
       )}
