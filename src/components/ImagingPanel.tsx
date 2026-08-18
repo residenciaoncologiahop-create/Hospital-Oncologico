@@ -417,12 +417,13 @@ const ClinicalTimelineChart = ({
 
   const chartDates = new Set(sorted.map(s => s.date));
 
+  // Solo incluir eventos de tratamiento cuyas fechas coincidan exactamente con un estudio del gráfico
   const relevantTreatments = timelineEvents.filter(evt => {
-    if (!evt.date || !evt.note) return false;
+    if (!evt.date || !evt.note || !chartDates.has(evt.date)) return false;
     const cat = (evt.category || '').toLowerCase();
     const note = evt.note.toLowerCase();
     return evt.isKey || cat.includes('quimio') || cat.includes('cirugía') || cat.includes('radio') || note.includes('inicio') || note.includes('cambio');
-  }).slice(0, 4);
+  }).slice(0, 3);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -431,8 +432,8 @@ const ClinicalTimelineChart = ({
     const region = pointData?.bodyRegion;
 
     return (
-      <div className="bg-slate-900 text-white rounded-xl shadow-xl p-3 text-xs min-w-[200px] border border-slate-800">
-        <div className="flex items-center justify-between pb-1 mb-1 border-b border-slate-800">
+      <div className="bg-slate-900 text-white rounded-xl shadow-xl p-3 text-xs min-w-[210px] border border-slate-800 pointer-events-none z-50">
+        <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800">
           <span className="font-black text-slate-100">{label}</span>
           <span className="text-[9px] font-bold bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">
             {modality}
@@ -451,11 +452,11 @@ const ClinicalTimelineChart = ({
             const unit = p.dataKey === 'suvMax' ? 'SUVmáx' : 'mm';
             return (
               <div key={i} className="flex justify-between items-center gap-3">
-                <div className="flex items-center gap-1.5 truncate max-w-[130px]">
+                <div className="flex items-center gap-1.5 truncate max-w-[140px]">
                   <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
                   <span className="text-slate-300 text-[11px] truncate">{displayName}</span>
                 </div>
-                <span className="font-bold text-white text-[11px]">{p.value} {unit}</span>
+                <span className="font-bold text-white text-[11px] shrink-0">{p.value} {unit}</span>
               </div>
             );
           })}
@@ -467,7 +468,7 @@ const ClinicalTimelineChart = ({
   const hasLesionCurves = lesionKeys.length > 0;
 
   return (
-    <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-2">
+    <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-3">
       <div className="flex items-center justify-between border-b border-slate-100 pb-2">
         <div className="flex items-center gap-2">
           <Activity size={15} className="text-blue-600" />
@@ -483,8 +484,8 @@ const ClinicalTimelineChart = ({
         </span>
       </div>
 
-      <div className="pt-2">
-        <ResponsiveContainer width="100%" height={240}>
+      <div className="pt-1">
+        <ResponsiveContainer width="100%" height={230}>
           <LineChart data={chartData} margin={{ top: 15, right: 20, left: -10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
             <XAxis
@@ -502,31 +503,23 @@ const ClinicalTimelineChart = ({
               dx={-2}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '3 3' }} />
-            <Legend
-              wrapperStyle={{ fontSize: '10px', fontWeight: 700, paddingTop: '8px' }}
-              formatter={(value) => <span style={{ color: '#475569' }}>{lesionKeyMap.get(value) || value}</span>}
-            />
 
-            {relevantTreatments.map((evt, idx) => {
-              const eventDate = chartDates.has(evt.date) ? evt.date : sorted[0]?.date;
-              if (!eventDate) return null;
-              return (
-                <ReferenceLine
-                  key={idx}
-                  x={eventDate}
-                  stroke="#cbd5e1"
-                  strokeDasharray="3 3"
-                  strokeWidth={1.5}
-                  label={{
-                    value: evt.note.length > 20 ? evt.note.substring(0, 20) + '…' : evt.note,
-                    position: 'top',
-                    fill: '#64748b',
-                    fontSize: 9,
-                    fontWeight: 700,
-                  }}
-                />
-              );
-            })}
+            {relevantTreatments.map((evt, idx) => (
+              <ReferenceLine
+                key={idx}
+                x={evt.date}
+                stroke="#cbd5e1"
+                strokeDasharray="3 3"
+                strokeWidth={1.5}
+                label={{
+                  value: evt.note.length > 18 ? evt.note.substring(0, 18) + '…' : evt.note,
+                  position: 'insideTop',
+                  fill: '#64748b',
+                  fontSize: 9,
+                  fontWeight: 700,
+                }}
+              />
+            ))}
 
             {hasLesionCurves ? (
               lesionKeys.map((key, i) => (
@@ -556,6 +549,37 @@ const ClinicalTimelineChart = ({
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Leyenda limpia, espaciada y perfectamente legible para cada lesión */}
+      {hasLesionCurves && (
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+          {lesionKeys.map((key, i) => {
+            const color = CHART_COLORS[i % CHART_COLORS.length];
+            const name = lesionKeyMap.get(key) || key;
+            const latestStudy = sorted.slice().reverse().find(s =>
+              s.targetLesions.some(l => (l.lesionKey || generateLesionKey(l.location)) === key)
+            );
+            const latestLesion = latestStudy?.targetLesions.find(l =>
+              (l.lesionKey || generateLesionKey(l.location)) === key
+            );
+
+            return (
+              <div
+                key={key}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200/70 text-xs font-semibold text-slate-700"
+              >
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                <span className="truncate max-w-[200px]">{name}</span>
+                {latestLesion?.measurement !== undefined && (
+                  <span className="text-[10px] font-black text-slate-500 font-mono">
+                    {latestLesion.measurement} mm
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
