@@ -566,6 +566,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     setStatus('Analizando historia clínica y línea de tiempo...');
 
     try {
+        const today = new Date().toLocaleDateString('es-AR');
+
         let strategyPrompt = "";
         if (context === 'RENOVACIÓN') {
             strategyPrompt = `ESTRATEGIA: RENOVACIÓN DE ${drugName.toUpperCase()}. Objetivo: Demostrar beneficio clínico y tolerancia.`;
@@ -578,24 +580,32 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
           : `${context} - BANCO DE DROGAS`;
 
         const prompt = `
-        Actúa como un Oncólogo Experto. Redacta un RESUMEN DE HISTORIA CLÍNICA para: ${entityLabel}.
+        Actúa como un Oncólogo Experto del Hospital Oncológico Provincial de Córdoba.
+        Hoy es ${today}.
+        Redacta un RESUMEN DE HISTORIA CLÍNICA oficial e institucional para: ${entityLabel}.
         
         ${strategyPrompt}
         
-        REGLAS DE FORMATO VISUAL (ESTRICTAS):
-        1. ❌ SIN ASTERISCOS ni MARKDOWN. Texto plano.
-        2. **ESTRUCTURA SIMPLIFICADA (SOLO 3 SECCIONES)**:
-           1. IDENTIFICACIÓN
-           2. RESUMEN CLÍNICO (Aquí debes integrar: Antecedentes, Cirugías, Tratamientos Previos, Estudios Recientes y Estado Actual en una narrativa cronológica fluida y detallada, sin dividir en tantos subtítulos para evitar redundancia).
-           3. JUSTIFICACIÓN
+        ESTRUCTURA OBLIGATORIA (3 SECCIONES):
+        1. IDENTIFICACIÓN
+           - Nombre y Apellido: ${patient?.name || ''}
+           - DNI: ${patient?.dni || ''}
+           - Fecha de Nacimiento / Edad: ${patient?.birthDate || ''} ${patient?.age ? `(${patient.age} años)` : ''}
+           - N° Historia Clínica: ${patient?.hcNumber || patient?.id || ''}
+           - Diagnóstico Oncológico Principal
         
-        CONTENIDO REQUERIDO:
-        - **Fechas exactas (DD/MM/AAAA)** para todo evento mencionado.
-        - Detalle explícito de cirugías (especialmente **AMPUTACIONES**) y resultados de patología.
+        2. RESUMEN CLÍNICO
+           Narrativa cronológica detallada y fluida integrando antecedentes, biopsias, anatomía patológica, inmunohistoquímica/biomarcadores, cirugías con fechas exactas, estudios complementarios (imágenes/laboratorio con fechas) y estado clínico actual.
         
-        **IMPORTANTE:** NO incluyas ninguna firma ni datos de contacto al final. El documento termina con el punto final de la justificación.
+        3. JUSTIFICACIÓN
+           Fundamentación oncológica clara y concisa de la indicación del esquema/fármaco (${drugName}).
         
-        CONTEXTO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar todas):\n${regenParams.accumulatedCorrections}` : ''}
+        REGLAS DE FORMATO (ESTRICTAS):
+        - ❌ SIN ASTERISCOS ni MARKDOWN. Texto plano limpio.
+        - Fechas en formato DD/MM/AAAA.
+        - NO incluyas firmas ni datos de contacto al final (el pie institucional se agrega automáticamente).
+        
+        CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar todas):\n${regenParams.accumulatedCorrections}` : ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
@@ -616,8 +626,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         const { width, height } = page.getSize();
         
         const marginX = 50; 
-        const marginTop = 30;
-        const marginBottom = 50; 
+        const marginTop = 35;
+        const marginBottom = 65; 
         let y = height - marginTop;
 
         let logoLoaded = false;
@@ -634,19 +644,52 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                     width: pngDims.width,
                     height: pngDims.height,
                 });
-                y -= (pngDims.height + 20); 
+                y -= (pngDims.height + 15); 
                 logoLoaded = true;
             }
         } catch { /* logo load failed, use text fallback */ }
 
         if (!logoLoaded) {
-            const title = "HOSPITAL ONCOLÓGICO PROVINCIAL";
-            const subtitle = "RESUMEN DE HISTORIA CLÍNICA";
-            page.drawText(title, { x: marginX, y, size: 14, font: fontBold });
-            y -= 18;
-            page.drawText(subtitle, { x: marginX, y, size: 10, font: fontBold });
-            y -= 25;
+            const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
+            const headerWidth = fontBold.widthOfTextAtSize(headerText, 13);
+            page.drawText(headerText, { x: (width - headerWidth) / 2, y, size: 13, font: fontBold });
+            y -= 20;
         }
+
+        // Línea divisoria bajo el encabezado institucional
+        page.drawLine({
+            start: { x: marginX, y },
+            end: { x: width - marginX, y },
+            thickness: 1.2,
+            color: rgb(0.15, 0.25, 0.45)
+        });
+        y -= 22;
+
+        // Título del documento
+        const docTitle = "RESUMEN DE HISTORIA CLÍNICA";
+        const titleWidth = fontBold.widthOfTextAtSize(docTitle, 13.5);
+        page.drawText(docTitle, { x: (width - titleWidth) / 2, y, size: 13.5, font: fontBold });
+        y -= 16;
+
+        // Subtítulo institucional
+        const subTitleWidth = fontBold.widthOfTextAtSize(entityLabel, 10);
+        page.drawText(entityLabel, { x: (width - subTitleWidth) / 2, y, size: 10, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+        y -= 18;
+
+        // Lugar y Fecha
+        const dateText = `Córdoba Capital, ${today}`;
+        const dateWidth = font.widthOfTextAtSize(dateText, 9);
+        page.drawText(dateText, { x: width - marginX - dateWidth, y, size: 9, font });
+        y -= 14;
+
+        // Línea divisoria bajo título y fecha
+        page.drawLine({
+            start: { x: marginX, y },
+            end: { x: width - marginX, y },
+            thickness: 0.6,
+            color: rgb(0.65, 0.65, 0.65)
+        });
+        y -= 22;
 
         const cleanSummary = summaryText
             .replace(/(\r\n|\n|\r)/gm, "\n")
@@ -657,37 +700,59 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
 
         const paragraphs = cleanSummary.split('\n');
         const contentWidth = width - (marginX * 2);
+        const fontSizeBody = 9.5;
+        const fontSizeHeader = 10.5;
+        const lineHeight = 13.5;
         
         for (const p of paragraphs) {
-            if (!p.trim()) {
-                y -= 8;
+            const trimmed = p.trim();
+            if (!trimmed) {
+                y -= 6;
                 continue;
             }
 
-            const isHeader = p.toUpperCase().includes('IDENTIFICACIÓN') || 
-                             p.toUpperCase().includes('RESUMEN CLÍNICO') || 
-                             p.toUpperCase().includes('JUSTIFICACIÓN');
+            const upper = trimmed.toUpperCase();
+            const isHeader = (
+                upper === 'IDENTIFICACIÓN' || upper === 'IDENTIFICACION' ||
+                upper.startsWith('1. IDENTIFICACIÓN') || upper.startsWith('1. IDENTIFICACION') ||
+                upper === 'RESUMEN CLÍNICO' || upper === 'RESUMEN CLINICO' ||
+                upper.startsWith('2. RESUMEN CLÍNICO') || upper.startsWith('2. RESUMEN CLINICO') ||
+                upper === 'JUSTIFICACIÓN' || upper === 'JUSTIFICACION' ||
+                upper.startsWith('3. JUSTIFICACIÓN') || upper.startsWith('3. JUSTIFICACION')
+            ) && trimmed.length < 45;
 
-            const currentFont = isHeader ? fontBold : font;
-            const currentSize = isHeader ? 10 : 9;
-            const currentSpacing = isHeader ? 14 : 11;
+            if (isHeader) {
+                y -= 12;
+                if (y < marginBottom + 50) {
+                    page = pdfDoc.addPage();
+                    y = height - marginTop - 20;
+                }
+                page.drawText(trimmed, { x: marginX, y, size: fontSizeHeader, font: fontBold, color: rgb(0.1, 0.2, 0.4) });
+                y -= 4;
+                page.drawLine({
+                    start: { x: marginX, y },
+                    end: { x: width - marginX, y },
+                    thickness: 0.5,
+                    color: rgb(0.2, 0.3, 0.5)
+                });
+                y -= 14;
+                continue;
+            }
 
-            if (isHeader) y -= 6;
-
-            const words = p.split(' ');
+            const words = trimmed.split(' ');
             let currentLine = '';
 
             for (const word of words) {
                 const testLine = currentLine ? `${currentLine} ${word}` : word;
-                const testWidth = currentFont.widthOfTextAtSize(testLine, currentSize);
+                const testWidth = font.widthOfTextAtSize(testLine, fontSizeBody);
 
                 if (testWidth > contentWidth) {
-                    if (y < marginBottom + 60) {
+                    if (y < marginBottom + 40) {
                         page = pdfDoc.addPage();
-                        y = height - marginTop;
+                        y = height - marginTop - 20;
                     }
-                    page.drawText(currentLine, { x: marginX, y, size: currentSize, font: currentFont });
-                    y -= currentSpacing;
+                    page.drawText(currentLine, { x: marginX, y, size: fontSizeBody, font });
+                    y -= lineHeight;
                     currentLine = word;
                 } else {
                     currentLine = testLine;
@@ -695,17 +760,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
             }
 
             if (currentLine) {
-                if (y < marginBottom + 60) {
+                if (y < marginBottom + 40) {
                     page = pdfDoc.addPage();
-                    y = height - marginTop;
+                    y = height - marginTop - 20;
                 }
-                page.drawText(currentLine, { x: marginX, y, size: currentSize, font: currentFont });
-                y -= currentSpacing;
+                page.drawText(currentLine, { x: marginX, y, size: fontSizeBody, font });
+                y -= (lineHeight + 3);
             }
         }
 
-        const footerY = 70;
-        if (y < footerY + 20) {
+        const footerY = 65;
+        if (y < footerY + 30) {
             page = pdfDoc.addPage();
         }
         
@@ -713,10 +778,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : '';
         const docEsp = doctorData.especialidad || 'Oncología Clínica';
 
-        page.drawText(docName, { x: width - marginX - 200, y: footerY, size: 9, font: fontBold });
-        if (docMat) page.drawText(docMat, { x: width - marginX - 200, y: footerY - 12, size: 8, font });
-        page.drawText(docEsp, { x: width - marginX - 200, y: footerY - 24, size: 8, font });
-        page.drawText('Servicio de Oncología Clínica', { x: width - marginX - 200, y: footerY - 36, size: 8, font });
+        page.drawText(docName, { x: width - marginX - 220, y: footerY, size: 9.5, font: fontBold });
+        if (docMat) page.drawText(docMat, { x: width - marginX - 220, y: footerY - 12, size: 8.5, font });
+        page.drawText(docEsp, { x: width - marginX - 220, y: footerY - 24, size: 8.5, font });
+        page.drawText('Servicio de Oncología Clínica', { x: width - marginX - 220, y: footerY - 36, size: 8.5, font });
+        page.drawText('Hospital Oncológico Provincial - Córdoba', { x: width - marginX - 220, y: footerY - 48, size: 8, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
 
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
