@@ -76,15 +76,35 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     droga_4: '',
   });
 
-  // Banco de Drogas Data Completion Modal
+  // Banco de Drogas Modal State (Admisión y Renovación)
   const [showBancoModal, setShowBancoModal] = useState<'admision' | 'renovacion' | null>(null);
-  const [bancoQuickData, setBancoQuickData] = useState({
-    drugName: '',
+  const [bancoFormData, setBancoFormData] = useState({
+    context: 'admision' as 'admision' | 'renovacion',
+    droga_1: '',
+    dosis_1: '',
+    dias_1: '',
+    total_dia_1: '',
+    droga_2: '',
+    dosis_2: '',
+    dias_2: '',
+    total_dia_2: '',
+    droga_3: '',
+    dosis_3: '',
+    dias_3: '',
+    total_dia_3: '',
+    intervalo_ciclo: '21',
+    ciclos_programados: '6',
+    tipo_tratamiento: 'avanzado',
+    linea: '1',
     peso: '',
     talla: '',
-    ecog: '',
+    ecog: '0',
     telefono: '',
     fnac: '',
+    motivo_renovacion: 'continua',
+    ciclos_realizados: '',
+    respuesta: 'estable',
+    sitio_progresion: '',
   });
   
   const [showDocConfig, setShowDocConfig] = useState(false);
@@ -232,29 +252,52 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     return { name, fnac, dni, phone, weight, height, ecog, diagnosis, stage };
   };
 
-  // Verificación de datos faltantes para Banco de Drogas
-  const getBancoMissingData = () => {
-    const known = extractFallbackPatientData();
-    const missing: { key: string; label: string }[] = [];
-    if (!known.weight?.trim()) missing.push({ key: 'weight', label: 'Peso' });
-    if (!known.height?.trim()) missing.push({ key: 'height', label: 'Talla' });
-    if (!known.ecog?.trim()) missing.push({ key: 'ecog', label: 'ECOG' });
-    if (!known.phone?.trim()) missing.push({ key: 'phone', label: 'Teléfono' });
-    return missing;
-  };
+  // Inicio de flujo para Banco de Drogas (abre modal de carga de celdas antes de generar PDF)
+  const handleStartBancoFlow = (formType: 'admision' | 'renovacion') => {
+    if (!hasClinicalData) {
+      alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
+      return;
+    }
+    const fallback = extractFallbackPatientData();
+    
+    let prefilledDrug = lastRegenParams[formType]?.drugName || '';
+    if (!prefilledDrug) {
+      const contextText = getEffectiveClinicalContext();
+      const drugMatch = contextText.match(/(?:esquema|tratamiento|indicaci[oó]n|solicita|droga|f[aá]rmaco|plan)\s*[:=]?\s*([-+A-Za-z0-9\s/]{3,40})/i);
+      if (drugMatch && !drugMatch[1].toLowerCase().includes('historia')) {
+        prefilledDrug = drugMatch[1].trim();
+      }
+    }
 
-  const bancoMissingFields = getBancoMissingData();
-
-  const handleOpenBancoDataModal = (formType: 'admision' | 'renovacion', initialDrug = '') => {
-    const known = extractFallbackPatientData();
-    setBancoQuickData({
-      drugName: initialDrug || lastRegenParams[formType]?.drugName || '',
-      peso: known.weight || '',
-      talla: known.height || '',
-      ecog: known.ecog || '',
-      telefono: known.phone || '',
-      fnac: known.fnac || '',
+    setBancoFormData({
+      context: formType,
+      droga_1: prefilledDrug,
+      dosis_1: '',
+      dias_1: '',
+      total_dia_1: '',
+      droga_2: '',
+      dosis_2: '',
+      dias_2: '',
+      total_dia_2: '',
+      droga_3: '',
+      dosis_3: '',
+      dias_3: '',
+      total_dia_3: '',
+      intervalo_ciclo: '21',
+      ciclos_programados: '6',
+      tipo_tratamiento: 'avanzado',
+      linea: '1',
+      peso: fallback.weight || '',
+      talla: fallback.height || '',
+      ecog: fallback.ecog || '0',
+      telefono: fallback.phone || '',
+      fnac: fallback.fnac || '',
+      motivo_renovacion: 'continua',
+      ciclos_realizados: '',
+      respuesta: 'estable',
+      sitio_progresion: '',
     });
+
     setShowBancoModal(formType);
   };
 
@@ -442,7 +485,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     }
   };
 
-  // --- AUTO-RESOLUCIÓN DE PARÁMETROS DE DROGAS AL DESCARGAR PDF ---
+  // --- AUTO-RESOLUCIÓN DE PARÁMETROS DE DROGAS AL DESCARGAR PDF PAMI ---
   const resolveDrugDetails = async (
     drugs: string[],
     patientWeight: string,
@@ -505,17 +548,16 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         9. laboratorio_formateado: SOLO parámetros oncológicamente relevantes o positivos (hemograma, función renal/hepática, marcadores tumorales como PSA, CEA, CA125). Formato conciso: "Hb 12g/dl, Cr 0.8, PSA 2.27 ng/ml". Máximo 110 caracteres.
         10. INFORME CLÍNICO ACTUAL Y JUSTIFICACIÓN ONCOLÓGICA DETALLADA (informe_clinico_detallado):
             - Redactar un informe clínico oncológico EXHAUSTIVO, PRECISO Y CRONOLÓGICO estructurado en párrafos claros que detalle todos los hitos diagnósticos, imagenológicos y terapéuticos del paciente para fundamentar de manera irrefutable la indicación del esquema de tratamiento oncológico.
-            - ESTRUCTURA Y HITOS OBLIGATORIOS (adaptados a cada paciente según sus antecedentes):
-              * Párrafo 1 (Diagnóstico inicial, histología y presentación): Edad del paciente, diagnóstico oncológico exacto con histopatología completa (tipo histológico, grado, Gleason, porcentaje de patrones/ductal/cribiforme si aplica, invasión perineural/vascular, biomarcadores RE/RP/HER2/Ki67/BRCA/mutaciones), fecha exacta de biopsia y forma de presentación/marcadores iniciales (ej. PSA, CEA, CA125, etc. con fechas).
-              * Párrafo 2 (Evolución por imágenes y estadificación cronológica con fechas): Detallar cronológicamente los estudios complementarios con fechas y hallazgos clave (RMN, Centellograma, TAC, PET/CT, PET-PSMA, etc.), valores cuantitativos relevantes (SUV máx, medidas en mm/cm), estadificación TNM o FIGO inicial y reestadificación si hubo cambios de estadio o descarte/confirmación de secundarismo.
-              * Párrafo 3 (Estrategia terapéutica, justificación del esquema y plan actual): Objetivo terapéutico (intención curativa, control sistémico avanzado, adyuvancia, rescate), tratamientos previos realizados o suspendidos/modificados con sus motivos, y justificación oncológica detallada del esquema propuesto en el plan médico actual con fechas.
-            - EXTENSIÓN: Entre 850 y 1400 caracteres (aproximadamente 2 a 3 párrafos compactos y densos de información médica). Texto corrido en español con saltos de línea entre párrafos, sin asteriscos ni markdown.
+            - ESTRUCTURA Y HITOS OBLIGATORIOS:
+              * Párrafo 1 (Diagnóstico inicial, histología y presentación): Edad del paciente, diagnóstico oncológico exacto con histopatología completa (tipo histológico, grado, Gleason, biomarcadores RE/RP/HER2/Ki67/BRCA/mutaciones), fecha exacta de biopsia y forma de presentación/marcadores iniciales con fechas.
+              * Párrafo 2 (Evolución por imágenes y estadificación cronológica): Detallar cronológicamente los estudios complementarios con fechas y hallazgos clave (RMN, Centellograma, TAC, PET/CT, PET-PSMA, etc.), valores cuantitativos relevantes (SUV máx, medidas en mm/cm), estadificación TNM o FIGO inicial y reestadificación si hubo cambios de estadio o descarte/confirmación de secundarismo.
+              * Párrafo 3 (Estrategia terapéutica y justificación del esquema): Objetivo terapéutico (intención curativa, control sistémico avanzado, adyuvancia, rescate), tratamientos previos realizados o suspendidos con sus motivos, y justificación oncológica detallada del esquema propuesto en el plan médico actual con fechas.
+            - EXTENSIÓN: Entre 850 y 1400 caracteres. Texto corrido en español con saltos de línea entre párrafos, sin asteriscos ni markdown.
         11. DROGAS / FÁRMACOS RELEVANTES DEL PLAN ACTUAL (droga_1, droga_2, droga_3, droga_4):
-            - Si en la historia clínica o plan actual figuran drogas indicadas (ej: Leuprolide, Darolutamida, Pembrolizumab, etc.), colocarlas en droga_1, droga_2, droga_3, droga_4. Si no están especificadas, devolver cadena vacía "".
+            - Si en la historia clínica figuran drogas indicadas, colocarlas en droga_1, droga_2, droga_3, droga_4.
         12. motivo_solicitud: Elegir EXACTAMENTE uno: "Inicio", "Renovación", "Cambio de Toxicidad", "Cambio por Progresión".
         13. tipo_tratamiento: Elegir EXACTAMENTE uno: "Adyuvante", "Neoadyuvante", "Avanzado".
         14. esquema_tratamiento_solicitado: Nombre del esquema o combinación solicitada si figura en el plan.
-        15. Si un dato no se encuentra disponible en la historia clínica o eventos, devolver cadena vacía "".
         
         Devolver ÚNICAMENTE este objeto JSON sin markdown:
         {
@@ -768,7 +810,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `PAMI_${finalName}.pdf`;
+      link.download = `PAMI_${finalName.replace(/\s+/g, '_')}.pdf`;
       link.click();
       setStatus('¡Listo!');
       
@@ -805,15 +847,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     handleStartPamiFlow(regenParams?.correction);
   };
 
-  // BANCO DE DROGAS: Extracción de datos
-  const extractBancoDrogasData = async (context: string, drugName: string, correction?: string, extraData?: typeof bancoQuickData) => {
+  // BANCO DE DROGAS: Extracción de datos con IA + sobreescritura de celdas confirmadas
+  const extractBancoDrogasData = async (context: string, drugName: string, correction?: string, extraData?: typeof bancoFormData) => {
     const today = new Date().toLocaleDateString('es-AR');
     const isRenovacion = context === 'RENOVACIÓN';
     const fallback = extractFallbackPatientData();
 
     const prompt = `
       Actúa como oncólogo experto. Hoy es ${today}. Analizá la historia clínica y extraé datos para el formulario Banco de Drogas ${context}.
-      FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}. Usar en droga_1.
+      FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}.
       ${extraData?.peso ? `PESO PACIENTE: ${extraData.peso} kg` : ''}
       ${extraData?.talla ? `TALLA PACIENTE: ${extraData.talla} cm` : ''}
       ${extraData?.ecog ? `ECOG PACIENTE: ${extraData.ecog}` : ''}
@@ -823,67 +865,68 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
 
       REGLAS DE EXTRACCIÓN Y DEDUCCIÓN:
       - fecha_diagnostico: DEDUCE OBLIGATORIAMENTE la fecha de diagnóstico inicial analizando las fechas del primer estudio patológico, biopsia o consulta diagnóstica inicial en los eventos de la Línea de Tiempo o Historia Clínica (Formato DD/MM/AAAA).
+      - cx_especificar: EXCLUSIVAMENTE la descripción del procedimiento QUIRÚRGICO (ej: "Mastectomía radical", "Resección de colon", "Nefrectomía"). ❌ NUNCA colocar tratamientos sistémicos ni drogas (como Carboplatino, Dabrafenib, etc.) en cx_especificar ni en campos de cirugía.
 
       ${isRenovacion ? `
       CONTEXTO RENOVACIÓN: El paciente ya tiene tratamiento aprobado y solicita continuarlo.
-      - motivo_renovacion: "continua" si sigue igual, "cambio" si hubo toxicidad o progresión
-      - ciclos_realizados: número de ciclos ya completados
-      - ciclos_programados: número total planificado
-      - respuesta: "estable", "parcial" o "completa"
-      - sitio_progresion: si hubo progresión, dónde
+      - motivo_renovacion: "${extraData?.motivo_renovacion || 'continua'}"
+      - ciclos_realizados: "${extraData?.ciclos_realizados || ''}"
+      - ciclos_programados: "${extraData?.ciclos_programados || ''}"
+      - respuesta: "${extraData?.respuesta || 'estable'}"
+      - sitio_progresion: "${extraData?.sitio_progresion || ''}"
       ` : `
       CONTEXTO ADMISIÓN: Primera solicitud del tratamiento.
       - anatomia_patologica: Resumen MUY CONCISO Y SINTÉTICO de la patología e inmunohistoquímica (tipo tumoral, grado, RE, RP, HER2, Ki67). MÁXIMO 180-200 caracteres. ❌ NO explayarse en párrafos extensos.
       - tnm_t, tnm_n, tnm_m: clasificación TNM si existe
       - receptor_RE, receptor_RP, receptor_HER2, receptor_KRAS, receptor_EGER: positivo/negativo/no aplica
       - tratamiento_previo_cx_si: true si tuvo cirugía de tumor primario
-      - cx_especificar: EXCLUSIVAMENTE la descripción del procedimiento QUIRÚRGICO (ej: "Mastectomía radical", "Resección de colon", "Nefrectomía"). ❌ NUNCA colocar tratamientos sistémicos (quimioterapia, esquemas de drogas como AC-T o inmunoterapia) en cx_especificar.
+      - cx_especificar: EXCLUSIVAMENTE descripción de cirugía (sin drogas)
       - cx_ganglios_resecados: número si aplica
       - cx_ganglios_comprometidos: número si aplica
       - cx_metastasis_si: true si tuvo cirugía de metástasis
       - rt_primario_si: true si tuvo RT en tumor primario
       - rt_metastasis_si: true si tuvo RT en metástasis
       - rt_localizacion: dónde
-      - tratamientos_sistemicos_si: true si tuvo quimio/hormonoterapia/biologicos previos
+      - tratamientos_sistemicos_si: true si tuvo quimio/inmunoterapia previa
       - qt_tipo: "neoadyuvante", "adyuvante" o "avanzado"
-      - qt_droga: nombre de la droga de quimioterapia o tratamiento sistémico
+      - qt_droga: nombre de la droga sistémica previa si la tuvo
       `}
 
       Campos comunes requeridos:
       {
-        "nombre_apellido": "",
-        "dni": "",
-        "fnac": "DD/MM/AAAA",
-        "edad": "",
+        "nombre_apellido": "${fallback.name || patient?.name || ''}",
+        "dni": "${fallback.dni || ''}",
+        "fnac": "${extraData?.fnac || fallback.fnac || ''}",
+        "edad": "${patient?.age || ''}",
         "sexo": "M" o "F",
         "domicilio": "",
-        "telefono": "",
+        "telefono": "${extraData?.telefono || fallback.phone || ''}",
         "localidad": "",
         "provincia": "Córdoba",
         "pais": "Argentina",
         "institucion": "Hospital Oncológico Provincial - Córdoba",
-        "diagnostico": "",
+        "diagnostico": "${fallback.diagnosis || ''}",
         "fecha_diagnostico": "DD/MM/AAAA",
         "cie10": "",
-        "estadio": "",
+        "estadio": "${fallback.stage || ''}",
         "sup_corporal": "",
-        "peso": "",
-        "talla": "",
-        "ecog": "0",
-        "tipo_tratamiento": "adyuvante/neoadyuvante/avanzado",
-        "linea": "1",
-        "droga_1": "${drugName}", "dosis_1": "", "dias_1": "", "total_dia_1": "",
-        "droga_2": "", "dosis_2": "", "dias_2": "", "total_dia_2": "",
-        "droga_3": "", "dosis_3": "", "dias_3": "", "total_dia_3": "",
-        "intervalo_ciclo": "",
-        "ciclos_programados": "",
+        "peso": "${extraData?.peso || fallback.weight || ''}",
+        "talla": "${extraData?.talla || fallback.height || ''}",
+        "ecog": "${extraData?.ecog || fallback.ecog || '0'}",
+        "tipo_tratamiento": "${extraData?.tipo_tratamiento || 'avanzado'}",
+        "linea": "${extraData?.linea || '1'}",
+        "droga_1": "${extraData?.droga_1 || drugName}", "dosis_1": "${extraData?.dosis_1 || ''}", "dias_1": "${extraData?.dias_1 || ''}", "total_dia_1": "${extraData?.total_dia_1 || ''}",
+        "droga_2": "${extraData?.droga_2 || ''}", "dosis_2": "${extraData?.dosis_2 || ''}", "dias_2": "${extraData?.dias_2 || ''}", "total_dia_2": "${extraData?.total_dia_2 || ''}",
+        "droga_3": "${extraData?.droga_3 || ''}", "dosis_3": "${extraData?.dosis_3 || ''}", "dias_3": "${extraData?.dias_3 || ''}", "total_dia_3": "${extraData?.total_dia_3 || ''}",
+        "intervalo_ciclo": "${extraData?.intervalo_ciclo || '21'}",
+        "ciclos_programados": "${extraData?.ciclos_programados || '6'}",
         "lugar_fecha": "${today} - Córdoba",
         "contacto_institucional": "",
         ${isRenovacion ? `
-        "motivo_renovacion": "continua",
-        "ciclos_realizados": "",
-        "respuesta": "estable",
-        "sitio_progresion": "",
+        "motivo_renovacion": "${extraData?.motivo_renovacion || 'continua'}",
+        "ciclos_realizados": "${extraData?.ciclos_realizados || ''}",
+        "respuesta": "${extraData?.respuesta || 'estable'}",
+        "sitio_progresion": "${extraData?.sitio_progresion || ''}",
         "receptor_RE": "", "receptor_RP": "", "receptor_HER2": "", "receptor_KRAS": "", "receptor_EGER": ""
         ` : `
         "anatomia_patologica": "",
@@ -910,27 +953,59 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     if (s !== -1 && e !== -1) clean = clean.substring(s, e + 1);
     const parsed = JSON.parse(clean);
 
-    // Integrar datos directos de fallback si el LLM no los extrajo
-    if (!parsed.peso && (extraData?.peso || fallback.weight)) parsed.peso = extraData?.peso || fallback.weight;
-    if (!parsed.talla && (extraData?.talla || fallback.height)) parsed.talla = extraData?.talla || fallback.height;
-    if (!parsed.ecog && (extraData?.ecog || fallback.ecog)) parsed.ecog = extraData?.ecog || fallback.ecog;
-    if (!parsed.telefono && (extraData?.telefono || fallback.phone)) parsed.telefono = extraData?.telefono || fallback.phone;
-    if (!parsed.fnac && (extraData?.fnac || fallback.fnac)) parsed.fnac = extraData?.fnac || fallback.fnac;
+    // Sobreescritura estricta con datos confirmados por el médico en el modal
+    if (extraData) {
+      if (extraData.droga_1) parsed.droga_1 = extraData.droga_1;
+      if (extraData.dosis_1) parsed.dosis_1 = extraData.dosis_1;
+      if (extraData.dias_1) parsed.dias_1 = extraData.dias_1;
+      if (extraData.total_dia_1) parsed.total_dia_1 = extraData.total_dia_1;
+
+      if (extraData.droga_2) parsed.droga_2 = extraData.droga_2;
+      if (extraData.dosis_2) parsed.dosis_2 = extraData.dosis_2;
+      if (extraData.dias_2) parsed.dias_2 = extraData.dias_2;
+      if (extraData.total_dia_2) parsed.total_dia_2 = extraData.total_dia_2;
+
+      if (extraData.droga_3) parsed.droga_3 = extraData.droga_3;
+      if (extraData.dosis_3) parsed.dosis_3 = extraData.dosis_3;
+      if (extraData.dias_3) parsed.dias_3 = extraData.dias_3;
+      if (extraData.total_dia_3) parsed.total_dia_3 = extraData.total_dia_3;
+
+      if (extraData.intervalo_ciclo) parsed.intervalo_ciclo = extraData.intervalo_ciclo;
+      if (extraData.ciclos_programados) parsed.ciclos_programados = extraData.ciclos_programados;
+      if (extraData.tipo_tratamiento) parsed.tipo_tratamiento = extraData.tipo_tratamiento;
+      if (extraData.linea) parsed.linea = extraData.linea;
+
+      if (extraData.peso) parsed.peso = extraData.peso;
+      if (extraData.talla) parsed.talla = extraData.talla;
+      if (extraData.ecog) parsed.ecog = extraData.ecog;
+      if (extraData.telefono) parsed.telefono = extraData.telefono;
+      if (extraData.fnac) parsed.fnac = extraData.fnac;
+
+      if (isRenovacion) {
+        if (extraData.motivo_renovacion) parsed.motivo_renovacion = extraData.motivo_renovacion;
+        if (extraData.ciclos_realizados) parsed.ciclos_realizados = extraData.ciclos_realizados;
+        if (extraData.respuesta) parsed.respuesta = extraData.respuesta;
+        if (extraData.sitio_progresion) parsed.sitio_progresion = extraData.sitio_progresion;
+      }
+    }
+
+    if (!parsed.peso && fallback.weight) parsed.peso = fallback.weight;
+    if (!parsed.talla && fallback.height) parsed.talla = fallback.height;
+    if (!parsed.ecog && fallback.ecog) parsed.ecog = fallback.ecog;
+    if (!parsed.telefono && fallback.phone) parsed.telefono = fallback.phone;
+    if (!parsed.fnac && fallback.fnac) parsed.fnac = fallback.fnac;
 
     return parsed;
   };
 
-  const fillAdmisionPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }, extraData?: typeof bancoQuickData) => {
+  const fillAdmisionPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }, extraData?: typeof bancoFormData) => {
     if (!hasClinicalData) { alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero."); return; }
     
-    let drugName = extraData?.drugName || regenParams?.drugName;
-    if (!drugName) {
-      drugName = window.prompt('Ingrese el/los fármaco/s para la Admisión Banco de Drogas:') || '';
-    }
-    if (!drugName || !drugName.trim()) return;
+    const drugName = extraData?.droga_1 || regenParams?.drugName || '';
+    if (!drugName.trim()) return;
 
     setProcessingId(formDef.id);
-    setStatus('Procesando Admisión...');
+    setStatus('Procesando Admisión Banco de Drogas...');
     try {
       const d = await extractBancoDrogasData('ADMISIÓN', drugName, regenParams?.correction, extraData);
       const bsa = calculateBSA(d.peso, d.talla);
@@ -956,7 +1031,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       };
       const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch { /* field not found */ } };
 
-      setT('Text1', d.nombre_apellido || patient?.name);
+      const finalPatientName = d.nombre_apellido || patient?.name || 'Paciente';
+
+      setT('Text1', finalPatientName);
       setT('Text2', 'Argentina');
       setT('Text3', fnd); setT('Text4', fnm); setT('Text5', fna);
       setT('Text6', d.dni);
@@ -1025,7 +1102,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `Admision_BancoDrogas_${d.nombre_apellido || patient?.name}.pdf`; link.click();
+      link.download = `Admision_BancoDrogas_${finalPatientName.replace(/\s+/g, '_')}.pdf`; link.click();
       setStatus('¡Listo!');
       const newAccumulated = regenParams
         ? (lastRegenParams[formDef.id]?.accumulatedCorrections
@@ -1040,17 +1117,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     finally { setProcessingId(null); setStatus(''); }
   };
 
-  const fillRenovacionPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }, extraData?: typeof bancoQuickData) => {
+  const fillRenovacionPDF = async (formDef: any, regenParams?: { drugName: string; correction: string }, extraData?: typeof bancoFormData) => {
     if (!hasClinicalData) { alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero."); return; }
     
-    let drugName = extraData?.drugName || regenParams?.drugName;
-    if (!drugName) {
-      drugName = window.prompt('Ingrese el/los fármaco/s para la Renovación Banco de Drogas:') || '';
-    }
-    if (!drugName || !drugName.trim()) return;
+    const drugName = extraData?.droga_1 || regenParams?.drugName || '';
+    if (!drugName.trim()) return;
 
     setProcessingId(formDef.id);
-    setStatus('Procesando Renovación...');
+    setStatus('Procesando Renovación Banco de Drogas...');
     try {
       const d = await extractBancoDrogasData('RENOVACIÓN', drugName, regenParams?.correction, extraData);
       const bsa = calculateBSA(d.peso, d.talla);
@@ -1075,7 +1149,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       };
       const setBtn = (name: string) => { try { form.getCheckBox(name).check(); } catch { /* field not found */ } };
 
-      setT('Text2', d.nombre_apellido || patient?.name);
+      const finalPatientName = d.nombre_apellido || patient?.name || 'Paciente';
+
+      setT('Text2', finalPatientName);
       setT('Text3', 'Argentina');
       setT('Text4', fnd); setT('Text5', fnm); setT('Text6', fna);
       setT('Text7', d.dni);
@@ -1141,7 +1217,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `Renovacion_BancoDrogas_${d.nombre_apellido || patient?.name}.pdf`; link.click();
+      link.download = `Renovacion_BancoDrogas_${finalPatientName.replace(/\s+/g, '_')}.pdf`; link.click();
       setStatus('¡Listo!');
       const newAccumulated = regenParams
         ? (lastRegenParams[formDef.id]?.accumulatedCorrections
@@ -1260,7 +1336,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         } catch { /* field not found in form */ }
       };
 
-      setT('APELLIDO Y NOMBRE', d.paciente_nombre || patient?.name);
+      const finalName = d.paciente_nombre || patient?.name || 'Paciente';
+
+      setT('APELLIDO Y NOMBRE', finalName);
       setT('DNI', d.paciente_dni);
       setT('EDAD', d.paciente_edad);
       setT('DOMICILIO', d.paciente_domicilio);
@@ -1299,7 +1377,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `DINADIC_${d.paciente_nombre || patient?.name}_${drugName}.pdf`; link.click();
+      link.download = `DINADIC_${finalName.replace(/\s+/g, '_')}_${drugName}.pdf`; link.click();
       setStatus('¡Listo!');
       setLastRegenParams(prev => ({
         ...prev,
@@ -1420,7 +1498,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `Interconsulta_${destino.replace(/\s+/g, '_')}_${patient?.name || 'Paciente'}.pdf`; link.click();
+      link.download = `Interconsulta_${destino.replace(/\s+/g, '_')}_${(patient?.name || 'Paciente').replace(/\s+/g, '_')}.pdf`; link.click();
       setStatus('¡Listo!');
     } catch (e: any) {
       alert("Error al generar interconsulta: " + e.message);
@@ -1428,32 +1506,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       setProcessingId(null);
       setStatus('');
     }
-  };
-
-  const generateFieldMap = async (formDef: any) => {
-    try {
-      const formUrl = window.location.origin + formDef.file;
-      const res = await fetch(formUrl);
-      if (!res.ok) throw new Error("No se pudo cargar el formulario base.");
-      const pdfBytes = await res.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(pdfBytes);
-      const form = pdfDoc.getForm();
-      const fields = form.getFields();
-      fields.forEach(field => {
-        try {
-          if (field.constructor.name === 'PDFTextField') {
-            (field as any).setText(field.getName());
-            (field as any).setFontSize(6);
-          }
-        } catch { /* skip */ }
-      });
-      const modifiedPdf = await pdfDoc.save();
-      const blob = new Blob([modifiedPdf], { type: 'application/pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `MAPA_CAMPOS_${formDef.name}.pdf`;
-      link.click();
-    } catch (e: any) { alert("Error: " + e.message); }
   };
 
   const liveBSA = calculateBSA(pamiFormData.peso, pamiFormData.talla);
@@ -1565,7 +1617,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       <div className="grid gap-4">
         {forms.map(form => {
           const isProcessing = processingId === form.id;
-          const isBanco = form.type === 'auto_banco';
 
           return (
             <div key={form.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 hover:border-blue-200 transition-all shadow-2xs">
@@ -1587,23 +1638,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                   <CheckCircle2 className="text-gray-200" size={18}/>
                 )}
               </div>
-
-              {/* Banner discreto de datos faltantes para Banco de Drogas */}
-              {isBanco && bancoMissingFields.length > 0 && (
-                <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="text-[11px] text-slate-600">
-                    <span className="font-medium text-slate-800">Para completar {form.context?.toLowerCase()} faltan datos: </span>
-                    <span className="text-slate-500">{bancoMissingFields.map(m => m.label).join(', ')}.</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenBancoDataModal(form.id as any)}
-                    className="text-[10px] font-bold text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-md border border-blue-200 shrink-0 self-start sm:self-auto transition-all"
-                  >
-                    Completar ahora
-                  </button>
-                </div>
-              )}
               
               <div className="flex flex-wrap gap-2">
                 {form.type === 'auto' ? (
@@ -1655,7 +1689,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                 ) : form.type === 'auto_banco' ? (
                   <div className="flex-1 flex flex-wrap gap-2">
                     <button
-                      onClick={() => form.id === 'admision' ? fillAdmisionPDF(form) : fillRenovacionPDF(form)}
+                      onClick={() => handleStartBancoFlow(form.id as 'admision' | 'renovacion')}
                       disabled={processingId !== null}
                       className="flex-1 min-w-[120px] flex items-center justify-center space-x-1.5 text-white py-2 px-3 rounded-lg text-xs font-bold bg-green-700 hover:bg-green-800 transition-all disabled:opacity-50"
                     >
@@ -2152,117 +2186,402 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         </div>
       )}
 
-      {/* MODAL DE CARGA RÁPIDA DE DATOS PARA BANCO DE DROGAS */}
-      {showBancoModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-2xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 border border-gray-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-green-50 text-green-700 rounded-xl">
-                  <FileText size={18} />
+      {/* MODAL DE ESQUEMA Y DATOS: BANCO DE DROGAS (ADMISIÓN Y RENOVACIÓN) */}
+      {showBancoModal && (() => {
+        const isAdmision = showBancoModal === 'admision';
+        const modalBSA = calculateBSA(bancoFormData.peso, bancoFormData.talla);
+
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-2xs flex items-center justify-center z-50 p-3 sm:p-5">
+            <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-gray-100">
+              
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-50 text-green-700 rounded-xl">
+                    <FileText size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-gray-900">
+                      {isAdmision ? 'Admisión Banco de Drogas' : 'Renovación Banco de Drogas'}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Indique el esquema de fármacos y dosis para completar automáticamente las celdas del formulario.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-bold text-sm text-gray-900">
-                    Datos para {showBancoModal === 'admision' ? 'Admisión' : 'Renovación'} Banco de Drogas
+                <button onClick={() => setShowBancoModal(null)} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-4 overflow-y-auto flex-1 bg-gray-50/20 text-xs">
+                
+                {/* 1. Tabla de Drogas y Posología */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
+                  <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100 flex items-center gap-1.5">
+                    <Pill size={14} className="text-green-700" />
+                    <span>1. Drogas Solicitadas y Dosificación</span>
                   </h4>
-                  <p className="text-xs text-gray-500">
-                    Complete los parámetros requeridos para la emisión del formulario.
-                  </p>
-                </div>
-              </div>
-              <button onClick={() => setShowBancoModal(null)} className="text-gray-400 hover:text-gray-600">
-                <X size={18} />
-              </button>
-            </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">
-                  Fármaco / Medicación a solicitar <span className="text-blue-600">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej: Trastuzumab, Pembrolizumab, Carboplatino"
-                  value={bancoQuickData.drugName}
-                  onChange={e => setBancoQuickData(prev => ({ ...prev, drugName: e.target.value }))}
-                  className="w-full p-2.5 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                />
+                  {/* Fila Droga 1 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                    <div className="sm:col-span-1">
+                      <label className="block font-semibold text-gray-700 mb-1">
+                        Droga #1 (Principal) <span className="text-blue-600">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Nivolumab"
+                        value={bancoFormData.droga_1}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, droga_1: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Dosis (mg/m² o mg)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 3 mg/kg / 240 mg"
+                        value={bancoFormData.dosis_1}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, dosis_1: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Días de Admin.</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Día 1"
+                        value={bancoFormData.dias_1}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, dias_1: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Dosis Total / Día</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 240 mg"
+                        value={bancoFormData.total_dia_1}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, total_dia_1: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fila Droga 2 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-2 border-t border-gray-50">
+                    <div className="sm:col-span-1">
+                      <label className="block font-semibold text-gray-700 mb-1">Droga #2 (Opcional)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Ipilimumab"
+                        value={bancoFormData.droga_2}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, droga_2: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Dosis (mg/m² o mg)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 1 mg/kg"
+                        value={bancoFormData.dosis_2}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, dosis_2: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Días de Admin.</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Día 1"
+                        value={bancoFormData.dias_2}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, dias_2: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Dosis Total / Día</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 80 mg"
+                        value={bancoFormData.total_dia_2}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, total_dia_2: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fila Droga 3 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-2 border-t border-gray-50">
+                    <div className="sm:col-span-1">
+                      <label className="block font-semibold text-gray-700 mb-1">Droga #3 (Opcional)</label>
+                      <input
+                        type="text"
+                        placeholder="Opcional"
+                        value={bancoFormData.droga_3}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, droga_3: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Dosis</label>
+                      <input
+                        type="text"
+                        placeholder=""
+                        value={bancoFormData.dosis_3}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, dosis_3: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Días</label>
+                      <input
+                        type="text"
+                        placeholder=""
+                        value={bancoFormData.dias_3}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, dias_3: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Dosis Total / Día</label>
+                      <input
+                        type="text"
+                        placeholder=""
+                        value={bancoFormData.total_dia_3}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, total_dia_3: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sugerencias Rápidas */}
+                  <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mr-1">
+                      Sugerencias:
+                    </span>
+                    {[
+                      { label: 'Nivolumab + Ipilimumab', d1: 'Nivolumab', dos1: '3 mg/kg', dias1: 'Día 1', tot1: '240 mg', d2: 'Ipilimumab', dos2: '1 mg/kg', dias2: 'Día 1', tot2: '80 mg' },
+                      { label: 'Trastuzumab + Pertuzumab', d1: 'Trastuzumab', dos1: '6 mg/kg (8 mg/kg carga)', dias1: 'Día 1', tot1: '420 mg', d2: 'Pertuzumab', dos2: '420 mg (840 mg carga)', dias2: 'Día 1', tot2: '420 mg' },
+                      { label: 'Pembrolizumab 200mg', d1: 'Pembrolizumab', dos1: '200 mg EV', dias1: 'Día 1', tot1: '200 mg', d2: '', dos2: '', dias2: '', tot2: '' },
+                      { label: 'Carboplatino + Paclitaxel', d1: 'Carboplatino', dos1: 'AUC 5', dias1: 'Día 1', tot1: 'AUC 5', d2: 'Paclitaxel', dos2: '175 mg/m²', dias2: 'Día 1', tot2: '300 mg' },
+                      { label: 'Dabrafenib + Trametinib', d1: 'Dabrafenib', dos1: '150 mg VO cada 12 hs', dias1: '1 - 28', tot1: '300 mg', d2: 'Trametinib', dos2: '2 mg VO diario', dias2: '1 - 28', tot2: '2 mg' },
+                    ].map(sug => (
+                      <button
+                        key={sug.label}
+                        type="button"
+                        onClick={() => setBancoFormData(prev => ({
+                          ...prev,
+                          droga_1: sug.d1, dosis_1: sug.dos1, dias_1: sug.dias1, total_dia_1: sug.tot1,
+                          droga_2: sug.d2, dosis_2: sug.dos2, dias_2: sug.dias2, total_dia_2: sug.tot2,
+                        }))}
+                        className="px-2 py-0.5 text-[11px] font-medium bg-gray-50 hover:bg-green-50 hover:text-green-800 text-gray-700 rounded border border-gray-200 transition-all"
+                      >
+                        {sug.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Parámetros del Esquema */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
+                  <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
+                    2. Parámetros del Esquema
+                  </h4>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">N° Ciclos Programados</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 6"
+                        value={bancoFormData.ciclos_programados}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, ciclos_programados: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Intervalo de Ciclo (Días)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 21"
+                        value={bancoFormData.intervalo_ciclo}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, intervalo_ciclo: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Tipo de Tratamiento</label>
+                      <select
+                        value={bancoFormData.tipo_tratamiento}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, tipo_tratamiento: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-500"
+                      >
+                        <option value="avanzado">Avanzado / Metástasis</option>
+                        <option value="adyuvante">Adyuvante</option>
+                        <option value="neoadyuvante">Neoadyuvante</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Línea de Tratamiento</label>
+                      <select
+                        value={bancoFormData.linea}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, linea: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-500"
+                      >
+                        <option value="1">1ra Línea</option>
+                        <option value="2">2da Línea</option>
+                        <option value="3">3ra Línea o posterior</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Parámetros específicos de Renovación */}
+                  {!isAdmision && (
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">Motivo Renovación</label>
+                        <select
+                          value={bancoFormData.motivo_renovacion}
+                          onChange={e => setBancoFormData(prev => ({ ...prev, motivo_renovacion: e.target.value }))}
+                          className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-500"
+                        >
+                          <option value="continua">Continúa mismo esquema</option>
+                          <option value="cambio">Cambio por Progresión / Toxicidad</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">Ciclos Realizados</label>
+                        <input
+                          type="text"
+                          placeholder="Ej: 3"
+                          value={bancoFormData.ciclos_realizados}
+                          onChange={e => setBancoFormData(prev => ({ ...prev, ciclos_realizados: e.target.value }))}
+                          className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">Respuesta Clínica</label>
+                        <select
+                          value={bancoFormData.respuesta}
+                          onChange={e => setBancoFormData(prev => ({ ...prev, respuesta: e.target.value }))}
+                          className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-500"
+                        >
+                          <option value="estable">Enfermedad Estable</option>
+                          <option value="parcial">Respuesta Parcial</option>
+                          <option value="completa">Respuesta Completa</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">Sitio Progresión (si hubo)</label>
+                        <input
+                          type="text"
+                          placeholder="Ej: Hepático"
+                          value={bancoFormData.sitio_progresion}
+                          onChange={e => setBancoFormData(prev => ({ ...prev, sitio_progresion: e.target.value }))}
+                          className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Datos Clínicos & Antropometría */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
+                  <h4 className="font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
+                    3. Antropometría y Estado Clínico
+                  </h4>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Peso (kg)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 70"
+                        value={bancoFormData.peso}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, peso: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Talla (cm)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 165"
+                        value={bancoFormData.talla}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, talla: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Sup. Corporal</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={modalBSA ? `${modalBSA} m²` : '—'}
+                        className="w-full p-2 border border-gray-200 rounded-lg bg-gray-100 font-bold text-gray-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">ECOG (0 - 4)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 0 o 1"
+                        value={bancoFormData.ecog}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, ecog: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1">Teléfono</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 3511234567"
+                        value={bancoFormData.telefono}
+                        onChange={e => setBancoFormData(prev => ({ ...prev, telefono: e.target.value }))}
+                        className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">Peso (kg)</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: 72"
-                    value={bancoQuickData.peso}
-                    onChange={e => setBancoQuickData(prev => ({ ...prev, peso: e.target.value }))}
-                    className="w-full p-2.5 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">Talla (cm)</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: 168"
-                    value={bancoQuickData.talla}
-                    onChange={e => setBancoQuickData(prev => ({ ...prev, talla: e.target.value }))}
-                    className="w-full p-2.5 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                  />
-                </div>
+              {/* Footer */}
+              <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowBancoModal(null)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!bancoFormData.droga_1.trim() || processingId !== null}
+                  onClick={() => {
+                    const formDef = forms.find(f => f.id === showBancoModal);
+                    if (showBancoModal === 'admision') {
+                      fillAdmisionPDF(formDef, undefined, bancoFormData);
+                    } else {
+                      fillRenovacionPDF(formDef, undefined, bancoFormData);
+                    }
+                  }}
+                  className="px-5 py-2 text-xs font-bold text-white bg-green-700 hover:bg-green-800 rounded-xl shadow-xs transition-all disabled:opacity-40 flex items-center gap-2"
+                >
+                  {processingId !== null ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  <span>Generar Formulario {isAdmision ? 'Admisión' : 'Renovación'} (PDF)</span>
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">ECOG (0 - 4)</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: 0 o 1"
-                    value={bancoQuickData.ecog}
-                    onChange={e => setBancoQuickData(prev => ({ ...prev, ecog: e.target.value }))}
-                    className="w-full p-2.5 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">Teléfono</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: 3511234567"
-                    value={bancoQuickData.telefono}
-                    onChange={e => setBancoQuickData(prev => ({ ...prev, telefono: e.target.value }))}
-                    className="w-full p-2.5 border border-gray-200 rounded-lg outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setShowBancoModal(null)}
-                className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={!bancoQuickData.drugName.trim()}
-                onClick={() => {
-                  const formDef = forms.find(f => f.id === showBancoModal);
-                  if (showBancoModal === 'admision') {
-                    fillAdmisionPDF(formDef, undefined, bancoQuickData);
-                  } else {
-                    fillRenovacionPDF(formDef, undefined, bancoQuickData);
-                  }
-                }}
-                className="px-4 py-2 text-xs font-bold text-white bg-green-700 hover:bg-green-800 rounded-xl transition-all disabled:opacity-40"
-              >
-                Generar Formulario Banco
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL ESQUEMA DINADIC */}
       {showEsquemaModal && (
