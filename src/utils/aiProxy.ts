@@ -504,8 +504,7 @@ export const getDrugInfoSecure = async (drugName: string): Promise<string> => {
 };
 
 // ── Extracción masiva de imágenes desde historia clínica ───────────────
-// Detecta TODOS los informes de imagen en los documentos y devuelve array
-// de estudios estructurados. Se llama desde handleProcessDocuments.
+// Detecta ÚNICAMENTE estudios con hallazgos oncológicos relevantes o positivos
 export const extractImagingFromHistorySecure = async (
   text: string,
   files: FileData[]
@@ -513,40 +512,42 @@ export const extractImagingFromHistorySecure = async (
   if (!text && files.length === 0) return [];
 
   const instructionText = `
-    Sos un radiólogo oncólogo experimentado. Tu objetivo es sintetizar la EVOLUCIÓN RADIOLÓGICA del paciente.
+    Sos un radiólogo oncólogo experimentado. Tu objetivo es identificar y sintetizar la EVOLUCIÓN RADIOLÓGICA del paciente.
 
-    OBJETIVO: Generar un resumen evolutivo sin copiar informes completos ni resumir estudio por estudio literalmente. Reconstruir la evolución clínica de lesiones y respuestas radiológicas.
+    OBJETIVO PRINCIPAL:
+    Extraer SOLAMENTE los estudios de imágenes que tengan hallazgos oncológicamente relevantes o positivos:
+    - PET/CT con enfermedad activa, captación hipermetabólica patológica o SUV relevante.
+    - TC con lesiones tumorales, metástasis, adenopatías patológicas o cambios evolutivos.
+    - RM con hallazgos oncológicos patológicos (ej: SNC, hepáticas, pélvicas).
+    - Otros estudios que documenten enfermedad activa o resolución/respuesta completa de lesiones previas.
+    ❌ EVITAR incorporar estudios normales o sin hallazgos relevantes, salvo que sean necesarios para documentar remisión completa.
 
-    REGLAS ESTRICTAS DE EXTRACCIÓN E INTERPRETACIONAL:
-    1. NO REPETIR HALLAZGOS: Si distintos métodos (TC, RMN, PET-TC) describen exactamente el mismo hallazgo, conserva una única descripción sin duplicar datos. El PET-TC aporta únicamente la información metabólica (SUV) sobre la lesión anatómica ya conocida. La RMN aporta la información diferencial (ej: SNC o pelvis).
-    2. AGRUPAR POR LOCALIZACIÓN ANATÓMICA (órganos/sitios): Organiza por localización ("Pulmón", "Hígado", "Ganglios", "Hueso", "Sistema Nervioso Central", "Peritoneo", "Suprarrenales", "Otros"), NO por método de estudio. Dentro de cada órgano muestra la evolución cronológica.
-    3. MOSTRAR SOLO CAMBIOS CLÍNICAMENTE RELEVANTES: Conserva aparición de nuevas lesiones, desaparición, aumento/disminución de tamaño en mm, respuesta parcial (RP), respuesta completa (RC), enfermedad progresiva (EP) o estabilidad (EE) cuando modifique la conducta. Omite hallazgos repetitivos o inespecíficos.
-    4. ELIMINAR FRASES SIN VALOR CLÍNICO: ❌ NUNCA incluyas "correlacionar clínicamente", "estudio técnicamente adecuado", "se recomienda seguimiento", "calidad diagnóstica aceptable", "hallazgos inespecíficos" o "sin cambios respecto al previo" si no aporta información asistencial.
-    5. PRIORIZAR EL ESTUDIO CON MAYOR INFORMACIÓN:
-       - RMN tiene prioridad para Sistema Nervioso Central (SNC) y pelvis.
-       - PET-TC tiene prioridad para actividad metabólica (SUV).
-       - TC tiene prioridad para anatomía toracoabdominal.
-    6. EVITAR CRONOLOGÍAS REDUNDANTES: Si 3 o más estudios consecutivos describen la misma lesión sin cambios, conserva el primero y el último indicando estabilidad en el intervalo.
+    REGLAS DE SÍNTESIS:
+    1. NO COPIAR INFORMES COMPLETOS: Extrae únicamente información concisa y cuantitativa.
+    2. relevantFindings: Redacta una línea breve y directa del hallazgo oncológico principal (ej: "Lesión hepática segmentaria: 32 mm", "Lesión hepática hipermetabólica: SUVmáx 8,4", "Nódulo pulmonar LSD: 14 mm", "Múltiples metástasis óseas blásticas").
+    3. Medidas en milímetros (mm). Fechas en DD/MM/YYYY.
+    4. suvMax: Si es PET-TC y se especifica SUVmáx o captación metabólica, extraer el valor.
+    5. targetLesions: Lesiones mensurables con localización precisa, medida en mm y lesionKey única (snake_case).
+    6. nonTargetLesions: Hallazgos no mensurables (location + status: "presente"|"ausente"|"aumentado"|"disminuido"|"estable").
+    7. newLesions: true si se identifican lesiones nuevas respecto a estudios anteriores.
+    8. NO incluyas datos identificatorios (nombres de personas, DNI).
 
-    FORMATO Y MEDIDAS:
-    - Medidas SIEMPRE en milímetros (mm). Fechas en DD/MM/YYYY.
-    - Tipo: SOLO "TC", "RMN" o "PET-TC".
-    - NO incluyas datos identificatorios (nombres, DNI).
-
-    SALIDA: ÚNICAMENTE ARRAY JSON DE ESTUDIOS EVOLUTIVOS:
+    SALIDA: ÚNICAMENTE ARRAY JSON:
     [
       {
-        "type": "TC" | "RMN" | "PET-TC",
+        "type": "TC" | "RMN" | "PET-TC" | "Ecografía",
         "date": "DD/MM/YYYY",
-        "bodyRegion": "región anatómica estudiada",
+        "bodyRegion": "región anatómica estudiada (ej: TAP, Tórax, Abdomen y Pelvis, Cerebro)",
         "treatment": "esquema de tratamiento activo o null",
+        "relevantFindings": "resumen breve del hallazgo oncológico relevante",
+        "suvMax": number_o_null,
         "targetLesions": [
-          { "location": "Órgano / Localización (Pulmón, Hígado, Ganglios, Hueso, SNC, Peritoneo, Suprarrenales, Otros)", "measurement": número_en_mm }
+          { "location": "string", "measurement": number, "lesionKey": "string" }
         ],
         "nonTargetLesions": [
-          { "location": "Órgano / Localización", "status": "presente|ausente|aumentado|disminuido|estable" }
+          { "location": "string", "status": "string" }
         ],
-        "newLesions": true | false
+        "newLesions": boolean
       }
     ]
   `;
@@ -571,9 +572,9 @@ export const compareRecistSecure = async (
 ): Promise<string> => {
 
   const prompt = `
-Sos un oncólogo experto en criterios RECIST 1.1 (versión 2009).
+Sos un oncólogo experto en criterios RECIST 1.1 (versión 2009) y iRECIST.
 
-Analizá la siguiente serie de estudios del mismo paciente y generá un informe de respuesta.
+Analizá la siguiente serie de estudios del mismo paciente y generá un informe conciso y riguroso de respuesta.
 
 ESTUDIOS (ordenados cronológicamente):
 ${JSON.stringify(studies, null, 2)}
@@ -589,7 +590,7 @@ FORMATO: HTML puro con clases Tailwind en un div contenedor. Incluir:
 2. Evaluación de lesiones no diana por estudio
 3. Nuevas lesiones detectadas
 4. Respuesta por estudio (badges: verde=RC/RP, amarillo=EE, rojo=EP)
-5. Conclusión RECIST global con razonamiento
+5. Conclusión RECIST global con razonamiento clínico
 
 NO incluyas nombres ni datos identificatorios.
   `;
@@ -606,20 +607,21 @@ export const extractSingleImagingReportSecure = async (
   if (!text && files.length === 0) return [];
 
   const instructionText = `
-Sos un radiólogo oncólogo. Extraé datos estructurados de el/los informe(s) radiológico(s) proporcionado(s).
+Sos un radiólogo oncólogo. Extraé datos estructurados y sintetizados de el/los informe(s) radiológico(s) proporcionado(s).
 REGLAS:
 
-1. Extraé TODOS los estudios presentes en el material (puede haber más de uno).
+1. Extraé ÚNICAMENTE los estudios presentes que contengan hallazgos oncológicos positivos o relevantes.
 2. Medidas SIEMPRE en milímetros (mm). Si viene en cm, convertí a mm.
 3. Fechas en DD/MM/YYYY.
 4. type: SOLO "TC" | "RMN" | "PET-TC" | "Ecografía".
-5. Para cada lesión diana: location anatómica precisa + measurement numérico en mm + lesionKey estable (snake_case, ej: "pulmon_lsd", "higado_seg_vi", "ganglio_mediastino").
-6. nonTargetLesions: location + status ("presente"|"ausente"|"aumentado"|"disminuido"|"estable").
-7. newLesions: true si el informe menciona lesiones nuevas respecto a estudio previo.
-8. treatment: esquema activo si se menciona, si no null.
-9. NO inventes medidas. Si no hay medición cuantitativa, dejá targetLesions vacío.
-10. NO incluyas nombres, DNI ni datos identificatorios.
-11. NO copies el informe completo; solo datos estructurados.
+5. relevantFindings: Resumen directo y breve del hallazgo principal (ej: "Lesión hepática segmentaria: 32 mm", "PET hipermetabólico SUVmáx 8.4").
+6. suvMax: Extraer valor numérico si se especifica SUVmáx en PET-TC.
+7. targetLesions: location anatómica precisa + measurement numérico en mm + lesionKey estable (snake_case).
+8. nonTargetLesions: location + status ("presente"|"ausente"|"aumentado"|"disminuido"|"estable").
+9. newLesions: true si el informe menciona lesiones nuevas respecto a estudio previo.
+10. treatment: esquema activo si se menciona, si no null.
+11. NO copies el informe completo; solo datos estructurados y el hallazgo sintético.
+12. NO incluyas nombres, DNI ni datos identificatorios.
 
 SALIDA: ÚNICAMENTE array JSON:
 [
@@ -628,6 +630,8 @@ SALIDA: ÚNICAMENTE array JSON:
     "date": "DD/MM/YYYY",
     "bodyRegion": "string",
     "treatment": "string|null",
+    "relevantFindings": "string",
+    "suvMax": number|null,
     "targetLesions": [
       { "location": "string", "measurement": number, "lesionKey": "string" }
     ],

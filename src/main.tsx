@@ -403,6 +403,8 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                         date: d.date || 'S/F',
                         bodyRegion: d.bodyRegion || 'No especificado',
                         treatment: d.treatment || null,
+                        relevantFindings: d.relevantFindings || undefined,
+                        suvMax: d.suvMax !== undefined ? d.suvMax : undefined,
                         targetLesions: (d.targetLesions || []).map((l: any) => ({
                             location: l.location || 'Lesión',
                             measurement: Number(l.measurement) || 0,
