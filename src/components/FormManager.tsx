@@ -549,9 +549,40 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     }
   };
 
+  // Resumen Clínico State
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [summaryData, setSummaryData] = useState({
+    context: 'SOLICITUD',
+    drugName: '',
+    nombre: '',
+    fnac: '',
+    edad: '',
+    sexo: 'Masculino',
+    dni: '',
+    hc: '',
+  });
+
+  const openSummaryModal = (context: string) => {
+    if (!hasClinicalData) {
+      alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
+      return;
+    }
+    setSummaryData({
+      context,
+      drugName: '',
+      nombre: patient?.name || '',
+      fnac: patient?.birthDate || '',
+      edad: patient?.age ? String(patient.age) : '',
+      sexo: patient?.gender || 'Masculino',
+      dni: patient?.dni || '',
+      hc: patient?.hcNumber || patient?.id || '',
+    });
+    setShowSummaryModal(true);
+  };
+
   // --- GENERADOR DE RESUMEN CLÍNICO ---
   const generateClinicalSummary = async (
-    context: string,
+    data: typeof summaryData,
     regenParams?: { drugName: string; formId: string; accumulatedCorrections: string }
   ) => {
     if (!hasClinicalData) {
@@ -559,8 +590,11 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         return;
     }
 
-    const drugName = regenParams?.drugName ?? window.prompt(`Ingrese el nombre de la droga/medicación para el trámite de ${context}:`);
-    if (!drugName || drugName.trim() === "") return;
+    const drugName = data.drugName?.trim() || regenParams?.drugName?.trim();
+    if (!drugName) {
+      alert("Por favor indique el nombre del fármaco o esquema a solicitar.");
+      return;
+    }
 
     setProcessingId('summary');
     setStatus('Analizando historia clínica y línea de tiempo...');
@@ -569,43 +603,55 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         const today = new Date().toLocaleDateString('es-AR');
 
         let strategyPrompt = "";
-        if (context === 'RENOVACIÓN') {
+        if (data.context === 'RENOVACIÓN') {
             strategyPrompt = `ESTRATEGIA: RENOVACIÓN DE ${drugName.toUpperCase()}. Objetivo: Demostrar beneficio clínico y tolerancia.`;
         } else {
             strategyPrompt = `ESTRATEGIA: ADMISIÓN / SOLICITUD DE ${drugName.toUpperCase()}. Objetivo: Justificar indicación inicial (ignorar continuidad si ya la tomó).`;
         }
 
-        const entityLabel = context === 'SOLICITUD'
+        const entityLabel = data.context === 'SOLICITUD'
           ? 'DINADIC - Dir. de Asistencia Directa por Situaciones Especiales'
-          : `${context} - BANCO DE DROGAS`;
+          : `${data.context} - BANCO DE DROGAS`;
 
         const prompt = `
         Actúa como un Oncólogo Experto del Hospital Oncológico Provincial de Córdoba.
         Hoy es ${today}.
-        Redacta un RESUMEN DE HISTORIA CLÍNICA oficial e institucional para: ${entityLabel}.
+        Redacta el texto para el documento institucional "RESUMEN DE HISTORIA CLÍNICA" correspondiente a: ${entityLabel}.
         
         ${strategyPrompt}
         
-        ESTRUCTURA OBLIGATORIA (3 SECCIONES):
-        1. IDENTIFICACIÓN
-           - Nombre y Apellido: ${patient?.name || ''}
-           - DNI: ${patient?.dni || ''}
-           - Fecha de Nacimiento / Edad: ${patient?.birthDate || ''} ${patient?.age ? `(${patient.age} años)` : ''}
-           - N° Historia Clínica: ${patient?.hcNumber || patient?.id || ''}
-           - Diagnóstico Oncológico Principal
+        FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}
         
-        2. RESUMEN CLÍNICO
-           Narrativa cronológica detallada y fluida integrando antecedentes, biopsias, anatomía patológica, inmunohistoquímica/biomarcadores, cirugías con fechas exactas, estudios complementarios (imágenes/laboratorio con fechas) y estado clínico actual.
+        DATOS DE IDENTIFICACIÓN DEL PACIENTE:
+        - Nombre: ${data.nombre || patient?.name || ''}
+        - Fecha de Nacimiento: ${data.fnac || patient?.birthDate || ''}
+        - Edad: ${data.edad || patient?.age || ''}
+        - Sexo: ${data.sexo || patient?.gender || ''}
+        - DNI: ${data.dni || patient?.dni || ''}
+        - Historia Clínica: ${data.hc || patient?.hcNumber || patient?.id || ''}
         
-        3. JUSTIFICACIÓN
-           Fundamentación oncológica clara y concisa de la indicación del esquema/fármaco (${drugName}).
+        ESTRUCTURA DE RESPUESTA REQUERIDA (TEXTO PLANO, SIN MARKDOWN NI ASTERISCOS):
         
-        REGLAS DE FORMATO (ESTRICTAS):
-        - ❌ SIN ASTERISCOS ni MARKDOWN. Texto plano limpio.
-        - Fechas en formato DD/MM/AAAA.
-        - NO incluyas firmas ni datos de contacto al final (el pie institucional se agrega automáticamente).
+        RESUMEN CLINICO
+        Redacta una narrativa cronológica exhaustiva y detallada:
+        1. Motivo de consulta inicial, fecha de primera consulta, antecedentes patológicos y quirúrgicos relevantes.
+        2. Biopsias y confirmación diagnóstica con fechas exactas, informe anatomopatológico, inmunohistoquímica (receptores, HER2, BRAF, Ki-67, etc.).
+        3. Estudios de estadificación por imágenes cronológicos (RMN, PET-TC, TAC, centellograma) con fechas exactas, medidas milimétricas, SUV max y órganos comprometidos.
+        4. Tratamientos oncológicos previos recibidos con fechas de inicio/fin, ciclos administrados, toxicidades o causas de cambio/suspensión.
+        5. Estado clínico actual del paciente, síntomas, laboratorio reciente y ECOG.
         
-        CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar todas):\n${regenParams.accumulatedCorrections}` : ''}
+        JUSTIFICACION
+        Redacta una justificación oncológica sólida y fundamentada para la solicitud de ${drugName}:
+        - Justificación de la terapia en base a la histología, mutaciones (ej. BRAF V600E), estadio de la enfermedad y líneas previas.
+        - Beneficio esperado (tasas de respuesta, sobrevida libre de progresión).
+        - Detalle de la dosis y posología prescripta para el tratamiento específico.
+        
+        REGLAS OBLIGATORIAS:
+        - ❌ SIN ASTERISCOS ni MARKDOWN. Texto limpio.
+        - Todas las fechas en formato DD/MM/AAAA.
+        - NO incluyas encabezados institucionales ni firmas finales (se colocan automáticamente).
+        
+        CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO:\n${regenParams.accumulatedCorrections}` : ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
@@ -625,9 +671,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         let page = pdfDoc.addPage();
         const { width, height } = page.getSize();
         
-        const marginX = 50; 
-        const marginTop = 35;
-        const marginBottom = 65; 
+        const marginX = 54; 
+        const marginTop = 36;
+        const marginBottom = 54; 
         let y = height - marginTop;
 
         let logoLoaded = false;
@@ -637,60 +683,80 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
             if (logoRes.ok) {
                 const logoBytes = await logoRes.arrayBuffer();
                 const pngImage = await pdfDoc.embedPng(logoBytes);
-                const pngDims = pngImage.scale(0.35);
+                const pngDims = pngImage.scale(0.38);
                 page.drawImage(pngImage, {
                     x: (width - pngDims.width) / 2,
                     y: y - pngDims.height,
                     width: pngDims.width,
                     height: pngDims.height,
                 });
-                y -= (pngDims.height + 15); 
+                y -= (pngDims.height + 24); 
                 logoLoaded = true;
             }
-        } catch { /* logo load failed, use text fallback */ }
+        } catch { /* logo load failed */ }
 
         if (!logoLoaded) {
-            const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
+            const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL";
             const headerWidth = fontBold.widthOfTextAtSize(headerText, 13);
             page.drawText(headerText, { x: (width - headerWidth) / 2, y, size: 13, font: fontBold });
-            y -= 20;
+            y -= 24;
         }
-
-        // Línea divisoria bajo el encabezado institucional
-        page.drawLine({
-            start: { x: marginX, y },
-            end: { x: width - marginX, y },
-            thickness: 1.2,
-            color: rgb(0.15, 0.25, 0.45)
-        });
-        y -= 22;
 
         // Título del documento
         const docTitle = "RESUMEN DE HISTORIA CLÍNICA";
-        const titleWidth = fontBold.widthOfTextAtSize(docTitle, 13.5);
-        page.drawText(docTitle, { x: (width - titleWidth) / 2, y, size: 13.5, font: fontBold });
+        const titleWidth = fontBold.widthOfTextAtSize(docTitle, 13);
+        page.drawText(docTitle, { x: (width - titleWidth) / 2, y, size: 13, font: fontBold });
         y -= 16;
 
-        // Subtítulo institucional
-        const subTitleWidth = fontBold.widthOfTextAtSize(entityLabel, 10);
-        page.drawText(entityLabel, { x: (width - subTitleWidth) / 2, y, size: 10, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+        // Subtítulo
+        const subTitleWidth = fontBold.widthOfTextAtSize(entityLabel, 10.5);
+        page.drawText(entityLabel, { x: (width - subTitleWidth) / 2, y, size: 10.5, font: fontBold });
         y -= 18;
 
         // Lugar y Fecha
         const dateText = `Córdoba Capital, ${today}`;
-        const dateWidth = font.widthOfTextAtSize(dateText, 9);
-        page.drawText(dateText, { x: width - marginX - dateWidth, y, size: 9, font });
-        y -= 14;
+        const dateWidth = font.widthOfTextAtSize(dateText, 9.5);
+        page.drawText(dateText, { x: width - marginX - dateWidth, y, size: 9.5, font });
+        y -= 10;
 
-        // Línea divisoria bajo título y fecha
+        // Línea divisoria superior
         page.drawLine({
             start: { x: marginX, y },
             end: { x: width - marginX, y },
-            thickness: 0.6,
-            color: rgb(0.65, 0.65, 0.65)
+            thickness: 0.8,
+            color: rgb(0, 0, 0)
         });
         y -= 22;
 
+        // 1. IDENTIFICACIÓN
+        page.drawText("IDENTIFICACION", { x: marginX, y, size: 10.5, font: fontBold });
+        y -= 4;
+        page.drawLine({
+            start: { x: marginX, y },
+            end: { x: width - marginX, y },
+            thickness: 0.8,
+            color: rgb(0, 0, 0)
+        });
+        y -= 16;
+
+        const drawIdentLine = (label: string, value: string) => {
+            const labelText = `${label}: `;
+            page.drawText(labelText, { x: marginX, y, size: 9.5, font });
+            const lw = font.widthOfTextAtSize(labelText, 9.5);
+            page.drawText(value || '---', { x: marginX + lw, y, size: 9.5, font });
+            y -= 14;
+        };
+
+        drawIdentLine("Nombre", (data.nombre || patient?.name || '').toUpperCase());
+        drawIdentLine("Fecha de nacimiento", data.fnac || patient?.birthDate || '');
+        drawIdentLine("Edad", data.edad ? `${data.edad} años` : (patient?.age ? `${patient.age} años` : ''));
+        drawIdentLine("Sexo", data.sexo || patient?.gender || 'Masculino');
+        drawIdentLine("DNI", data.dni || patient?.dni || '');
+        drawIdentLine("Historia Clínica", data.hc || patient?.hcNumber || patient?.id || '');
+
+        y -= 10;
+
+        // Limpieza y partición del texto generado
         const cleanSummary = summaryText
             .replace(/(\r\n|\n|\r)/gm, "\n")
             .replace(/\*\*/g, "")
@@ -698,13 +764,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
             .replace(/##/g, "")
             .replace(/#/g, "");
 
-        const paragraphs = cleanSummary.split('\n');
+        const rawParagraphs = cleanSummary.split('\n');
         const contentWidth = width - (marginX * 2);
         const fontSizeBody = 9.5;
         const fontSizeHeader = 10.5;
         const lineHeight = 13.5;
-        
-        for (const p of paragraphs) {
+
+        for (const p of rawParagraphs) {
             const trimmed = p.trim();
             if (!trimmed) {
                 y -= 6;
@@ -712,30 +778,38 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
             }
 
             const upper = trimmed.toUpperCase();
-            const isHeader = (
-                upper === 'IDENTIFICACIÓN' || upper === 'IDENTIFICACION' ||
-                upper.startsWith('1. IDENTIFICACIÓN') || upper.startsWith('1. IDENTIFICACION') ||
-                upper === 'RESUMEN CLÍNICO' || upper === 'RESUMEN CLINICO' ||
-                upper.startsWith('2. RESUMEN CLÍNICO') || upper.startsWith('2. RESUMEN CLINICO') ||
-                upper === 'JUSTIFICACIÓN' || upper === 'JUSTIFICACION' ||
-                upper.startsWith('3. JUSTIFICACIÓN') || upper.startsWith('3. JUSTIFICACION')
-            ) && trimmed.length < 45;
+            
+            // Omitir si la IA repite el bloque de IDENTIFICACIÓN
+            if (upper.includes("IDENTIFICACION") || upper.includes("IDENTIFICACIÓN")) {
+                continue;
+            }
+            if (upper.startsWith("NOMBRE:") || upper.startsWith("FECHA DE NACIMIENTO:") || upper.startsWith("EDAD:") || upper.startsWith("SEXO:") || upper.startsWith("DNI:") || upper.startsWith("HISTORIA CLÍNICA:") || upper.startsWith("HISTORIA CLINICA:")) {
+                continue;
+            }
 
-            if (isHeader) {
-                y -= 12;
-                if (y < marginBottom + 50) {
+            const isSectionHeader = (
+                upper === 'RESUMEN CLINICO' || upper === 'RESUMEN CLÍNICO' ||
+                upper.startsWith('RESUMEN CLINICO') || upper.startsWith('RESUMEN CLÍNICO') ||
+                upper === 'JUSTIFICACION' || upper === 'JUSTIFICACIÓN' ||
+                upper.startsWith('JUSTIFICACION') || upper.startsWith('JUSTIFICACIÓN')
+            ) && trimmed.length < 40;
+
+            if (isSectionHeader) {
+                const headerText = upper.includes('JUSTIFICAC') ? 'JUSTIFICACION' : 'RESUMEN CLINICO';
+                y -= 14;
+                if (y < marginBottom + 60) {
                     page = pdfDoc.addPage();
                     y = height - marginTop - 20;
                 }
-                page.drawText(trimmed, { x: marginX, y, size: fontSizeHeader, font: fontBold, color: rgb(0.1, 0.2, 0.4) });
+                page.drawText(headerText, { x: marginX, y, size: fontSizeHeader, font: fontBold });
                 y -= 4;
                 page.drawLine({
                     start: { x: marginX, y },
                     end: { x: width - marginX, y },
-                    thickness: 0.5,
-                    color: rgb(0.2, 0.3, 0.5)
+                    thickness: 0.8,
+                    color: rgb(0, 0, 0)
                 });
-                y -= 14;
+                y -= 16;
                 continue;
             }
 
@@ -747,7 +821,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
                 const testWidth = font.widthOfTextAtSize(testLine, fontSizeBody);
 
                 if (testWidth > contentWidth) {
-                    if (y < marginBottom + 40) {
+                    if (y < marginBottom + 30) {
                         page = pdfDoc.addPage();
                         y = height - marginTop - 20;
                     }
@@ -760,7 +834,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
             }
 
             if (currentLine) {
-                if (y < marginBottom + 40) {
+                if (y < marginBottom + 30) {
                     page = pdfDoc.addPage();
                     y = height - marginTop - 20;
                 }
@@ -788,7 +862,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `Resumen_Clinico_${context}_${patient?.name || 'Paciente'}.pdf`;
+        link.download = `Resumen_Clinico_${data.context}_${data.nombre || patient?.name || 'Paciente'}.pdf`;
         link.click();
         setStatus('¡Listo!');
     } catch (e: any) {
@@ -1850,7 +1924,7 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
                       <Download size={14}/><span>Plantilla</span>
                     </button>
                     <button
-                      onClick={() => generateClinicalSummary(form.context || 'SOLICITUD', undefined)}
+                      onClick={() => openSummaryModal('SOLICITUD')}
                       disabled={processingId !== null}
                       className="flex items-center justify-center space-x-1.5 bg-purple-700 text-white hover:bg-purple-800 py-2 px-3 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
                     >
@@ -1875,7 +1949,7 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
                       <Download size={14}/><span>Plantilla</span>
                     </button>
                     <button
-                      onClick={() => generateClinicalSummary(form.context || 'SOLICITUD', undefined)}
+                      onClick={() => openSummaryModal(form.context || 'ADMISIÓN')}
                       disabled={processingId !== null}
                       className="flex items-center justify-center space-x-1.5 bg-purple-700 text-white hover:bg-purple-800 py-2 px-3 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
                     >
@@ -2954,6 +3028,151 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
                 className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
               >
                 Generar igualmente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE IDENTIFICACIÓN Y DATOS PARA RESUMEN DE HISTORIA CLÍNICA */}
+      {showSummaryModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-2xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <FilePlus className="text-purple-600" size={20} />
+                <h4 className="font-bold text-sm text-gray-900">
+                  Resumen de Historia Clínica — {summaryData.context === 'SOLICITUD' ? 'DINADIC' : summaryData.context}
+                </h4>
+              </div>
+              <button onClick={() => setShowSummaryModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Confirme o complete los datos identificatorios del paciente y el esquema a solicitar para el documento institucional.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-gray-700 uppercase text-[10px] mb-1">
+                  Fármaco / Medicación Solicitada (*)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Dabrafenib + Trametinib"
+                  value={summaryData.drugName}
+                  onChange={e => setSummaryData(prev => ({ ...prev, drugName: e.target.value }))}
+                  className="w-full p-2.5 border border-purple-200 bg-purple-50/40 rounded-xl font-medium focus:bg-white focus:border-purple-600 outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-gray-700 uppercase text-[10px] mb-1">
+                  Nombre y Apellido del Paciente
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: GOMEZ, PEDRO OSCAR"
+                  value={summaryData.nombre}
+                  onChange={e => setSummaryData(prev => ({ ...prev, nombre: e.target.value }))}
+                  className="w-full p-2 border border-gray-200 rounded-xl focus:border-blue-500 outline-none uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 uppercase text-[10px] mb-1">
+                  Fecha de Nacimiento (DD/MM/AAAA)
+                </label>
+                <input
+                  type="text"
+                  placeholder="DD/MM/AAAA"
+                  value={summaryData.fnac}
+                  onChange={e => setSummaryData(prev => ({ ...prev, fnac: e.target.value }))}
+                  className="w-full p-2 border border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 uppercase text-[10px] mb-1">
+                  Edad
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: 61 años"
+                  value={summaryData.edad}
+                  onChange={e => setSummaryData(prev => ({ ...prev, edad: e.target.value }))}
+                  className="w-full p-2 border border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 uppercase text-[10px] mb-1">
+                  Sexo
+                </label>
+                <div className="flex gap-2">
+                  {['Masculino', 'Femenino'].map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSummaryData(prev => ({ ...prev, sexo: s }))}
+                      className={`flex-1 py-2 text-xs font-bold rounded-xl border transition-all ${
+                        summaryData.sexo === s ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-50 text-gray-700 border-gray-200'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 uppercase text-[10px] mb-1">
+                  DNI / Documento
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: 16907275"
+                  value={summaryData.dni}
+                  onChange={e => setSummaryData(prev => ({ ...prev, dni: e.target.value }))}
+                  className="w-full p-2 border border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-gray-700 uppercase text-[10px] mb-1">
+                  N° de Historia Clínica
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: 9217053"
+                  value={summaryData.hc}
+                  onChange={e => setSummaryData(prev => ({ ...prev, hc: e.target.value }))}
+                  className="w-full p-2 border border-gray-200 rounded-xl focus:border-blue-500 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowSummaryModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!summaryData.drugName.trim() || processingId === 'summary'}
+                onClick={() => {
+                  setShowSummaryModal(false);
+                  generateClinicalSummary(summaryData);
+                }}
+                className="px-5 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-xs transition-all disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {processingId === 'summary' ? <Loader2 size={14} className="animate-spin" /> : <FilePlus size={14} />}
+                <span>Generar Resumen de HC (PDF)</span>
               </button>
             </div>
           </div>
