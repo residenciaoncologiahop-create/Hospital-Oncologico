@@ -269,29 +269,55 @@ const App = ({ user }: AppProps) => {
         setClinicalContextUpdatedAt(p.clinicalContextUpdatedAt || null);
     }, [selectedPatientId, patients]);
 
+    const cleanForFirestore = <T,>(obj: T): T => {
+        if (obj === undefined) return null as unknown as T;
+        if (obj === null || typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) {
+            return obj.map(item => cleanForFirestore(item)).filter(item => item !== undefined) as unknown as T;
+        }
+        const clean: Record<string, any> = {};
+        for (const [key, value] of Object.entries(obj as Record<string, any>)) {
+            if (value !== undefined) {
+                clean[key] = cleanForFirestore(value);
+            }
+        }
+        return clean as T;
+    };
+
+    const sanitizeChatHistory = (history: ChatMessage[]): ChatMessage[] => {
+        if (!Array.isArray(history)) return [];
+        return history
+            .filter(m => m && typeof m === 'object')
+            .map(m => ({
+                role: (m.role === 'user' ? 'user' : 'model') as 'user' | 'model',
+                text: typeof m.text === 'string' ? m.text : '',
+                timestamp: typeof m.timestamp === 'number' ? m.timestamp : Date.now()
+            }));
+    };
+
     const getAnonContext = (p: Patient) => {
         const eventsText = (p.timeline && p.timeline.length > 0)
-            ? p.timeline.map((e: any) => `• [${e.date}] [${e.category || 'Evento'} - ${e.professional || 'Médico'}]: ${e.note}${e.detail ? ` | Detalle: ${e.detail}` : ''}${e.isKey ? ' (HITO CLAVE)' : ''}`).join('\n')
-            : 'Sin eventos estructurados en cronología.';
+            ? p.timeline.map((e: any) => `• [${e.date}] ${e.category ? `(${e.category}) ` : ''}${e.professional ? `[${e.professional}]: ` : ''}${e.note}${e.detail ? ` — Detalle: ${e.detail}` : ''}`).join('\n')
+            : 'Sin eventos previos registrados en la cronología.';
 
         const labsText = (p.labResults && p.labResults.length > 0)
-            ? p.labResults.map((l: any) => `• [${l.date || 'S/F'}] ${l.testName}: ${l.value} ${l.unit || ''} ${l.isAbnormal ? '(Anormal/Fuera de rango)' : ''}`).join('\n')
+            ? p.labResults.map((l: any) => `• ${l.date ? `[${l.date}] ` : ''}${l.testName}: ${l.value} ${l.unit || ''} ${l.isAbnormal ? '(Fuera de rango)' : ''}`).join('\n')
             : '';
 
         const imagingText = (p.imagingStudies && p.imagingStudies.length > 0)
-            ? p.imagingStudies.map((s: any) => `• [${s.date || 'S/F'}] ${s.modality || 'Estudio'}: ${s.findings || s.summary || ''}`).join('\n')
+            ? p.imagingStudies.map((s: any) => `• ${s.date ? `[${s.date}] ` : ''}${s.type || (s as any).modality || 'Estudio'}${s.bodyRegion ? ` (${s.bodyRegion})` : ''}: ${s.relevantFindings || (s as any).findings || (s as any).summary || 'Sin hallazgos críticos descritos'}`).join('\n')
             : '';
 
-        return `[DATOS ESTRUCTURADOS DEL PACIENTE]
-Rango Etario: ${p.ageRange || 'No especificado'} años.
-Diagnóstico Registrado: ${p.diagnosis || 'No especificado'}.
+        return `INFORMACIÓN CLÍNICA Y ANTECEDENTES DEL PACIENTE:
+- Diagnóstico Oncológico: ${p.diagnosis || 'No especificado'}
+- Rango Etario: ${p.ageRange || 'No especificado'} años
 
-[CRONOLOGÍA DE EVENTOS REGISTRADOS]
+CRONOLOGÍA CLÍNICA Y ANTECEDENTES REGISTRADOS:
 ${eventsText}
-${labsText ? `\n[RESULTADOS DE LABORATORIO REGISTRADOS]\n${labsText}` : ''}
-${imagingText ? `\n[ESTUDIOS DE IMÁGENES REGISTRADOS]\n${imagingText}` : ''}
+${labsText ? `\nESTUDIOS DE LABORATORIO:\n${labsText}` : ''}
+${imagingText ? `\nESTUDIOS DE IMÁGENES:\n${imagingText}` : ''}
 
-[NOTAS CLÍNICAS Y DOCUMENTACIÓN]
+NOTAS CLÍNICAS Y DOCUMENTACIÓN EVOLUTIVA:
 ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
     };
 
@@ -407,8 +433,8 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                         date: d.date || 'S/F',
                         bodyRegion: d.bodyRegion || 'No especificado',
                         treatment: d.treatment || null,
-                        relevantFindings: d.relevantFindings || undefined,
-                        suvMax: d.suvMax !== undefined ? d.suvMax : undefined,
+                        relevantFindings: d.relevantFindings || '',
+                        suvMax: typeof d.suvMax === 'number' ? d.suvMax : (d.suvMax ? Number(d.suvMax) : null),
                         targetLesions: (d.targetLesions || []).map((l: any) => ({
                             location: l.location || 'Lesión',
                             measurement: Number(l.measurement) || 0,
@@ -423,8 +449,8 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                     updateData.imagingStudies = combinedImaging;
                 }
 
-                // Un solo updateDoc con todo junto
-                await updateDoc(patientRef, updateData);
+                // Un solo updateDoc con todo junto sanitizado contra undefined
+                await updateDoc(patientRef, cleanForFirestore(updateData));
                 // Persistir contexto clínico acumulado para evitar re-subida de PDFs
                 if (historyText) {
                     await saveClinicalContext(selectedPatientId, historyText);
@@ -446,7 +472,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         if (!selectedPatientId) return;
         const labWithAuthor = { ...newLab, professional: doctorName || 'Manual' };
         const currentLabs = patients.find(p => p.id === selectedPatientId)?.labResults || [];
-        await updateDoc(doc(db, "patients", selectedPatientId), { labResults: [...currentLabs, labWithAuthor], lastUpdated: Date.now() });
+        await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ labResults: [...currentLabs, labWithAuthor], lastUpdated: Date.now() }));
     };
 
     const handleAddManualEvolution = async () => {
@@ -464,7 +490,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         setTimeline(updatedTimeline);
         setManualNote('');
         setManualIsKey(false);
-        await updateDoc(doc(db, "patients", selectedPatientId), { timeline: updatedTimeline, lastUpdated: Date.now() });
+        await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ timeline: updatedTimeline, lastUpdated: Date.now() }));
         logAction("ADD_MANUAL_EVOLUTION", selectedPatientId, doctorName);
     };
 
@@ -473,7 +499,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         if (confirm("¿Eliminar este evento?")) {
             const updatedTimeline = timeline.filter(e => e !== ev);
             setTimeline(updatedTimeline);
-            await updateDoc(doc(db, "patients", selectedPatientId), { timeline: updatedTimeline, lastUpdated: Date.now() });
+            await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ timeline: updatedTimeline, lastUpdated: Date.now() }));
             logAction("DELETE_TIMELINE_EVENT", selectedPatientId, doctorName);
         }
     };
@@ -483,18 +509,22 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         const p = patients.find(pat => pat.id === selectedPatientId);
         if (!p) return;
         setLastError(null);
-        const newUserMsg: ChatMessage = { role: 'user', text: chatInput, timestamp: Date.now() };
+        const newUserMsg: ChatMessage = { role: 'user', text: chatInput.trim(), timestamp: Date.now() };
         const updatedUser = [...chatMessages, newUserMsg];
-        setChatMessages(updatedUser); setChatInput(''); setIsTyping(true);
+        setChatMessages(updatedUser);
+        setChatInput('');
+        setIsTyping(true);
         try {
             const responseText = await getChatResponseSecure(updatedUser, newUserMsg.text, getAnonContext(p), [...historyFiles, ...guidelineFiles]);
-            const newAiMsg: ChatMessage = { role: 'model', text: responseText, timestamp: Date.now() };
+            const newAiMsg: ChatMessage = { role: 'model', text: responseText || '', timestamp: Date.now() };
             const updatedAI = [...updatedUser, newAiMsg];
-            setChatMessages(updatedAI);
-            await updateDoc(doc(db, "patients", selectedPatientId), { chatHistory: updatedAI, lastUpdated: Date.now() });
+            const cleanHistory = sanitizeChatHistory(updatedAI);
+            setChatMessages(cleanHistory);
+            await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ chatHistory: cleanHistory, lastUpdated: Date.now() }));
             logAction("CHAT_MESSAGE", selectedPatientId, doctorName);
         } catch (e: any) {
-            setLastError(e.message);
+            console.error("Error en chat o guardado Firestore:", e);
+            setLastError(e.message || "Error al procesar el mensaje");
         } finally {
             setIsTyping(false);
         }

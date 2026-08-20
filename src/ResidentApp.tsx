@@ -148,17 +148,17 @@ const ResidentApp = () => {
     setChatInput(''); setIsTyping(true);
 
     const eventsText = (selectedPatient.timeline && selectedPatient.timeline.length > 0)
-      ? selectedPatient.timeline.map((e: any) => `• [${e.date}] [${e.category || 'Evento'} - ${e.professional || 'Médico'}]: ${e.note}${e.detail ? ` | Detalle: ${e.detail}` : ''}${e.isKey ? ' (HITO CLAVE)' : ''}`).join('\n')
-      : 'Sin eventos estructurados en cronología.';
+      ? selectedPatient.timeline.map((e: any) => `• [${e.date}] ${e.category ? `(${e.category}) ` : ''}${e.professional ? `[${e.professional}]: ` : ''}${e.note}${e.detail ? ` — Detalle: ${e.detail}` : ''}`).join('\n')
+      : 'Sin eventos previos registrados en la cronología.';
 
-    const context = `[DATOS ESTRUCTURADOS DEL PACIENTE]
-Edad: ${selectedPatient.age || 'No especificada'} años.
-Diagnóstico Registrado: ${selectedPatient.diagnosis || 'No especificado'}.
+    const context = `INFORMACIÓN CLÍNICA Y ANTECEDENTES DEL PACIENTE:
+- Diagnóstico Oncológico: ${selectedPatient.diagnosis || 'No especificado'}
+- Edad: ${selectedPatient.age || 'No especificada'} años
 
-[CRONOLOGÍA DE EVENTOS REGISTRADOS]
+CRONOLOGÍA CLÍNICA Y ANTECEDENTES:
 ${eventsText}
 
-[NOTAS CLÍNICAS Y DOCUMENTACIÓN]
+NOTAS CLÍNICAS Y DOCUMENTACIÓN:
 ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
 
     const response = await getResidentChatResponse(updatedHistory, newMsg.text, context, selectedPatient.files);

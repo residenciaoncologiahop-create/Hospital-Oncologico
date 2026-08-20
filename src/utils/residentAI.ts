@@ -38,8 +38,8 @@ const AUDIT_STYLE_INSTRUCTIONS = `
 
 export const getResidentChatResponse = async (msgs: ChatMessage[], newMsg: string, context: string, files: FileData[]) => {
     try {
-        const historyText = msgs.slice(-6).map(m => `${m.role === 'user' ? 'MÉDICO' : 'ASISTENTE'}: ${m.text}`).join('\n\n');
-        const contextBlock = `[INFORMACIÓN CLÍNICA DEL PACIENTE ACTUAL]\n${context}\n\n[HISTORIAL DE DISCUSIÓN CLÍNICA RECIENTE]\n${historyText}`;
+        const historyText = msgs.slice(-10).map(m => `${m.role === 'user' ? 'MÉDICO' : 'ASISTENTE ONCOLÓGICO'}: ${m.text}`).join('\n\n');
+        const contextBlock = `ANTECEDENTES Y REGISTROS CLÍNICOS DEL PACIENTE:\n${context}\n\nCONVERSACIÓN CLÍNICA EN CURSO:\n${historyText}`;
         const parts: any[] = buildParts(contextBlock, (files && Array.isArray(files)) ? files.slice(0, 3) : []);
         parts.push({ text: `CONSULTA DEL MÉDICO:\n${newMsg}` });
         
@@ -48,7 +48,7 @@ export const getResidentChatResponse = async (msgs: ChatMessage[], newMsg: strin
             systemInstruction: CLINICAL_CHAT_SYSTEM_INSTRUCTION 
         });
         const text = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
-        return text ? text.replace(/\[(?:Dato Documentado|Dato Estructurado|Dato no estructurado|Inferencia|Hipótesis|Dato Clínico)\]:\s*/gi, '') : "Error.";
+        return text ? text.replace(/\[(?:Dato Documentado|Dato Estructurado|Dato no estructurado|Inferencia|Hipótesis|Dato Clínico)\]:\s*/gi, '').trim() : "Error.";
     } catch (e: any) {
         return "Error: " + e.message;
     }

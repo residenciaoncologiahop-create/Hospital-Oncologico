@@ -52,15 +52,30 @@ export const subscribeToPatients = (callback: (patients: Patient[]) => void) => 
     });
 };
 
+export const cleanForFirestore = <T,>(obj: T): T => {
+    if (obj === undefined) return null as unknown as T;
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) {
+        return obj.map(item => cleanForFirestore(item)).filter(item => item !== undefined) as unknown as T;
+    }
+    const clean: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, any>)) {
+        if (value !== undefined) {
+            clean[key] = cleanForFirestore(value);
+        }
+    }
+    return clean as T;
+};
+
 // Crear
 export const createPatient = async (patientData: Patient) => {
-    return await addDoc(collection(db, PATIENTS_COLLECTION), patientData);
+    return await addDoc(collection(db, PATIENTS_COLLECTION), cleanForFirestore(patientData));
 };
 
 // Actualizar
 export const updatePatient = async (id: string, data: Partial<Patient>) => {
     const docRef = doc(db, PATIENTS_COLLECTION, id);
-    await updateDoc(docRef, { ...data, lastUpdated: Date.now() });
+    await updateDoc(docRef, cleanForFirestore({ ...data, lastUpdated: Date.now() }));
 };
 
 // NUEVO: Borrar paciente
