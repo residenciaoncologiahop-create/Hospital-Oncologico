@@ -210,6 +210,7 @@ const App = ({ user }: AppProps) => {
     const [showDrugsModal, setShowDrugsModal] = useState(false);
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
+    const [lastError, setLastError] = useState<string | null>(null);
 
     const chatEndRef = useRef<HTMLDivElement>(null);
     const isProcessingRef = useRef(false);
