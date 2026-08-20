@@ -20,7 +20,7 @@ import {
     Upload, Activity, Trash2, Menu, X, Clock,
     Loader2, AlertCircle, Info, Terminal, ChevronDown,
     Calendar, PenTool, ClipboardCheck, Wrench, Calculator, Pill,
-    PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2
+    PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2, Filter
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -188,8 +188,9 @@ const App = ({ user }: AppProps) => {
     const [isTyping, setIsTyping] = useState(false);
     const [isChatFullScreen, setIsChatFullScreen] = useState(false);
     const [isProcessingDocs, setIsProcessingDocs] = useState(false);
-    const [lastError, setLastError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [timelineSearch, setTimelineSearch] = useState('');
+    const [timelineCategoryFilter, setTimelineCategoryFilter] = useState('Todas');
     const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
     const [manualDoctor, setManualDoctor] = useState(doctorName || '');
     const [manualNote, setManualNote] = useState('');
@@ -1048,14 +1049,101 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                             return cat ? CATEGORY_STYLES[cat] : DEFAULT_STYLE;
                                         };
                                         const sorted = [...timeline].sort((a, b) => parseDate(a.date) - parseDate(b.date));
+
+                                        // Categorías base y categorías dinámicas extraídas de los eventos existentes
+                                        const baseCategories = ['Consulta', 'Imagen', 'Lab', 'Cirugía', 'Quimio', 'Radio', 'Evolución', 'Anatomía Patológica'];
+                                        const presentCategories = Array.from(new Set(timeline.map(e => e.category).filter(Boolean)));
+                                        const allCategories = Array.from(new Set([...baseCategories, ...presentCategories]));
+
+                                        const normalizeSearch = (str: string) =>
+                                            (str || '')
+                                                .toLowerCase()
+                                                .normalize('NFD')
+                                                .replace(/[\u0300-\u036f]/g, '');
+
+                                        const filteredSorted = sorted.filter(ev => {
+                                            if (timelineCategoryFilter !== 'Todas') {
+                                                const catNorm = normalizeSearch(ev.category || '');
+                                                const filterNorm = normalizeSearch(timelineCategoryFilter);
+                                                if (!catNorm.includes(filterNorm) && !filterNorm.includes(catNorm)) {
+                                                    return false;
+                                                }
+                                            }
+                                            if (timelineSearch.trim()) {
+                                                const q = normalizeSearch(timelineSearch.trim());
+                                                const targetText = normalizeSearch(
+                                                    `${ev.date || ''} ${ev.category || ''} ${ev.professional || ''} ${ev.note || ''} ${ev.detail || ''}`
+                                                );
+                                                if (!targetText.includes(q)) {
+                                                    return false;
+                                                }
+                                            }
+                                            return true;
+                                        });
+
                                         return (
                                             <div className="space-y-3 pt-2">
+                                                {/* BARRA DE BÚSQUEDA Y FILTRO POR CATEGORÍA */}
+                                                {timeline.length > 0 && (
+                                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+                                                        <div className="relative flex-1">
+                                                            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"/>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Buscar eventos (ej: carboplatino, biopsia, PET, neutropenia)..."
+                                                                value={timelineSearch}
+                                                                onChange={e => setTimelineSearch(e.target.value)}
+                                                                className="w-full pl-9 pr-8 py-1.5 bg-transparent text-xs font-semibold text-gray-700 placeholder-gray-400 outline-none"
+                                                            />
+                                                            {timelineSearch && (
+                                                                <button
+                                                                    onClick={() => setTimelineSearch('')}
+                                                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                                                                    title="Limpiar búsqueda"
+                                                                >
+                                                                    <X size={12}/>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        <div className="h-4 w-px bg-gray-200 hidden sm:block"/>
+                                                        <div className="flex items-center gap-2">
+                                                            <select
+                                                                value={timelineCategoryFilter}
+                                                                onChange={e => setTimelineCategoryFilter(e.target.value)}
+                                                                className="bg-gray-50 sm:bg-transparent px-3 py-1.5 rounded-xl sm:rounded-none text-xs font-bold text-gray-700 outline-none cursor-pointer hover:text-blue-600 transition-colors"
+                                                            >
+                                                                <option value="Todas">Todas las categorías</option>
+                                                                {allCategories.map(cat => (
+                                                                    <option key={cat} value={cat}>{cat}</option>
+                                                                ))}
+                                                            </select>
+                                                            {(timelineSearch.trim() || timelineCategoryFilter !== 'Todas') && (
+                                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 whitespace-nowrap">
+                                                                    {filteredSorted.length} de {timeline.length}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {sorted.length === 0 ? (
                                                     <div className="flex flex-col items-center justify-center py-20 text-gray-200">
                                                         <Clock size={40} className="mb-3 opacity-10"/>
                                                         <p className="text-xs font-black uppercase tracking-widest">Sin eventos</p>
                                                     </div>
-                                                ) : sorted.map((ev, i) => {
+                                                ) : filteredSorted.length === 0 ? (
+                                                    <div className="flex flex-col items-center justify-center py-12 text-gray-400 bg-white rounded-2xl border border-dashed border-gray-200">
+                                                        <Search size={28} className="mb-2 opacity-30 text-gray-400"/>
+                                                        <p className="text-xs font-bold text-gray-600">No se encontraron eventos coincidentes</p>
+                                                        <p className="text-[11px] text-gray-400 mt-0.5">Prueba con otros términos de búsqueda o selecciona otra categoría</p>
+                                                        <button
+                                                            onClick={() => { setTimelineSearch(''); setTimelineCategoryFilter('Todas'); }}
+                                                            className="mt-3 text-[10px] font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                                                        >
+                                                            Restablecer filtros
+                                                        </button>
+                                                    </div>
+                                                ) : filteredSorted.map((ev, i) => {
                                                     const s = getStyle(ev);
                                                     const isExpanded = expandedEvents.has(i);
                                                     const toggleExpand = () => setExpandedEvents(prev => {
@@ -1065,7 +1153,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                                     });
                                                     return (
                                                         <div key={i} className="relative pl-9 pb-6 group">
-                                                            {i < sorted.length - 1 && <div className="absolute left-[13px] top-6 bottom-0 w-px bg-gray-100"/>}
+                                                            {i < filteredSorted.length - 1 && <div className="absolute left-[13px] top-6 bottom-0 w-px bg-gray-100"/>}
                                                             <div className={`absolute left-0 top-1.5 w-6 h-6 rounded-full border-4 border-white shadow-md flex items-center justify-center transition-transform group-hover:scale-110 ${s.dot}`}>
                                                                 {ev.isKey ? <AlertCircle size={10} className="text-white"/> : <Info size={10} className="text-white"/>}
                                                             </div>

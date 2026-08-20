@@ -43,6 +43,8 @@ const ResidentApp = () => {
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [timelineSearch, setTimelineSearch] = useState('');
+  const [timelineCategoryFilter, setTimelineCategoryFilter] = useState('Todas');
 
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [auditContent, setAuditContent] = useState<string | null>(null);
@@ -380,17 +382,103 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                   </div>
                 )}
 
-                {activeTab === 'timeline' && (
-                  <div className="space-y-4 pt-2">
-                    {(!selectedPatient.timeline || selectedPatient.timeline.length === 0) ? (
-                      <div className="flex flex-col items-center justify-center py-20 text-gray-200">
-                        <Clock size={40} className="mb-3 opacity-10" />
-                        <p className="text-xs font-black uppercase tracking-widest">Sin eventos. Procesá los documentos primero.</p>
-                      </div>
-                    ) : (
-                      selectedPatient.timeline
-                        .filter(ev => ev.note && ev.note.trim() !== '' && !ev.note.toLowerCase().includes('sin descripción'))
-                        .map((ev, i) => (
+                {activeTab === 'timeline' && (() => {
+                  const baseCategories = ['Consulta', 'Imagen', 'Lab', 'Cirugía', 'Quimio', 'Radio', 'Evolución', 'Anatomía Patológica'];
+                  const presentCategories = Array.from(new Set((selectedPatient.timeline || []).map((e: any) => e.category).filter(Boolean)));
+                  const allCategories = Array.from(new Set([...baseCategories, ...presentCategories]));
+
+                  const normalizeSearch = (str: string) =>
+                    (str || '')
+                      .toLowerCase()
+                      .normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '');
+
+                  const rawList = (selectedPatient.timeline || [])
+                    .filter((ev: any) => ev.note && ev.note.trim() !== '' && !ev.note.toLowerCase().includes('sin descripción'));
+
+                  const filteredEvents = rawList.filter((ev: any) => {
+                    if (timelineCategoryFilter !== 'Todas') {
+                      const catNorm = normalizeSearch(ev.category || '');
+                      const filterNorm = normalizeSearch(timelineCategoryFilter);
+                      if (!catNorm.includes(filterNorm) && !filterNorm.includes(catNorm)) {
+                        return false;
+                      }
+                    }
+                    if (timelineSearch.trim()) {
+                      const q = normalizeSearch(timelineSearch.trim());
+                      const targetText = normalizeSearch(
+                        `${ev.date || ''} ${ev.category || ''} ${ev.professional || ''} ${ev.note || ''} ${ev.detail || ''}`
+                      );
+                      if (!targetText.includes(q)) {
+                        return false;
+                      }
+                    }
+                    return true;
+                  });
+
+                  return (
+                    <div className="space-y-4 pt-2">
+                      {rawList.length > 0 && (
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+                          <div className="relative flex-1">
+                            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"/>
+                            <input
+                              type="text"
+                              placeholder="Buscar eventos (ej: carboplatino, biopsia, PET, neutropenia)..."
+                              value={timelineSearch}
+                              onChange={e => setTimelineSearch(e.target.value)}
+                              className="w-full pl-9 pr-8 py-1.5 bg-transparent text-xs font-semibold text-gray-700 placeholder-gray-400 outline-none"
+                            />
+                            {timelineSearch && (
+                              <button
+                                onClick={() => setTimelineSearch('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                                title="Limpiar búsqueda"
+                              >
+                                <X size={12}/>
+                              </button>
+                            )}
+                          </div>
+                          <div className="h-4 w-px bg-gray-200 hidden sm:block"/>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={timelineCategoryFilter}
+                              onChange={e => setTimelineCategoryFilter(e.target.value)}
+                              className="bg-gray-50 sm:bg-transparent px-3 py-1.5 rounded-xl sm:rounded-none text-xs font-bold text-gray-700 outline-none cursor-pointer hover:text-indigo-600 transition-colors"
+                            >
+                              <option value="Todas">Todas las categorías</option>
+                              {allCategories.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                              ))}
+                            </select>
+                            {(timelineSearch.trim() || timelineCategoryFilter !== 'Todas') && (
+                              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 whitespace-nowrap">
+                                {filteredEvents.length} de {rawList.length}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {rawList.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-gray-200">
+                          <Clock size={40} className="mb-3 opacity-10" />
+                          <p className="text-xs font-black uppercase tracking-widest">Sin eventos. Procesá los documentos primero.</p>
+                        </div>
+                      ) : filteredEvents.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-400 bg-white rounded-2xl border border-dashed border-gray-200">
+                          <Search size={28} className="mb-2 opacity-30 text-gray-400"/>
+                          <p className="text-xs font-bold text-gray-600">No se encontraron eventos coincidentes</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">Prueba con otros términos de búsqueda o selecciona otra categoría</p>
+                          <button
+                            onClick={() => { setTimelineSearch(''); setTimelineCategoryFilter('Todas'); }}
+                            className="mt-3 text-[10px] font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            Restablecer filtros
+                          </button>
+                        </div>
+                      ) : (
+                        filteredEvents.map((ev: any, i: number) => (
                           <div key={i} className="relative pl-10 border-l-4 border-gray-100 pb-8 group">
                             <div className={`absolute -left-[14px] top-1.5 w-5 h-5 rounded-full border-4 border-white shadow-md flex items-center justify-center transition-all group-hover:scale-110 ${ev.isKey ? 'bg-red-500 text-white' : 'bg-indigo-400 text-white'}`}>
                               {ev.isKey ? <AlertCircle size={10}/> : <Info size={10}/>}
@@ -407,9 +495,10 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                             </div>
                           </div>
                         ))
-                    )}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {activeTab === 'forms' && (
                   <FormManager patient={selectedPatient as any} historyText={selectedPatient.historyText} files={selectedPatient.files} timeline={selectedPatient?.timeline} />
