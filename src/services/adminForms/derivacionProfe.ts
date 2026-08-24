@@ -145,8 +145,10 @@ export const derivacionProfeDefinition: AdminFormDefinition = {
     const today = new Date().toLocaleDateString('es-AR');
     const p = context.patient || {};
 
+    const requestedMed = initialValues?.medicacion_solicitada || '';
+
     const baseData: Record<string, any> = {
-      medicacion_solicitada: initialValues?.medicacion_solicitada || '',
+      medicacion_solicitada: requestedMed,
       hospital: 'HOSPITAL ONCOLÓGICO PROVINCIAL DE CÓRDOBA',
       fecha: today,
       apellido_nombre: p.name || '',
@@ -167,12 +169,20 @@ export const derivacionProfeDefinition: AdminFormDefinition = {
     }
 
     try {
-      const drugHint = initialValues?.medicacion_solicitada ? `FÁRMACO ALTO COSTO SOLICITADO: ${initialValues.medicacion_solicitada}.` : '';
+      const drugInstruction = requestedMed
+        ? `MEDICACIÓN / FÁRMACO DE ALTO COSTO SOLICITADO POR EL MÉDICO ONCÓLOGO: "${requestedMed}".
+REGLAS CLÍNICAS OBLIGATORIAS:
+- "medicacion_solicitada": Usar EXACTAMENTE "${requestedMed}".
+- "tratamiento_propuesto": Redactar el esquema terapéutico directo con dosis mensual, vía, intervalos y justificación técnica para el Programa PROFE orientada específicamente a "${requestedMed}" (máximo 350 caracteres).
+- "resumen_semiologico": Resumen conciso del estado actual, ECOG, síntomas y hallazgos clave que fundamenten la indicación médica de "${requestedMed}" (máximo 400 caracteres).
+- "evolucion_pronostico": Evolución oncológica reciente y pronóstico esperado con el uso de "${requestedMed}" en 3 a 4 oraciones concisas (máximo 350 caracteres).`
+        : '';
 
       const prompt = `
 Actúa como oncólogo médico del Hospital Oncológico Provincial de Córdoba. Hoy es ${today}.
 Analizá la historia clínica y extraé los datos para completar el "Form 133.0 Planilla derivacion Profe - Medicación Alto Costo" (Ministerio de Salud de Córdoba / Programa Incluir Salud).
-${drugHint}
+
+${drugInstruction}
 
 DATOS DEL PACIENTE:
 - Nombre: ${baseData.apellido_nombre}
@@ -182,12 +192,12 @@ DATOS DEL PACIENTE:
 INSTRUCCIONES DE EXTRACCIÓN:
 Devuelve ÚNICAMENTE un objeto JSON válido con los siguientes campos en texto clínico claro, conciso y profesional en español:
 {
-  "medicacion_solicitada": "Nombre del fármaco de alto costo con dosis mensual sugerida (ej: Pembrolizumab 200 mg EV c/21 días)",
+  "medicacion_solicitada": "${requestedMed || 'Nombre del fármaco de alto costo con dosis mensual sugerida'}",
   "diagnostico": "Diagnóstico oncológico conciso con histopatología y estadificación (máximo 150 caracteres).",
   "antecedentes_heredofamiliares": "Antecedentes patológicos personales y heredofamiliares relevantes (máximo 250 caracteres).",
-  "resumen_semiologico": "Resumen conciso y directo del examen físico actual, ECOG, síntomas y hallazgos clave que justifiquen el requerimiento de alto costo (máximo 400 caracteres).",
-  "evolucion_pronostico": "Evolución oncológica reciente, respuesta previa y pronóstico esperado en 3 a 4 oraciones concisas (máximo 350 caracteres).",
-  "tratamiento_propuesto": "Esquema terapéutico directo con dosis mensual, vía, intervalos y justificación técnica en 3 a 4 oraciones (máximo 350 caracteres)."
+  "resumen_semiologico": "Resumen conciso y directo del examen físico actual, ECOG, síntomas y hallazgos clave que justifiquen el requerimiento de ${requestedMed || 'alto costo'} (máximo 400 caracteres).",
+  "evolucion_pronostico": "Evolución oncológica reciente, respuesta previa y pronóstico esperado con ${requestedMed || 'el tratamiento'} en 3 a 4 oraciones concisas (máximo 350 caracteres).",
+  "tratamiento_propuesto": "Esquema terapéutico directo con dosis mensual, vía, intervalos y justificación técnica para ${requestedMed || 'la medicación solicitada'} en 3 a 4 oraciones (máximo 350 caracteres)."
 }
 
 HISTORIA CLÍNICA Y TIMELINE:
@@ -207,7 +217,7 @@ ${context.historyText}
 
       return {
         ...baseData,
-        medicacion_solicitada: initialValues?.medicacion_solicitada || parsed.medicacion_solicitada || baseData.medicacion_solicitada,
+        medicacion_solicitada: requestedMed || parsed.medicacion_solicitada || baseData.medicacion_solicitada,
         diagnostico: parsed.diagnostico || baseData.diagnostico,
         antecedentes_heredofamiliares: parsed.antecedentes_heredofamiliares || '',
         resumen_semiologico: parsed.resumen_semiologico || '',

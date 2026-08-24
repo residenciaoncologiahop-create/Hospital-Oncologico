@@ -69,6 +69,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   const [showForm03StudyModal, setShowForm03StudyModal] = useState(false);
   const [form03StudyInput, setForm03StudyInput] = useState('');
 
+  // Modal para seleccionar/escribir la medicación de la Planilla PROFE 133
+  const [showProfeMedModal, setShowProfeMedModal] = useState(false);
+  const [profeMedInput, setProfeMedInput] = useState('');
+
   const handleStartAdminFormFlow = async (formDef: AdminFormDefinition, initialValues?: Record<string, any>) => {
     if (!hasClinicalData) {
       alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
@@ -79,6 +83,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     if (formDef.id === 'form03_practicas' && !initialValues?.solicitud_estudio) {
       setForm03StudyInput('');
       setShowForm03StudyModal(true);
+      return;
+    }
+
+    // Si es Planilla PROFE 133 y no viene medicación previa, abrir modal para que el médico la especifique
+    if (formDef.id === 'derivacion_profe_133' && !initialValues?.medicacion_solicitada) {
+      setProfeMedInput('');
+      setShowProfeMedModal(true);
       return;
     }
 
@@ -3433,6 +3444,108 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
                   }
                 }}
                 className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-black tracking-wider transition-all shadow-lg shadow-blue-200 flex items-center gap-2 disabled:opacity-50"
+              >
+                <Wand2 size={14} />
+                <span>Continuar y Redactar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PREGUNTAR MEDICACIÓN PARA PLANILLA PROFE 133 */}
+      {showProfeMedModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-50 text-indigo-700 rounded-2xl border border-indigo-100">
+                  <Pill size={20} />
+                </div>
+                <div>
+                  <span className="text-[9px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase tracking-wider">
+                    Form. 133.0 PROFE
+                  </span>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide mt-1">
+                    Medicación Oncológica de Alto Costo
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowProfeMedModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-all"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-black text-slate-800 uppercase tracking-wide block mb-1">
+                  ¿Qué medicación desea solicitar?
+                </label>
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                  Seleccione una opción o escriba el fármaco/esquema. El sistema redactará la justificación técnica, evolución mensual y dosis orientadas a esta medicación.
+                </p>
+              </div>
+
+              {/* Sugerencias rápidas habituales */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[
+                  'Pembrolizumab 200 mg EV c/21 días',
+                  'Trastuzumab emtansina (T-DM1) 160 mg EV',
+                  'Letrozol 2.5 mg/día VO',
+                  'Palbociclib 125 mg/día VO + Fulvestrant',
+                  'Osimertinib 80 mg/día VO',
+                  'Nivolumab 240 mg EV c/14 días',
+                  'Ribociclib 600 mg/día VO + Letrozol',
+                  'Bevacizumab 7.5 mg/kg EV c/21 días'
+                ].map((sug, sIdx) => (
+                  <button
+                    key={sIdx}
+                    type="button"
+                    onClick={() => setProfeMedInput(sug)}
+                    className={`text-[10px] font-bold px-2.5 py-1.5 rounded-xl border transition-all text-left
+                      ${profeMedInput === sug
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}`}
+                  >
+                    {sug}
+                  </button>
+                ))}
+              </div>
+
+              <div className="pt-2">
+                <input
+                  type="text"
+                  autoFocus
+                  value={profeMedInput}
+                  onChange={e => setProfeMedInput(e.target.value)}
+                  placeholder="Escriba o ajuste el fármaco y dosis a solicitar..."
+                  className="w-full text-xs p-3 rounded-xl border border-gray-300 font-bold text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-3 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowProfeMedModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!profeMedInput.trim()}
+                onClick={() => {
+                  const profeDef = ADMIN_FORMS_REGISTRY.find(f => f.id === 'derivacion_profe_133');
+                  if (profeDef && profeMedInput.trim()) {
+                    setShowProfeMedModal(false);
+                    handleStartAdminFormFlow(profeDef, { medicacion_solicitada: profeMedInput.trim() });
+                  }
+                }}
+                className="px-5 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-black tracking-wider transition-all shadow-lg shadow-indigo-200 flex items-center gap-2 disabled:opacity-50"
               >
                 <Wand2 size={14} />
                 <span>Continuar y Redactar</span>
