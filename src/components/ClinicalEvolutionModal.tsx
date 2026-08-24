@@ -206,20 +206,20 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
                 <CheckCircle2 size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
                 <div className="text-xs text-blue-950 space-y-1">
                   <p className="font-bold uppercase tracking-wider text-[10px] text-blue-800">
-                    1. Resumen de Historia Clínica (Recuperado automáticamente)
+                    Antecedentes del Paciente (Recuperados automáticamente)
                   </p>
                   <p className="text-gray-600 leading-relaxed text-[11px]">
-                    El diagnóstico, antecedentes, cirugías y tratamientos documentados del paciente se integran de manera automática para contextualizar la evolución sin que debas volver a cargarlos.
+                    El diagnóstico, antecedentes, cirugías y tratamientos documentados del paciente se integran de manera automática para contextualizar el párrafo inicial sin que debas volver a cargarlos.
                   </p>
                 </div>
               </div>
 
-              {/* Sección 2: Estudios que trae */}
+              {/* Sección: Estudios que trae */}
               <div className="bg-gray-50/80 border border-gray-200/80 rounded-2xl p-5 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>2. Estudios que trae el paciente</span>
+                      <span>Estudios que trae el paciente</span>
                     </h4>
                     <p className="text-[11px] text-gray-500">
                       Adjuntá los informes (PDF o imágenes). El contenido relevante se transcribirá literalmente sin alterar la redacción original.
@@ -279,10 +279,10 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
                 )}
               </div>
 
-              {/* Sección 3: Actualidad del paciente */}
+              {/* Sección: Actualidad del paciente */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-black text-gray-700 uppercase tracking-wider">
-                  3. Actualidad del Paciente (Consulta del día)
+                  Actualidad del Paciente (Consulta del día)
                 </label>
                 <p className="text-[11px] text-gray-400 font-medium">
                   Situación clínica actual, síntomas, tolerancia a tratamientos, toxicidad o comentarios del paciente.
@@ -295,11 +295,11 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
                 />
               </div>
 
-              {/* Sección 4: Examen Físico (EF) */}
+              {/* Sección: Examen Físico (EF) */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-black text-gray-700 uppercase tracking-wider">
-                    4. Examen Físico (EF)
+                    EF (Examen Físico)
                   </label>
                   <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
                     <ShieldAlert size={12} /> No inventar hallazgos
@@ -316,10 +316,10 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
                 />
               </div>
 
-              {/* Sección 5: Plan */}
+              {/* Sección: Plan */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-black text-gray-700 uppercase tracking-wider">
-                  5. Plan Definido en la Consulta
+                  Plan Definido en la Consulta
                 </label>
                 <p className="text-[11px] text-gray-400 font-medium">
                   Conducta terapéutica, continuidad de esquema, estudios solicitados, pautas de alarma y próxima cita.
