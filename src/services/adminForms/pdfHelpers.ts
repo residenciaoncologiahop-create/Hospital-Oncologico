@@ -72,6 +72,61 @@ export const drawOnLines = (
   }
 };
 
+export const drawOnLinesFitted = (
+  page: PDFPage,
+  text: string,
+  lines: LineSpec[],
+  font: PDFFont,
+  initialFontSize = 7.8,
+  minFontSize = 5.5,
+  color = rgb(0, 0, 0)
+) => {
+  if (!text?.trim() || lines.length === 0) return;
+
+  const words = text.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim().split(' ');
+
+  // Buscar el tamaño de fuente óptimo para que entren todas las palabras en las líneas disponibles
+  let bestFontSize = minFontSize;
+  for (let sz = initialFontSize; sz >= minFontSize; sz = Math.round((sz - 0.2) * 10) / 10) {
+    let wordIdx = 0;
+    let fits = false;
+
+    for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+      const line = lines[lineIdx];
+      let currentLineText = '';
+
+      while (wordIdx < words.length) {
+        const nextWord = words[wordIdx];
+        const testText = currentLineText ? `${currentLineText} ${nextWord}` : nextWord;
+        const testWidth = font.widthOfTextAtSize(testText, sz);
+
+        if (testWidth <= line.width) {
+          currentLineText = testText;
+          wordIdx++;
+        } else {
+          if (!currentLineText) {
+            currentLineText = nextWord;
+            wordIdx++;
+          }
+          break;
+        }
+      }
+
+      if (wordIdx >= words.length) {
+        fits = true;
+        break;
+      }
+    }
+
+    if (fits) {
+      bestFontSize = sz;
+      break;
+    }
+  }
+
+  drawOnLines(page, text, lines, font, bestFontSize, color);
+};
+
 export const drawTextAt = (
   page: PDFPage,
   text: string,

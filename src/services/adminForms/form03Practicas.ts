@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../../utils/aiProxy';
 import { AdminFormDefinition, AdminFormContext } from './types';
-import { drawOnLines, drawTextAt, drawMark, cleanDate } from './pdfHelpers';
+import { drawOnLines, drawOnLinesFitted, drawTextAt, drawMark, cleanDate } from './pdfHelpers';
 
 export const form03PracticasDefinition: AdminFormDefinition = {
   id: 'form03_practicas',
@@ -23,28 +23,23 @@ export const form03PracticasDefinition: AdminFormDefinition = {
       rows: 2,
       gridSpan: 12,
       group: '1. Datos de la Solicitud',
-      helperText: 'Especifique con precisión la práctica, estudio o biopsia solicitada.'
+      description: 'Estudio o práctica de alta complejidad a realizar fuera del establecimiento.'
+    },
+    {
+      key: 'codigo_decreto',
+      label: 'Código según Decreto',
+      type: 'text',
+      placeholder: 'Opcional (código nomenclador si aplica)',
+      required: false,
+      gridSpan: 4,
+      group: '1. Datos de la Solicitud'
     },
     {
       key: 'caracter_atencion',
       label: 'Carácter de la Atención',
       type: 'select',
-      defaultValue: 'Ambulatorio',
+      options: ['Ambulatorio', 'Estabilizado', 'Urgencia', 'Emergencia'],
       required: true,
-      options: [
-        { label: 'Ambulatorio', value: 'Ambulatorio' },
-        { label: 'Urgencia', value: 'Urgencia' },
-        { label: 'Emergencia', value: 'Emergencia' },
-        { label: 'Estabilizado', value: 'Estabilizado' }
-      ],
-      gridSpan: 4,
-      group: '1. Datos de la Solicitud'
-    },
-    {
-      key: 'numero_derivacion',
-      label: 'N° de Derivación (Opcional)',
-      type: 'text',
-      placeholder: 'Ej: 0425-...',
       gridSpan: 4,
       group: '1. Datos de la Solicitud'
     },
@@ -57,78 +52,76 @@ export const form03PracticasDefinition: AdminFormDefinition = {
       group: '1. Datos de la Solicitud'
     },
     {
+      key: 'numero_derivacion',
+      label: 'Número de Derivación',
+      type: 'text',
+      placeholder: 'N° asignado por el servicio',
+      gridSpan: 4,
+      group: '1. Datos de la Solicitud'
+    },
+    {
+      key: 'fecha_internacion',
+      label: 'Fecha Internación (si corresponde)',
+      type: 'date',
+      gridSpan: 4,
+      group: '1. Datos de la Solicitud'
+    },
+    {
+      key: 'condicion_obra_social',
+      label: 'Condición Social / Cobertura',
+      type: 'text',
+      placeholder: 'Ej: Sin Cobertura (Programa Provincial), PROFE, etc.',
+      required: true,
+      gridSpan: 4,
+      group: '1. Datos de la Solicitud'
+    },
+    {
       key: 'establecimiento',
       label: 'Establecimiento Solicitante',
       type: 'text',
-      defaultValue: 'HOSPITAL ONCOLÓGICO PROVINCIAL',
       required: true,
       gridSpan: 6,
-      group: '2. Datos del Paciente e Institución'
+      group: '1. Datos de la Solicitud'
     },
     {
       key: 'servicio',
-      label: 'Servicio',
+      label: 'Servicio Solicitante',
       type: 'text',
-      defaultValue: 'ONCOLOGÍA CLÍNICA',
       required: true,
       gridSpan: 6,
-      group: '2. Datos del Paciente e Institución'
+      group: '1. Datos de la Solicitud'
     },
     {
       key: 'apellido_nombre',
       label: 'Apellido y Nombre del Paciente',
       type: 'text',
       required: true,
-      gridSpan: 6,
-      group: '2. Datos del Paciente e Institución'
+      gridSpan: 8,
+      group: '2. Filiación del Paciente'
     },
     {
       key: 'tipo_nro_documento',
-      label: 'Tipo y N° Documento',
+      label: 'Tipo y N° de Documento',
       type: 'text',
       required: true,
-      gridSpan: 6,
-      group: '2. Datos del Paciente e Institución'
-    },
-    {
-      key: 'condicion_obra_social',
-      label: 'Condición Social / Obra Social',
-      type: 'text',
-      placeholder: 'Ej: Sin cobertura / PROFE / APROSS...',
-      gridSpan: 6,
-      group: '2. Datos del Paciente e Institución'
-    },
-    {
-      key: 'fecha_internacion',
-      label: 'Fecha Internación (si corresponde)',
-      type: 'text',
-      placeholder: 'DD/MM/AAAA',
-      gridSpan: 6,
-      group: '2. Datos del Paciente e Institución'
+      gridSpan: 4,
+      group: '2. Filiación del Paciente'
     },
     {
       key: 'diagnostico_presuntivo',
-      label: 'Diagnóstico Presuntivo / Clínico',
+      label: 'Diagnóstico Presuntivo / Histológico',
       type: 'textarea',
-      placeholder: 'Diagnóstico oncológico, subtipo histológico y estadificación...',
+      placeholder: 'Diagnóstico oncológico completo, estadio y subtipo histológico...',
       required: true,
       rows: 2,
       gridSpan: 12,
       group: '3. Fundamentación Clínica'
     },
     {
-      key: 'codigo_decreto',
-      label: 'Código según Decreto (Opcional)',
-      type: 'text',
-      placeholder: 'Código de nomenclador...',
-      gridSpan: 4,
-      group: '3. Fundamentación Clínica'
-    },
-    {
       key: 'estudios_previos',
       label: 'Estudios Previos Efectuados y Resultados',
       type: 'textarea',
-      placeholder: 'Imágenes previas, laboratorios, biopsia, etc.',
+      placeholder: 'Resumen cronológico de biopsias, imágenes (TAC/RMN) y laboratorios previos...',
       required: true,
       rows: 3,
       gridSpan: 12,
@@ -138,7 +131,7 @@ export const form03PracticasDefinition: AdminFormDefinition = {
       key: 'fundamentos_pedido',
       label: 'Fundamentos del Pedido y Plan Terapéutico (Epicrisis)',
       type: 'textarea',
-      placeholder: 'Justificación médica del estudio y conducta terapéutica posterior...',
+      placeholder: 'Justificación médica, motivo por el cual se solicita este estudio y conducta terapéutica planeada...',
       required: true,
       rows: 4,
       gridSpan: 12,
@@ -146,9 +139,9 @@ export const form03PracticasDefinition: AdminFormDefinition = {
     },
     {
       key: 'observaciones',
-      label: 'Observaciones / Requisitos Especiales',
+      label: 'Observaciones (A completar a demanda del médico)',
       type: 'textarea',
-      placeholder: 'Aclaraciones adicionales, preparación del paciente, etc.',
+      placeholder: 'Aclaraciones adicionales, preparación especial, creatinina/función renal, etc. (Opcional)',
       rows: 2,
       gridSpan: 12,
       group: '3. Fundamentación Clínica'
@@ -177,7 +170,7 @@ export const form03PracticasDefinition: AdminFormDefinition = {
       codigo_decreto: '',
       estudios_previos: '',
       fundamentos_pedido: '',
-      observaciones: ''
+      observaciones: initialValues?.observaciones || ''
     };
 
     if (!context.historyText && (!context.timeline || context.timeline.length === 0)) {
@@ -187,7 +180,7 @@ export const form03PracticasDefinition: AdminFormDefinition = {
     try {
       const studyInstruction = requestedStudy
         ? `ESTUDIO O PRÁCTICA EXTRAHOSPITALARIA SOLICITADA POR EL MÉDICO: "${requestedStudy}".
-Todos los fundamentos, epicrisis, antecedentes de estudios previos y observaciones DEBEN redactarse orientados de forma directa y específica a justificar técnicamente la necesidad de realizar "${requestedStudy}" para la patología y evolución de este paciente.`
+Todos los fundamentos, epicrisis y antecedentes de estudios previos DEBEN redactarse orientados de forma directa y específica a justificar técnicamente la necesidad de realizar "${requestedStudy}" para la patología y evolución de este paciente.`
         : '';
 
       const prompt = `
@@ -207,9 +200,10 @@ Devuelve ÚNICAMENTE un objeto JSON válido con los siguientes campos en texto p
   "diagnostico_presuntivo": "Diagnóstico oncológico completo con estadío clínico y subtipo histológico.",
   "solicitud_estudio": "${requestedStudy || 'Práctica o estudio de alta complejidad solicitado'}",
   "estudios_previos": "Resumen cronológico conciso de biopsias, TAC, RMN, laboratorios y estudios relevantes previos que anteceden y fundamentan la práctica.",
-  "fundamentos_pedido": "Justificación clínica sólida y plan terapéutico (epicrisis) que fundamentan de manera directa la necesidad del estudio (${requestedStudy || 'solicitado'}) y su impacto en la conducta oncológica.",
-  "observaciones": "Observaciones clínicas pertinentes al estudio (${requestedStudy || ''}) como función renal/creatinina, contraste, alergias, ECOG, etc."
+  "fundamentos_pedido": "Justificación clínica sólida y concisa en un máximo de 3 a 5 oraciones claras (máximo 400 caracteres) que fundamente técnicamente la necesidad del estudio (${requestedStudy || 'solicitado'}) y su impacto en la conducta oncológica para que encaje de forma completa en el espacio asignado."
 }
+
+NOTA IMPORTANTE: No incluyas ni completes el campo 'observaciones' (el médico lo completará a demanda si lo requiere).
 
 HISTORIA CLÍNICA Y EVOLUCIONES:
 ${context.historyText}
@@ -232,7 +226,7 @@ ${context.historyText}
         solicitud_estudio: requestedStudy || parsed.solicitud_estudio || baseData.solicitud_estudio,
         estudios_previos: parsed.estudios_previos || '',
         fundamentos_pedido: parsed.fundamentos_pedido || '',
-        observaciones: parsed.observaciones || ''
+        observaciones: initialValues?.observaciones || ''
       };
     } catch {
       return baseData;
@@ -294,57 +288,49 @@ ${context.historyText}
     else if (caracter === 'Estabilizado') drawMark(page, 343, 624, 10, fontBold, textColor);
     else drawMark(page, 452, 624, 10, fontBold, textColor); // Ambulatorio
 
-    // 8. Diagnóstico Presuntivo (3 líneas)
-    const diagText = data.diagnostico_presuntivo || '';
-    const diagFontSize = diagText.length > 180 ? 7.2 : 7.8;
-    drawOnLines(page, diagText, [
+    // 8. Diagnóstico Presuntivo (3 líneas con ajuste dinámico de tamaño para evitar desbordes)
+    drawOnLinesFitted(page, data.diagnostico_presuntivo || '', [
       { x: 125, y: 586.99 + 2, width: 440 },
       { x: 63.864, y: 564.91 + 2, width: 505 },
       { x: 63.864, y: 542.83 + 2, width: 505 }
-    ], font, diagFontSize, textColor);
+    ], font, 7.8, 5.8, textColor);
 
-    // 9. Solicitud de estudio (3 líneas)
-    const solText = data.solicitud_estudio || '';
-    const solFontSize = solText.length > 120 ? 7.5 : 8.0;
-    drawOnLines(page, solText, [
+    // 9. Solicitud de estudio (3 líneas con ajuste dinámico de tamaño)
+    drawOnLinesFitted(page, data.solicitud_estudio || '', [
       { x: 160, y: 520.75 + 2, width: 405 },
       { x: 63.864, y: 498.67 + 2, width: 505 },
       { x: 63.864, y: 476.47 + 2, width: 505 }
-    ], fontBold, solFontSize, textColor);
+    ], fontBold, 8.0, 6.0, textColor);
 
     // 10. Código según decreto
     drawTextAt(page, data.codigo_decreto || '', 175, 454.39 + 2, font, 8, textColor);
 
-    // 11. Estudios Previos Efectuados y Resultados (5 líneas)
-    const prevText = data.estudios_previos || '';
-    const prevFontSize = prevText.length > 350 ? 7.0 : 7.5;
-    drawOnLines(page, prevText, [
+    // 11. Estudios Previos Efectuados y Resultados (5 líneas con ajuste dinámico de tamaño para entrar al 100%)
+    drawOnLinesFitted(page, data.estudios_previos || '', [
       { x: 265, y: 418.85 + 2, width: 300 },
       { x: 63.864, y: 396.77 + 2, width: 505 },
       { x: 63.864, y: 374.69 + 2, width: 505 },
       { x: 63.864, y: 352.61 + 2, width: 505 },
       { x: 63.864, y: 330.53 + 2, width: 505 }
-    ], font, prevFontSize, textColor);
+    ], font, 7.5, 5.5, textColor);
 
-    // 12. Fundamentos del Pedido y Plan Terapéutico (Epicrisis) (5 líneas debajo del título)
-    const fundText = data.fundamentos_pedido || '';
-    const fundFontSize = fundText.length > 380 ? 7.0 : 7.5;
-    drawOnLines(page, fundText, [
+    // 12. Fundamentos del Pedido y Plan Terapéutico / Epicrisis (5 líneas con ajuste dinámico de tamaño para entrar al 100%)
+    drawOnLinesFitted(page, data.fundamentos_pedido || '', [
       { x: 63.864, y: 294.29 + 2, width: 505 },
       { x: 63.864, y: 272.18 + 2, width: 505 },
       { x: 63.864, y: 250.10 + 2, width: 505 },
       { x: 63.864, y: 227.90 + 2, width: 505 },
       { x: 63.864, y: 205.82 + 2, width: 505 }
-    ], font, fundFontSize, textColor);
+    ], font, 7.5, 5.5, textColor);
 
-    // 13. Observaciones (3 líneas)
-    const obsText = data.observaciones || '';
-    const obsFontSize = obsText.length > 220 ? 7.0 : 7.5;
-    drawOnLines(page, obsText, [
-      { x: 145, y: 183.74 + 2, width: 420 },
-      { x: 63.864, y: 161.66 + 2, width: 505 },
-      { x: 63.864, y: 139.58 + 2, width: 505 }
-    ], font, obsFontSize, textColor);
+    // 13. Observaciones (3 líneas - Se dibuja ÚNICAMENTE si el médico completó algo a demanda)
+    if (data.observaciones && data.observaciones.trim()) {
+      drawOnLinesFitted(page, data.observaciones, [
+        { x: 145, y: 183.74 + 2, width: 420 },
+        { x: 63.864, y: 161.66 + 2, width: 505 },
+        { x: 63.864, y: 139.58 + 2, width: 505 }
+      ], font, 7.5, 5.5, textColor);
+    }
 
     // 14. Firmas al pie
     const docName = context.doctorData?.nombre || '';
