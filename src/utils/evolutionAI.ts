@@ -17,9 +17,8 @@ REGLAS DE FORMATO Y ESTRUCTURA OBLIGATORIA:
 
 1. PROHIBIDO NUMERAR LOS SUBTÍTULOS: No uses números (nada de "1.", "2.", "3.", etc.).
 2. SIN TÍTULO DE RESUMEN AL INICIO: La evolución comienza DIRECTAMENTE con el texto de resumen e historia clínica (párrafo introductorio sin encabezado como "RESUMEN DE HISTORIA CLÍNICA").
-3. ENCABEZADOS PERMITIDOS (en mayúsculas, sin números):
+3. ENCABEZADOS PERMITIDOS (únicamente estos en mayúsculas, sin números):
    - ESTUDIOS QUE TRAE
-   - ACTUALIDAD DEL PACIENTE
    - EF
    - PLAN
 
@@ -33,8 +32,9 @@ REGLAS DE FORMATO Y ESTRUCTURA OBLIGATORIA:
    - Si no trae estudios nuevos o no se adjuntó ninguno: Escribir exactamente "No presenta estudios nuevos." debajo de ESTUDIOS QUE TRAE.
    - PROHIBIDO modificar, parafrasear, interpretar o inventar resultados de los estudios adjuntos.
 
-5. ACTUALIDAD DEL PACIENTE:
-   - Situación clínica actual, síntomas y datos de la consulta referidos por el médico.
+5. ACTUALIDAD DEL PACIENTE (SIN TÍTULO):
+   - PROHIBIDO escribir el título "ACTUALIDAD DEL PACIENTE".
+   - En su lugar, después de la sección de estudios que trae, redactar DIRECTAMENTE un párrafo que comience con la frase "Actualmente el paciente presenta..." (o "Actualmente la paciente presenta..." según el género del paciente), integrando textualmente lo que el médico haya indicado para la consulta de hoy.
 
 6. EF:
    - Examen físico del día. Consignar ÚNICAMENTE los hallazgos ingresados por el médico tratante. NO inventar ningún dato ni signos vitales.
@@ -52,8 +52,7 @@ ESTUDIOS QUE TRAE
 - [Fecha] [Nombre del estudio]: [Contenido literal del informe]
 - [Fecha] Laboratorio: Hb ... / HTO ...% / GB ... / NS ...% / Plaq ... / Gluc ... / Creat ... / Uremia ... / GOT ... / GPT ... / FAL ... / BT ... (BD ... / BI ...) / ...
 
-ACTUALIDAD DEL PACIENTE
-[Texto de actualidad de la consulta]
+Actualmente el/la paciente presenta [o refiere] [lo que el médico inserte en la actualidad]
 
 EF
 [Hallazgos de examen físico]
@@ -90,8 +89,8 @@ ${noNewStudies || attachedFiles.length === 0
   : `El médico adjuntó ${attachedFiles.length} archivo(s) con estudios/informes del paciente. Lee cada archivo, identifica el estudio y fecha, y transcríbelo con el formato requerido (- [Fecha] [Nombre de estudio]: [Contenido]). Si es un laboratorio, usa el formato sintético con barras (/): - [Fecha] Laboratorio: Hb ... / HTO ...% / GB ... / NS ...% / Plaq ... / Gluc ... / Creat ... / Uremia ... / GOT ... / GPT ... / FAL ... / BT ... (BD ... / BI ...) / ...`}
 
 === DATOS DE LA CONSULTA ACTUAL APORTADOS POR EL MÉDICO ===
-- ACTUALIDAD DEL PACIENTE / SÍNTOMAS:
-${actualidad.trim() ? actualidad.trim() : 'No se refieren síntomas agudos en la consulta actual.'}
+- ACTUALIDAD (REDACTAR INICIANDO DIRECTAMENTE CON "Actualmente el/la paciente presenta..." SIN TÍTULO DE ACTUALIDAD):
+${actualidad.trim() ? actualidad.trim() : 'No refiere síntomas agudos en la consulta actual.'}
 
 - EF (EXAMEN FÍSICO DEL DÍA):
 ${examenFisico.trim() ? examenFisico.trim() : 'No se registran datos adicionales de examen físico.'}
@@ -100,10 +99,11 @@ ${examenFisico.trim() ? examenFisico.trim() : 'No se registran datos adicionales
 ${plan.trim() ? plan.trim() : 'Continuar seguimiento según esquema pautado.'}
 
 RECUERDA:
-1. Comienza DIRECTAMENTE con el texto de resumen clínico, SIN encabezado "RESUMEN DE HISTORIA CLÍNICA" ni números.
-2. Los siguientes encabezados NO llevan números: ESTUDIOS QUE TRAE, ACTUALIDAD DEL PACIENTE, EF, PLAN.
-3. Para cada estudio usa el formato "- [Fecha] [Nombre]: [Contenido]" y para laboratorios el formato con "/".
-4. No inventes ningún dato.
+1. Comienza DIRECTAMENTE con el texto de resumen clínico, SIN encabezado ni números.
+2. Encabezado "ESTUDIOS QUE TRAE" con los estudios formateados con "-" (o "No presenta estudios nuevos.").
+3. SUPRIME el título de actualidad: comienza directamente con "Actualmente el paciente presenta..." (o "Actualmente la paciente presenta...").
+4. Encabezados "EF" y "PLAN" sin números.
+5. No inventes ningún dato.
 `.trim();
 
   const parts = buildParts(promptContent, noNewStudies ? [] : attachedFiles);
