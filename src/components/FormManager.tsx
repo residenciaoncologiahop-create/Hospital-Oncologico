@@ -4,6 +4,9 @@ import {
 } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../utils/aiProxy';
+import { ADMIN_FORMS_REGISTRY } from '../services/adminForms/registry';
+import { AdminFormDefinition, AdminFormContext } from '../services/adminForms/types';
+import AdminFormReviewModal from './adminForms/AdminFormReviewModal';
 
 interface FormManagerProps {
   patient: any;
@@ -55,6 +58,41 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   });
   const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
   const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
+
+  // Estados y flujo para Nuevos Formularios Administrativos Modulares
+  const [selectedAdminForm, setSelectedAdminForm] = useState<AdminFormDefinition | null>(null);
+  const [adminFormData, setAdminFormData] = useState<Record<string, any>>({});
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [adminProcessingId, setAdminProcessingId] = useState<string | null>(null);
+
+  const handleStartAdminFormFlow = async (formDef: AdminFormDefinition) => {
+    if (!hasClinicalData) {
+      alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
+      return;
+    }
+
+    setAdminProcessingId(formDef.id);
+    setStatus(`Analizando historia clínica para ${formDef.shortName}...`);
+    try {
+      const adminContext: AdminFormContext = {
+        patient,
+        historyText: getEffectiveClinicalContext(),
+        timeline: timeline || patient?.timeline || [],
+        files,
+        doctorData
+      };
+
+      const extracted = await formDef.extractData(adminContext);
+      setAdminFormData(extracted);
+      setSelectedAdminForm(formDef);
+      setAdminModalOpen(true);
+    } catch (e: any) {
+      alert(`Error al preparar el formulario ${formDef.shortName}: ${e.message}`);
+    } finally {
+      setAdminProcessingId(null);
+      setStatus('');
+    }
+  };
 
   // PAMI State
   const [showPamiReviewModal, setShowPamiReviewModal] = useState(false);
@@ -2007,6 +2045,62 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
         })}
       </div>
 
+      {/* SECCIÓN INDEPENDIENTE: FORMULARIOS ADMINISTRATIVOS Y DERIVACIONES */}
+      <div className="mt-8 pt-6 border-t border-gray-200 space-y-4">
+        <div>
+          <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+            <FileText size={16} className="text-blue-600"/>
+            <span>Formularios Administrativos y Derivaciones</span>
+          </h3>
+          <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+            Solicitudes de prácticas extrahospitalarias de alta complejidad, pedidos de medicación y programas especiales.
+          </p>
+        </div>
+
+        <div className="grid gap-4">
+          {ADMIN_FORMS_REGISTRY.map(formDef => {
+            const isProcessing = adminProcessingId === formDef.id;
+
+            return (
+              <div key={formDef.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 hover:border-blue-200 transition-all shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-blue-50 text-blue-700 rounded-lg">
+                      <FileText size={18} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wide">{formDef.name}</h4>
+                        <span className="text-[9px] font-black bg-slate-100 text-slate-700 px-2 py-0.5 rounded uppercase">
+                          {formDef.code}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-gray-500">{formDef.description}</span>
+                    </div>
+                  </div>
+                  {isProcessing ? (
+                    <Loader2 className="animate-spin text-blue-600" size={18}/>
+                  ) : (
+                    <CheckCircle2 className="text-gray-200" size={18}/>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleStartAdminFormFlow(formDef)}
+                    disabled={adminProcessingId !== null || processingId !== null}
+                    className="flex-1 min-w-[140px] flex items-center justify-center space-x-1.5 text-white py-2 px-3 rounded-lg text-xs font-bold bg-blue-700 hover:bg-blue-800 transition-all disabled:opacity-50"
+                  >
+                    {isProcessing ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>}
+                    <span>Completar y Generar PDF</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* MODAL DE REVISIÓN SIMPLIFICADO: FORMULARIO PAMI ONCOLÓGICO */}
       {showPamiReviewModal && (() => {
         const justificationLength = (pamiFormData.informe_clinico_detallado || '').length;
@@ -3227,6 +3321,26 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
             </button>
           </div>
         </div>
+      )}
+
+      {/* MODAL DE REVISIÓN Y EMISIÓN PARA FORMULARIOS ADMINISTRATIVOS */}
+      {selectedAdminForm && (
+        <AdminFormReviewModal
+          formDef={selectedAdminForm}
+          isOpen={adminModalOpen}
+          onClose={() => {
+            setAdminModalOpen(false);
+            setSelectedAdminForm(null);
+          }}
+          initialData={adminFormData}
+          context={{
+            patient,
+            historyText: getEffectiveClinicalContext(),
+            timeline: timeline || patient?.timeline || [],
+            files,
+            doctorData
+          }}
+        />
       )}
 
     </div>
