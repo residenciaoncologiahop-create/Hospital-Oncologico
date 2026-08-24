@@ -160,6 +160,8 @@ export const form03PracticasDefinition: AdminFormDefinition = {
     const p = context.patient || {};
     const doc = context.doctorData || {};
 
+    const requestedStudy = initialValues?.solicitud_estudio || '';
+
     const baseData: Record<string, any> = {
       establecimiento: 'HOSPITAL ONCOLÓGICO PROVINCIAL',
       servicio: doc.especialidad || 'ONCOLOGÍA CLÍNICA',
@@ -171,7 +173,7 @@ export const form03PracticasDefinition: AdminFormDefinition = {
       condicion_obra_social: p.healthInsurance || 'Sin Cobertura (Programa Provincial)',
       caracter_atencion: 'Ambulatorio',
       diagnostico_presuntivo: p.diagnosis || '',
-      solicitud_estudio: initialValues?.solicitud_estudio || '',
+      solicitud_estudio: requestedStudy,
       codigo_decreto: '',
       estudios_previos: '',
       fundamentos_pedido: '',
@@ -183,9 +185,16 @@ export const form03PracticasDefinition: AdminFormDefinition = {
     }
 
     try {
+      const studyInstruction = requestedStudy
+        ? `ESTUDIO O PRÁCTICA EXTRAHOSPITALARIA SOLICITADA POR EL MÉDICO: "${requestedStudy}".
+Todos los fundamentos, epicrisis, antecedentes de estudios previos y observaciones DEBEN redactarse orientados de forma directa y específica a justificar técnicamente la necesidad de realizar "${requestedStudy}" para la patología y evolución de este paciente.`
+        : '';
+
       const prompt = `
 Actúa como oncólogo médico del Hospital Oncológico Provincial de Córdoba. Hoy es ${today}.
 Analizá la historia clínica y extraé información precisa para completar el formulario oficial de "SOLICITUD DE PRÁCTICAS ESPECIALIZADAS EXTRAHOSPITALARIAS" (Form. 03 - Ministerio de Salud de Córdoba).
+
+${studyInstruction}
 
 DATOS DEL PACIENTE:
 - Nombre: ${baseData.apellido_nombre}
@@ -196,10 +205,10 @@ INSTRUCCIONES DE EXTRACCIÓN:
 Devuelve ÚNICAMENTE un objeto JSON válido con los siguientes campos en texto plano y profesional en español:
 {
   "diagnostico_presuntivo": "Diagnóstico oncológico completo con estadío clínico y subtipo histológico.",
-  "solicitud_estudio": "Práctica o estudio de alta complejidad sugerido según la última evolución (ej: PET/TC con 18F-FDG, RMN SNC, etc. Si no se especifica, dejar vacío).",
-  "estudios_previos": "Resumen cronológico conciso de biopsias, TAC, RMN, laboratorios y estudios relevantes previos con sus fechas y hallazgos clave.",
-  "fundamentos_pedido": "Justificación clínica sólida para solicitar la práctica extrahospitalaria y su impacto en la toma de decisión o plan terapéutico.",
-  "observaciones": "Observaciones clínicas pertinentes (ej: creatinina normal, requiere contraste, alergias, ECOG, etc.)."
+  "solicitud_estudio": "${requestedStudy || 'Práctica o estudio de alta complejidad solicitado'}",
+  "estudios_previos": "Resumen cronológico conciso de biopsias, TAC, RMN, laboratorios y estudios relevantes previos que anteceden y fundamentan la práctica.",
+  "fundamentos_pedido": "Justificación clínica sólida y plan terapéutico (epicrisis) que fundamentan de manera directa la necesidad del estudio (${requestedStudy || 'solicitado'}) y su impacto en la conducta oncológica.",
+  "observaciones": "Observaciones clínicas pertinentes al estudio (${requestedStudy || ''}) como función renal/creatinina, contraste, alergias, ECOG, etc."
 }
 
 HISTORIA CLÍNICA Y EVOLUCIONES:
@@ -220,7 +229,7 @@ ${context.historyText}
       return {
         ...baseData,
         diagnostico_presuntivo: parsed.diagnostico_presuntivo || baseData.diagnostico_presuntivo,
-        solicitud_estudio: initialValues?.solicitud_estudio || parsed.solicitud_estudio || baseData.solicitud_estudio,
+        solicitud_estudio: requestedStudy || parsed.solicitud_estudio || baseData.solicitud_estudio,
         estudios_previos: parsed.estudios_previos || '',
         fundamentos_pedido: parsed.fundamentos_pedido || '',
         observaciones: parsed.observaciones || ''
@@ -243,98 +252,98 @@ ${context.historyText}
     const textColor = rgb(0, 0, 0);
 
     // 1. Número de Derivación (superior derecho)
-    drawTextAt(page, data.numero_derivacion || '', 535, 809.64, fontBold, 8.5, textColor);
+    drawTextAt(page, data.numero_derivacion || '', 535, 809.64 + 2, fontBold, 8.5, textColor);
 
     // 2. Fecha de Emisión (encolumnada sobre las barras de fecha)
     const emisionClean = cleanDate(data.fecha_emision) || data.fecha_emision || '';
     const emisionParts = emisionClean.split('/');
     if (emisionParts.length === 3) {
-      drawTextAt(page, emisionParts[0], 474, 787.56, fontBold, 8.5, textColor);
-      drawTextAt(page, emisionParts[1], 506, 787.56, fontBold, 8.5, textColor);
-      drawTextAt(page, emisionParts[2], 536, 787.56, fontBold, 8.5, textColor);
+      drawTextAt(page, emisionParts[0], 474, 787.56 + 2, fontBold, 8.5, textColor);
+      drawTextAt(page, emisionParts[1], 506, 787.56 + 2, fontBold, 8.5, textColor);
+      drawTextAt(page, emisionParts[2], 536, 787.56 + 2, fontBold, 8.5, textColor);
     } else if (emisionClean) {
-      drawTextAt(page, emisionClean, 474, 787.56, fontBold, 8.5, textColor);
+      drawTextAt(page, emisionClean, 474, 787.56 + 2, fontBold, 8.5, textColor);
     }
 
     // 3. Establecimiento y Servicio (sobre las líneas punteadas oficiales)
-    drawTextAt(page, data.establecimiento || 'HOSPITAL ONCOLÓGICO PROVINCIAL', 160, 733.9, fontBold, 8, textColor);
-    drawTextAt(page, data.servicio || 'ONCOLOGÍA CLÍNICA', 430, 733.9, fontBold, 8, textColor);
+    drawTextAt(page, data.establecimiento || 'HOSPITAL ONCOLÓGICO PROVINCIAL', 160, 733.9 + 2, fontBold, 8, textColor);
+    drawTextAt(page, data.servicio || 'ONCOLOGÍA CLÍNICA', 430, 733.9 + 2, fontBold, 8, textColor);
 
     // 4. Apellido y Nombre / Tipo y N° documento
-    drawTextAt(page, (data.apellido_nombre || '').toUpperCase(), 155, 711.7, fontBold, 8.5, textColor);
-    drawTextAt(page, data.tipo_nro_documento || '', 465, 711.7, fontBold, 8.5, textColor);
+    drawTextAt(page, (data.apellido_nombre || '').toUpperCase(), 155, 711.7 + 2, fontBold, 8.5, textColor);
+    drawTextAt(page, data.tipo_nro_documento || '', 465, 711.7 + 2, fontBold, 8.5, textColor);
 
     // 5. Fecha Internación (dentro del recuadro izquierdo)
     const internacionClean = cleanDate(data.fecha_internacion) || data.fecha_internacion || '';
     const internacionParts = internacionClean.split('/');
     if (internacionParts.length === 3) {
-      drawTextAt(page, internacionParts[0], 152, 678.46, font, 8, textColor);
-      drawTextAt(page, internacionParts[1], 175, 678.46, font, 8, textColor);
-      drawTextAt(page, internacionParts[2], 200, 678.46, font, 8, textColor);
+      drawTextAt(page, internacionParts[0], 152, 678.46 + 2, font, 8, textColor);
+      drawTextAt(page, internacionParts[1], 175, 678.46 + 2, font, 8, textColor);
+      drawTextAt(page, internacionParts[2], 200, 678.46 + 2, font, 8, textColor);
     } else if (internacionClean) {
-      drawTextAt(page, internacionClean, 152, 678.46, font, 8, textColor);
+      drawTextAt(page, internacionClean, 152, 678.46 + 2, font, 8, textColor);
     }
 
     // 6. Condición Social y/o Obra Social
-    drawTextAt(page, data.condicion_obra_social || '', 405, 667.42, fontBold, 8, textColor);
+    drawTextAt(page, data.condicion_obra_social || '', 405, 667.42 + 2, fontBold, 8, textColor);
 
     // 7. Carácter de Atención (Checkboxes preimpresos)
     const caracter = data.caracter_atencion || 'Ambulatorio';
-    if (caracter === 'Emergencia') drawMark(page, 75, 623, 10, fontBold, textColor);
-    else if (caracter === 'Urgencia') drawMark(page, 201, 623, 10, fontBold, textColor);
-    else if (caracter === 'Estabilizado') drawMark(page, 343, 623, 10, fontBold, textColor);
-    else drawMark(page, 452, 623, 10, fontBold, textColor); // Ambulatorio
+    if (caracter === 'Emergencia') drawMark(page, 75, 624, 10, fontBold, textColor);
+    else if (caracter === 'Urgencia') drawMark(page, 201, 624, 10, fontBold, textColor);
+    else if (caracter === 'Estabilizado') drawMark(page, 343, 624, 10, fontBold, textColor);
+    else drawMark(page, 452, 624, 10, fontBold, textColor); // Ambulatorio
 
     // 8. Diagnóstico Presuntivo (3 líneas)
     const diagText = data.diagnostico_presuntivo || '';
     const diagFontSize = diagText.length > 180 ? 7.2 : 7.8;
     drawOnLines(page, diagText, [
-      { x: 125, y: 586.99, width: 440 },
-      { x: 63.864, y: 564.91, width: 505 },
-      { x: 63.864, y: 542.83, width: 505 }
+      { x: 125, y: 586.99 + 2, width: 440 },
+      { x: 63.864, y: 564.91 + 2, width: 505 },
+      { x: 63.864, y: 542.83 + 2, width: 505 }
     ], font, diagFontSize, textColor);
 
     // 9. Solicitud de estudio (3 líneas)
     const solText = data.solicitud_estudio || '';
     const solFontSize = solText.length > 120 ? 7.5 : 8.0;
     drawOnLines(page, solText, [
-      { x: 160, y: 520.75, width: 405 },
-      { x: 63.864, y: 498.67, width: 505 },
-      { x: 63.864, y: 476.47, width: 505 }
+      { x: 160, y: 520.75 + 2, width: 405 },
+      { x: 63.864, y: 498.67 + 2, width: 505 },
+      { x: 63.864, y: 476.47 + 2, width: 505 }
     ], fontBold, solFontSize, textColor);
 
     // 10. Código según decreto
-    drawTextAt(page, data.codigo_decreto || '', 175, 454.39, font, 8, textColor);
+    drawTextAt(page, data.codigo_decreto || '', 175, 454.39 + 2, font, 8, textColor);
 
     // 11. Estudios Previos Efectuados y Resultados (5 líneas)
     const prevText = data.estudios_previos || '';
     const prevFontSize = prevText.length > 350 ? 7.0 : 7.5;
     drawOnLines(page, prevText, [
-      { x: 265, y: 418.85, width: 300 },
-      { x: 63.864, y: 396.77, width: 505 },
-      { x: 63.864, y: 374.69, width: 505 },
-      { x: 63.864, y: 352.61, width: 505 },
-      { x: 63.864, y: 330.53, width: 505 }
+      { x: 265, y: 418.85 + 2, width: 300 },
+      { x: 63.864, y: 396.77 + 2, width: 505 },
+      { x: 63.864, y: 374.69 + 2, width: 505 },
+      { x: 63.864, y: 352.61 + 2, width: 505 },
+      { x: 63.864, y: 330.53 + 2, width: 505 }
     ], font, prevFontSize, textColor);
 
     // 12. Fundamentos del Pedido y Plan Terapéutico (Epicrisis) (5 líneas debajo del título)
     const fundText = data.fundamentos_pedido || '';
     const fundFontSize = fundText.length > 380 ? 7.0 : 7.5;
     drawOnLines(page, fundText, [
-      { x: 63.864, y: 294.29, width: 505 },
-      { x: 63.864, y: 272.18, width: 505 },
-      { x: 63.864, y: 250.10, width: 505 },
-      { x: 63.864, y: 227.90, width: 505 },
-      { x: 63.864, y: 205.82, width: 505 }
+      { x: 63.864, y: 294.29 + 2, width: 505 },
+      { x: 63.864, y: 272.18 + 2, width: 505 },
+      { x: 63.864, y: 250.10 + 2, width: 505 },
+      { x: 63.864, y: 227.90 + 2, width: 505 },
+      { x: 63.864, y: 205.82 + 2, width: 505 }
     ], font, fundFontSize, textColor);
 
     // 13. Observaciones (3 líneas)
     const obsText = data.observaciones || '';
     const obsFontSize = obsText.length > 220 ? 7.0 : 7.5;
     drawOnLines(page, obsText, [
-      { x: 145, y: 183.74, width: 420 },
-      { x: 63.864, y: 161.66, width: 505 },
-      { x: 63.864, y: 139.58, width: 505 }
+      { x: 145, y: 183.74 + 2, width: 420 },
+      { x: 63.864, y: 161.66 + 2, width: 505 },
+      { x: 63.864, y: 139.58 + 2, width: 505 }
     ], font, obsFontSize, textColor);
 
     // 14. Firmas al pie

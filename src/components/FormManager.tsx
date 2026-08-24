@@ -65,9 +65,20 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [adminProcessingId, setAdminProcessingId] = useState<string | null>(null);
 
-  const handleStartAdminFormFlow = async (formDef: AdminFormDefinition) => {
+  // Modal para seleccionar/escribir el estudio del Formulario 03
+  const [showForm03StudyModal, setShowForm03StudyModal] = useState(false);
+  const [form03StudyInput, setForm03StudyInput] = useState('');
+
+  const handleStartAdminFormFlow = async (formDef: AdminFormDefinition, initialValues?: Record<string, any>) => {
     if (!hasClinicalData) {
       alert("⚠️ Cargue la Historia Clínica o agregue eventos en la Línea de Tiempo primero.");
+      return;
+    }
+
+    // Si es Formulario 03 y no viene estudio previo, abrir modal para que el médico lo especifique
+    if (formDef.id === 'form03_practicas' && !initialValues?.solicitud_estudio) {
+      setForm03StudyInput('');
+      setShowForm03StudyModal(true);
       return;
     }
 
@@ -82,7 +93,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         doctorData
       };
 
-      const extracted = await formDef.extractData(adminContext);
+      const extracted = await formDef.extractData(adminContext, initialValues);
       setAdminFormData(extracted);
       setSelectedAdminForm(formDef);
       setAdminModalOpen(true);
@@ -3327,6 +3338,106 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
             >
               <Wand2 size={14}/> Generar DINADIC
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PREGUNTAR ESTUDIO PARA FORMULARIO 03 */}
+      {showForm03StudyModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-50 text-blue-700 rounded-2xl border border-blue-100">
+                  <FileText size={20} />
+                </div>
+                <div>
+                  <span className="text-[9px] font-black bg-blue-600 text-white px-2 py-0.5 rounded uppercase tracking-wider">
+                    Form. 03
+                  </span>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide mt-1">
+                    Solicitud de Prácticas Extrahospitalarias
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowForm03StudyModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-all"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-black text-slate-800 uppercase tracking-wide block mb-1">
+                  ¿Qué estudio desea solicitar?
+                </label>
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                  Seleccione una opción o escriba la práctica requerida. El sistema fundamentará y redactará la epicrisis específicamente para este estudio.
+                </p>
+              </div>
+
+              {/* Sugerencias rápidas habituales */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[
+                  'PET/TC corporal total con 18F-FDG',
+                  'RMN de Cerebro con y sin contraste',
+                  'Centellograma óseo de cuerpo entero',
+                  'RMN de Pelvis con contraste',
+                  'Panel NGS / Biología Molecular en Tejido Tumoral',
+                  'Biopsia guiada por Tomografía'
+                ].map((sug, sIdx) => (
+                  <button
+                    key={sIdx}
+                    type="button"
+                    onClick={() => setForm03StudyInput(sug)}
+                    className={`text-[10px] font-bold px-2.5 py-1.5 rounded-xl border transition-all text-left
+                      ${form03StudyInput === sug
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'}`}
+                  >
+                    {sug}
+                  </button>
+                ))}
+              </div>
+
+              <div className="pt-2">
+                <input
+                  type="text"
+                  autoFocus
+                  value={form03StudyInput}
+                  onChange={e => setForm03StudyInput(e.target.value)}
+                  placeholder="Escriba o ajuste el estudio a solicitar..."
+                  className="w-full text-xs p-3 rounded-xl border border-gray-300 font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-3 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowForm03StudyModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!form03StudyInput.trim()}
+                onClick={() => {
+                  const form03Def = ADMIN_FORMS_REGISTRY.find(f => f.id === 'form03_practicas');
+                  if (form03Def && form03StudyInput.trim()) {
+                    setShowForm03StudyModal(false);
+                    handleStartAdminFormFlow(form03Def, { solicitud_estudio: form03StudyInput.trim() });
+                  }
+                }}
+                className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-black tracking-wider transition-all shadow-lg shadow-blue-200 flex items-center gap-2 disabled:opacity-50"
+              >
+                <Wand2 size={14} />
+                <span>Continuar y Redactar</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
