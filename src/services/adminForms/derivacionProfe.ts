@@ -180,14 +180,14 @@ DATOS DEL PACIENTE:
 - Diagnóstico Base: ${baseData.diagnostico}
 
 INSTRUCCIONES DE EXTRACCIÓN:
-Devuelve ÚNICAMENTE un objeto JSON válido con los siguientes campos en texto clínico claro y profesional en español:
+Devuelve ÚNICAMENTE un objeto JSON válido con los siguientes campos en texto clínico claro, conciso y profesional en español:
 {
   "medicacion_solicitada": "Nombre del fármaco de alto costo con dosis mensual sugerida (ej: Pembrolizumab 200 mg EV c/21 días)",
-  "diagnostico": "Diagnóstico oncológico con histopatología y estadificación.",
-  "antecedentes_heredofamiliares": "Antecedentes patológicos personales y heredofamiliares oncológicos y no oncológicos relevantes.",
-  "resumen_semiologico": "Resumen del examen físico actual, ECOG, síntomas, laboratorios clave y hallazgos radiológicos que justifiquen el requerimiento de alto costo.",
-  "evolucion_pronostico": "Evolución oncológica reciente del paciente, respuesta a tratamientos previos, estabilidad/progresión y pronóstico con el tratamiento propuesto.",
-  "tratamiento_propuesto": "Esquema terapéutico detallado con dosis mensual prescripta, vía de administración, intervalos y justificación técnica para el Programa PROFE."
+  "diagnostico": "Diagnóstico oncológico conciso con histopatología y estadificación (máximo 150 caracteres).",
+  "antecedentes_heredofamiliares": "Antecedentes patológicos personales y heredofamiliares relevantes (máximo 250 caracteres).",
+  "resumen_semiologico": "Resumen conciso y directo del examen físico actual, ECOG, síntomas y hallazgos clave que justifiquen el requerimiento de alto costo (máximo 400 caracteres).",
+  "evolucion_pronostico": "Evolución oncológica reciente, respuesta previa y pronóstico esperado en 3 a 4 oraciones concisas (máximo 350 caracteres).",
+  "tratamiento_propuesto": "Esquema terapéutico directo con dosis mensual, vía, intervalos y justificación técnica en 3 a 4 oraciones (máximo 350 caracteres)."
 }
 
 HISTORIA CLÍNICA Y TIMELINE:
@@ -232,32 +232,32 @@ ${context.historyText}
     const textColor = rgb(0, 0, 0);
 
     // 1. HOSPITAL O LUGAR DE ATENCIÓN
-    drawTextAt(page, data.hospital || 'HOSPITAL ONCOLÓGICO PROVINCIAL DE CÓRDOBA', 215, 773.76 + 2, fontBold, 8.5, textColor);
+    drawTextAt(page, data.hospital || 'HOSPITAL ONCOLÓGICO PROVINCIAL DE CÓRDOBA', 215, 773.76 + 2, fontBold, 9.0, textColor);
 
     // 2. APELLIDO Y NOMBRE
-    drawTextAt(page, (data.apellido_nombre || '').toUpperCase(), 165, 703.18 + 2, fontBold, 8.5, textColor);
+    drawTextAt(page, (data.apellido_nombre || '').toUpperCase(), 165, 703.18 + 2, fontBold, 9.2, textColor);
 
     // 3. NÚMERO DE BENEFICIO
-    drawTextAt(page, data.nro_beneficio || '', 180, 684.82 + 2, fontBold, 8.5, textColor);
+    drawTextAt(page, data.nro_beneficio || '', 180, 684.82 + 2, fontBold, 9.0, textColor);
 
     // 4. EDAD Y DNI
     const edadStr = data.edad ? (String(data.edad).includes('año') ? String(data.edad) : `${data.edad} años`) : '';
-    drawTextAt(page, edadStr, 85, 666.58 + 2, fontBold, 8.5, textColor);
-    drawTextAt(page, data.dni || '', 250, 666.58 + 2, fontBold, 8.5, textColor);
+    drawTextAt(page, edadStr, 85, 666.58 + 2, fontBold, 9.0, textColor);
+    drawTextAt(page, data.dni || '', 250, 666.58 + 2, fontBold, 9.0, textColor);
 
     // 5. TELÉFONO Y DOMICILIO (2 líneas para domicilio)
-    drawTextAt(page, data.telefono || '', 110, 648.22 + 2, fontBold, 8.5, textColor);
+    drawTextAt(page, data.telefono || '', 110, 648.22 + 2, fontBold, 9.0, textColor);
     drawOnLinesFitted(page, data.domicilio || '', [
       { x: 365, y: 648.22 + 2, width: 190 },
       { x: 36,  y: 629.86 + 2, width: 520 }
-    ], font, 8.0, 6.0, textColor);
+    ], font, 8.8, 6.8, textColor);
 
     // 6. ANTECEDENTES PERSONALES Y HEREDOFAMILIARES (3 líneas)
     drawOnLinesFitted(page, data.antecedentes_heredofamiliares || '', [
       { x: 310, y: 611.62 + 2, width: 246 },
       { x: 36,  y: 593.26 + 2, width: 520 },
       { x: 36,  y: 575.02 + 2, width: 520 }
-    ], font, 7.5, 5.5, textColor);
+    ], font, 8.5, 6.5, textColor);
 
     // 7. RESUMEN SEMIOLÓGICO ACTUAL – MEDICACIÓN ALTO COSTO (8 líneas)
     drawOnLinesFitted(page, data.resumen_semiologico || '', [
@@ -269,14 +269,14 @@ ${context.historyText}
       { x: 36,  y: 465.07 + 2, width: 520 },
       { x: 36,  y: 446.83 + 2, width: 520 },
       { x: 36,  y: 428.47 + 2, width: 520 }
-    ], font, 7.5, 5.5, textColor);
+    ], font, 8.2, 6.5, textColor);
 
     // 8. DIAGNÓSTICO (3 líneas)
     drawOnLinesFitted(page, data.diagnostico || '', [
       { x: 120, y: 410.11 + 2, width: 436 },
       { x: 36,  y: 391.87 + 2, width: 520 },
       { x: 36,  y: 373.49 + 2, width: 520 }
-    ], fontBold, 7.8, 5.8, textColor);
+    ], fontBold, 8.8, 6.8, textColor);
 
     // 9. EVOLUCIÓN Y PRONÓSTICO – EVOLUCIÓN MENSUAL PARA ALTO COSTO (7 líneas)
     drawOnLinesFitted(page, data.evolucion_pronostico || '', [
@@ -287,7 +287,7 @@ ${context.historyText}
       { x: 36,  y: 281.93 + 2, width: 520 },
       { x: 36,  y: 263.69 + 2, width: 520 },
       { x: 36,  y: 245.33 + 2, width: 520 }
-    ], font, 7.5, 5.5, textColor);
+    ], font, 8.2, 6.5, textColor);
 
     // 10. TRATAMIENTO/S PROPUESTO – DOSIS MENSUAL DE MEDICACIÓN ALTO COSTO (8 líneas)
     drawOnLinesFitted(page, data.tratamiento_propuesto || '', [
@@ -299,16 +299,16 @@ ${context.historyText}
       { x: 36,  y: 135.50 + 2, width: 520 },
       { x: 36,  y: 117.14 + 2, width: 520 },
       { x: 36,  y: 98.784 + 2, width: 520 }
-    ], font, 7.5, 5.5, textColor);
+    ], font, 8.2, 6.5, textColor);
 
     // 11. FECHA Y FIRMA
-    drawTextAt(page, cleanDate(data.fecha) || data.fecha || '', 85, 53.544 + 2, fontBold, 8.5, textColor);
+    drawTextAt(page, cleanDate(data.fecha) || data.fecha || '', 85, 53.544 + 2, fontBold, 9.0, textColor);
 
     const docName = context.doctorData?.nombre || '';
     const docMat = context.doctorData?.matricula ? `M.P. ${context.doctorData.matricula}` : '';
     if (docName) {
-      drawTextAt(page, docName, 370, 70 + 2, fontBold, 8, textColor);
-      if (docMat) drawTextAt(page, `${docMat} - Oncología Clínica`, 370, 60 + 2, font, 7.5, textColor);
+      drawTextAt(page, docName, 370, 70 + 2, fontBold, 8.5, textColor);
+      if (docMat) drawTextAt(page, `${docMat} - Oncología Clínica`, 370, 60 + 2, font, 7.8, textColor);
     }
 
     const pdfBytesOut = await pdfDoc.save();
