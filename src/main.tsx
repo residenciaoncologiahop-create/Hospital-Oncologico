@@ -20,11 +20,12 @@ import {
     Upload, Activity, Trash2, Menu, X, Clock,
     Loader2, AlertCircle, Info, Terminal, ChevronDown,
     Calendar, PenTool, ClipboardCheck, Wrench, Calculator, Pill,
-    PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2, Filter
+    PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2, Filter, Sparkles
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
 import ClinicalAuditModal from './components/ClinicalAuditModal';
+import ClinicalEvolutionModal from './components/ClinicalEvolutionModal';
 
 import { User } from 'firebase/auth';
 import AuthWrapper, { logout } from './components/AuthWrapper';
@@ -202,6 +203,7 @@ const App = ({ user }: AppProps) => {
         generatorFn: ((text: string, files: FileData[], guidelines?: FileData[]) => Promise<string>) | null;
         accumulatedCorrections: string;
     }>({ isOpen: false, title: '', content: null, isLoading: false, generatorFn: null, accumulatedCorrections: '' });
+    const [showEvolutionModal, setShowEvolutionModal] = useState(false);
     const [showAuditModal, setShowAuditModal] = useState(false);
     const [showPendientesModal, setShowPendientesModal] = useState(false);
     const [pendientesTodayCount, setPendientesTodayCount] = useState(0);
@@ -494,6 +496,23 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         setManualIsKey(false);
         await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ timeline: updatedTimeline, lastUpdated: Date.now() }));
         logAction("ADD_MANUAL_EVOLUTION", selectedPatientId, doctorName);
+    };
+
+    const handleSaveEvolutionToTimeline = async (evolutionText: string) => {
+        if (!selectedPatientId || !evolutionText) return;
+        const today = new Date();
+        const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+        const newEvent: ClinicalEvent = {
+            date: formattedDate,
+            professional: doctorName || 'Oncología',
+            category: 'Evolución',
+            note: evolutionText,
+            isKey: true
+        };
+        const updatedTimeline = sortTimeline([...timeline, newEvent]);
+        setTimeline(updatedTimeline);
+        await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ timeline: updatedTimeline, lastUpdated: Date.now() }));
+        logAction("SAVE_GENERATED_EVOLUTION", selectedPatientId, doctorName);
     };
 
     const handleDeleteEvent = async (ev: ClinicalEvent) => {
@@ -806,6 +825,17 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                         </div>
                         {/* Botones Header Derecho */}
                         <div className="flex items-center gap-2">
+                            {selP && (
+                                <button
+                                    onClick={() => setShowEvolutionModal(true)}
+                                    className="px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-100 active:scale-95"
+                                    title="Generar evolución médica para Historia Clínica Digital"
+                                >
+                                    <Sparkles size={13} />
+                                    <span>Generar Evolución</span>
+                                </button>
+                            )}
+
                             {/* Botón PENDIENTES */}
                             <div className="relative">
                                 <button
@@ -1015,7 +1045,10 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                             </section>
 
                                             <section className="space-y-4 pt-4 border-t border-gray-100">
-                                                <div className="grid grid-cols-3 gap-2">
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                    <button onClick={() => setShowEvolutionModal(true)} className="flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-md shadow-blue-100">
+                                                        <Sparkles size={16} className="text-white mb-1"/> Evolución HCD
+                                                    </button>
                                                     <button onClick={handleRunClinicalAudit} disabled={isAuditing} className="flex flex-col items-center justify-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 p-3 rounded-lg text-[9px] font-black tracking-widest uppercase transition-all shadow-sm">
                                                         <ClipboardCheck size={16} className="text-blue-600 mb-1"/> Control Calidad
                                                     </button>
@@ -1432,6 +1465,20 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                             </form>
                         </div>
                     </div>
+                )}
+
+                {selP && (
+                    <ClinicalEvolutionModal
+                        isOpen={showEvolutionModal}
+                        onClose={() => setShowEvolutionModal(false)}
+                        patientData={{
+                            hcOrName: `HC-${selP.hcNumber}`,
+                            diagnosis: selP.diagnosis || 'No especificado',
+                            age: `${selP.ageRange} años`,
+                            baselineContext: getAnonContext(selP),
+                        }}
+                        onSaveToTimeline={handleSaveEvolutionToTimeline}
+                    />
                 )}
 
                 <ClinicalAuditModal isOpen={showAuditModal} onClose={() => setShowAuditModal(false)} content={auditContent} isLoading={isAuditing} mode="professional"/>

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Activity, Plus, Search, Trash2, LogOut, Menu, X, 
   FileText, Clock, GraduationCap, Calculator, Pill, 
-  MessageSquare, Loader2, AlertCircle, ClipboardList, CalendarHeart, Info, Maximize2, Minimize2
+  MessageSquare, Loader2, AlertCircle, ClipboardList, CalendarHeart, Info, Maximize2, Minimize2, Sparkles
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -12,6 +12,7 @@ import FileUploader from './components/FileUploader';
 import ResidentLearningModule from './components/ResidentLearningModule';
 import ClinicalAuditModal from './components/ClinicalAuditModal';
 import ClinicalReportModal from './components/ClinicalReportModal';
+import ClinicalEvolutionModal from './components/ClinicalEvolutionModal';
 
 import { 
   getResidentChatResponse, 
@@ -46,6 +47,7 @@ const ResidentApp = () => {
   const [timelineSearch, setTimelineSearch] = useState('');
   const [timelineCategoryFilter, setTimelineCategoryFilter] = useState('Todas');
 
+  const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [auditContent, setAuditContent] = useState<string | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
@@ -253,6 +255,21 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
     setAuditContent(result); setIsAuditing(false);
   };
 
+  const handleSaveEvolutionToTimeline = (evolutionText: string) => {
+    if (!selectedPatient || !evolutionText) return;
+    const today = new Date();
+    const formattedDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+    const newEvent = {
+      date: formattedDate,
+      professional: 'Residente',
+      category: 'Evolución',
+      note: evolutionText,
+      isKey: true,
+    };
+    const updatedTimeline = [...(selectedPatient.timeline || []), newEvent];
+    updateCurrentPatient({ timeline: updatedTimeline });
+  };
+
   const handleExit = () => { 
     if (window.confirm("Se borrarán los datos. ¿Salir?")) window.location.reload(); 
   };
@@ -313,9 +330,21 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
               {selectedPatient && <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{selectedPatient.diagnosis}</span>}
             </div>
           </div>
-          <div className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase">
-            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
-            <span>Sesión Volátil</span>
+          <div className="flex items-center gap-3">
+            {selectedPatient && (
+              <button
+                onClick={() => setShowEvolutionModal(true)}
+                className="px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md shadow-indigo-100 active:scale-95"
+                title="Generar evolución médica para Historia Clínica Digital"
+              >
+                <Sparkles size={13} />
+                <span>Generar Evolución</span>
+              </button>
+            )}
+            <div className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl flex items-center space-x-2 text-[10px] font-bold tracking-widest uppercase">
+              <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
+              <span>Sesión Volátil</span>
+            </div>
           </div>
         </header>
 
@@ -336,7 +365,13 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                   <div className="space-y-6">
                     <FileUploader label="Documentos del Caso" files={selectedPatient.files} setFiles={(newFiles) => updateCurrentPatient({ files: newFiles })} />
                     
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <button 
+                        onClick={() => setShowEvolutionModal(true)}
+                        className="flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all shadow-md"
+                      >
+                        <Sparkles size={16} className="mb-1" /> Evolución
+                      </button>
                       <button 
                         onClick={handleRunAudit} disabled={isAuditing}
                         className="flex flex-col items-center justify-center gap-1 bg-gray-800 text-white hover:bg-gray-700 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all shadow-lg"
@@ -656,6 +691,20 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
             </form>
           </div>
         </div>
+      )}
+
+      {selectedPatient && (
+        <ClinicalEvolutionModal
+          isOpen={showEvolutionModal}
+          onClose={() => setShowEvolutionModal(false)}
+          patientData={{
+            hcOrName: selectedPatient.name,
+            diagnosis: selectedPatient.diagnosis || 'No especificado',
+            age: selectedPatient.age ? `${selectedPatient.age} años` : undefined,
+            baselineContext: getEffectiveClinicalText(),
+          }}
+          onSaveToTimeline={handleSaveEvolutionToTimeline}
+        />
       )}
 
       {showCalc && <OncoCalculator onClose={() => setShowCalc(false)} />}
