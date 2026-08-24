@@ -242,78 +242,107 @@ ${context.historyText}
     const page = pdfDoc.getPages()[0];
     const textColor = rgb(0, 0, 0);
 
-    // Encabezado superior derecho
-    drawTextAt(page, data.numero_derivacion || '', 495, 786, fontBold, 8.5, textColor);
-    drawTextAt(page, cleanDate(data.fecha_emision) || data.fecha_emision || '', 460, 768, font, 8.5, textColor);
+    // 1. Número de Derivación (superior derecho)
+    drawTextAt(page, data.numero_derivacion || '', 535, 809.64, fontBold, 8.5, textColor);
 
-    // Establecimiento y Servicio
-    drawTextAt(page, data.establecimiento || 'HOSPITAL ONCOLÓGICO PROVINCIAL', 165, 720, fontBold, 8, textColor);
-    drawTextAt(page, data.servicio || 'ONCOLOGÍA CLÍNICA', 425, 720, fontBold, 8, textColor);
+    // 2. Fecha de Emisión (encolumnada sobre las barras de fecha)
+    const emisionClean = cleanDate(data.fecha_emision) || data.fecha_emision || '';
+    const emisionParts = emisionClean.split('/');
+    if (emisionParts.length === 3) {
+      drawTextAt(page, emisionParts[0], 474, 787.56, fontBold, 8.5, textColor);
+      drawTextAt(page, emisionParts[1], 506, 787.56, fontBold, 8.5, textColor);
+      drawTextAt(page, emisionParts[2], 536, 787.56, fontBold, 8.5, textColor);
+    } else if (emisionClean) {
+      drawTextAt(page, emisionClean, 474, 787.56, fontBold, 8.5, textColor);
+    }
 
-    // Apellido y Nombre / Tipo y N° Doc
-    drawTextAt(page, (data.apellido_nombre || '').toUpperCase(), 145, 699, fontBold, 8.5, textColor);
-    drawTextAt(page, data.tipo_nro_documento || '', 445, 699, fontBold, 8.5, textColor);
+    // 3. Establecimiento y Servicio (sobre las líneas punteadas oficiales)
+    drawTextAt(page, data.establecimiento || 'HOSPITAL ONCOLÓGICO PROVINCIAL', 160, 733.9, fontBold, 8, textColor);
+    drawTextAt(page, data.servicio || 'ONCOLOGÍA CLÍNICA', 430, 733.9, fontBold, 8, textColor);
 
-    // Fecha Internación y Condición Social
-    drawTextAt(page, data.fecha_internacion || '', 155, 663, font, 8, textColor);
-    drawTextAt(page, data.condicion_obra_social || '', 360, 663, fontBold, 8, textColor);
+    // 4. Apellido y Nombre / Tipo y N° documento
+    drawTextAt(page, (data.apellido_nombre || '').toUpperCase(), 155, 711.7, fontBold, 8.5, textColor);
+    drawTextAt(page, data.tipo_nro_documento || '', 465, 711.7, fontBold, 8.5, textColor);
 
-    // Carácter de Atención (Checkboxes en el original)
+    // 5. Fecha Internación (dentro del recuadro izquierdo)
+    const internacionClean = cleanDate(data.fecha_internacion) || data.fecha_internacion || '';
+    const internacionParts = internacionClean.split('/');
+    if (internacionParts.length === 3) {
+      drawTextAt(page, internacionParts[0], 152, 678.46, font, 8, textColor);
+      drawTextAt(page, internacionParts[1], 175, 678.46, font, 8, textColor);
+      drawTextAt(page, internacionParts[2], 200, 678.46, font, 8, textColor);
+    } else if (internacionClean) {
+      drawTextAt(page, internacionClean, 152, 678.46, font, 8, textColor);
+    }
+
+    // 6. Condición Social y/o Obra Social
+    drawTextAt(page, data.condicion_obra_social || '', 405, 667.42, fontBold, 8, textColor);
+
+    // 7. Carácter de Atención (Checkboxes preimpresos)
     const caracter = data.caracter_atencion || 'Ambulatorio';
-    if (caracter === 'Emergencia') drawMark(page, 72, 624, 11, fontBold, textColor);
-    else if (caracter === 'Urgencia') drawMark(page, 195, 624, 11, fontBold, textColor);
-    else if (caracter === 'Estabilizado') drawMark(page, 334, 624, 11, fontBold, textColor);
-    else drawMark(page, 448, 624, 11, fontBold, textColor); // Ambulatorio
+    if (caracter === 'Emergencia') drawMark(page, 75, 623, 10, fontBold, textColor);
+    else if (caracter === 'Urgencia') drawMark(page, 201, 623, 10, fontBold, textColor);
+    else if (caracter === 'Estabilizado') drawMark(page, 343, 623, 10, fontBold, textColor);
+    else drawMark(page, 452, 623, 10, fontBold, textColor); // Ambulatorio
 
-    // Diagnóstico Presuntivo (3 líneas)
-    drawOnLines(page, data.diagnostico_presuntivo, [
-      { x: 160, y: 596, width: 380 },
-      { x: 64,  y: 578, width: 476 },
-      { x: 64,  y: 560, width: 476 },
-    ], font, 8, textColor);
+    // 8. Diagnóstico Presuntivo (3 líneas)
+    const diagText = data.diagnostico_presuntivo || '';
+    const diagFontSize = diagText.length > 180 ? 7.2 : 7.8;
+    drawOnLines(page, diagText, [
+      { x: 125, y: 586.99, width: 440 },
+      { x: 63.864, y: 564.91, width: 505 },
+      { x: 63.864, y: 542.83, width: 505 }
+    ], font, diagFontSize, textColor);
 
-    // Solicitud de estudio (3 líneas)
-    drawOnLines(page, data.solicitud_estudio, [
-      { x: 160, y: 524, width: 380 },
-      { x: 64,  y: 506, width: 476 },
-      { x: 64,  y: 488, width: 476 },
-    ], font, 8, textColor);
+    // 9. Solicitud de estudio (3 líneas)
+    const solText = data.solicitud_estudio || '';
+    const solFontSize = solText.length > 120 ? 7.5 : 8.0;
+    drawOnLines(page, solText, [
+      { x: 160, y: 520.75, width: 405 },
+      { x: 63.864, y: 498.67, width: 505 },
+      { x: 63.864, y: 476.47, width: 505 }
+    ], fontBold, solFontSize, textColor);
 
-    // Código según decreto
-    drawTextAt(page, data.codigo_decreto || '', 175, 447, font, 8, textColor);
+    // 10. Código según decreto
+    drawTextAt(page, data.codigo_decreto || '', 175, 454.39, font, 8, textColor);
 
-    // Estudios Previos Efectuados y Resultados (5 líneas)
-    drawOnLines(page, data.estudios_previos, [
-      { x: 250, y: 422, width: 290 },
-      { x: 64,  y: 404, width: 476 },
-      { x: 64,  y: 386, width: 476 },
-      { x: 64,  y: 368, width: 476 },
-      { x: 64,  y: 350, width: 476 },
-    ], font, 8, textColor);
+    // 11. Estudios Previos Efectuados y Resultados (5 líneas)
+    const prevText = data.estudios_previos || '';
+    const prevFontSize = prevText.length > 350 ? 7.0 : 7.5;
+    drawOnLines(page, prevText, [
+      { x: 265, y: 418.85, width: 300 },
+      { x: 63.864, y: 396.77, width: 505 },
+      { x: 63.864, y: 374.69, width: 505 },
+      { x: 63.864, y: 352.61, width: 505 },
+      { x: 63.864, y: 330.53, width: 505 }
+    ], font, prevFontSize, textColor);
 
-    // Fundamentos del Pedido y Plan Terapéutico (Epicrisis) (6 líneas)
-    drawOnLines(page, data.fundamentos_pedido, [
-      { x: 64, y: 312, width: 476 },
-      { x: 64, y: 294, width: 476 },
-      { x: 64, y: 276, width: 476 },
-      { x: 64, y: 258, width: 476 },
-      { x: 64, y: 240, width: 476 },
-      { x: 64, y: 222, width: 476 },
-    ], font, 8, textColor);
+    // 12. Fundamentos del Pedido y Plan Terapéutico (Epicrisis) (5 líneas debajo del título)
+    const fundText = data.fundamentos_pedido || '';
+    const fundFontSize = fundText.length > 380 ? 7.0 : 7.5;
+    drawOnLines(page, fundText, [
+      { x: 63.864, y: 294.29, width: 505 },
+      { x: 63.864, y: 272.18, width: 505 },
+      { x: 63.864, y: 250.10, width: 505 },
+      { x: 63.864, y: 227.90, width: 505 },
+      { x: 63.864, y: 205.82, width: 505 }
+    ], font, fundFontSize, textColor);
 
-    // Observaciones (3 líneas)
-    drawOnLines(page, data.observaciones, [
-      { x: 135, y: 186, width: 405 },
-      { x: 64,  y: 168, width: 476 },
-      { x: 64,  y: 150, width: 476 },
-    ], font, 8, textColor);
+    // 13. Observaciones (3 líneas)
+    const obsText = data.observaciones || '';
+    const obsFontSize = obsText.length > 220 ? 7.0 : 7.5;
+    drawOnLines(page, obsText, [
+      { x: 145, y: 183.74, width: 420 },
+      { x: 63.864, y: 161.66, width: 505 },
+      { x: 63.864, y: 139.58, width: 505 }
+    ], font, obsFontSize, textColor);
 
-    // Firmas al pie
+    // 14. Firmas al pie
     const docName = context.doctorData?.nombre || '';
     const docMat = context.doctorData?.matricula ? `M.P. ${context.doctorData.matricula}` : '';
     if (docName) {
-      drawTextAt(page, docName, 64, 60, fontBold, 7.5, textColor);
-      if (docMat) drawTextAt(page, docMat, 64, 50, font, 7, textColor);
+      drawTextAt(page, docName, 64, 56, fontBold, 7.5, textColor);
+      if (docMat) drawTextAt(page, docMat, 64, 46, font, 7, textColor);
     }
 
     const pdfBytesOut = await pdfDoc.save();
