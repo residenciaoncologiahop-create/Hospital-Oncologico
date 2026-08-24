@@ -515,6 +515,37 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         logAction("SAVE_GENERATED_EVOLUTION", selectedPatientId, doctorName);
     };
 
+    const handleAddStudiesFromEvolution = async (files: FileData[]): Promise<number> => {
+        if (!selectedPatientId || !files || files.length === 0) return 0;
+        try {
+            const rawEvents = await extractTimelineSecure('', files);
+            const events: ClinicalEvent[] = rawEvents.map((e: any) => ({
+                date: e.date || e.fecha || "S/F",
+                professional: e.professional || e.profesional || e.medico || "N/A",
+                category: e.category || e.categoria || e.tipo || "General",
+                note: e.note || e.nota || e.descripcion || "Estudio",
+                isKey: !!e.isKey || !!e.clave || !!e.importante,
+                ...(e.detail ? { detail: e.detail } : {}),
+            })).filter(e => e.note && e.note.trim() !== '');
+
+            if (events.length > 0) {
+                const combinedTimeline = sortTimeline(
+                    deduplicateTimelineEvents([...(timeline || []), ...events])
+                );
+                setTimeline(combinedTimeline);
+                await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({
+                    timeline: combinedTimeline,
+                    lastUpdated: Date.now()
+                }));
+                logAction("ADD_STUDIES_FROM_EVOLUTION_TO_TIMELINE", selectedPatientId, doctorName);
+            }
+            return events.length;
+        } catch (err) {
+            console.error("Error al extraer y guardar estudios en timeline:", err);
+            return 0;
+        }
+    };
+
     const handleDeleteEvent = async (ev: ClinicalEvent) => {
         if (!selectedPatientId || !timeline) return;
         if (confirm("¿Eliminar este evento?")) {
@@ -1478,6 +1509,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                             baselineContext: getAnonContext(selP),
                         }}
                         onSaveToTimeline={handleSaveEvolutionToTimeline}
+                        onAddAttachedStudiesToTimeline={handleAddStudiesFromEvolution}
                     />
                 )}
 

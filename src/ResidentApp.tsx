@@ -270,6 +270,54 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
     updateCurrentPatient({ timeline: updatedTimeline });
   };
 
+  const handleAddStudiesFromEvolution = async (files: { name: string; type: string; data: string }[]): Promise<number> => {
+    if (!selectedPatient || !files || files.length === 0) return 0;
+    try {
+      const rawEvents = await extractResidentTimeline('', files);
+      const normalized = rawEvents.map((e: any) => ({
+        date: e.date || e.fecha || 'S/F',
+        professional: e.professional || e.profesional || 'N/A',
+        category: e.category || e.categoria || e.type || 'Evento',
+        note: e.note || e.nota || e.description || e.descripcion || '',
+        isKey: !!e.isKey || !!e.clave || !!e.key,
+        ...(e.detail ? { detail: e.detail } : {})
+      })).filter((e: any) => e.note && e.note.trim() !== '');
+
+      if (normalized.length > 0) {
+        const allEvents = [...(selectedPatient.timeline || []), ...normalized];
+        const seen = new Map<string, any>();
+        for (const ev of allEvents) {
+          const normDate = (ev.date || 'S/F').trim();
+          const normCat = (ev.category || 'General').toLowerCase().trim();
+          const normNote = (ev.note || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]/g, '');
+          const noteSnippet = normNote.substring(0, 120);
+          const key = `${normDate}|${normCat}|${noteSnippet}`;
+
+          if (!seen.has(key)) {
+            seen.set(key, ev);
+          } else {
+            const existing = seen.get(key);
+            const existingScore = (existing.isKey ? 10 : 0) + (existing.note?.length || 0) + (existing.detail?.length || 0);
+            const newScore = (ev.isKey ? 10 : 0) + (ev.note?.length || 0) + (ev.detail?.length || 0);
+            if (newScore > existingScore) {
+              seen.set(key, ev);
+            }
+          }
+        }
+        const deduplicated = Array.from(seen.values());
+        updateCurrentPatient({ timeline: deduplicated });
+      }
+      return normalized.length;
+    } catch (err) {
+      console.error("Error al extraer y guardar estudios en timeline:", err);
+      return 0;
+    }
+  };
+
   const handleExit = () => { 
     if (window.confirm("Se borrarán los datos. ¿Salir?")) window.location.reload(); 
   };
@@ -704,6 +752,7 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
             baselineContext: getEffectiveClinicalText(),
           }}
           onSaveToTimeline={handleSaveEvolutionToTimeline}
+          onAddAttachedStudiesToTimeline={handleAddStudiesFromEvolution}
         />
       )}
 

@@ -21,6 +21,7 @@ interface Props {
     baselineContext: string;
   };
   onSaveToTimeline?: (note: string) => Promise<void> | void;
+  onAddAttachedStudiesToTimeline?: (files: FileData[]) => Promise<number>;
 }
 
 const ClinicalEvolutionModal: React.FC<Props> = ({
@@ -28,6 +29,7 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
   onClose,
   patientData,
   onSaveToTimeline,
+  onAddAttachedStudiesToTimeline,
 }) => {
   const [step, setStep] = useState<'input' | 'result'>('input');
   
@@ -44,6 +46,7 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
   const [copied, setCopied] = useState(false);
   const [savedToTimeline, setSavedToTimeline] = useState(false);
   const [isSavingToTimeline, setIsSavingToTimeline] = useState(false);
+  const [studiesAddedCount, setStudiesAddedCount] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,6 +55,7 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
       setEvolutionText('');
       setCopied(false);
       setSavedToTimeline(false);
+      setStudiesAddedCount(0);
       setErrorMsg(null);
     }
   }, [isOpen]);
@@ -87,8 +91,9 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
   const handleGenerate = async () => {
     setIsGenerating(true);
     setErrorMsg(null);
+    setStudiesAddedCount(0);
     try {
-      const result = await generateClinicalEvolution({
+      const evolutionPromise = generateClinicalEvolution({
         patientBaselineContext: patientData.baselineContext,
         attachedFiles: noNewStudies ? [] : attachedFiles,
         noNewStudies,
@@ -97,7 +102,16 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
         plan,
       });
 
+      const studiesPromise = (!noNewStudies && attachedFiles.length > 0 && onAddAttachedStudiesToTimeline)
+        ? onAddAttachedStudiesToTimeline(attachedFiles)
+        : Promise.resolve(0);
+
+      const [result, addedCount] = await Promise.all([evolutionPromise, studiesPromise]);
+
       setEvolutionText(result);
+      if (typeof addedCount === 'number' && addedCount > 0) {
+        setStudiesAddedCount(addedCount);
+      }
       setStep('result');
     } catch (err: any) {
       console.error("Error al generar evolución:", err);
@@ -361,6 +375,13 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
                   <span>{copied ? '¡Copiado!' : 'Copiar para HCD'}</span>
                 </button>
               </div>
+
+              {studiesAddedCount > 0 && (
+                <div className="bg-blue-50 border border-blue-200 text-blue-900 p-3.5 rounded-2xl flex items-center gap-2.5 text-xs font-bold animate-in fade-in slide-in-from-top-1 duration-200 shadow-sm">
+                  <CheckCircle2 size={16} className="text-blue-600 flex-shrink-0" />
+                  <span>Se extrajeron y añadieron automáticamente {studiesAddedCount} estudio(s) nuevo(s) a la línea de tiempo de eventos.</span>
+                </div>
+              )}
 
               {/* Textarea Editable de la Evolución */}
               <div className="relative">
