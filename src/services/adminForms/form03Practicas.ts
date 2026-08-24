@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../../utils/aiProxy';
 import { AdminFormDefinition, AdminFormContext } from './types';
-import { drawWrappedTextLines, drawCheckbox, tryEmbedHeaderLogo } from './pdfHelpers';
+import { drawOnLines, drawTextAt, drawMark, cleanDate } from './pdfHelpers';
 
 export const form03PracticasDefinition: AdminFormDefinition = {
   id: 'form03_practicas',
@@ -11,6 +11,7 @@ export const form03PracticasDefinition: AdminFormDefinition = {
   institution: 'Ministerio de Salud de Córdoba (Anexo III Exp. 0425-68637/99)',
   description: 'Derivación y solicitud de estudios de alta complejidad fuera del hospital (PET-TC, RMN específica, Centellograma, Biología Molecular, etc.).',
   category: 'Prácticas y Estudios',
+  templateFile: '/forms/form03_practicas.pdf',
 
   fields: [
     {
@@ -230,136 +231,93 @@ ${context.historyText}
   },
 
   generatePDF: async (data: Record<string, any>, context: AdminFormContext) => {
-    const pdfDoc = await PDFDocument.create();
+    const formUrl = window.location.origin + '/forms/form03_practicas.pdf';
+    const res = await fetch(formUrl);
+    if (!res.ok) throw new Error('No se encontró la plantilla original de Formulario 03 (/forms/form03_practicas.pdf)');
+
+    const pdfDoc = await PDFDocument.load(await res.arrayBuffer());
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const page = pdfDoc.addPage([595.28, 841.89]); // A4 vertical
-    const { width, height } = page.getSize();
-    const marginX = 40;
-    const contentWidth = width - marginX * 2;
-    let y = height - 30;
+    const page = pdfDoc.getPages()[0];
+    const textColor = rgb(0, 0, 0);
 
-    // Logo / Encabezado
-    y = await tryEmbedHeaderLogo(pdfDoc, page, y, 32);
-
-    // Título Principal
-    const title = 'SOLICITUD PRÁCTICAS ESPECIALIZADAS';
-    const subTitle = 'EXTRAHOSPITALARIAS';
-    const expediente = 'Anexo III Expediente 0425-68637/99';
-
-    page.drawText(title, { x: marginX + 110, y: y, size: 10, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
-    page.drawText(subTitle, { x: marginX + 145, y: y - 11, size: 10, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
-    page.drawText(expediente, { x: marginX + 125, y: y - 22, size: 7.5, font, color: rgb(0.3, 0.3, 0.3) });
-
-    // Bloque Derivación / Fecha
-    page.drawText(`Form. 03 – Número Derivación: ${data.numero_derivacion || '………………'}`, {
-      x: width - marginX - 180,
-      y: y,
-      size: 8,
-      font: fontBold
-    });
-    page.drawText(`Fecha de Emisión: ${data.fecha_emision || '……/……/……'}`, {
-      x: width - marginX - 180,
-      y: y - 12,
-      size: 8,
-      font
-    });
-
-    y -= 38;
-
-    // FORMULARIO 03 Label
-    page.drawText('FORMULARIO 03', { x: marginX, y, size: 9, font: fontBold });
-    y -= 14;
+    // Encabezado superior derecho
+    drawTextAt(page, data.numero_derivacion || '', 495, 786, fontBold, 8.5, textColor);
+    drawTextAt(page, cleanDate(data.fecha_emision) || data.fecha_emision || '', 460, 768, font, 8.5, textColor);
 
     // Establecimiento y Servicio
-    page.drawText(`ESTABLECIMIENTO: ${data.establecimiento || ''}`, { x: marginX, y, size: 8, font: fontBold });
-    page.drawText(`SERVICIO: ${data.servicio || ''}`, { x: marginX + 280, y, size: 8, font: fontBold });
-    page.drawLine({ start: { x: marginX, y: y - 2 }, end: { x: width - marginX, y: y - 2 }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-    y -= 14;
+    drawTextAt(page, data.establecimiento || 'HOSPITAL ONCOLÓGICO PROVINCIAL', 165, 720, fontBold, 8, textColor);
+    drawTextAt(page, data.servicio || 'ONCOLOGÍA CLÍNICA', 425, 720, fontBold, 8, textColor);
 
-    // Apellido y Nombre / Documento
-    page.drawText(`Apellido y Nombre: ${data.apellido_nombre || ''}`, { x: marginX, y, size: 8.5, font });
-    page.drawText(`Tipo y N° documento: ${data.tipo_nro_documento || ''}`, { x: marginX + 280, y, size: 8.5, font });
-    page.drawLine({ start: { x: marginX, y: y - 2 }, end: { x: width - marginX, y: y - 2 }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-    y -= 14;
+    // Apellido y Nombre / Tipo y N° Doc
+    drawTextAt(page, (data.apellido_nombre || '').toUpperCase(), 145, 699, fontBold, 8.5, textColor);
+    drawTextAt(page, data.tipo_nro_documento || '', 445, 699, fontBold, 8.5, textColor);
 
-    // Fecha internación y Condición social
-    page.drawText(`Fecha Internación: ${data.fecha_internacion || '……/……/……'}`, { x: marginX, y, size: 8, font });
-    page.drawText(`Condición Social y/o Obra Social: ${data.condicion_obra_social || ''}`, { x: marginX + 170, y, size: 8, font });
-    page.drawLine({ start: { x: marginX, y: y - 2 }, end: { x: width - marginX, y: y - 2 }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-    y -= 18;
+    // Fecha Internación y Condición Social
+    drawTextAt(page, data.fecha_internacion || '', 155, 663, font, 8, textColor);
+    drawTextAt(page, data.condicion_obra_social || '', 360, 663, fontBold, 8, textColor);
 
-    // Carácter de atención (Checkboxes)
+    // Carácter de Atención (Checkboxes en el original)
     const caracter = data.caracter_atencion || 'Ambulatorio';
-    drawCheckbox(page, marginX + 10, y, 10, caracter === 'Emergencia', 'Emergencia', font, 8);
-    drawCheckbox(page, marginX + 130, y, 10, caracter === 'Urgencia', 'Urgencia', font, 8);
-    drawCheckbox(page, marginX + 250, y, 10, caracter === 'Estabilizado', 'Estabilizado', font, 8);
-    drawCheckbox(page, marginX + 370, y, 10, caracter === 'Ambulatorio', 'Ambulatorio', font, 8);
-    y -= 18;
+    if (caracter === 'Emergencia') drawMark(page, 72, 624, 11, fontBold, textColor);
+    else if (caracter === 'Urgencia') drawMark(page, 195, 624, 11, fontBold, textColor);
+    else if (caracter === 'Estabilizado') drawMark(page, 334, 624, 11, fontBold, textColor);
+    else drawMark(page, 448, 624, 11, fontBold, textColor); // Ambulatorio
 
-    // Función de sección con recuadro
-    const drawSection = (titleLabel: string, content: string, linesCount: number) => {
-      page.drawText(titleLabel, { x: marginX, y, size: 8.5, font: fontBold, color: rgb(0, 0, 0) });
-      y -= 11;
-      const boxHeight = linesCount * 11 + 6;
-      page.drawRectangle({
-        x: marginX,
-        y: y - boxHeight + 8,
-        width: contentWidth,
-        height: boxHeight,
-        borderColor: rgb(0.8, 0.8, 0.8),
-        borderWidth: 0.5,
-        color: rgb(0.98, 0.98, 0.98),
-      });
+    // Diagnóstico Presuntivo (3 líneas)
+    drawOnLines(page, data.diagnostico_presuntivo, [
+      { x: 160, y: 596, width: 380 },
+      { x: 64,  y: 578, width: 476 },
+      { x: 64,  y: 560, width: 476 },
+    ], font, 8, textColor);
 
-      drawWrappedTextLines(page, content || '', marginX + 4, y + 2, contentWidth - 8, linesCount, 11, 8, font);
-      y -= (boxHeight + 6);
-    };
+    // Solicitud de estudio (3 líneas)
+    drawOnLines(page, data.solicitud_estudio, [
+      { x: 160, y: 524, width: 380 },
+      { x: 64,  y: 506, width: 476 },
+      { x: 64,  y: 488, width: 476 },
+    ], font, 8, textColor);
 
-    // 1. Diagnóstico Presuntivo
-    drawSection('Diagnóstico Presuntivo:', data.diagnostico_presuntivo, 3);
+    // Código según decreto
+    drawTextAt(page, data.codigo_decreto || '', 175, 447, font, 8, textColor);
 
-    // 2. Solicitud de estudio
-    const codigoStr = data.codigo_decreto ? ` (Código según decreto: ${data.codigo_decreto})` : '';
-    drawSection(`Solicitud de estudio:${codigoStr}`, data.solicitud_estudio, 3);
+    // Estudios Previos Efectuados y Resultados (5 líneas)
+    drawOnLines(page, data.estudios_previos, [
+      { x: 250, y: 422, width: 290 },
+      { x: 64,  y: 404, width: 476 },
+      { x: 64,  y: 386, width: 476 },
+      { x: 64,  y: 368, width: 476 },
+      { x: 64,  y: 350, width: 476 },
+    ], font, 8, textColor);
 
-    // 3. Estudios Previos Efectuados y Resultados
-    drawSection('Estudios Previos Efectuados y Resultados:', data.estudios_previos, 5);
+    // Fundamentos del Pedido y Plan Terapéutico (Epicrisis) (6 líneas)
+    drawOnLines(page, data.fundamentos_pedido, [
+      { x: 64, y: 312, width: 476 },
+      { x: 64, y: 294, width: 476 },
+      { x: 64, y: 276, width: 476 },
+      { x: 64, y: 258, width: 476 },
+      { x: 64, y: 240, width: 476 },
+      { x: 64, y: 222, width: 476 },
+    ], font, 8, textColor);
 
-    // 4. Fundamentos del Pedido y Plan Terapéutico (Epicrisis)
-    drawSection('Fundamentos del Pedido y Plan Terapéutico (Epicrisis):', data.fundamentos_pedido, 6);
-
-    // 5. Observaciones
-    drawSection('Observaciones:', data.observaciones, 3);
+    // Observaciones (3 líneas)
+    drawOnLines(page, data.observaciones, [
+      { x: 135, y: 186, width: 405 },
+      { x: 64,  y: 168, width: 476 },
+      { x: 64,  y: 150, width: 476 },
+    ], font, 8, textColor);
 
     // Firmas al pie
-    y = 55;
-    const sigColWidth = contentWidth / 4;
-    const docName = context.doctorData?.nombre || 'Médico Solicitante';
+    const docName = context.doctorData?.nombre || '';
     const docMat = context.doctorData?.matricula ? `M.P. ${context.doctorData.matricula}` : '';
+    if (docName) {
+      drawTextAt(page, docName, 64, 60, fontBold, 7.5, textColor);
+      if (docMat) drawTextAt(page, docMat, 64, 50, font, 7, textColor);
+    }
 
-    const drawSigLine = (colIdx: number, titleSig: string, extra = '') => {
-      const sx = marginX + colIdx * sigColWidth;
-      page.drawLine({
-        start: { x: sx + 5, y: y + 15 },
-        end: { x: sx + sigColWidth - 10, y: y + 15 },
-        thickness: 0.6,
-        color: rgb(0.4, 0.4, 0.4)
-      });
-      page.drawText(titleSig, { x: sx + 10, y: y + 4, size: 7.5, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
-      if (extra) {
-        page.drawText(extra, { x: sx + 10, y: y - 5, size: 6.5, font, color: rgb(0.4, 0.4, 0.4) });
-      }
-    };
-
-    drawSigLine(0, docName, docMat);
-    drawSigLine(1, 'Jefe de Servicio', 'Firma y Sello');
-    drawSigLine(2, 'Médico Auditor', 'Firma y Sello');
-    drawSigLine(3, 'Director / SubDirector', 'Hospital Oncológico');
-
-    const pdfBytes = await pdfDoc.save();
-    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const pdfBytesOut = await pdfDoc.save();
+    const blob = new Blob([pdfBytesOut], { type: 'application/pdf' });
     const filename = `Form03_Practicas_${(data.apellido_nombre || 'Paciente').replace(/\s+/g, '_')}_${(data.fecha_emision || '').replace(/\//g, '-')}.pdf`;
 
     return { blob, filename };

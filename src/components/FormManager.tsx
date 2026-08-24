@@ -2094,6 +2094,14 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
                     {isProcessing ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>}
                     <span>Completar y Generar PDF</span>
                   </button>
+                  {formDef.templateFile && (
+                    <button
+                      onClick={() => downloadTemplate({ file: formDef.templateFile, name: formDef.name })}
+                      className="flex items-center justify-center space-x-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 py-2 px-3 rounded-lg text-xs font-bold transition-all"
+                    >
+                      <Download size={14}/><span>Plantilla</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );

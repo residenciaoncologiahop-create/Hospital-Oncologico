@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../../utils/aiProxy';
 import { AdminFormDefinition, AdminFormContext, DrugTableRow } from './types';
-import { calculateBSA, drawWrappedTextLines, drawCheckbox, tryEmbedHeaderLogo } from './pdfHelpers';
+import { calculateBSA, drawOnLines, drawTextAt, drawMark, cleanDate } from './pdfHelpers';
 
 export const solicitudMedicamentosDefinition: AdminFormDefinition = {
   id: 'solicitud_medicamentos_onco',
@@ -11,6 +11,7 @@ export const solicitudMedicamentosDefinition: AdminFormDefinition = {
   institution: 'Hospital Oncológico Provincial / Ministerio de Salud de Córdoba',
   description: 'Solicitud institucional de fármacos oncológicos con tabla de drogas, dosis/m², ciclos y reseña de historia clínica (2 páginas).',
   category: 'Medicación y Farmacia',
+  templateFile: '/forms/solicitud_medicamentos.pdf',
 
   fields: [
     {
@@ -386,271 +387,135 @@ ${context.historyText}
   },
 
   generatePDF: async (data: Record<string, any>, context: AdminFormContext) => {
-    const pdfDoc = await PDFDocument.create();
+    const formUrl = window.location.origin + '/forms/solicitud_medicamentos.pdf';
+    const res = await fetch(formUrl);
+    if (!res.ok) throw new Error('No se encontró la plantilla original de Solicitud de Medicamentos (/forms/solicitud_medicamentos.pdf)');
+
+    const pdfDoc = await PDFDocument.load(await res.arrayBuffer());
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const marginX = 40;
-    const contentWidth = 595.28 - marginX * 2;
+    const pages = pdfDoc.getPages();
+    const p1 = pages[0];
+    const p2 = pages[1];
+    const textColor = rgb(0, 0, 0);
 
     // ─────────────────────────────────────────────────────────────
     // PÁGINA 1
     // ─────────────────────────────────────────────────────────────
-    const p1 = pdfDoc.addPage([595.28, 841.89]);
-    let y1 = 841.89 - 30;
+    drawTextAt(p1, cleanDate(data.fecha_pedido) || data.fecha_pedido || '', 145, 740, font, 8.5, textColor);
+    drawTextAt(p1, data.hospital || 'Hospital Oncológico Provincial', 110, 716, fontBold, 8, textColor);
+    drawTextAt(p1, data.localidad_hosp || 'Córdoba', 425, 716, fontBold, 8, textColor);
+    drawTextAt(p1, data.telefono_profesional || '', 315, 693, fontBold, 8, textColor);
 
-    // Logo
-    y1 = await tryEmbedHeaderLogo(pdfDoc, p1, y1, 32);
+    // DATOS DEL PACIENTE
+    drawTextAt(p1, (data.nombre_apellido || '').toUpperCase(), 165, 627, fontBold, 8.5, textColor);
+    drawTextAt(p1, data.nro_expediente || '', 460, 627, fontBold, 8.5, textColor);
 
-    // Box Título
-    p1.drawRectangle({
-      x: marginX,
-      y: y1 - 20,
-      width: contentWidth,
-      height: 22,
-      borderColor: rgb(0.2, 0.2, 0.2),
-      borderWidth: 0.8,
-      color: rgb(0.96, 0.96, 0.96),
-    });
-    const titleText = 'FICHA DE SOLICITUD DE MEDICAMENTOS ONCOLÓGICOS';
-    const tw = fontBold.widthOfTextAtSize(titleText, 10);
-    p1.drawText(titleText, { x: marginX + (contentWidth - tw) / 2, y: y1 - 14, size: 10, font: fontBold });
-    y1 -= 32;
+    drawTextAt(p1, data.dni || '', 115, 607, fontBold, 8.5, textColor);
+    drawTextAt(p1, data.nro_hc || '', 285, 607, fontBold, 8.5, textColor);
+    drawTextAt(p1, data.edad || '', 420, 607, font, 8.5, textColor);
+    drawTextAt(p1, data.sexo || '', 495, 607, font, 8.5, textColor);
 
-    // Metadatos encabezado
-    p1.drawText(`Fecha de pedido: ${data.fecha_pedido || '……/……/……'}`, { x: marginX, y: y1, size: 8.5, font });
-    y1 -= 13;
-    p1.drawText(`Hospital: ${data.hospital || ''}`, { x: marginX, y: y1, size: 8.5, font });
-    p1.drawText(`Localidad: ${data.localidad_hosp || 'Córdoba'}`, { x: marginX + 280, y: y1, size: 8.5, font });
-    y1 -= 13;
-    p1.drawText(`Nº de teléfono para comunicación exclusivamente profesional: ${data.telefono_profesional || ''}`, { x: marginX, y: y1, size: 8, font: fontBold });
-    y1 -= 16;
+    drawTextAt(p1, data.domicilio || '', 125, 587, font, 8.5, textColor);
+    drawTextAt(p1, data.localidad || 'Córdoba', 390, 587, font, 8.5, textColor);
 
-    // SECCIÓN DATOS DEL PACIENTE
-    const drawSectionHeader = (page: any, yPos: number, title: string) => {
-      page.drawRectangle({
-        x: marginX,
-        y: yPos - 16,
-        width: contentWidth,
-        height: 18,
-        borderColor: rgb(0.3, 0.3, 0.3),
-        borderWidth: 0.6,
-        color: rgb(0.93, 0.93, 0.93),
-      });
-      page.drawText(title, { x: marginX + 6, y: yPos - 12, size: 8.5, font: fontBold, color: rgb(0, 0, 0) });
-      return yPos - 22;
-    };
+    drawTextAt(p1, cleanDate(data.fecha_nacimiento) || data.fecha_nacimiento || '', 135, 567, font, 8.5, textColor);
+    drawTextAt(p1, data.telefono_paciente || '', 350, 567, font, 8.5, textColor);
 
-    y1 = drawSectionHeader(p1, y1, 'DATOS DEL PACIENTE');
-    y1 -= 4;
-
-    p1.drawText(`Nombre y Apellido: ${data.nombre_apellido || ''}`, { x: marginX, y: y1, size: 8.5, font });
-    p1.drawText(`Nº de exp. : ${data.nro_expediente || '………………'}`, { x: marginX + 320, y: y1, size: 8.5, font });
-    y1 -= 13;
-
-    p1.drawText(`D.N.I.: ${data.dni || ''}`, { x: marginX, y: y1, size: 8.5, font });
-    p1.drawText(`N° de H.C.: ${data.nro_hc || ''}`, { x: marginX + 160, y: y1, size: 8.5, font });
-    p1.drawText(`Edad: ${data.edad || ''}`, { x: marginX + 320, y: y1, size: 8.5, font });
-    p1.drawText(`Sexo: ${data.sexo || ''}`, { x: marginX + 410, y: y1, size: 8.5, font });
-    y1 -= 13;
-
-    p1.drawText(`Domicilio: ${data.domicilio || ''}`, { x: marginX, y: y1, size: 8.5, font });
-    p1.drawText(`Localidad: ${data.localidad || 'Córdoba'}`, { x: marginX + 320, y: y1, size: 8.5, font });
-    y1 -= 13;
-
-    p1.drawText(`F. Nacim: ${data.fecha_nacimiento || '……/……/……'}`, { x: marginX, y: y1, size: 8.5, font });
-    p1.drawText(`T.E.: ${data.telefono_paciente || ''}`, { x: marginX + 320, y: y1, size: 8.5, font });
-    y1 -= 18;
-
-    // SECCIÓN DATOS MÉDICOS
-    y1 = drawSectionHeader(p1, y1, 'DATOS MÉDICOS');
-    y1 -= 4;
-
+    // DATOS MÉDICOS
     const isInternado = data.paciente_internado === 'SI';
-    p1.drawText('Paciente internado', { x: marginX, y: y1, size: 8.5, font });
-    drawCheckbox(p1, marginX + 130, y1 - 2, 9, isInternado, 'SI', font, 8);
-    drawCheckbox(p1, marginX + 190, y1 - 2, 9, !isInternado, 'NO', font, 8);
-    y1 -= 14;
+    if (isInternado) drawMark(p1, 232, 514, 10, fontBold, textColor);
+    else drawMark(p1, 308, 514, 10, fontBold, textColor);
 
-    p1.drawText(`Diagnóstico: ${data.diagnostico || ''}`, { x: marginX, y: y1, size: 8.5, font: fontBold });
-    y1 -= 13;
-    p1.drawText(`Estadío: ${data.estadio || ''}`, { x: marginX, y: y1, size: 8.5, font: fontBold });
-    y1 -= 18;
+    drawTextAt(p1, data.diagnostico || '', 145, 488, fontBold, 8.5, textColor);
+    drawTextAt(p1, data.estadio || '', 125, 461, fontBold, 8.5, textColor);
 
     // TABLA DE DROGAS
-    const tableCols = [
-      { header: 'Nombre de las drogas', width: 150 },
-      { header: 'Concentración\n(gr, Mg, UI)', width: 80 },
-      { header: 'Contenido env.\n(ml, comp)', width: 75 },
-      { header: 'Dosis\ndiaria', width: 65 },
-      { header: 'Cant. envases\n(caja, frasco)', width: 75 },
-      { header: 'Duración\ndel tto.', width: 70 },
-    ];
-
-    // Header de la tabla
-    const thHeight = 22;
-    p1.drawRectangle({
-      x: marginX,
-      y: y1 - thHeight,
-      width: contentWidth,
-      height: thHeight,
-      borderColor: rgb(0.2, 0.2, 0.2),
-      borderWidth: 0.6,
-      color: rgb(0.95, 0.95, 0.95),
-    });
-
-    let colX = marginX;
-    tableCols.forEach(col => {
-      p1.drawText(col.header.split('\n')[0], { x: colX + 4, y: y1 - 10, size: 7, font: fontBold });
-      if (col.header.includes('\n')) {
-        p1.drawText(col.header.split('\n')[1], { x: colX + 4, y: y1 - 18, size: 6.5, font });
-      }
-      p1.drawLine({ start: { x: colX, y: y1 }, end: { x: colX, y: y1 - thHeight }, thickness: 0.5, color: rgb(0.5, 0.5, 0.5) });
-      colX += col.width;
-    });
-    y1 -= thHeight;
-
-    // Filas de la tabla (5 filas)
     const drugs: DrugTableRow[] = (data.drogas_tabla && data.drogas_tabla.length > 0) ? data.drogas_tabla : [
       { droga: data.droga_principal || '', concentracion: '', envase: 'F.A.', dosisDiaria: data.dosis_m2 || '', cantidadEnvases: '1', duracionTto: '21 días' }
     ];
 
-    const rowHeight = 20;
-    for (let r = 0; r < 5; r++) {
-      const drug = drugs[r] || { droga: '', concentracion: '', envase: '', dosisDiaria: '', cantidadEnvases: '', duracionTto: '' };
-      p1.drawRectangle({
-        x: marginX,
-        y: y1 - rowHeight,
-        width: contentWidth,
-        height: rowHeight,
-        borderColor: rgb(0.3, 0.3, 0.3),
-        borderWidth: 0.5,
-        color: r % 2 === 0 ? rgb(1, 1, 1) : rgb(0.98, 0.98, 0.98)
-      });
-
-      let rx = marginX;
-      p1.drawText(drug.droga || '', { x: rx + 4, y: y1 - 13, size: 7.5, font: fontBold });
-      rx += tableCols[0].width;
-      p1.drawLine({ start: { x: rx, y: y1 }, end: { x: rx, y: y1 - rowHeight }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-
-      p1.drawText(drug.concentracion || '', { x: rx + 4, y: y1 - 13, size: 7.5, font });
-      rx += tableCols[1].width;
-      p1.drawLine({ start: { x: rx, y: y1 }, end: { x: rx, y: y1 - rowHeight }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-
-      p1.drawText(drug.envase || '', { x: rx + 4, y: y1 - 13, size: 7.5, font });
-      rx += tableCols[2].width;
-      p1.drawLine({ start: { x: rx, y: y1 }, end: { x: rx, y: y1 - rowHeight }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-
-      p1.drawText(drug.dosisDiaria || '', { x: rx + 4, y: y1 - 13, size: 7.5, font });
-      rx += tableCols[3].width;
-      p1.drawLine({ start: { x: rx, y: y1 }, end: { x: rx, y: y1 - rowHeight }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-
-      p1.drawText(drug.cantidadEnvases || '', { x: rx + 4, y: y1 - 13, size: 7.5, font });
-      rx += tableCols[4].width;
-      p1.drawLine({ start: { x: rx, y: y1 }, end: { x: rx, y: y1 - rowHeight }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-
-      p1.drawText(drug.duracionTto || '', { x: rx + 4, y: y1 - 13, size: 7.5, font });
-
-      y1 -= rowHeight;
+    const rowYs = [370, 315, 260, 205];
+    for (let i = 0; i < Math.min(drugs.length, 4); i++) {
+      const d = drugs[i];
+      const y = rowYs[i];
+      drawTextAt(p1, d.droga || '', 64, y, fontBold, 7.5, textColor);
+      drawTextAt(p1, d.concentracion || '', 205, y, font, 7.5, textColor);
+      drawTextAt(p1, d.envase || '', 282, y, font, 7.5, textColor);
+      drawTextAt(p1, d.dosisDiaria || '', 355, y, fontBold, 7.5, textColor);
+      drawTextAt(p1, d.cantidadEnvases || '', 425, y, fontBold, 7.5, textColor);
+      drawTextAt(p1, d.duracionTto || '', 492, y, font, 7.5, textColor);
     }
-
-    y1 -= 14;
 
     // Tratamiento prolongado
     const isProlongado = data.tratamiento_prolongado === 'SI';
-    p1.drawText('Tratamiento prolongado:', { x: marginX, y: y1, size: 8.5, font });
-    drawCheckbox(p1, marginX + 150, y1 - 2, 9, isProlongado, 'SI', font, 8);
-    drawCheckbox(p1, marginX + 220, y1 - 2, 9, !isProlongado, 'NO', font, 8);
-    y1 -= 16;
+    if (isProlongado) drawMark(p1, 262, 139, 10, fontBold, textColor);
+    else drawMark(p1, 344, 139, 10, fontBold, textColor);
 
-    // Datos Antropométricos y Ciclos
-    p1.drawText(`Peso: ${data.peso ? `${data.peso} kg` : ''}`, { x: marginX, y: y1, size: 8.5, font });
-    p1.drawText(`Superficie corporal: ${data.superficie_corporal ? `${data.superficie_corporal} m²` : ''}`, { x: marginX + 140, y: y1, size: 8.5, font: fontBold });
-    p1.drawText(`Total de ciclos de tto: ${data.total_ciclos || ''}`, { x: marginX + 320, y: y1, size: 8.5, font });
-    y1 -= 14;
+    // Antropometría y Ciclos
+    drawTextAt(p1, data.peso ? `${data.peso} kg` : '', 110, 113, font, 8.5, textColor);
+    drawTextAt(p1, data.superficie_corporal ? `${data.superficie_corporal} m²` : '', 270, 113, fontBold, 8.5, textColor);
+    drawTextAt(p1, data.total_ciclos || '', 465, 113, font, 8.5, textColor);
 
-    p1.drawText(`Talla: ${data.talla ? `${data.talla} cm` : ''}`, { x: marginX, y: y1, size: 8.5, font });
-    p1.drawText(`Dosis por M2 : ${data.dosis_m2 || ''}`, { x: marginX + 140, y: y1, size: 8.5, font });
-    p1.drawText(`Ciclo solicitado Nº: ${data.ciclo_solicitado || '1'}`, { x: marginX + 320, y: y1, size: 8.5, font: fontBold });
-
-    // Footer Página 1
-    p1.drawText('(VER AL DORSO) ⇒', { x: 595.28 - marginX - 100, y: 40, size: 8.5, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+    drawTextAt(p1, data.talla ? `${data.talla} cm` : '', 110, 87, font, 8.5, textColor);
+    drawTextAt(p1, data.dosis_m2 || '', 250, 87, font, 8.5, textColor);
+    drawTextAt(p1, data.ciclo_solicitado || '1', 465, 87, fontBold, 8.5, textColor);
 
     // ─────────────────────────────────────────────────────────────
     // PÁGINA 2 (DORSO)
     // ─────────────────────────────────────────────────────────────
-    const p2 = pdfDoc.addPage([595.28, 841.89]);
-    let y2 = 841.89 - 40;
+    // Antecedentes clínicos (9 líneas)
+    drawOnLines(p2, data.antecedentes_clinicos, [
+      { x: 185, y: 744, width: 350 },
+      { x: 64,  y: 724, width: 476 },
+      { x: 64,  y: 704, width: 476 },
+      { x: 64,  y: 684, width: 476 },
+      { x: 64,  y: 664, width: 476 },
+      { x: 64,  y: 644, width: 476 },
+      { x: 64,  y: 624, width: 476 },
+      { x: 64,  y: 604, width: 476 },
+      { x: 64,  y: 584, width: 476 },
+    ], font, 8, textColor);
 
-    // Header Dorso
-    y2 = drawSectionHeader(p2, y2, 'RESEÑA DE H.C.');
-    y2 -= 6;
+    // Antecedentes Quirúrgicos (5 líneas)
+    drawOnLines(p2, data.antecedentes_quirurgicos, [
+      { x: 205, y: 544, width: 330 },
+      { x: 64,  y: 524, width: 476 },
+      { x: 64,  y: 504, width: 476 },
+      { x: 64,  y: 484, width: 476 },
+      { x: 64,  y: 464, width: 476 },
+    ], font, 8, textColor);
 
-    // Función de sección en dorso con recuadro
-    const drawBackSection = (titleLabel: string, content: string, linesCount: number) => {
-      p2.drawText(titleLabel, { x: marginX, y: y2, size: 8.5, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
-      y2 -= 11;
-      const bHeight = linesCount * 12 + 6;
-      p2.drawRectangle({
-        x: marginX,
-        y: y2 - bHeight + 8,
-        width: contentWidth,
-        height: bHeight,
-        borderColor: rgb(0.8, 0.8, 0.8),
-        borderWidth: 0.5,
-        color: rgb(0.99, 0.99, 0.99),
-      });
+    // Tratamientos previos y fechas (7 líneas)
+    drawOnLines(p2, data.tratamientos_previos, [
+      { x: 350, y: 407, width: 185 },
+      { x: 64,  y: 387, width: 476 },
+      { x: 64,  y: 367, width: 476 },
+      { x: 64,  y: 347, width: 476 },
+      { x: 64,  y: 327, width: 476 },
+      { x: 64,  y: 307, width: 476 },
+      { x: 64,  y: 287, width: 476 },
+    ], font, 8, textColor);
 
-      drawWrappedTextLines(p2, content || '', marginX + 5, y2 + 2, contentWidth - 10, linesCount, 12, 8, font);
-      y2 -= (bHeight + 10);
-    };
+    // Estudios adjuntos (4 líneas)
+    drawOnLines(p2, data.estudios_adjuntos, [
+      { x: 64, y: 227, width: 476 },
+      { x: 64, y: 207, width: 476 },
+      { x: 64, y: 187, width: 476 },
+      { x: 64, y: 167, width: 476 },
+    ], font, 8, textColor);
 
-    // 1. Antecedentes clínicos (9 líneas)
-    drawBackSection('Antecedentes clínicos:', data.antecedentes_clinicos, 8);
-
-    // 2. Antecedentes Quirúrgicos (5 líneas)
-    drawBackSection('Antecedentes Quirúrgicos:', data.antecedentes_quirurgicos, 4);
-
-    // 3. Tratamientos previos y fechas (7 líneas)
-    drawBackSection(
-      'Detallar tratamientos previos y fechas de los mismos (Oncológicos, radioterapia; quimioterapia, inmunoterapia, hormonoterapia, etc) :',
-      data.tratamientos_previos,
-      6
-    );
-
-    // 4. Estudios solicitados / adjuntos (4 líneas)
-    drawBackSection(
-      'Se solicita que se adjunte original o copia de los siguientes estudios:\nAnatomía patológica, Inmuno histoquímica, Inmuno fenotipos o similares; y estudios por imágenes inherentes a estatificación. En el caso puntual del L.N.H. biopsia medular ósea.',
-      data.estudios_adjuntos,
-      4
-    );
-
-    // Firmas al pie página 2
-    y2 = 60;
-    const docName = context.doctorData?.nombre || 'Médico Especialista';
+    // Firmas al pie
+    const docName = context.doctorData?.nombre || '';
     const docMat = context.doctorData?.matricula ? `M.P. ${context.doctorData.matricula}` : '';
-    const sigColWidth = contentWidth / 3;
+    if (docName) {
+      drawTextAt(p2, docName, 100, 50, fontBold, 7.5, textColor);
+      if (docMat) drawTextAt(p2, docMat, 100, 40, font, 7, textColor);
+    }
 
-    const drawSigLineP2 = (colIdx: number, titleSig: string, extra = '') => {
-      const sx = marginX + colIdx * sigColWidth;
-      p2.drawLine({
-        start: { x: sx + 10, y: y2 + 15 },
-        end: { x: sx + sigColWidth - 15, y: y2 + 15 },
-        thickness: 0.6,
-        color: rgb(0.4, 0.4, 0.4)
-      });
-      p2.drawText(titleSig, { x: sx + 15, y: y2 + 4, size: 7.5, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
-      if (extra) {
-        p2.drawText(extra, { x: sx + 15, y: y2 - 5, size: 6.5, font, color: rgb(0.4, 0.4, 0.4) });
-      }
-    };
-
-    drawSigLineP2(0, docName, docMat || 'Firma y Sello Médico Especialista');
-    drawSigLineP2(1, 'Jefe de Servicio', 'Firma y Sello');
-    drawSigLineP2(2, 'Director del Hosp.', 'Hospital Oncológico');
-
-    const pdfBytes = await pdfDoc.save();
-    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const pdfBytesOut = await pdfDoc.save();
+    const blob = new Blob([pdfBytesOut], { type: 'application/pdf' });
     const filename = `Solicitud_Medicamentos_${(data.nombre_apellido || 'Paciente').replace(/\s+/g, '_')}_${(data.fecha_pedido || '').replace(/\//g, '-')}.pdf`;
 
     return { blob, filename };

@@ -51,6 +51,7 @@ export interface AdminFormDefinition {
   institution: string;
   description: string;
   category: 'Prácticas y Estudios' | 'Medicación y Farmacia' | 'Programas Especiales';
+  templateFile?: string;
   fields: AdminFormField[];
   extractData: (context: AdminFormContext, initialValues?: Record<string, any>) => Promise<Record<string, any>>;
   generatePDF: (data: Record<string, any>, context: AdminFormContext) => Promise<{ blob: Blob; filename: string }>;

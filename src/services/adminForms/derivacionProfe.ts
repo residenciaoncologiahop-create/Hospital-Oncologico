@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../../utils/aiProxy';
 import { AdminFormDefinition, AdminFormContext } from './types';
-import { drawWrappedTextLines, tryEmbedHeaderLogo } from './pdfHelpers';
+import { drawOnLines, drawTextAt, cleanDate } from './pdfHelpers';
 
 export const derivacionProfeDefinition: AdminFormDefinition = {
   id: 'profe_133',
@@ -11,6 +11,7 @@ export const derivacionProfeDefinition: AdminFormDefinition = {
   institution: 'Ministerio de Salud de Córdoba / Programa Incluir Salud (PROFE)',
   description: 'Historia clínica de estado actual, evolución mensual y dosis para cobertura de fármacos oncológicos de alto costo vía PROFE.',
   category: 'Programas Especiales',
+  templateFile: '/forms/derivacion_profe_133.pdf',
 
   fields: [
     {
@@ -171,7 +172,7 @@ export const derivacionProfeDefinition: AdminFormDefinition = {
 
       const prompt = `
 Actúa como oncólogo médico del Hospital Oncológico Provincial de Córdoba. Hoy es ${today}.
-Analizá la historia clínica y extraé los datos para completar el "Form 133.0 Planilla derivación Profe - Medicación Alto Costo" (Ministerio de Salud de Córdoba / Programa Incluir Salud).
+Analizá la historia clínica y extraé los datos para completar el "Form 133.0 Planilla derivacion Profe - Medicación Alto Costo" (Ministerio de Salud de Córdoba / Programa Incluir Salud).
 ${drugHint}
 
 DATOS DEL PACIENTE:
@@ -220,125 +221,87 @@ ${context.historyText}
   },
 
   generatePDF: async (data: Record<string, any>, context: AdminFormContext) => {
-    const pdfDoc = await PDFDocument.create();
+    const formUrl = window.location.origin + '/forms/derivacion_profe_133.pdf';
+    const res = await fetch(formUrl);
+    if (!res.ok) throw new Error('No se encontró la plantilla original de Planilla PROFE 133.0 (/forms/derivacion_profe_133.pdf)');
+
+    const pdfDoc = await PDFDocument.load(await res.arrayBuffer());
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const page = pdfDoc.addPage([595.28, 841.89]); // A4
-    const { width, height } = page.getSize();
-    const marginX = 40;
-    const contentWidth = width - marginX * 2;
-    let y = height - 28;
+    const page = pdfDoc.getPages()[0];
+    const textColor = rgb(0, 0, 0);
 
-    // Logo Encabezado
-    y = await tryEmbedHeaderLogo(pdfDoc, page, y, 32);
+    // HOSPITAL O LUGAR DE ATENCIÓN
+    drawTextAt(page, data.hospital || 'HOSPITAL ONCOLÓGICO PROVINCIAL DE CÓRDOBA', 225, 753, fontBold, 8, textColor);
 
-    // Header oficial Form 133
-    page.drawText('Form 133.0 Planilla derivacion Profe', {
-      x: marginX,
-      y,
-      size: 7.5,
-      font: fontBold,
-      color: rgb(0.3, 0.3, 0.3)
-    });
-    y -= 12;
+    // FILIACIÓN Y BENEFICIO
+    drawTextAt(page, (data.apellido_nombre || '').toUpperCase(), 175, 672, fontBold, 8.5, textColor);
+    drawTextAt(page, data.nro_beneficio || '', 180, 650, fontBold, 8.5, textColor);
 
-    page.drawText(`HOSPITAL O LUGAR DE ATENCION: ${data.hospital || 'HOSPITAL ONCOLÓGICO PROVINCIAL'}`, {
-      x: marginX,
-      y,
-      size: 8.5,
-      font: fontBold
-    });
-    y -= 12;
+    drawTextAt(page, data.edad || '', 110, 628, font, 8.5, textColor);
+    drawTextAt(page, data.dni || '', 270, 628, fontBold, 8.5, textColor);
 
-    page.drawText('HISTORIA CLINICA (estado actual) Formulario para completar en todos sus ítems', {
-      x: marginX,
-      y,
-      size: 8,
-      font: fontBold,
-      color: rgb(0.1, 0.1, 0.1)
-    });
-    y -= 10;
+    drawTextAt(page, data.telefono || '', 135, 606, font, 8.5, textColor);
+    drawTextAt(page, data.domicilio || '', 320, 606, font, 8.5, textColor);
 
-    page.drawText('Adjuntar informes escritos de estudios previos de laboratorio, diagnóstico por imágenes, etc.', {
-      x: marginX,
-      y,
-      size: 7.5,
-      font,
-      color: rgb(0.4, 0.4, 0.4)
-    });
-    page.drawLine({ start: { x: marginX, y: y - 4 }, end: { x: width - marginX, y: y - 4 }, thickness: 0.8, color: rgb(0.2, 0.2, 0.2) });
-    y -= 18;
+    // ANTECEDENTES PERSONALES Y HEREDOFAMILIARES (3 líneas)
+    drawOnLines(page, data.antecedentes_heredofamiliares, [
+      { x: 310, y: 562, width: 225 },
+      { x: 64,  y: 542, width: 476 },
+      { x: 64,  y: 522, width: 476 },
+    ], font, 8, textColor);
 
-    // Filiación y Beneficio
-    page.drawText(`APELLIDO Y NOMBRE: ${data.apellido_nombre || ''}`, { x: marginX, y, size: 8.5, font });
-    y -= 13;
+    // RESUMEN SEMIOLÓGICO ACTUAL – MEDICACIÓN ALTO COSTO (8 líneas)
+    drawOnLines(page, data.resumen_semiologico, [
+      { x: 345, y: 492, width: 190 },
+      { x: 64,  y: 472, width: 476 },
+      { x: 64,  y: 452, width: 476 },
+      { x: 64,  y: 432, width: 476 },
+      { x: 64,  y: 412, width: 476 },
+      { x: 64,  y: 392, width: 476 },
+      { x: 64,  y: 372, width: 476 },
+      { x: 64,  y: 352, width: 476 },
+    ], font, 8, textColor);
 
-    page.drawText(`NÚMERO DE BENEFICIO: ${data.nro_beneficio || '……………………………………'}`, { x: marginX, y, size: 8.5, font: fontBold });
-    y -= 13;
+    // DIAGNOSTICO (3 líneas)
+    drawOnLines(page, data.diagnostico, [
+      { x: 150, y: 322, width: 385 },
+      { x: 64,  y: 302, width: 476 },
+      { x: 64,  y: 282, width: 476 },
+    ], font, 8, textColor);
 
-    page.drawText(`EDAD: ${data.edad || ''}`, { x: marginX, y, size: 8.5, font });
-    page.drawText(`DNI: ${data.dni || ''}`, { x: marginX + 180, y, size: 8.5, font });
-    y -= 13;
+    // EVOLUCION Y PRONOSTICO – EVOLUCIÓN MENSUAL PARA ALTO COSTO (7 líneas)
+    drawOnLines(page, data.evolucion_pronostico, [
+      { x: 385, y: 252, width: 150 },
+      { x: 64,  y: 232, width: 476 },
+      { x: 64,  y: 212, width: 476 },
+      { x: 64,  y: 192, width: 476 },
+      { x: 64,  y: 172, width: 476 },
+      { x: 64,  y: 152, width: 476 },
+      { x: 64,  y: 132, width: 476 },
+    ], font, 8, textColor);
 
-    page.drawText(`TELEFONO: ${data.telefono || ''}`, { x: marginX, y, size: 8.5, font });
-    page.drawText(`DOMICILIO: ${data.domicilio || ''}`, { x: marginX + 180, y, size: 8.5, font });
-    page.drawLine({ start: { x: marginX, y: y - 4 }, end: { x: width - marginX, y: y - 4 }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-    y -= 18;
+    // TRATAMIENTO/S PROPUESTO – DOSIS MENSUAL DE MEDICACIÓN ALTO COSTO (8 líneas)
+    drawOnLines(page, data.tratamiento_propuesto, [
+      { x: 425, y: 102, width: 110 },
+      { x: 64,  y: 82,  width: 476 },
+      { x: 64,  y: 62,  width: 476 },
+      { x: 64,  y: 42,  width: 476 },
+    ], font, 8, textColor);
 
-    // Función de sección con recuadro y líneas
-    const drawProfeSection = (titleLabel: string, content: string, linesCount: number) => {
-      page.drawText(titleLabel, { x: marginX, y, size: 8, font: fontBold, color: rgb(0, 0, 0) });
-      y -= 10;
-      const bHeight = linesCount * 11 + 6;
-      page.drawRectangle({
-        x: marginX,
-        y: y - bHeight + 8,
-        width: contentWidth,
-        height: bHeight,
-        borderColor: rgb(0.8, 0.8, 0.8),
-        borderWidth: 0.5,
-        color: rgb(0.98, 0.98, 0.98),
-      });
+    // FECHA Y FIRMA
+    drawTextAt(page, cleanDate(data.fecha) || data.fecha || '', 110, 22, fontBold, 8.5, textColor);
 
-      drawWrappedTextLines(page, content || '', marginX + 4, y + 2, contentWidth - 8, linesCount, 11, 7.5, font);
-      y -= (bHeight + 8);
-    };
-
-    // 1. Antecedentes personales y heredofamiliares (3 líneas)
-    drawProfeSection('ANTECEDENTES PERSONALES Y HEREDOFAMILIARES:', data.antecedentes_heredofamiliares, 3);
-
-    // 2. Resumen semiológico actual - Medicación alto costo (6 líneas)
-    drawProfeSection('RESUMEN SEMIOLÓGICO ACTUAL – MEDICACIÓN ALTO COSTO:', data.resumen_semiologico, 6);
-
-    // 3. Diagnóstico (2 líneas)
-    drawProfeSection('DIAGNOSTICO:', data.diagnostico, 2);
-
-    // 4. Evolución y pronóstico - Evolución mensual para alto costo (6 líneas)
-    drawProfeSection('EVOLUCION Y PRONOSTICO – EVOLUCIÓN MENSUAL PARA ALTO COSTO:', data.evolucion_pronostico, 6);
-
-    // 5. Tratamiento propuesto - Dosis mensual (6 líneas)
-    drawProfeSection('TRATAMIENTO/S PROPUESTO – DOSIS MENSUAL DE MEDICACIÓN ALTO COSTO:', data.tratamiento_propuesto, 6);
-
-    // Footer de firmas y fecha
-    y = 45;
-    page.drawText(`FECHA: ${data.fecha || '……/……/…………'}`, { x: marginX, y, size: 8.5, font: fontBold });
-
-    const docName = context.doctorData?.nombre || 'Firma y Sello del Profesional';
+    const docName = context.doctorData?.nombre || '';
     const docMat = context.doctorData?.matricula ? `M.P. ${context.doctorData.matricula}` : '';
-    const sigX = width - marginX - 200;
+    if (docName) {
+      drawTextAt(page, docName, 390, 22, fontBold, 7.5, textColor);
+      if (docMat) drawTextAt(page, docMat, 390, 12, font, 7, textColor);
+    }
 
-    page.drawLine({
-      start: { x: sigX, y: y + 15 },
-      end: { x: sigX + 190, y: y + 15 },
-      thickness: 0.6,
-      color: rgb(0.3, 0.3, 0.3)
-    });
-    page.drawText(docName, { x: sigX + 10, y: y + 4, size: 8, font: fontBold });
-    page.drawText(docMat || 'FIRMA Y SELLO DEL PROFESIONAL', { x: sigX + 10, y: y - 6, size: 7, font, color: rgb(0.4, 0.4, 0.4) });
-
-    const pdfBytes = await pdfDoc.save();
-    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const pdfBytesOut = await pdfDoc.save();
+    const blob = new Blob([pdfBytesOut], { type: 'application/pdf' });
     const filename = `Planilla_PROFE_133_${(data.apellido_nombre || 'Paciente').replace(/\s+/g, '_')}_${(data.fecha || '').replace(/\//g, '-')}.pdf`;
 
     return { blob, filename };

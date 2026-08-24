@@ -1,4 +1,4 @@
-import { PDFDocument, PDFPage, PDFFont, rgb } from 'pdf-lib';
+import { PDFPage, PDFFont, rgb } from 'pdf-lib';
 
 export const calculateBSA = (weight: string | number, height: string | number): string => {
   const w = parseFloat(weight?.toString().replace(',', '.') || '');
@@ -17,138 +17,108 @@ export const cleanDate = (val: string): string => {
   return val.trim();
 };
 
-export const wrapText = (
+export interface LineSpec {
+  x: number;
+  y: number;
+  width: number;
+}
+
+export const drawOnLines = (
+  page: PDFPage,
   text: string,
-  maxWidth: number,
-  fontSize: number,
-  font: PDFFont
-): string[] => {
-  if (!text) return [];
-  const words = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split(/\s+/);
-  const lines: string[] = [];
-  let currentLine = '';
+  lines: LineSpec[],
+  font: PDFFont,
+  fontSize = 8,
+  color = rgb(0, 0, 0)
+) => {
+  if (!text?.trim() || lines.length === 0) return;
 
-  for (const word of words) {
-    if (!word) continue;
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+  const words = text.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim().split(' ');
+  let wordIdx = 0;
 
-    if (testWidth <= maxWidth) {
-      currentLine = testLine;
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    if (wordIdx >= words.length) break;
+
+    const line = lines[lineIdx];
+    let currentLineText = '';
+
+    while (wordIdx < words.length) {
+      const nextWord = words[wordIdx];
+      const testText = currentLineText ? `${currentLineText} ${nextWord}` : nextWord;
+      const testWidth = font.widthOfTextAtSize(testText, fontSize);
+
+      if (testWidth <= line.width) {
+        currentLineText = testText;
+        wordIdx++;
+      } else {
+        // Si una sola palabra excede el ancho de la línea, forzar corte
+        if (!currentLineText) {
+          currentLineText = nextWord;
+          wordIdx++;
+        }
+        break;
+      }
+    }
+
+    if (currentLineText) {
+      page.drawText(currentLineText, {
+        x: line.x,
+        y: line.y,
+        size: fontSize,
+        font,
+        color
+      });
     }
   }
-
-  if (currentLine) lines.push(currentLine);
-  return lines;
 };
 
-export const drawWrappedTextLines = (
+export const drawTextAt = (
   page: PDFPage,
   text: string,
   x: number,
-  startY: number,
-  maxWidth: number,
-  maxLines: number,
-  lineHeight: number,
-  fontSize: number,
+  y: number,
   font: PDFFont,
-  color = rgb(0.1, 0.1, 0.1)
-): number => {
-  if (!text?.trim()) return startY;
-  const lines = wrapText(text.trim(), maxWidth, fontSize, font);
-  const visibleLines = lines.slice(0, maxLines);
-
-  visibleLines.forEach((line, index) => {
-    page.drawText(line, {
-      x,
-      y: startY - index * lineHeight,
-      size: fontSize,
-      font,
-      color,
-    });
+  fontSize = 8.5,
+  color = rgb(0, 0, 0)
+) => {
+  if (!text || !String(text).trim()) return;
+  page.drawText(String(text).trim(), {
+    x,
+    y,
+    size: fontSize,
+    font,
+    color
   });
-
-  return startY - visibleLines.length * lineHeight;
 };
 
-export const drawCheckbox = (
+export const drawMark = (
   page: PDFPage,
   x: number,
   y: number,
-  size: number,
-  checked: boolean,
-  label?: string,
+  size = 10,
   font?: PDFFont,
-  fontSize = 9
+  color = rgb(0, 0, 0)
 ) => {
-  // Draw square box
-  page.drawRectangle({
-    x,
-    y,
-    width: size,
-    height: size,
-    borderColor: rgb(0.2, 0.2, 0.2),
-    borderWidth: 0.8,
-    color: rgb(1, 1, 1),
-  });
-
-  if (checked) {
-    // Draw cross 'X' inside box
-    const inset = size * 0.2;
-    page.drawLine({
-      start: { x: x + inset, y: y + inset },
-      end: { x: x + size - inset, y: y + size - inset },
-      thickness: 1.2,
-      color: rgb(0, 0, 0),
-    });
-    page.drawLine({
-      start: { x: x + inset, y: y + size - inset },
-      end: { x: x + size - inset, y: y + inset },
-      thickness: 1.2,
-      color: rgb(0, 0, 0),
-    });
-  }
-
-  if (label && font) {
-    page.drawText(label, {
-      x: x + size + 4,
-      y: y + 1.5,
-      size: fontSize,
+  if (font) {
+    page.drawText('X', {
+      x,
+      y,
+      size,
       font,
-      color: rgb(0.15, 0.15, 0.15),
+      color
+    });
+  } else {
+    page.drawLine({
+      start: { x, y },
+      end: { x: x + size, y: y + size },
+      thickness: 1.2,
+      color
+    });
+    page.drawLine({
+      start: { x, y: y + size },
+      end: { x: x + size, y },
+      thickness: 1.2,
+      color
     });
   }
-};
-
-export const tryEmbedHeaderLogo = async (
-  pdfDoc: PDFDocument,
-  page: PDFPage,
-  yPos: number,
-  maxHeight = 35
-): Promise<number> => {
-  try {
-    const logoUrl = window.location.origin + '/img/header_logo.png';
-    const res = await fetch(logoUrl);
-    if (res.ok) {
-      const bytes = await res.arrayBuffer();
-      const png = await pdfDoc.embedPng(bytes);
-      const scale = maxHeight / png.height;
-      const width = png.width * scale;
-      const height = png.height * scale;
-      const { width: pageWidth } = page.getSize();
-      page.drawImage(png, {
-        x: (pageWidth - width) / 2,
-        y: yPos - height,
-        width,
-        height,
-      });
-      return yPos - height - 12;
-    }
-  } catch {
-    // Fallback if logo not found
-  }
-  return yPos;
 };
