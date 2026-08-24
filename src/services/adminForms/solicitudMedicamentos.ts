@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../../utils/aiProxy';
 import { AdminFormDefinition, AdminFormContext, DrugTableRow } from './types';
-import { calculateBSA, drawOnLines, drawTextAt, drawMark, cleanDate } from './pdfHelpers';
+import { calculateBSA, drawOnLinesFitted, drawTextAt, drawMark, cleanDate } from './pdfHelpers';
 
 export const solicitudMedicamentosDefinition: AdminFormDefinition = {
   id: 'solicitud_medicamentos_onco',
@@ -58,27 +58,8 @@ export const solicitudMedicamentosDefinition: AdminFormDefinition = {
       group: '1. Esquema Terapéutico Solicitado'
     },
     {
-      key: 'paciente_internado',
-      label: 'Paciente Internado',
-      type: 'select',
-      defaultValue: 'NO',
-      options: [{ label: 'NO', value: 'NO' }, { label: 'SI', value: 'SI' }],
-      gridSpan: 3,
-      group: '1. Esquema Terapéutico Solicitado'
-    },
-    {
-      key: 'tratamiento_prolongado',
-      label: 'Tratamiento Prolongado',
-      type: 'select',
-      defaultValue: 'SI',
-      options: [{ label: 'SI', value: 'SI' }, { label: 'NO', value: 'NO' }],
-      gridSpan: 3,
-      group: '1. Esquema Terapéutico Solicitado'
-    },
-    // Datos del Paciente
-    {
       key: 'nombre_apellido',
-      label: 'Nombre y Apellido',
+      label: 'Nombre y Apellido del Paciente',
       type: 'text',
       required: true,
       gridSpan: 6,
@@ -100,14 +81,6 @@ export const solicitudMedicamentosDefinition: AdminFormDefinition = {
       group: '2. Filiación del Paciente'
     },
     {
-      key: 'nro_expediente',
-      label: 'N° de Expediente (Opcional)',
-      type: 'text',
-      placeholder: 'Ej: 0425-...',
-      gridSpan: 3,
-      group: '2. Filiación del Paciente'
-    },
-    {
       key: 'edad',
       label: 'Edad',
       type: 'text',
@@ -117,16 +90,7 @@ export const solicitudMedicamentosDefinition: AdminFormDefinition = {
     {
       key: 'sexo',
       label: 'Sexo',
-      type: 'select',
-      options: [{ label: 'Femenino', value: 'Femenino' }, { label: 'Masculino', value: 'Masculino' }],
-      gridSpan: 3,
-      group: '2. Filiación del Paciente'
-    },
-    {
-      key: 'fecha_nacimiento',
-      label: 'Fecha de Nacimiento',
       type: 'text',
-      placeholder: 'DD/MM/AAAA',
       gridSpan: 3,
       group: '2. Filiación del Paciente'
     },
@@ -142,154 +106,186 @@ export const solicitudMedicamentosDefinition: AdminFormDefinition = {
       label: 'Localidad Paciente',
       type: 'text',
       defaultValue: 'Córdoba',
-      gridSpan: 3,
+      gridSpan: 6,
+      group: '2. Filiación del Paciente'
+    },
+    {
+      key: 'fecha_nacimiento',
+      label: 'Fecha de Nacimiento',
+      type: 'date',
+      gridSpan: 4,
       group: '2. Filiación del Paciente'
     },
     {
       key: 'telefono_paciente',
-      label: 'Teléfono Contacto Paciente',
+      label: 'T.E. Paciente',
       type: 'text',
-      gridSpan: 3,
+      gridSpan: 4,
       group: '2. Filiación del Paciente'
     },
-    // Antropometría y Dosis
+    {
+      key: 'nro_expediente',
+      label: 'N° de Expediente',
+      type: 'text',
+      gridSpan: 4,
+      group: '2. Filiación del Paciente'
+    },
+    {
+      key: 'paciente_internado',
+      label: 'Paciente Internado',
+      type: 'radio',
+      options: [
+        { label: 'NO', value: 'NO' },
+        { label: 'SI', value: 'SI' }
+      ],
+      defaultValue: 'NO',
+      gridSpan: 4,
+      group: '3. Datos Clínicos y Antropométricos'
+    },
+    {
+      key: 'tratamiento_prolongado',
+      label: 'Tratamiento Prolongado',
+      type: 'radio',
+      options: [
+        { label: 'SI', value: 'SI' },
+        { label: 'NO', value: 'NO' }
+      ],
+      defaultValue: 'SI',
+      gridSpan: 4,
+      group: '3. Datos Clínicos y Antropométricos'
+    },
     {
       key: 'diagnostico',
       label: 'Diagnóstico Oncológico',
-      type: 'text',
+      type: 'textarea',
+      placeholder: 'Histología, primario y subtipo tumoral...',
       required: true,
-      gridSpan: 8,
-      group: '3. Parámetros Clínicos y Dosis'
+      rows: 2,
+      gridSpan: 12,
+      group: '3. Datos Clínicos y Antropométricos'
     },
     {
       key: 'estadio',
-      label: 'Estadío',
+      label: 'Estadío TNM / Clínico',
       type: 'text',
-      placeholder: 'Ej: IV, IIIB, cT3 N1 M0...',
+      placeholder: 'Ej: Estadío IV (cT2 cN1 cM1b)',
       required: true,
       gridSpan: 4,
-      group: '3. Parámetros Clínicos y Dosis'
+      group: '3. Datos Clínicos y Antropométricos'
     },
     {
       key: 'peso',
       label: 'Peso (kg)',
-      type: 'number',
-      required: true,
-      gridSpan: 3,
-      group: '3. Parámetros Clínicos y Dosis'
+      type: 'text',
+      gridSpan: 2,
+      group: '3. Datos Clínicos y Antropométricos'
     },
     {
       key: 'talla',
       label: 'Talla (cm)',
-      type: 'number',
-      required: true,
-      gridSpan: 3,
-      group: '3. Parámetros Clínicos y Dosis'
+      type: 'text',
+      gridSpan: 2,
+      group: '3. Datos Clínicos y Antropométricos'
     },
     {
       key: 'superficie_corporal',
       label: 'Superficie Corporal (m²)',
       type: 'text',
-      required: true,
-      gridSpan: 3,
-      group: '3. Parámetros Clínicos y Dosis',
-      helperText: 'Cálculo por Mosteller.'
+      gridSpan: 4,
+      group: '3. Datos Clínicos y Antropométricos'
     },
     {
       key: 'dosis_m2',
-      label: 'Dosis por m² / Dosis Plana',
+      label: 'Dosis por m² / Dosis Total',
       type: 'text',
-      placeholder: 'Ej: 200 mg c/21d o 85 mg/m²',
-      gridSpan: 3,
-      group: '3. Parámetros Clínicos y Dosis'
+      placeholder: 'Ej: 200 mg fijos o 175 mg/m²',
+      gridSpan: 4,
+      group: '4. Posología y Ciclos'
     },
     {
       key: 'ciclo_solicitado',
       label: 'Ciclo Solicitado N°',
       type: 'text',
       defaultValue: '1',
-      gridSpan: 6,
-      group: '3. Parámetros Clínicos y Dosis'
+      gridSpan: 4,
+      group: '4. Posología y Ciclos'
     },
     {
       key: 'total_ciclos',
-      label: 'Total de Ciclos Planeados',
+      label: 'Total de Ciclos Previstos',
       type: 'text',
       defaultValue: '6 ciclos',
-      gridSpan: 6,
-      group: '3. Parámetros Clínicos y Dosis'
+      gridSpan: 4,
+      group: '4. Posología y Ciclos'
     },
-    // Reseña HC (Página 2)
     {
       key: 'antecedentes_clinicos',
-      label: 'Antecedentes Clínicos y Comorbilidades',
+      label: 'Antecedentes Clínicos (Dorso)',
       type: 'textarea',
-      placeholder: 'Comorbilidades, factores de riesgo, ECOG...',
-      rows: 3,
+      placeholder: 'Comorbilidades, ECOG, síntomas y toxicidades...',
+      rows: 4,
       gridSpan: 12,
-      group: '4. Reseña de Historia Clínica (Página 2)'
+      group: '5. Reseña de Historia Clínica (Dorso)'
     },
     {
       key: 'antecedentes_quirurgicos',
-      label: 'Antecedentes Quirúrgicos',
+      label: 'Antecedentes Quirúrgicos (Dorso)',
       type: 'textarea',
-      placeholder: 'Cirugías oncológicas y no oncológicas previas con fecha...',
-      rows: 2,
+      placeholder: 'Cirugías oncológicas previas con fechas...',
+      rows: 3,
       gridSpan: 12,
-      group: '4. Reseña de Historia Clínica (Página 2)'
+      group: '5. Reseña de Historia Clínica (Dorso)'
     },
     {
       key: 'tratamientos_previos',
-      label: 'Tratamientos Previos y Fechas (QT, RT, Inmuno, Hormono)',
+      label: 'Tratamientos Previos y Fechas (Dorso)',
       type: 'textarea',
-      placeholder: 'Líneas previas de quimioterapia, esquemas, fechas y respuesta...',
+      placeholder: 'Quimioterapia, radioterapia o líneas previas...',
       rows: 3,
       gridSpan: 12,
-      group: '4. Reseña de Historia Clínica (Página 2)'
+      group: '5. Reseña de Historia Clínica (Dorso)'
     },
     {
       key: 'estudios_adjuntos',
-      label: 'Estudios Adjuntos (AP, IHQ, Biopsia, Imágenes)',
+      label: 'Estudios Adjuntos e Inmunohistoquímica (Dorso)',
       type: 'textarea',
-      placeholder: 'Biopsia con fecha e IHQ (receptores, HER2, etc.) y estudios por imágenes...',
+      placeholder: 'Biopsias, IHQ (RE/RP/HER2/Ki67), TC o PET...',
       rows: 3,
       gridSpan: 12,
-      group: '4. Reseña de Historia Clínica (Página 2)'
+      group: '5. Reseña de Historia Clínica (Dorso)'
     }
   ],
 
   extractData: async (context: AdminFormContext, initialValues?: Record<string, any>) => {
     const today = new Date().toLocaleDateString('es-AR');
     const p = context.patient || {};
-    const doc = context.doctorData || {};
-
-    const rawWeight = p.weight || '';
-    const rawHeight = p.height || '';
-    const bsa = calculateBSA(rawWeight, rawHeight);
+    const weight = p.weight ? parseFloat(p.weight) : undefined;
+    const height = p.height ? parseFloat(p.height) : undefined;
+    const bsa = calculateBSA(weight, height);
 
     const baseData: Record<string, any> = {
       droga_principal: initialValues?.droga_principal || '',
       fecha_pedido: today,
       hospital: 'Hospital Oncológico Provincial',
       localidad_hosp: 'Córdoba',
-      telefono_profesional: doc.cel_area && doc.cel_num ? `${doc.cel_area} ${doc.cel_num}` : '',
-      paciente_internado: 'NO',
-      tratamiento_prolongado: 'SI',
+      telefono_profesional: '',
       nombre_apellido: p.name || '',
-      nro_expediente: '',
       dni: p.dni || '',
-      nro_hc: p.hcNumber || p.id || '',
+      nro_hc: p.recordNumber || '',
       edad: p.age ? String(p.age) : '',
-      sexo: p.gender || 'Femenino',
-      fecha_nacimiento: p.birthDate || '',
+      sexo: p.sex === 'M' ? 'Masculino' : p.sex === 'F' ? 'Femenino' : '',
       domicilio: '',
       localidad: 'Córdoba',
+      fecha_nacimiento: p.birthDate || '',
       telefono_paciente: '',
+      nro_expediente: '',
+      paciente_internado: 'NO',
+      tratamiento_prolongado: 'SI',
       diagnostico: p.diagnosis || '',
       estadio: p.stage || '',
-      peso: rawWeight ? String(rawWeight) : '',
-      talla: rawHeight ? String(rawHeight) : '',
-      superficie_corporal: bsa,
+      peso: weight ? String(weight) : '',
+      talla: height ? String(height) : '',
+      superficie_corporal: bsa ? String(bsa) : '',
       dosis_m2: '',
       ciclo_solicitado: '1',
       total_ciclos: '6 ciclos',
@@ -297,7 +293,7 @@ export const solicitudMedicamentosDefinition: AdminFormDefinition = {
       antecedentes_quirurgicos: '',
       tratamientos_previos: '',
       estudios_adjuntos: '',
-      drogas_tabla: [] as DrugTableRow[]
+      drogas_tabla: []
     };
 
     if (!context.historyText && (!context.timeline || context.timeline.length === 0)) {
@@ -305,45 +301,46 @@ export const solicitudMedicamentosDefinition: AdminFormDefinition = {
     }
 
     try {
-      const drugHint = initialValues?.droga_principal ? `FÁRMACO SOLICITADO POR EL MÉDICO: ${initialValues.droga_principal}.` : '';
+      const drugHint = initialValues?.droga_principal ? `FÁRMACO/ESQUEMA SOLICITADO: ${initialValues.droga_principal}.` : '';
 
       const prompt = `
 Actúa como oncólogo médico del Hospital Oncológico Provincial de Córdoba. Hoy es ${today}.
-Analizá la historia clínica y extraé los datos para completar la "FICHA DE SOLICITUD DE MEDICAMENTOS ONCOLÓGICOS".
+Analizá la historia clínica del paciente y extraé los datos para completar la "FICHA DE SOLICITUD DE MEDICAMENTOS ONCOLÓGICOS" oficial (2 páginas).
 ${drugHint}
 
 DATOS DEL PACIENTE:
 - Nombre: ${baseData.nombre_apellido}
 - DNI: ${baseData.dni}
-- Diagnóstico: ${baseData.diagnostico}
-- Peso: ${baseData.peso} kg, Talla: ${baseData.talla} cm
+- Diagnóstico Base: ${baseData.diagnostico}
+- Estadío: ${baseData.estadio}
+- Peso: ${baseData.peso} kg | Talla: ${baseData.talla} cm | SC: ${baseData.superficie_corporal} m²
 
 INSTRUCCIONES DE EXTRACCIÓN:
-Devuelve ÚNICAMENTE un objeto JSON válido con los campos exactos:
+Devuelve ÚNICAMENTE un objeto JSON válido con los siguientes campos en texto claro, conciso y profesional en español:
 {
-  "droga_principal": "Nombre del fármaco o esquema oncológico principal (ej: Pembrolizumab, Carboplatino + Paclitaxel, Trastuzumab, etc.)",
-  "diagnostico": "Diagnóstico oncológico con histología",
-  "estadio": "Estadío clínico/TNM (ej: IV, IIIA, etc.)",
-  "dosis_m2": "Dosis por m2 o dosis fija según el fármaco",
-  "ciclo_solicitado": "1",
-  "total_ciclos": "Cantidad de ciclos estimada (ej: 6 ciclos)",
+  "droga_principal": "Nombre del fármaco o esquema oncológico principal (ej: Pembrolizumab, Letrozol, etc.)",
+  "diagnostico": "Diagnóstico histopatológico y subtipo tumoral conciso (máximo 150 caracteres).",
+  "estadio": "Estadío TNM o estadío clínico resumido (ej: Estadío IV cT2 cN1 cM1b).",
+  "dosis_m2": "Dosis calculada por m² o dosis fija de la droga (ej: 200 mg fijos c/21d, o 175 mg/m²).",
+  "ciclo_solicitado": "Número de ciclo solicitado (ej: 1)",
+  "total_ciclos": "Total de ciclos previstos para el tratamiento (ej: 6 ciclos o 5 años)",
+  "antecedentes_clinicos": "Comorbilidades relevantes, ECOG actual, síntomas y toxicidades de forma concisa.",
+  "antecedentes_quirurgicos": "Cirugías previas con fecha si están disponibles.",
+  "tratamientos_previos": "Líneas de quimioterapia, radioterapia u hormonoterapia previas con fechas y dosis.",
+  "estudios_adjuntos": "Resumen de biopsia, inmunohistoquímica (RE, RP, HER2, Ki67) e imágenes clave.",
   "drogas_tabla": [
     {
-      "droga": "Nombre de la droga",
-      "concentracion": "ej: 100 mg / 4 ml o 200 mg",
-      "envase": "ej: F.A. o comp.",
-      "dosisDiaria": "ej: 200 mg d1 o 80 mg/m2",
-      "cantidadEnvases": "ej: 2 F.A.",
-      "duracionTto": "ej: 21 días"
+      "droga": "Nombre de la droga 1",
+      "concentracion": "Concentración (ej: 100 mg / 4 ml o 2.5 mg)",
+      "envase": "comp. o F.A.",
+      "dosisDiaria": "Dosis diaria/aplicación (ej: 2.5 mg/día o 200 mg EV)",
+      "cantidadEnvases": "Cantidad requerida para el ciclo (ej: 1 caja o 2 F.A.)",
+      "duracionTto": "Duración del tratamiento o intervalo (ej: 21 días o Diario continuo)"
     }
-  ],
-  "antecedentes_clinicos": "Antecedentes patológicos relevantes, comorbilidades y ECOG.",
-  "antecedentes_quirurgicos": "Cirugías previas relevantes con fechas.",
-  "tratamientos_previos": "Tratamientos oncológicos previos recibidos con fechas de inicio/fin y esquema.",
-  "estudios_adjuntos": "Resumen de biopsia/anatomía patológica, inmunohistoquímica (receptores, HER2, Ki-67) y estudios por imágenes."
+  ]
 }
 
-HISTORIA CLÍNICA:
+HISTORIA CLÍNICA Y TIMELINE:
 ${context.historyText}
       `;
 
@@ -403,115 +400,144 @@ ${context.historyText}
     // ─────────────────────────────────────────────────────────────
     // PÁGINA 1
     // ─────────────────────────────────────────────────────────────
-    drawTextAt(p1, cleanDate(data.fecha_pedido) || data.fecha_pedido || '', 145, 740, font, 8.5, textColor);
-    drawTextAt(p1, data.hospital || 'Hospital Oncológico Provincial', 110, 716, fontBold, 8, textColor);
-    drawTextAt(p1, data.localidad_hosp || 'Córdoba', 425, 716, fontBold, 8, textColor);
-    drawTextAt(p1, data.telefono_profesional || '', 315, 693, fontBold, 8, textColor);
+    // 1. Fecha de pedido (encolumnada sobre las barras de fecha)
+    const fechaClean = cleanDate(data.fecha_pedido) || data.fecha_pedido || '';
+    const fechaParts = fechaClean.split('/');
+    if (fechaParts.length === 3) {
+      drawTextAt(p1, fechaParts[0], 174, 708.82, fontBold, 8.8, textColor);
+      drawTextAt(p1, fechaParts[1], 207, 708.82, fontBold, 8.8, textColor);
+      drawTextAt(p1, fechaParts[2], 238, 708.82, fontBold, 8.8, textColor);
+    } else if (fechaClean) {
+      drawTextAt(p1, fechaClean, 174, 708.82, fontBold, 8.8, textColor);
+    }
 
-    // DATOS DEL PACIENTE
-    drawTextAt(p1, (data.nombre_apellido || '').toUpperCase(), 165, 627, fontBold, 8.5, textColor);
-    drawTextAt(p1, data.nro_expediente || '', 460, 627, fontBold, 8.5, textColor);
+    // 2. Hospital y Localidad
+    drawTextAt(p1, data.hospital || 'Hospital Oncológico Provincial', 135, 679.54, fontBold, 8.8, textColor);
+    drawTextAt(p1, data.localidad_hosp || 'Córdoba', 422, 679.54, fontBold, 8.8, textColor);
 
-    drawTextAt(p1, data.dni || '', 115, 607, fontBold, 8.5, textColor);
-    drawTextAt(p1, data.nro_hc || '', 285, 607, fontBold, 8.5, textColor);
-    drawTextAt(p1, data.edad || '', 420, 607, font, 8.5, textColor);
-    drawTextAt(p1, data.sexo || '', 495, 607, font, 8.5, textColor);
+    // 3. Teléfono médico profesional
+    drawTextAt(p1, data.telefono_profesional || '', 395, 650.14, fontBold, 8.5, textColor);
 
-    drawTextAt(p1, data.domicilio || '', 125, 587, font, 8.5, textColor);
-    drawTextAt(p1, data.localidad || 'Córdoba', 390, 587, font, 8.5, textColor);
+    // 4. DATOS DEL PACIENTE
+    drawTextAt(p1, (data.nombre_apellido || '').toUpperCase(), 185, 586.15, fontBold, 9.0, textColor);
+    drawTextAt(p1, data.nro_expediente || '', 480, 586.15, fontBold, 9.0, textColor);
 
-    drawTextAt(p1, cleanDate(data.fecha_nacimiento) || data.fecha_nacimiento || '', 135, 567, font, 8.5, textColor);
-    drawTextAt(p1, data.telefono_paciente || '', 350, 567, font, 8.5, textColor);
+    drawTextAt(p1, data.dni || '', 120, 564.19, fontBold, 8.8, textColor);
+    drawTextAt(p1, data.nro_hc || '', 300, 564.19, fontBold, 8.8, textColor);
+    drawTextAt(p1, data.edad || '', 395, 564.19, fontBold, 8.8, textColor);
+    drawTextAt(p1, data.sexo || '', 470, 564.19, fontBold, 8.8, textColor);
 
-    // DATOS MÉDICOS
-    const isInternado = data.paciente_internado === 'SI';
-    if (isInternado) drawMark(p1, 232, 514, 10, fontBold, textColor);
-    else drawMark(p1, 308, 514, 10, fontBold, textColor);
+    drawTextAt(p1, data.domicilio || '', 140, 542.23, font, 8.8, textColor);
+    drawTextAt(p1, data.localidad || 'Córdoba', 390, 542.23, fontBold, 8.8, textColor);
 
-    drawTextAt(p1, data.diagnostico || '', 145, 488, fontBold, 8.5, textColor);
-    drawTextAt(p1, data.estadio || '', 125, 461, fontBold, 8.5, textColor);
+    drawTextAt(p1, cleanDate(data.fecha_nacimiento) || data.fecha_nacimiento || '', 135, 520.27, fontBold, 8.8, textColor);
+    drawTextAt(p1, data.telefono_paciente || '', 290, 520.27, fontBold, 8.8, textColor);
 
-    // TABLA DE DROGAS
+    // 5. DATOS MÉDICOS: Paciente Internado
+    if (data.paciente_internado === 'SI') {
+      p1.drawText('X', { x: 241, y: 447.67 + 1.5, size: 9, font: fontBold, color: textColor });
+    } else {
+      p1.drawText('X', { x: 316.5, y: 447.67 + 1.5, size: 9, font: fontBold, color: textColor });
+    }
+
+    // 6. Diagnóstico (2 líneas con ajuste dinámico)
+    drawOnLinesFitted(p1, data.diagnostico || '', [
+      { x: 150, y: 420.41, width: 395 },
+      { x: 85,  y: 405.77, width: 460 }
+    ], fontBold, 8.5, 6.8, textColor);
+
+    // 7. Estadío
+    drawTextAt(p1, data.estadio || '', 135, 391.13, fontBold, 8.8, textColor);
+
+    // 8. TABLA DE DROGAS (Filas en y = 298, 269, 239, 209)
     const drugs: DrugTableRow[] = (data.drogas_tabla && data.drogas_tabla.length > 0) ? data.drogas_tabla : [
       { droga: data.droga_principal || '', concentracion: '', envase: 'F.A.', dosisDiaria: data.dosis_m2 || '', cantidadEnvases: '1', duracionTto: '21 días' }
     ];
 
-    const rowYs = [370, 315, 260, 205];
+    const tableYs = [298, 269, 239, 209];
     for (let i = 0; i < Math.min(drugs.length, 4); i++) {
       const d = drugs[i];
-      const y = rowYs[i];
-      drawTextAt(p1, d.droga || '', 64, y, fontBold, 7.5, textColor);
-      drawTextAt(p1, d.concentracion || '', 205, y, font, 7.5, textColor);
-      drawTextAt(p1, d.envase || '', 282, y, font, 7.5, textColor);
-      drawTextAt(p1, d.dosisDiaria || '', 355, y, fontBold, 7.5, textColor);
-      drawTextAt(p1, d.cantidadEnvases || '', 425, y, fontBold, 7.5, textColor);
-      drawTextAt(p1, d.duracionTto || '', 492, y, font, 7.5, textColor);
+      const y = tableYs[i];
+      drawTextAt(p1, d.droga || '', 85, y, fontBold, 8.2, textColor);
+      drawTextAt(p1, d.concentracion || '', 216, y, font, 8.0, textColor);
+      drawTextAt(p1, d.envase || '', 294, y, font, 8.0, textColor);
+      drawTextAt(p1, d.dosisDiaria || '', 358, y, fontBold, 8.0, textColor);
+      drawTextAt(p1, d.cantidadEnvases || '', 408, y, font, 7.8, textColor);
+      drawTextAt(p1, d.duracionTto || '', 478, y, font, 7.8, textColor);
     }
 
-    // Tratamiento prolongado
-    const isProlongado = data.tratamiento_prolongado === 'SI';
-    if (isProlongado) drawMark(p1, 262, 139, 10, fontBold, textColor);
-    else drawMark(p1, 344, 139, 10, fontBold, textColor);
+    // 9. Tratamiento prolongado
+    if (data.tratamiento_prolongado === 'SI') {
+      p1.drawText('X', { x: 268.5, y: 168.62 + 1.5, size: 9, font: fontBold, color: textColor });
+    } else {
+      p1.drawText('X', { x: 351.5, y: 168.62 + 1.5, size: 9, font: fontBold, color: textColor });
+    }
 
-    // Antropometría y Ciclos
-    drawTextAt(p1, data.peso ? `${data.peso} kg` : '', 110, 113, font, 8.5, textColor);
-    drawTextAt(p1, data.superficie_corporal ? `${data.superficie_corporal} m²` : '', 270, 113, fontBold, 8.5, textColor);
-    drawTextAt(p1, data.total_ciclos || '', 465, 113, font, 8.5, textColor);
+    // 10. Antropometría y Ciclos
+    const pesoStr = data.peso ? (String(data.peso).includes('kg') ? data.peso : `${data.peso} kg`) : '';
+    drawTextAt(p1, pesoStr, 118, 139.1, fontBold, 8.8, textColor);
 
-    drawTextAt(p1, data.talla ? `${data.talla} cm` : '', 110, 87, font, 8.5, textColor);
-    drawTextAt(p1, data.dosis_m2 || '', 250, 87, font, 8.5, textColor);
-    drawTextAt(p1, data.ciclo_solicitado || '1', 465, 87, fontBold, 8.5, textColor);
+    const bsaStr = data.superficie_corporal ? (String(data.superficie_corporal).includes('m') ? data.superficie_corporal : `${data.superficie_corporal} m²`) : '';
+    drawTextAt(p1, bsaStr, 290, 139.1, fontBold, 8.8, textColor);
+
+    drawTextAt(p1, data.total_ciclos || '', 512, 139.1, fontBold, 8.2, textColor);
+
+    const tallaStr = data.talla ? (String(data.talla).includes('cm') ? data.talla : `${data.talla} cm`) : '';
+    drawTextAt(p1, tallaStr, 118, 109.68, fontBold, 8.8, textColor);
+
+    drawTextAt(p1, data.dosis_m2 || '', 265, 109.68, fontBold, 8.8, textColor);
+    drawTextAt(p1, data.ciclo_solicitado || '1', 428, 109.68, fontBold, 8.8, textColor);
 
     // ─────────────────────────────────────────────────────────────
     // PÁGINA 2 (DORSO)
     // ─────────────────────────────────────────────────────────────
     // Antecedentes clínicos (9 líneas)
-    drawOnLines(p2, data.antecedentes_clinicos, [
-      { x: 185, y: 744, width: 350 },
-      { x: 64,  y: 724, width: 476 },
-      { x: 64,  y: 704, width: 476 },
-      { x: 64,  y: 684, width: 476 },
-      { x: 64,  y: 664, width: 476 },
-      { x: 64,  y: 644, width: 476 },
-      { x: 64,  y: 624, width: 476 },
-      { x: 64,  y: 604, width: 476 },
-      { x: 64,  y: 584, width: 476 },
-    ], font, 8, textColor);
+    drawOnLinesFitted(p2, data.antecedentes_clinicos || '', [
+      { x: 198,    y: 755.62, width: 345 },
+      { x: 85.104, y: 740.98, width: 460 },
+      { x: 85.104, y: 719.02, width: 460 },
+      { x: 85.104, y: 697.06, width: 460 },
+      { x: 85.104, y: 675.10, width: 460 },
+      { x: 85.104, y: 653.14, width: 460 },
+      { x: 85.104, y: 631.18, width: 460 },
+      { x: 85.104, y: 609.22, width: 460 },
+      { x: 85.104, y: 587.11, width: 460 }
+    ], font, 8.2, 6.5, textColor);
 
     // Antecedentes Quirúrgicos (5 líneas)
-    drawOnLines(p2, data.antecedentes_quirurgicos, [
-      { x: 205, y: 544, width: 330 },
-      { x: 64,  y: 524, width: 476 },
-      { x: 64,  y: 504, width: 476 },
-      { x: 64,  y: 484, width: 476 },
-      { x: 64,  y: 464, width: 476 },
-    ], font, 8, textColor);
+    drawOnLinesFitted(p2, data.antecedentes_quirurgicos || '', [
+      { x: 220,    y: 565.15, width: 325 },
+      { x: 85.104, y: 550.51, width: 460 },
+      { x: 85.104, y: 528.55, width: 460 },
+      { x: 85.104, y: 506.59, width: 460 },
+      { x: 85.104, y: 484.63, width: 460 }
+    ], font, 8.2, 6.5, textColor);
 
     // Tratamientos previos y fechas (7 líneas)
-    drawOnLines(p2, data.tratamientos_previos, [
-      { x: 350, y: 407, width: 185 },
-      { x: 64,  y: 387, width: 476 },
-      { x: 64,  y: 367, width: 476 },
-      { x: 64,  y: 347, width: 476 },
-      { x: 64,  y: 327, width: 476 },
-      { x: 64,  y: 307, width: 476 },
-      { x: 64,  y: 287, width: 476 },
-    ], font, 8, textColor);
+    drawOnLinesFitted(p2, data.tratamientos_previos || '', [
+      { x: 355,    y: 448.03, width: 190 },
+      { x: 85.104, y: 433.37, width: 460 },
+      { x: 85.104, y: 411.41, width: 460 },
+      { x: 85.104, y: 389.45, width: 460 },
+      { x: 85.104, y: 367.37, width: 460 },
+      { x: 85.104, y: 345.41, width: 460 },
+      { x: 85.104, y: 323.45, width: 460 }
+    ], font, 8.2, 6.5, textColor);
 
     // Estudios adjuntos (4 líneas)
-    drawOnLines(p2, data.estudios_adjuntos, [
-      { x: 64, y: 227, width: 476 },
-      { x: 64, y: 207, width: 476 },
-      { x: 64, y: 187, width: 476 },
-      { x: 64, y: 167, width: 476 },
-    ], font, 8, textColor);
+    drawOnLinesFitted(p2, data.estudios_adjuntos || '', [
+      { x: 85.104, y: 242.90, width: 460 },
+      { x: 85.104, y: 220.94, width: 460 },
+      { x: 85.104, y: 198.98, width: 460 },
+      { x: 85.104, y: 176.90, width: 460 }
+    ], font, 8.0, 6.2, textColor);
 
     // Firmas al pie
     const docName = context.doctorData?.nombre || '';
     const docMat = context.doctorData?.matricula ? `M.P. ${context.doctorData.matricula}` : '';
     if (docName) {
-      drawTextAt(p2, docName, 100, 50, fontBold, 7.5, textColor);
-      if (docMat) drawTextAt(p2, docMat, 100, 40, font, 7, textColor);
+      drawTextAt(p2, docName, 106, 122, fontBold, 8.0, textColor);
+      if (docMat) drawTextAt(p2, `${docMat} - Oncología Clínica`, 106, 112, font, 7.5, textColor);
     }
 
     const pdfBytesOut = await pdfDoc.save();
