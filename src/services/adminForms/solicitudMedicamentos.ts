@@ -263,8 +263,10 @@ export const solicitudMedicamentosDefinition: AdminFormDefinition = {
     const height = p.height ? parseFloat(p.height) : undefined;
     const bsa = calculateBSA(weight, height);
 
+    const requestedDrug = initialValues?.droga_principal || '';
+
     const baseData: Record<string, any> = {
-      droga_principal: initialValues?.droga_principal || '',
+      droga_principal: requestedDrug,
       fecha_pedido: today,
       hospital: 'Hospital Oncológico Provincial',
       localidad_hosp: 'Córdoba',
@@ -301,12 +303,19 @@ export const solicitudMedicamentosDefinition: AdminFormDefinition = {
     }
 
     try {
-      const drugHint = initialValues?.droga_principal ? `FÁRMACO/ESQUEMA SOLICITADO: ${initialValues.droga_principal}.` : '';
+      const drugInstruction = requestedDrug
+        ? `MEDICACIÓN / ESQUEMA ONCOLÓGICO SOLICITADO POR EL MÉDICO TRATANTE: "${requestedDrug}".
+REGLAS CLÍNICAS OBLIGATORIAS:
+- "droga_principal": Usar EXACTAMENTE "${requestedDrug}".
+- "drogas_tabla": Completar la tabla con cada uno de los fármacos del esquema "${requestedDrug}", especificando concentración habitual, tipo de envase (comp., F.A., etc.), dosis diaria/aplicación calculada con el peso/talla/SC del paciente (${baseData.peso} kg, ${baseData.talla} cm, ${baseData.superficie_corporal} m²), cantidad de envases para el ciclo y duración del tratamiento/intervalo.
+- "dosis_m2": Detallar la dosis calculada por m² o dosis plana para "${requestedDrug}".`
+        : '';
 
       const prompt = `
 Actúa como oncólogo médico del Hospital Oncológico Provincial de Córdoba. Hoy es ${today}.
 Analizá la historia clínica del paciente y extraé los datos para completar la "FICHA DE SOLICITUD DE MEDICAMENTOS ONCOLÓGICOS" oficial (2 páginas).
-${drugHint}
+
+${drugInstruction}
 
 DATOS DEL PACIENTE:
 - Nombre: ${baseData.nombre_apellido}
@@ -318,7 +327,7 @@ DATOS DEL PACIENTE:
 INSTRUCCIONES DE EXTRACCIÓN:
 Devuelve ÚNICAMENTE un objeto JSON válido con los siguientes campos en texto claro, conciso y profesional en español:
 {
-  "droga_principal": "Nombre del fármaco o esquema oncológico principal (ej: Pembrolizumab, Letrozol, etc.)",
+  "droga_principal": "${requestedDrug || 'Nombre del fármaco o esquema oncológico principal'}",
   "diagnostico": "Diagnóstico histopatológico y subtipo tumoral conciso (máximo 150 caracteres).",
   "estadio": "Estadío TNM o estadío clínico resumido (ej: Estadío IV cT2 cN1 cM1b).",
   "dosis_m2": "Dosis calculada por m² o dosis fija de la droga (ej: 200 mg fijos c/21d, o 175 mg/m²).",
@@ -357,7 +366,7 @@ ${context.historyText}
 
       return {
         ...baseData,
-        droga_principal: initialValues?.droga_principal || parsed.droga_principal || baseData.droga_principal,
+        droga_principal: requestedDrug || parsed.droga_principal || baseData.droga_principal,
         diagnostico: parsed.diagnostico || baseData.diagnostico,
         estadio: parsed.estadio || baseData.estadio,
         dosis_m2: parsed.dosis_m2 || baseData.dosis_m2,
@@ -369,7 +378,7 @@ ${context.historyText}
         estudios_adjuntos: parsed.estudios_adjuntos || '',
         drogas_tabla: Array.isArray(parsed.drogas_tabla) && parsed.drogas_tabla.length > 0 ? parsed.drogas_tabla : [
           {
-            droga: initialValues?.droga_principal || parsed.droga_principal || 'Medicación Oncológica',
+            droga: requestedDrug || parsed.droga_principal || 'Medicación Oncológica',
             concentracion: '',
             envase: 'F.A.',
             dosisDiaria: parsed.dosis_m2 || '',
