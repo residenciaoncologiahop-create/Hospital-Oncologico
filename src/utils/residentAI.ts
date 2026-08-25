@@ -501,35 +501,49 @@ export const generateTumorBoardAnalysis = async (text: string, files: FileData[]
     }
 };
 
-// 4. AUDITORÍA CLÍNICA (MISMO FORMATO STRICTO)
+// 4. AUDITORÍA CLÍNICA / CONTROL DE CALIDAD
 export const generateOncologyVerification = async (text: string, files: FileData[]) => {
     try {
         const prompt = `
-            ACTÚA COMO: Auditor Clínico.
-            TAREA: Auditoría de Completitud.
+            ACTÚA COMO: Auditor Clínico y Extractor de Calidad Documental Oncológica.
+            OBJETIVO: Detectar vacíos documentales críticos e inconsistencias en la historia clínica del paciente.
+            NO realizar interpretación clínica subjetiva ni sugerir conductas terapéuticas.
             
-            ${AUDIT_STYLE_INSTRUCTIONS}
-            
-            ESTRUCTURA HTML REQUERIDA (SIN NUMERALES EN TÍTULOS):
-            
-            <div class="space-y-4 font-sans text-gray-800 text-sm">
-                <div class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
-                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b pb-1">Resumen Estructurado</h3>
-                    <p class="mb-2 leading-relaxed text-gray-700">Paciente: [Edad/Sexo]. Diagnóstico: [Dx]. Estadio: [TNM].</p>
-                </div>
+            CRITERIOS CLÍNICOS Y DOCUMENTALES A AUDITAR:
+            1) COMPLETITUD DE VARIABLES CLAVE:
+               - Estadio tumoral completo (TNM / FIGO)
+               - Performance status (ECOG / WHO)
+               - Confirmación histopatológica / biopsia
+               - Biomarcadores / perfil molecular requerido
+               - Imágenes relevantes de estadificación/respuesta
+               - Registro de tratamientos previos o activos
+            2) INCONSISTENCIAS Y DISCORDANCIAS DOCUMENTALES:
+               - Discordancia cronológica de fechas
+               - Discordancia entre estadio y anatomía patológica o imágenes
+               - Falta de criterios de respuesta documentados o discrepancias en la indicación
 
-                <div class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
-                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b pb-1">Variables Detectadas</h3>
-                    <p class="mb-2 leading-relaxed text-gray-700">[Variable 1], [Variable 2], [Variable 3].</p>
-                </div>
+            FORMATO DE SALIDA ESTRICTO (JSON):
+            - Si NO se detectan inconsistencias ni vacíos críticos relevantes:
+              {
+                "hasIssues": false,
+                "alerts": []
+              }
 
-                <div class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm">
-                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 border-b pb-1">Datos Faltantes (Control)</h3>
-                    <p class="mb-2 leading-relaxed text-gray-700">
-                        ⚠️ Se detecta ausencia de: [Dato faltante 1], [Dato faltante 2].
-                    </p>
-                </div>
-            </div>
+            - Si se detectan inconsistencias o vacíos críticos:
+              {
+                "hasIssues": true,
+                "alerts": [
+                  {
+                    "category": "Tratamiento" | "Estadificación" | "Biopsia" | "Biomarcadores" | "Imágenes" | "Performance Status" | "Cronología",
+                    "summary": "Frase breve y directa (ej: verificar correspondencia con inmunoterapia/iRECIST o falta información para confirmar el estadio).",
+                    "detail": "Explicación contextual y justificación documental precisa en 1-2 oraciones."
+                  }
+                ]
+              }
+
+            IMPORTANTE:
+            - NO incluyas en la lista de alertas los controles que fueron correctos.
+            - NO agregues texto fuera del JSON.
 
             ENTRADA: "${text}"
         `;
@@ -537,11 +551,18 @@ export const generateOncologyVerification = async (text: string, files: FileData
         const parts: any[] = [{ text: prompt }];
         if (files) files.slice(0, 5).forEach(f => { if(f.data) parts.push({ inlineData: { mimeType: f.type, data: f.data } }) });
 
-        const res = await callGemini({ parts });
+        const res = await callGemini({ parts, responseMimeType: "application/json" });
         const raw = res.text ? (typeof res.text === 'function' ? res.text() : res.text) : "";
-        return raw.replace(/```html|```/g, '').trim();
+        return raw.replace(/```json|```html|```/g, '').trim();
 
     } catch (e: any) {
-        return `<div class="p-4 text-red-600 border border-red-200 rounded-lg">Error: ${e.message}</div>`;
+        return JSON.stringify({
+            hasIssues: true,
+            alerts: [{
+                category: "Sistema",
+                summary: "Error al procesar el control de calidad",
+                detail: e.message
+            }]
+        });
     }
 };

@@ -430,7 +430,7 @@ export const extractLabsSecure = async (
   }
 };
 
-// ── Auditoría Clínica ──────────────────────────
+// ── Auditoría Clínica / Control de Calidad ──────────────────
 export const generateClinicalAuditSecure = async (
   text: string,
   files: FileData[]
@@ -438,28 +438,57 @@ export const generateClinicalAuditSecure = async (
 
   const auditPrompt = `
 ACTUÁ COMO: Extractor y auditor de registros clínicos oncológicos.
-OBJETIVO: Organizar la información clínica existente, detectar datos faltantes y señalar inconsistencias documentales.
-NO realizar interpretación clínica ni sugerir decisiones.
+OBJETIVO: Detectar vacíos documentales críticos e inconsistencias en la historia clínica del paciente.
+NO realizar interpretación clínica ni sugerir conductas terapéuticas.
 
-REGLAS DE SEGURIDAD:
-1. NO emitas opiniones clínicas ni sugerencias terapéuticas.
-2. NO infieras datos no escritos.
-3. Si un dato no está explícito, usar "NO DOCUMENTADO".
-4. SOLO HTML limpio con clases Tailwind.
+REGLAS DE SEGURIDAD (CERO TOLERANCIA):
+1. NO emitas opiniones clínicas subjetivas ni sugerencias terapéuticas.
+2. NO infieras datos que no estén expresamente documentados.
+3. Si un dato esencial no está explícito, señalarlo como alerta.
+
+CRITERIOS CLÍNICOS Y DOCUMENTALES A AUDITAR:
+1) COMPLETITUD DE VARIABLES CLAVE:
+   - Estadio tumoral completo (TNM / FIGO)
+   - Performance status (ECOG / WHO)
+   - Confirmación histopatológica / informe de biopsia
+   - Biomarcadores / perfil molecular / inmunohistoquímica requerida
+   - Estudios de imágenes relevantes de estadificación o reevaluación
+   - Registro de tratamientos previos o en curso
+2) INCONSISTENCIAS Y DISCORDANCIAS DOCUMENTALES:
+   - Discordancia cronológica de fechas
+   - Discordancia entre estadio asignado y hallazgos patológicos o radiológicos
+   - Falta de criterios de respuesta documentados (ej. iRECIST en inmunoterapia) o discrepancias en la indicación
+
+FORMATO DE SALIDA ESTRICTO (JSON):
+- Si NO se detectan inconsistencias ni vacíos críticos relevantes:
+  {
+    "hasIssues": false,
+    "alerts": []
+  }
+
+- Si se detectan inconsistencias o vacíos críticos:
+  {
+    "hasIssues": true,
+    "alerts": [
+      {
+        "category": "Tratamiento" | "Estadificación" | "Biopsia" | "Biomarcadores" | "Imágenes" | "Performance Status" | "Cronología",
+        "summary": "Frase breve y directa (ej: verificar correspondencia con inmunoterapia/iRECIST o falta información para confirmar el estadio).",
+        "detail": "Explicación contextual y justificación documental precisa en 1-2 oraciones."
+      }
+    ]
+  }
+
+IMPORTANTE:
+- NO incluyas en la lista de alertas los controles que fueron correctos.
+- NO agregues texto fuera del JSON.
 
 NOTAS CLÍNICAS: "${text}"
-
-TAREAS:
-1) EXTRAER DATOS CLÍNICOS ESTRUCTURADOS (Edad, Sexo, Diagnóstico, Estadio TNM, ECOG, Biomarcadores, Tratamientos)
-2) GENERAR CHECKLIST DE COMPLETITUD (✔ si existe, ⚠ si falta)
-3) DETECTAR INCONSISTENCIAS DOCUMENTALES
-
-FORMATO: HTML puro con clases Tailwind, en div contenedor.
   `;
 
   const parts = buildParts(auditPrompt, files);
-  const res = await callGemini({ parts });
-  return res.text.replace(/```html|```/g, '').trim();
+  const res = await callGemini({ parts, responseMimeType: "application/json" });
+  const raw = res.text ? (typeof res.text === 'function' ? (res as any).text() : res.text) : "";
+  return raw.replace(/```json|```html|```/g, '').trim();
 };
 
 // ── Generación de texto genérico ───────────────
