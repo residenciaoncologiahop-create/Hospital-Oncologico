@@ -5,11 +5,15 @@ import {
   updateProfile
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { Activity, Mail, Lock, User, Loader2, ShieldCheck } from 'lucide-react';
+import { Activity, Mail, Lock, User, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
 
 type AuthMode = 'login' | 'register';
 
-const AuthScreen = () => {
+interface AuthScreenProps {
+  onEnterDemo?: () => void;
+}
+
+const AuthScreen: React.FC<AuthScreenProps> = ({ onEnterDemo }) => {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -171,6 +175,23 @@ const AuthScreen = () => {
           </button>
 
         </form>
+
+        {/* ── BOTÓN ACCESO MODO DEMO ── */}
+        {onEnterDemo && (
+          <div className="mt-6 pt-6 border-t border-gray-100 text-center">
+            <button
+              type="button"
+              onClick={onEnterDemo}
+              className="w-full group bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 hover:from-blue-900 hover:to-indigo-900 text-white py-3.5 px-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100/50 hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2.5 active:scale-95 border border-indigo-700/40"
+            >
+              <Sparkles size={16} className="text-amber-400 group-hover:rotate-12 transition-transform" />
+              <span>Probar Demo</span>
+            </button>
+            <p className="text-[10px] text-gray-400 font-medium mt-2 leading-tight">
+              Casos ficticios · No se requiere cuenta · Datos de demostración
+            </p>
+          </div>
+        )}
 
         <p className="text-[8px] text-gray-300 text-center font-medium mt-6 leading-relaxed">
           Acceso restringido a profesionales habilitados del equipo de oncología.

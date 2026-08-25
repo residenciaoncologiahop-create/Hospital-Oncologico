@@ -4,9 +4,34 @@ import { auth } from '../lib/firebase';
 import AuthScreen from './AuthScreen';
 import { Loader2 } from 'lucide-react';
 
-interface AuthWrapperProps {
-  children: (user: User) => React.ReactNode;
+interface DemoContext {
+  isDemoMode: boolean;
+  onExitDemo: () => void;
 }
+
+interface AuthWrapperProps {
+  children: (user: User, demoContext?: DemoContext) => React.ReactNode;
+}
+
+const createDemoUser = (): User => ({
+  uid: 'demo-user',
+  email: 'demo@oncoguide.app',
+  displayName: 'Modo Demo',
+  emailVerified: true,
+  isAnonymous: true,
+  metadata: {} as any,
+  providerData: [],
+  refreshToken: '',
+  tenantId: null,
+  delete: async () => {},
+  getIdToken: async () => '',
+  getIdTokenResult: async () => ({} as any),
+  reload: async () => {},
+  toJSON: () => ({}),
+  phoneNumber: null,
+  photoURL: null,
+  providerId: 'demo'
+});
 
 /**
  * AuthWrapper
@@ -14,15 +39,17 @@ interface AuthWrapperProps {
  * Envuelve toda la aplicación. Muestra:
  *   - Spinner mientras Firebase verifica la sesión
  *   - Pantalla de login si no hay sesión
+ *   - Modo Demo si el usuario eligió probar casos ficticios sin cuenta
  *   - La app completa si hay sesión activa
  * 
  * USO en index.tsx:
  *   <AuthWrapper>
- *     {(user) => <RootOrchestrator DoctorApp={App} user={user} />}
+ *     {(user, demoContext) => <RootOrchestrator DoctorApp={App} user={user} isDemoMode={demoContext?.isDemoMode} onExitDemo={demoContext?.onExitDemo} />}
  *   </AuthWrapper>
  */
 const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,6 +59,12 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     });
     return () => unsubscribe();
   }, []);
+
+  // Si se activó Modo Demo explícitamente, saltar autenticación Firebase
+  if (isDemoMode) {
+    const demoUser = createDemoUser();
+    return <>{children(demoUser, { isDemoMode: true, onExitDemo: () => setIsDemoMode(false) })}</>;
+  }
 
   // Firebase verificando sesión guardada
   if (loading) {
@@ -47,13 +80,13 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     );
   }
 
-  // No autenticado → pantalla de login
+  // No autenticado → pantalla de login con opción de probar demo
   if (!user) {
-    return <AuthScreen />;
+    return <AuthScreen onEnterDemo={() => setIsDemoMode(true)} />;
   }
 
-  // Autenticado → app completa
-  return <>{children(user)}</>;
+  // Autenticado normal → app completa
+  return <>{children(user, { isDemoMode: false, onExitDemo: logout })}</>;
 };
 
 export default AuthWrapper;

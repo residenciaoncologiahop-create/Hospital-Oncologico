@@ -31,6 +31,7 @@ import { User } from 'firebase/auth';
 import AuthWrapper, { logout } from './components/AuthWrapper';
 import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, normalizeLabTestName } from './utils/aiProxy';
 import { saveClinicalContext, clearClinicalContext } from './services/patientService';
+import { demoPatients } from './mocks/demoCases';
 
 // --- RANGOS ETARIOS ---
 const AGE_RANGES = ['0-18', '19-30', '31-40', '41-50', '51-60', '61-70', '71-80', '80+'];
@@ -46,6 +47,7 @@ const getOrInitFingerprint = () => {
 };
 
 const logAction = async (action: string, patientId: string | null, doctorName: string | null) => {
+    if (doctorName === 'Modo Demo' || patientId?.startsWith('demo-')) return;
     try {
         const fingerprint = getOrInitFingerprint();
         await addDoc(collection(db, "audit_logs"), {
@@ -139,10 +141,14 @@ const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/
     );
 };
 
-interface AppProps { user: User; }
+interface AppProps {
+    user: User;
+    isDemoMode?: boolean;
+    onExitDemo?: () => void;
+}
 
-const App = ({ user }: AppProps) => {
-    const doctorName = user.displayName || user.email || 'Profesional';
+const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
+    const doctorName = isDemoMode ? 'Modo Demo' : (user.displayName || user.email || 'Profesional');
     
     const [patients, setPatients] = useState<Patient[]>([]);
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
@@ -224,6 +230,15 @@ const App = ({ user }: AppProps) => {
     }, []);
     
     useEffect(() => {
+        if (isDemoMode) {
+            const cloned = JSON.parse(JSON.stringify(demoPatients));
+            setPatients(cloned);
+            if (cloned.length > 0) {
+                setSelectedPatientId(cloned[0].id);
+            }
+            return;
+        }
+
         if (!user.uid) { setPatients([]); return; }
         const q = query(collection(db, "patients"), where("doctorId", "==", user.uid));
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -240,7 +255,7 @@ const App = ({ user }: AppProps) => {
             setPatients(list);
         });
         return () => unsubscribe();
-    }, [user.uid]);
+    }, [user.uid, isDemoMode]);
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -327,6 +342,10 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
 
     const savePatientDetails = async () => {
         if (selectedPatientId) {
+            if (isDemoMode) {
+                setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, historyText, lastUpdated: Date.now() } : p));
+                return;
+            }
             const patientRef = doc(db, "patients", selectedPatientId);
             await updateDoc(patientRef, { historyText, lastUpdated: Date.now() });
             logAction("UPDATE_PATIENT_DATA", selectedPatientId, doctorName);
@@ -335,6 +354,10 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
 
     const saveImagingStudies = async (studies: ImagingStudy[]) => {
         if (selectedPatientId) {
+            if (isDemoMode) {
+                setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, imagingStudies: studies, lastUpdated: Date.now() } : p));
+                return;
+            }
             await updateDoc(doc(db, "patients", selectedPatientId), { imagingStudies: studies, lastUpdated: Date.now() });
         }
     };
@@ -347,6 +370,12 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
     const handleClearContext = async () => {
         if (!selectedPatientId) return;
         if (!window.confirm('¿Limpiar el contexto clínico guardado? Esto eliminará el texto acumulado de todos los documentos procesados. Los eventos y laboratorios extraídos no se verán afectados.')) return;
+        if (isDemoMode) {
+            setHistoryText('');
+            setClinicalContextUpdatedAt(null);
+            setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, historyText: '', clinicalContext: '', clinicalContextUpdatedAt: null, lastUpdated: Date.now() } : p));
+            return;
+        }
         await clearClinicalContext(selectedPatientId);
         setHistoryText('');
         setClinicalContextUpdatedAt(null);
@@ -420,8 +449,6 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
             );
 
             if (selectedPatientId) {
-                const patientRef = doc(db, "patients", selectedPatientId);
-
                 const updateData: any = {
                     timeline: combinedTimeline,
                     labResults: combinedLabs,
@@ -429,6 +456,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                     lastUpdated: Date.now()
                 };
 
+                let updatedStudies: ImagingStudy[] | null = null;
                 if (extractedImaging.length > 0) {
                     const currentImaging = patients.find(p => p.id === selectedPatientId)?.imagingStudies || [];
                     const newStudies: ImagingStudy[] = extractedImaging.map((d: any) => ({
@@ -451,16 +479,30 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                     const combinedImaging = mergeImagingStudies(currentImaging, newStudies);
                     setImagingStudies(combinedImaging);
                     updateData.imagingStudies = combinedImaging;
+                    updatedStudies = combinedImaging;
                 }
 
-                // Un solo updateDoc con todo junto sanitizado contra undefined
-                await updateDoc(patientRef, cleanForFirestore(updateData));
-                // Persistir contexto clínico acumulado para evitar re-subida de PDFs
-                if (historyText) {
-                    await saveClinicalContext(selectedPatientId, historyText);
-                    setClinicalContextUpdatedAt(Date.now());
+                if (isDemoMode) {
+                    setPatients(prev => prev.map(p => {
+                        if (p.id !== selectedPatientId) return p;
+                        return {
+                            ...p,
+                            timeline: combinedTimeline,
+                            labResults: combinedLabs,
+                            historyText,
+                            imagingStudies: updatedStudies || p.imagingStudies,
+                            lastUpdated: Date.now()
+                        };
+                    }));
+                } else {
+                    const patientRef = doc(db, "patients", selectedPatientId);
+                    await updateDoc(patientRef, cleanForFirestore(updateData));
+                    if (historyText) {
+                        await saveClinicalContext(selectedPatientId, historyText);
+                        setClinicalContextUpdatedAt(Date.now());
+                    }
+                    logAction("PROCESS_DOCS_AND_LABS", selectedPatientId, doctorName);
                 }
-                logAction("PROCESS_DOCS_AND_LABS", selectedPatientId, doctorName);
             }
 
             alert(`Procesado: ${events.length} eventos y ${extractedLabs.length} laboratorios.`);
@@ -476,7 +518,12 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         if (!selectedPatientId) return;
         const labWithAuthor = { ...newLab, professional: doctorName || 'Manual' };
         const currentLabs = patients.find(p => p.id === selectedPatientId)?.labResults || [];
-        await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ labResults: [...currentLabs, labWithAuthor], lastUpdated: Date.now() }));
+        const updatedLabs = [...currentLabs, labWithAuthor];
+        if (isDemoMode) {
+            setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, labResults: updatedLabs, lastUpdated: Date.now() } : p));
+            return;
+        }
+        await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ labResults: updatedLabs, lastUpdated: Date.now() }));
     };
 
     const handleAddManualEvolution = async () => {
@@ -494,6 +541,10 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         setTimeline(updatedTimeline);
         setManualNote('');
         setManualIsKey(false);
+        if (isDemoMode) {
+            setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, timeline: updatedTimeline, lastUpdated: Date.now() } : p));
+            return;
+        }
         await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ timeline: updatedTimeline, lastUpdated: Date.now() }));
         logAction("ADD_MANUAL_EVOLUTION", selectedPatientId, doctorName);
     };
@@ -511,6 +562,10 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         };
         const updatedTimeline = sortTimeline([...timeline, newEvent]);
         setTimeline(updatedTimeline);
+        if (isDemoMode) {
+            setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, timeline: updatedTimeline, lastUpdated: Date.now() } : p));
+            return;
+        }
         await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ timeline: updatedTimeline, lastUpdated: Date.now() }));
         logAction("SAVE_GENERATED_EVOLUTION", selectedPatientId, doctorName);
     };
@@ -533,11 +588,15 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                     deduplicateTimelineEvents([...(timeline || []), ...events])
                 );
                 setTimeline(combinedTimeline);
-                await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({
-                    timeline: combinedTimeline,
-                    lastUpdated: Date.now()
-                }));
-                logAction("ADD_STUDIES_FROM_EVOLUTION_TO_TIMELINE", selectedPatientId, doctorName);
+                if (isDemoMode) {
+                    setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, timeline: combinedTimeline, lastUpdated: Date.now() } : p));
+                } else {
+                    await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({
+                        timeline: combinedTimeline,
+                        lastUpdated: Date.now()
+                    }));
+                    logAction("ADD_STUDIES_FROM_EVOLUTION_TO_TIMELINE", selectedPatientId, doctorName);
+                }
             }
             return events.length;
         } catch (err) {
@@ -551,6 +610,10 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         if (confirm("¿Eliminar este evento?")) {
             const updatedTimeline = timeline.filter(e => e !== ev);
             setTimeline(updatedTimeline);
+            if (isDemoMode) {
+                setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, timeline: updatedTimeline, lastUpdated: Date.now() } : p));
+                return;
+            }
             await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ timeline: updatedTimeline, lastUpdated: Date.now() }));
             logAction("DELETE_TIMELINE_EVENT", selectedPatientId, doctorName);
         }
@@ -572,8 +635,12 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
             const updatedAI = [...updatedUser, newAiMsg];
             const cleanHistory = sanitizeChatHistory(updatedAI);
             setChatMessages(cleanHistory);
-            await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ chatHistory: cleanHistory, lastUpdated: Date.now() }));
-            logAction("CHAT_MESSAGE", selectedPatientId, doctorName);
+            if (isDemoMode) {
+                setPatients(prev => prev.map(pat => pat.id === selectedPatientId ? { ...pat, chatHistory: cleanHistory, lastUpdated: Date.now() } : pat));
+            } else {
+                await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ chatHistory: cleanHistory, lastUpdated: Date.now() }));
+                logAction("CHAT_MESSAGE", selectedPatientId, doctorName);
+            }
         } catch (e: any) {
             console.error("Error en chat o guardado Firestore:", e);
             setLastError(e.message || "Error al procesar el mensaje");
@@ -584,6 +651,11 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
 
     const handleCreatePatient = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isDemoMode) {
+            alert("En Modo Demo los casos clínicos están preconfigurados. Para registrar nuevos pacientes, inicie sesión con su cuenta profesional.");
+            setShowNewPatientModal(false);
+            return;
+        }
         if (!newPatientHC.trim()) return;
         try {
             const docRef = await addDoc(collection(db, "patients"), {
@@ -606,6 +678,10 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
 
     const handleDeletePatient = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
+        if (isDemoMode) {
+            alert("En Modo Demo los casos ficticios de demostración no pueden eliminarse.");
+            return;
+        }
         if (confirm("¿Eliminar este caso permanentemente?")) {
             try {
                 await deleteDoc(doc(db, "patients", id));
@@ -717,7 +793,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
     const isLabTab = activeTab === 'labs' || activeTab === 'imaging';
 
     return (
-        <>
+        <div className="flex flex-col h-screen overflow-hidden">
             <style>{`
                 .fs-large { font-size: 112% !important; }
                 .fs-large .text-\\[10px\\] { font-size: 12px !important; }
@@ -731,7 +807,29 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 .fs-xl .text-sm { font-size: 16px !important; }
             `}</style>
 
-            <div className={`flex h-screen bg-white text-gray-800 font-medium text-xs overflow-hidden ${fontSize === 'large' ? 'fs-large' : fontSize === 'xl' ? 'fs-xl' : ''}`}>
+            {/* ── BANNER PERSISTENTE MODO DEMO ─────────────────── */}
+            {isDemoMode && (
+                <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-white px-4 py-2 flex items-center justify-between shadow-md z-50 flex-shrink-0 text-xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="bg-black/25 text-white text-[10px] uppercase font-black px-2.5 py-0.5 rounded-md tracking-wider border border-white/20 flex items-center gap-1 flex-shrink-0">
+                            <Sparkles size={11} className="text-amber-200" />
+                            Modo Demo
+                        </span>
+                        <span className="font-semibold text-white truncate">
+                            Modo Demo — Estás viendo casos ficticios de demostración. Los cambios no se guardan. No utilizar con información de pacientes reales.
+                        </span>
+                    </div>
+                    <button
+                        onClick={onExitDemo}
+                        className="bg-white text-amber-900 hover:bg-amber-50 active:scale-95 font-black px-3.5 py-1.5 rounded-xl text-xs transition-all shadow-sm flex items-center gap-1.5 flex-shrink-0 ml-4 border border-amber-200"
+                    >
+                        <LogOut size={13} />
+                        Salir del Demo
+                    </button>
+                </div>
+            )}
+
+            <div className={`flex flex-1 min-h-0 bg-white text-gray-800 font-medium text-xs overflow-hidden ${fontSize === 'large' ? 'fs-large' : fontSize === 'xl' ? 'fs-xl' : ''}`}>
 
                 {/* ── SIDEBAR ─────────────────────────────────── */}
                 <aside className={`fixed inset-y-0 left-0 z-40 bg-gray-50 border-r lg:static flex flex-col transition-all duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} ${sidebarOpen ? 'w-72 lg:translate-x-0' : 'w-0 lg:translate-x-0 overflow-hidden'}`}>
@@ -821,7 +919,13 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                 <button onClick={cycleFontSize} className="text-[10px] font-black text-gray-400 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors tracking-widest" title="Cambiar tamaño de letra">
                                     {fontSizeLabel[fontSize]}
                                 </button>
-                                <button onClick={logout} className="text-gray-200 hover:text-red-500 transition-colors"><LogOut size={16}/></button>
+                                <button 
+                                    onClick={isDemoMode && onExitDemo ? onExitDemo : logout} 
+                                    className="text-gray-400 hover:text-red-500 transition-colors" 
+                                    title={isDemoMode ? "Salir del Modo Demo" : "Cerrar sesión"}
+                                >
+                                    <LogOut size={16}/>
+                                </button>
                             </div>
                         </div>
                         <p className="text-[8px] text-gray-300 text-center font-medium">Herramienta de apoyo para discusión clínica y docencia. No sustituye la historia clínica ni el juicio médico.</p>
@@ -1525,13 +1629,25 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 {showCalculatorModal && <OncoCalculator onClose={() => setShowCalculatorModal(false)} />}
                 {showDrugsModal && <DrugReference onClose={() => setShowDrugsModal(false)} />}
             </div>
-        </>
+        </div>
     );
 };
 
 const root = createRoot(document.getElementById('root')!);
 root.render(
     <AuthWrapper>
-        {(user) => <RootOrchestrator DoctorApp={() => <App user={user}/>}/>}
+        {(user, demoContext) => (
+            <RootOrchestrator
+                DoctorApp={(props) => (
+                    <App
+                        user={user}
+                        isDemoMode={props.isDemoMode ?? demoContext?.isDemoMode}
+                        onExitDemo={props.onExitDemo ?? demoContext?.onExitDemo}
+                    />
+                )}
+                isDemoMode={demoContext?.isDemoMode}
+                onExitDemo={demoContext?.onExitDemo}
+            />
+        )}
     </AuthWrapper>
 );

@@ -37,13 +37,46 @@ const PendientesPanel: React.FC<PendientesPanelProps> = ({ doctorId, initialTab 
   const [calendarMonth, setCalendarMonth] = useState(new Date());
 
   useEffect(() => {
+    if (doctorId === 'demo-user') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      setPendientes([
+        {
+          id: 'demo-task-1',
+          doctorId: 'demo-user',
+          date: today,
+          text: 'Evaluar respuesta RECIST 1.1 en TC de control HC-DEMO-001 (Mama IIB)',
+          done: false,
+          createdAt: Date.now() - 1000 * 60 * 60 * 2
+        },
+        {
+          id: 'demo-task-2',
+          doctorId: 'demo-user',
+          date: today,
+          text: 'Confeccionar planilla PAMI de Osimertinib para HC-DEMO-002',
+          done: false,
+          createdAt: Date.now() - 1000 * 60 * 60 * 1
+        },
+        {
+          id: 'demo-task-3',
+          doctorId: 'demo-user',
+          date: tomorrowStr,
+          text: 'Control semestral de CEA y consulta de vigilancia HC-DEMO-003',
+          done: false,
+          createdAt: Date.now()
+        }
+      ]);
+      return;
+    }
+
     const q = query(collection(db, "pendientes"), where("doctorId", "==", doctorId));
     const unsub = onSnapshot(q, snap => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Pendiente));
       setPendientes(list);
     });
     return () => unsub();
-  }, [doctorId]);
+  }, [doctorId, today]);
 
   useEffect(() => {
     if (pendientes.length === 0) return;
@@ -74,6 +107,19 @@ const PendientesPanel: React.FC<PendientesPanelProps> = ({ doctorId, initialTab 
 
   const addTask = async (text: string, date: string, clearFn: () => void) => {
     if (!text.trim()) return;
+    if (doctorId === 'demo-user') {
+      const newTaskObj: Pendiente = {
+        id: `demo-task-${Date.now()}`,
+        doctorId: 'demo-user',
+        date,
+        text: text.trim(),
+        done: false,
+        createdAt: Date.now()
+      };
+      setPendientes(prev => [...prev, newTaskObj]);
+      clearFn();
+      return;
+    }
     await addDoc(collection(db, "pendientes"), {
       doctorId, date, text: text.trim(), done: false, createdAt: Date.now()
     });
@@ -81,10 +127,18 @@ const PendientesPanel: React.FC<PendientesPanelProps> = ({ doctorId, initialTab 
   };
 
   const toggleDone = async (p: Pendiente) => {
+    if (doctorId === 'demo-user') {
+      setPendientes(prev => prev.map(item => item.id === p.id ? { ...item, done: !item.done } : item));
+      return;
+    }
     await updateDoc(doc(db, "pendientes", p.id), { done: !p.done });
   };
 
   const deleteTask = async (id: string) => {
+    if (doctorId === 'demo-user') {
+      setPendientes(prev => prev.filter(item => item.id !== id));
+      return;
+    }
     await deleteDoc(doc(db, "pendientes", id));
   };
 

@@ -65,13 +65,20 @@ const ModeSelector = ({ onSelect }: { onSelect: (mode: 'doctor' | 'resident') =>
 // --- ORQUESTADOR PRINCIPAL ---
 
 interface RootOrchestratorProps {
-  DoctorApp: React.ComponentType;
+  DoctorApp: React.ComponentType<{ isDemoMode?: boolean; onExitDemo?: () => void }>;
+  isDemoMode?: boolean;
+  onExitDemo?: () => void;
 }
 
-const RootOrchestrator: React.FC<RootOrchestratorProps> = ({ DoctorApp }) => {
+const RootOrchestrator: React.FC<RootOrchestratorProps> = ({ DoctorApp, isDemoMode = false, onExitDemo }) => {
   const [appMode, setAppMode] = useState<'selection' | 'doctor' | 'resident'>('selection');
 
-  // --- RENDERIZADO ---
+  // En Modo Demo ingresar directamente a DoctorApp con casos ficticios
+  if (isDemoMode) {
+    return <DoctorApp isDemoMode={true} onExitDemo={onExitDemo} />;
+  }
+
+  // --- RENDERIZADO NORMAL ---
 
   if (appMode === 'selection') {
     return <ModeSelector onSelect={setAppMode} />;
@@ -82,7 +89,7 @@ const RootOrchestrator: React.FC<RootOrchestratorProps> = ({ DoctorApp }) => {
   }
 
   // MODO DOCTOR
-  return <DoctorApp />;
+  return <DoctorApp isDemoMode={false} onExitDemo={onExitDemo} />;
 };
 
 export default RootOrchestrator;
