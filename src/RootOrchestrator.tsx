@@ -24,9 +24,6 @@ const ModeSelector = ({ onSelect }: { onSelect: (mode: 'doctor' | 'resident') =>
             <h2 className="text-2xl font-black text-gray-800 mb-2 tracking-tight group-hover:text-blue-600 transition-colors">
               Ingreso Profesional
             </h2>
-            <p className="text-sm text-gray-400 font-medium leading-relaxed max-w-xs">
-              Acceso completo con persistencia de datos (Firebase), historial y auditoría. Requiere identificación.
-            </p>
             <div className="mt-8 flex items-center text-blue-600 font-black text-xs uppercase tracking-widest">
               <span>Ingresar</span>
               <ChevronRight size={16} className="ml-2 group-hover:translate-x-1 transition-transform" />
@@ -47,9 +44,6 @@ const ModeSelector = ({ onSelect }: { onSelect: (mode: 'doctor' | 'resident') =>
             <h2 className="text-2xl font-black text-gray-800 mb-2 tracking-tight group-hover:text-indigo-600 transition-colors">
               Modo Residente
             </h2>
-            <p className="text-sm text-gray-400 font-medium leading-relaxed max-w-xs">
-              Espacio temporal y educativo. Sin persistencia de datos. Incluye herramientas de aprendizaje y ateneo.
-            </p>
             <div className="mt-8 flex items-center text-indigo-600 font-black text-xs uppercase tracking-widest">
               <span>Acceder</span>
               <ChevronRight size={16} className="ml-2 group-hover:translate-x-1 transition-transform" />
