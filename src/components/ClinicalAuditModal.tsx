@@ -79,14 +79,14 @@ function parseAuditResult(rawContent: string | null): { hasIssues: boolean; aler
         const parts = text.split(':');
         if (parts.length > 1) {
           return {
-            category: parts[0].replace(/^[-•⚠️\s]+/, '').trim(),
+            category: parts[0].replace(/^(?:[-•\s]|⚠️)+/u, '').trim(),
             summary: parts.slice(1).join(':').trim(),
             detail: text
           };
         }
         return {
           category: 'Documentación',
-          summary: text.replace(/^[-•⚠️\s]+/, '').trim(),
+          summary: text.replace(/^(?:[-•\s]|⚠️)+/u, '').trim(),
           detail: text
         };
       });
