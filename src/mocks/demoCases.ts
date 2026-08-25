@@ -3,6 +3,18 @@ import { LabResult } from '../components/LabPanel';
 
 export const DEMO_USER_ID = "demo-user";
 
+export interface ValidationItem {
+  label: string;
+  detail: string;
+  expectedBehavior: string;
+}
+
+export interface ClinicalValidationChecklist {
+  scenarioTitle: string;
+  primaryObjective: string;
+  items: ValidationItem[];
+}
+
 export interface DemoPatient {
   id: string;
   doctorId: string;
@@ -14,6 +26,7 @@ export interface DemoPatient {
   historyText: string;
   clinicalContext?: string;
   clinicalContextUpdatedAt?: number | null;
+  validationCriteria: ClinicalValidationChecklist;
   timeline: Array<{
     date: string;
     professional: string;
@@ -34,186 +47,145 @@ export interface DemoPatient {
 }
 
 export const demoPatients: DemoPatient[] = [
-  // ── CASO 1: CA DE MAMA — ESTADIO IIB ──────────────────────────────────
+  // ──────────────────────────────────────────────────────────────────────────
+  // CASO 1 — CÁNCER DE COLON METASTÁSICO
+  // Validación: RECIST 1.1 Estándar (NO iRECIST por ausencia de inmunoterapia),
+  // Progresión confirmada (PD) y Cinética de CEA.
+  // ──────────────────────────────────────────────────────────────────────────
   {
     id: "demo-001",
     doctorId: DEMO_USER_ID,
     hcNumber: "DEMO-001",
     name: "HC-DEMO-001",
-    age: 58,
-    ageRange: "51-60",
-    diagnosis: "Ca Mama Izq — Carcinoma Ductal Invasor RH+ HER2- Estadio IIB (cT2 cN1 M0)",
+    age: 62,
+    ageRange: "61-70",
+    diagnosis: "Adenocarcinoma de Colon Sigmoides — Estadio IVB Sincrónico (Metástasis hepáticas y retroperitoneales)",
     historyText: `HISTORIA CLÍNICA ONCOLÓGICA - HC-DEMO-001
-PACIENTE: Femenina, 58 años. Sin antecedentes patológicos de relevancia.
-DIAGNÓSTICO: Carcinoma ductal invasor de mama izquierda, Grado Histológico 2 (Nottingham 6/9).
-INMUNOHISTOQUÍMICA: RE 95% (fuerte), RP 80% (fuerte), HER2 Negativo (1+), Ki-67 22%.
-ESTADIFICACIÓN INICIAL: cT2 (3.2 cm) cN1 (ganglio axilar ipsilateral móvil) cM0 - Estadio IIB.
+PACIENTE: Masculino, 62 años. Hipertensión arterial en tratamiento con Enalapril 10 mg/día.
+DIAGNÓSTICO: Adenocarcinoma de colon sigmoides moderadamente diferenciado, estadio IVB sincrónico con metástasis bilobares hepáticas no resecables y adenopatías retroperitoneales.
+PERFIL MOLECULAR: RAS mutado (KRAS codón 12 c.35G>A p.G12D), BRAF V600E no mutado (WT), Inestabilidad Microsatelital Estable (MSS / pMMR).
 
-TRATAMIENTO REALIZADO:
-1. Cirugía: Cuadrantectomía superoexterna izquierda + Linfadenectomía axilar nivel I-II (10/05/2023).
-   Anatomía Patológica quirúrgica: Tumor de 2.8 cm, márgenes libres (>5 mm). 2/14 ganglios comprometidos con metástasis macrometastásica (ypT2 pN1a).
-2. Quimioterapia adyuvante: Esquema AC-T finalizado en diciembre 2023 (4 ciclos AC: Doxorrubicina 60 mg/m² + Ciclofosfamida 600 mg/m² seguidos de Paclitaxel semanal 80 mg/m² x 12 semanas).
-3. Radioterapia adyuvante: 50 Gy a mama izquierda y lecho quirúrgico con boost de 10 Gy + irradiación a fosa supraclavicular (Enero-Febrero 2024).
-4. Hormonoterapia adyuvante actual: Letrozol 2.5 mg/día vo (iniciado Marzo 2024, plan 5 a 10 años) + Calcio 1200 mg/día + Vitamina D3 800 UI/día.
+LÍNEAS DE TRATAMIENTO:
+1. Primera Línea Sistémica (Enero 2023 - Septiembre 2023):
+   - Esquema: mFOLFOX6 + Bevacizumab (5 mg/kg cada 14 días) x 12 ciclos.
+   - Mejor respuesta: Respuesta Parcial (PR) con reducción del 36% en lesiones target y normalización temporal de CEA.
+   - Progresión a 1ra línea: Septiembre 2023 (aumento de metástasis hepáticas y nuevo compromiso interaortocava).
+2. Segunda Línea Sistémica (Octubre 2023 - Presente):
+   - Esquema: FOLFIRI (Irinotecán 180 mg/m² + Leucovorina + 5-FU bolo/infusión continua) + Aflibercept 4 mg/kg cada 14 días.
+   - Evaluación Mes 3 (Enero 2024): Enfermedad Estable (SD).
+   - Evaluación Mes 9 (Julio 2024): Progresión de Enfermedad (PD) con crecimiento >20% de lesión diana hepática (de 25 mm a 34 mm, +36% vs nadir) y aumento significativo de CEA a 34.0 ng/mL.
 
-ESTADO ACTUAL (Agosto 2024):
-Asintomática. Examen físico: Mamas simétricas, lecho quirúrgico sin nódulos ni retracciones. Axila y fosa supraclavicular libres. ECOG 0. Densitometría ósea con osteopenia leve en cuello femoral (T-score -1.4).`,
+ESTADO CLÍNICO ACTUAL:
+ECOG 1. Dolor leve en hipocondrio derecho controlado con Paracetamol/Tramadol. Se evalúa pase a 3ra línea (Trifluridina/Tipiracilo + Bevacizumab vs Regorafenib).`,
     clinicalContext: `HISTORIA CLÍNICA ONCOLÓGICA - HC-DEMO-001
-PACIENTE: Femenina, 58 años. Sin antecedentes patológicos de relevancia.
-DIAGNÓSTICO: Carcinoma ductal invasor de mama izquierda, Grado Histológico 2 (Nottingham 6/9).
-INMUNOHISTOQUÍMICA: RE 95% (fuerte), RP 80% (fuerte), HER2 Negativo (1+), Ki-67 22%.
-ESTADIFICACIÓN INICIAL: cT2 (3.2 cm) cN1 cM0 - Estadio IIB.
-TRATAMIENTO: Cirugía conservadora + VAX -> QT Adyuvante (AC-T) -> RT Adyuvante -> Letrozol 2.5 mg/día.`,
-    clinicalContextUpdatedAt: Date.now() - 1000 * 60 * 60 * 24 * 10,
+PACIENTE: 62 años. Ca Colon Sigmoides Estadio IVB (KRAS mutado, MSS).
+LÍNEAS: 1ra L: mFOLFOX6 + Bevacizumab (PR -> PD) -> 2da L: FOLFIRI + Aflibercept (SD -> PD actual).
+IMÁGENES: 4 TC seriadas con progresión demostrada.
+NO INMUNOTERAPIA: Requiere exclusivamente criterio RECIST 1.1.`,
+    clinicalContextUpdatedAt: Date.now() - 1000 * 60 * 60 * 24 * 14,
+    validationCriteria: {
+      scenarioTitle: "Cáncer de Colon Metastásico (Quimioterapia + Antiangiogénicos)",
+      primaryObjective: "Comprobar el cálculo estricto de RECIST 1.1 y verificar que NO se active iRECIST ante la ausencia de fármacos inmunoterápicos.",
+      items: [
+        {
+          label: "Criterio de Respuesta",
+          detail: "RECIST 1.1 Estándar",
+          expectedBehavior: "El sistema NO debe activar iRECIST porque el paciente recibe quimioterapia (FOLFOX/FOLFIRI) y antiangiogénicos (Bevacizumab/Aflibercept), no inmunoterapia."
+        },
+        {
+          label: "Evaluación de Progresión",
+          detail: "Progresión de Enfermedad (PD) en TC Julio 2024",
+          expectedBehavior: "El sistema debe detectar incremento >=20% y >=5 mm respecto al nadir en lesiones target hepáticas (+36% vs nadir)."
+        },
+        {
+          label: "Guía de Seguimiento / NCCN",
+          detail: "NCCN Colon Cancer — Escenario Metastásico Activo",
+          expectedBehavior: "Debe seleccionar la guía de Cáncer de Colon y asociar el protocolo de evaluación seriada de respuesta (cada 8-12 semanas) y NO de vigilancia post-curativa."
+        },
+        {
+          label: "Cinética de Laboratorio",
+          detail: "Normalización y posterior rebote de CEA",
+          expectedBehavior: "CEA disminuye con la respuesta a 1ra línea (12.4 -> 2.1) y asciende fuertemente al progresar (18.5 -> 34.0 ng/mL)."
+        }
+      ]
+    },
     timeline: [
       {
-        date: "15/03/2023",
-        professional: "Dr. Juan Gómez (Mastología)",
+        date: "05/01/2023",
+        professional: "Dra. Carmen Benítez (Gastroenterología)",
         category: "Diagnóstico",
-        note: "Consulta inicial por nódulo palpable indoloro en mama izquierda (CSE) de 3 cm. Mamografía y Ecografía mamaria: BI-RADS 5.",
+        note: "Videocolonoscopía: Tumor estenosante de sigmoides a 20 cm del margen anal. Biopsia: Adenocarcinoma.",
         isKey: true,
-        detail: "Nódulo espiculado de 32 mm en CSE mama izquierda con adenomegalia axilar ipsilateral sospechosa de 18 mm."
+        detail: "Estadificación inicial con metástasis hepáticas múltiples y adenopatías."
       },
       {
-        date: "02/04/2023",
-        professional: "Dra. Ana Pérez (Patología)",
-        category: "Biopsia / IHQ",
-        note: "Biopsia Core mamaria izquierda: Carcinoma Ductal Invasor G2. PUNC axilar: Positivo para metástasis de carcinoma.",
-        isKey: true,
-        detail: "IHQ: RE 95% (+), RP 80% (+), HER2 1+ (Negativo), Ki-67: 22%. Subtipo Luminal B - HER2 negativo."
-      },
-      {
-        date: "18/04/2023",
-        professional: "Dr. Carlos Rossi (Diagnóstico por Imágenes)",
+        date: "15/01/2023",
+        professional: "Dr. Mario Rossi (Diagnóstico por Imágenes)",
         category: "Estudios",
-        note: "Estadificación inicial: TC Toraco-Abdomino-Pelviana + Centellograma Óseo.",
+        note: "TC Toraco-Abdomino-Pelviana basal: Tumor primario sigmoideo de 48 mm + 2 lesiones target hepáticas (42 mm y 28 mm, Suma: 70 mm).",
         isKey: true,
-        detail: "Masa mamaria de 32 mm y ganglio axilar izquierdo de 18 mm. Sin secundarismo óseo, pulmonar ni hepático. Estadio IIB (cT2 cN1 M0)."
+        detail: "Compromiso ganglionar retroperitoneal no medible. Estadio IVB (cT3 cN1 cM1b)."
       },
       {
-        date: "10/05/2023",
-        professional: "Dr. Juan Gómez (Cirugía Oncológica)",
-        category: "Cirugía",
-        note: "Cuadrantectomía superoexterna mama izquierda + Linfadenectomía axilar nivel I-II.",
-        isKey: true,
-        detail: "Evolución postoperatoria favorable sin complicaciones. Informe AP: Tumor de 28 mm, márgenes >5 mm. 2/14 ganglios comprometidos (pT2 pN1a M0)."
-      },
-      {
-        date: "12/06/2023",
-        professional: "Dra. Elena Silva (Oncología Clínica)",
+        date: "25/01/2023",
+        professional: "Dr. Santiago Morales (Oncología Clínica)",
         category: "Tratamiento",
-        note: "Inicio de Quimioterapia adyuvante: Esquema AC (Doxorrubicina 60 mg/m² + Ciclofosfamida 600 mg/m²) cada 21 días x 4 ciclos.",
+        note: "Inicio de 1ra Línea: mFOLFOX6 + Bevacizumab 5 mg/kg cada 14 días.",
         isKey: true,
-        detail: "Adecuada tolerancia con soporte antiemético con Ondansetrón y Dexametasona."
+        detail: "Se solicitó perfil molecular: KRAS mutado en codón 12, BRAF WT, MSS."
       },
       {
-        date: "04/09/2023",
-        professional: "Dra. Elena Silva (Oncología Clínica)",
+        date: "20/05/2023",
+        professional: "Dr. Mario Rossi (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "TC Control (Ciclo 8): Reducción de lesiones hepáticas (26 mm y 19 mm, Suma: 45 mm, -35.7% vs basal).",
+        isKey: true,
+        detail: "Respuesta Parcial (PR) según RECIST 1.1. Excelente tolerancia clínica."
+      },
+      {
+        date: "10/09/2023",
+        professional: "Dr. Mario Rossi (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "TC Control (Ciclo 12): Progresión de Enfermedad (PD). Crecimiento de lesión hepática a 38 mm (+52% vs nadir).",
+        isKey: true,
+        detail: "Aparición de nueva adenopatía interaortocava sospechosa. Finalización de 1ra línea."
+      },
+      {
+        date: "05/10/2023",
+        professional: "Dr. Santiago Morales (Oncología Clínica)",
         category: "Tratamiento",
-        note: "Continuación de QT adyuvante: Paclitaxel semanal 80 mg/m² x 12 semanas.",
-        isKey: false,
-        detail: "Hemograma y función hepática dentro de parámetros normales. Neuropatía periférica G1 transitoria."
-      },
-      {
-        date: "05/12/2023",
-        professional: "Dra. Elena Silva (Oncología Clínica)",
-        category: "Evolución",
-        note: "Finalización de Quimioterapia adyuvante (12 semanas de Paclitaxel completadas). Evaluación clínica sin signos de enfermedad.",
+        note: "Inicio de 2da Línea: FOLFIRI + Aflibercept 4 mg/kg cada 14 días.",
         isKey: true,
-        detail: "Derivación a Radioterapia para tratamiento consolidatorio locorregional."
+        detail: "Monitoreo de presión arterial y proteinuria por uso de Aflibercept."
       },
       {
         date: "15/01/2024",
-        professional: "Dr. Marcos Valenzuela (Radioterapia)",
-        category: "Tratamiento",
-        note: "Inicio de Radioterapia conformada 3D sobre mama izquierda (50 Gy) + Sobreimpresión en lecho tumoral (10 Gy).",
+        professional: "Dr. Mario Rossi (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "TC Control 2da Línea: Enfermedad Estable (SD). Lesiones hepáticas 25 mm y 18 mm (Suma: 43 mm).",
         isKey: false,
-        detail: "Tratamiento completado el 25/02/2024 con radiodermitis Grado 1 resuelta con cremas emolientes."
+        detail: "Estabilidad de enfermedad con control sintomático y CEA estable en 18.5 ng/mL."
       },
       {
-        date: "01/03/2024",
-        professional: "Dra. Elena Silva (Oncología Clínica)",
-        category: "Tratamiento",
-        note: "Inicio de Hormonoterapia adyuvante: Letrozol 2.5 mg/día vía oral (plan mínimo 5 años).",
+        date: "20/07/2024",
+        professional: "Dr. Mario Rossi (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "TC Control 2da Línea (Mes 9): Progresión de Enfermedad (PD). Lesión diana hepática aumentó a 34 mm (+36% vs nadir de 25 mm). Suma total: 55 mm (+27.9% vs nadir).",
         isKey: true,
-        detail: "Se indica Densitometría Ósea basal y suplementación con Calcio 1200 mg + Vitamina D3."
-      },
-      {
-        date: "15/08/2024",
-        professional: "Dra. Elena Silva (Oncología Clínica)",
-        category: "Control",
-        note: "Control oncológico semestral en curso de hormonoterapia. Paciente asintomática, ECOG 0, examen físico normal.",
-        isKey: true,
-        detail: "TC de control sin evidencia de recidiva local ni a distancia. CA 15-3 normal (14.1 U/mL)."
+        detail: "Progresión inequívoca de lesiones diana preexistentes y elevación de CEA a 34.0 ng/mL."
       }
     ],
     labResults: [
       {
-        date: "15/04/2023",
-        test: "CA 15-3",
-        value: 48.5,
-        unit: "U/mL",
+        date: "10/01/2023",
+        test: "CEA",
+        value: 12.4,
+        unit: "ng/mL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "15/04/2023",
-        test: "Hemoglobina",
-        value: 13.2,
-        unit: "g/dL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "15/04/2023",
-        test: "Creatinina",
-        value: 0.78,
-        unit: "mg/dL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "15/04/2023",
-        test: "Leucocitos",
-        value: 6800,
-        unit: "/mm³",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "20/08/2023",
-        test: "CA 15-3",
-        value: 28.2,
-        unit: "U/mL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "20/08/2023",
-        test: "Hemoglobina",
-        value: 11.4,
-        unit: "g/dL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "20/08/2023",
-        test: "Neutrófilos",
-        value: 2200,
-        unit: "/mm³",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "08/02/2024",
-        test: "CA 15-3",
-        value: 16.4,
-        unit: "U/mL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "08/02/2024",
+        date: "10/01/2023",
         test: "Hemoglobina",
         value: 12.8,
         unit: "g/dL",
@@ -221,33 +193,81 @@ TRATAMIENTO: Cirugía conservadora + VAX -> QT Adyuvante (AC-T) -> RT Adyuvante 
         professional: "Laboratorio Central"
       },
       {
-        date: "08/02/2024",
-        test: "Plaquetas",
-        value: 220000,
-        unit: "/mm³",
+        date: "10/01/2023",
+        test: "Creatinina",
+        value: 0.90,
+        unit: "mg/dL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "10/08/2024",
-        test: "CA 15-3",
-        value: 14.1,
-        unit: "U/mL",
+        date: "15/05/2023",
+        test: "CEA",
+        value: 2.1,
+        unit: "ng/mL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "10/08/2024",
+        date: "15/05/2023",
         test: "Hemoglobina",
-        value: 13.5,
+        value: 11.6,
         unit: "g/dL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "10/08/2024",
+        date: "05/09/2023",
+        test: "CEA",
+        value: 18.5,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "05/09/2023",
+        test: "GOT",
+        value: 48,
+        unit: "U/L",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/01/2024",
+        test: "CEA",
+        value: 16.2,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/01/2024",
+        test: "Hemoglobina",
+        value: 11.2,
+        unit: "g/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "15/07/2024",
+        test: "CEA",
+        value: 34.0,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "15/07/2024",
+        test: "Hemoglobina",
+        value: 10.9,
+        unit: "g/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "15/07/2024",
         test: "Creatinina",
-        value: 0.80,
+        value: 0.94,
         unit: "mg/dL",
         source: "documento",
         professional: "Laboratorio Central"
@@ -257,253 +277,270 @@ TRATAMIENTO: Cirugía conservadora + VAX -> QT Adyuvante (AC-T) -> RT Adyuvante 
       {
         id: "img-demo-001-1",
         type: "TC",
-        date: "18/04/2023",
+        date: "15/01/2023",
         bodyRegion: "Tórax, Abdomen y Pelvis",
-        treatment: "Basal prequirúrgico",
+        treatment: "Basal pre-tratamiento",
         isBaseline: true,
-        relevantFindings: "Formación nodular espiculada en cuadrante superoexterno de mama izquierda de 32 mm. Adenomegalia axilar izquierda ipsilateral de 18 mm. Sin evidencia de metástasis a distancia.",
+        relevantFindings: "Masa sigmoidea primaria. Dos lesiones hepáticas focales sólidas secundarias en segmentos IV y VII. Adenopatías retroperitoneales.",
         targetLesions: [
           {
-            location: "Nódulo mamario izquierdo CSE",
-            measurement: 32,
-            lesionKey: "nodulo_mamario_izquierdo_cse"
+            location: "Metástasis hepática segmento IV",
+            measurement: 42,
+            lesionKey: "metastasis_hepatica_segmento_iv"
           },
           {
-            location: "Adenopatía axilar izquierda",
-            measurement: 18,
-            lesionKey: "adenopatia_axilar_izquierda"
+            location: "Metástasis hepática segmento VII",
+            measurement: 28,
+            lesionKey: "metastasis_hepatica_segmento_vii"
           }
         ],
         nonTargetLesions: [
           {
-            location: "Parénquima pulmonar bilateral",
-            status: "Presente / No medible (sin nódulos sospechosos)"
+            location: "Tumor primario sigmoideo",
+            status: "Presente"
           },
           {
-            location: "Parénquima hepático",
-            status: "Normal sin lesiones focales"
+            location: "Adenopatías retroperitoneales",
+            status: "Presente / No medible"
           }
         ],
         newLesions: false,
-        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 400
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 550
       },
       {
         id: "img-demo-001-2",
         type: "TC",
-        date: "28/08/2023",
+        date: "20/05/2023",
         bodyRegion: "Tórax, Abdomen y Pelvis",
-        treatment: "Post-cirugía / Durante Quimioterapia AC-T",
+        treatment: "1ra Línea: mFOLFOX6 + Bevacizumab (Ciclo 8)",
         isBaseline: false,
-        relevantFindings: "Cambios postquirúrgicos en mama izquierda y hueco axilar. Lecho mamario sin nódulo residual. Ganglio axilar residual disminuido a 8 mm. Suma total de diámetros target: 8 mm (-84% vs basal). Respuesta Parcial (PR) según RECIST 1.1.",
+        relevantFindings: "Reducción significativa de lesiones hepáticas (26 mm y 19 mm, Suma: 45 mm, -35.7% vs basal de 70 mm). Respuesta Parcial (PR) según RECIST 1.1.",
         targetLesions: [
           {
-            location: "Nódulo mamario izquierdo CSE",
-            measurement: 0,
-            lesionKey: "nodulo_mamario_izquierdo_cse"
+            location: "Metástasis hepática segmento IV",
+            measurement: 26,
+            lesionKey: "metastasis_hepatica_segmento_iv"
           },
           {
-            location: "Adenopatía axilar izquierda",
-            measurement: 8,
-            lesionKey: "adenopatia_axilar_izquierda"
+            location: "Metástasis hepática segmento VII",
+            measurement: 19,
+            lesionKey: "metastasis_hepatica_segmento_vii"
           }
         ],
         nonTargetLesions: [
           {
-            location: "Lecho quirúrgico mamario y axilar",
-            status: "Sin signos de recidiva"
+            location: "Tumor primario y adenopatías",
+            status: "Respuesta parcial / Estables"
           }
         ],
         newLesions: false,
-        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 280
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 430
       },
       {
         id: "img-demo-001-3",
         type: "TC",
-        date: "10/02/2024",
+        date: "15/01/2024",
         bodyRegion: "Tórax, Abdomen y Pelvis",
-        treatment: "Post-finalización de Quimioterapia y Radioterapia",
+        treatment: "2da Línea: FOLFIRI + Aflibercept (Mes 3)",
         isBaseline: false,
-        relevantFindings: "Control post-tratamiento adyuvante locorregional. Parénquima pulmonar y hepático sin lesiones secundarias. Ganglios axilares subcentimétricos (6 mm). Enfermedad Estable (SD) / Respuesta Completa en lecho mamario.",
+        relevantFindings: "Lesiones hepáticas en 25 mm y 18 mm (Suma: 43 mm). Estable respecto a controles previos. Enfermedad Estable (SD) según RECIST 1.1.",
         targetLesions: [
           {
-            location: "Nódulo mamario izquierdo CSE",
-            measurement: 0,
-            lesionKey: "nodulo_mamario_izquierdo_cse"
+            location: "Metástasis hepática segmento IV",
+            measurement: 25,
+            lesionKey: "metastasis_hepatica_segmento_iv"
           },
           {
-            location: "Adenopatía axilar izquierda",
-            measurement: 6,
-            lesionKey: "adenopatia_axilar_izquierda"
+            location: "Metástasis hepática segmento VII",
+            measurement: 18,
+            lesionKey: "metastasis_hepatica_segmento_vii"
           }
         ],
         nonTargetLesions: [
           {
-            location: "Área torácica y abdominal",
-            status: "Sin lesiones sospechosas"
+            location: "Adenopatías retroperitoneales",
+            status: "Estables"
           }
         ],
         newLesions: false,
-        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 180
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 200
       },
       {
         id: "img-demo-001-4",
         type: "TC",
-        date: "15/08/2024",
+        date: "20/07/2024",
         bodyRegion: "Tórax, Abdomen y Pelvis",
-        treatment: "En curso de Hormonoterapia (Letrozol 2.5 mg/d)",
+        treatment: "2da Línea: FOLFIRI + Aflibercept (Mes 9)",
         isBaseline: false,
-        relevantFindings: "Estudio de seguimiento oncológico. Sin evidencia de recidiva tumoral locorregional ni a distancia. Estabilidad completa sostenida.",
+        relevantFindings: "Incremento de metástasis hepática segmento IV a 34 mm (+36% vs nadir de 25 mm) y segmento VII a 21 mm. Suma diámetros: 55 mm (+27.9% vs nadir de 43 mm). Configura Progresión de Enfermedad (PD) según RECIST 1.1.",
         targetLesions: [
           {
-            location: "Nódulo mamario izquierdo CSE",
-            measurement: 0,
-            lesionKey: "nodulo_mamario_izquierdo_cse"
+            location: "Metástasis hepática segmento IV",
+            measurement: 34,
+            lesionKey: "metastasis_hepatica_segmento_iv"
           },
           {
-            location: "Adenopatía axilar izquierda",
-            measurement: 5,
-            lesionKey: "adenopatia_axilar_izquierda"
+            location: "Metástasis hepática segmento VII",
+            measurement: 21,
+            lesionKey: "metastasis_hepatica_segmento_vii"
           }
         ],
         nonTargetLesions: [
           {
-            location: "Lecho quirúrgico y axila izquierda",
-            status: "Sin cambios respecto al estudio previo"
+            location: "Adenopatías retroperitoneales",
+            status: "En progresión dimensional"
           }
         ],
         newLesions: false,
-        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 10
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 20
       }
     ],
     chatHistory: [
       {
         role: "user",
-        text: "¿Cuál es el esquema de seguimiento y monitoreo de salud ósea recomendado para esta paciente tratada con Letrozol?",
+        text: "¿Cuál es el criterio RECIST aplicable a este paciente y qué opciones de tratamiento de 3ra línea recomienda la guía NCCN tras progresión a FOLFOX y FOLFIRI?",
         timestamp: Date.now() - 1000 * 60 * 60 * 2
       },
       {
         role: "model",
-        text: `Para una paciente de 58 años con antecedentes de **Carcinoma de Mama Estadio IIB (ypT2 pN1a M0) RH+ HER2-**, en tratamiento adyuvante con **Letrozol 2.5 mg/día**:
+        text: `Para este paciente con **Adenocarcinoma de Colon Sigmoides Estadio IV (KRAS mutado, MSS)**:
 
-1. **Monitoreo de Salud Ósea:**
-   - Realizar Densitometría Ósea (DMO) de columna y cadera basal y cada 1-2 años por el riesgo de pérdida de masa ósea y fracturas asociado a Inhibidores de la Aromatasa.
-   - Mantener suplementación con Calcio (1000-1200 mg/día) y Vitamina D3 (800-1000 UI/día).
-   - Si el T-score cae a < -2.0 o presenta factores de riesgo adicionales, evaluar inicio de bisfosfonatos (Ácido Zoledrónico 4 mg ev semestral) o Denosumab.
+1. **Criterio de Evaluación Radiológica:**
+   - Corresponde **RECIST 1.1 Estándar** (NO iRECIST, ya que el paciente no ha recibido anticuerpos anti-PD-1/PD-L1 ni anti-CTLA-4, y el tumor es MSS).
+   - En la TC del 20/07/2024 se constata **Progresión de Enfermedad (PD)** por un aumento del +27.9% en la suma de diámetros de lesiones diana respecto al nadir (>20% y >5 mm absolutos).
 
-2. **Seguimiento Clínico y Mamográfico:**
-   - Examen físico y anamnesis cada 3 a 6 meses durante los primeros 3 años.
-   - Mamografía bilateral anual (la primera a los 6-12 meses del fin de la radioterapia).
-   - No se recomiendan estudios tomográficos ni centellogramas de rutina en ausencia de síntomas o sospecha clínica (Guías NCCN/ASCO).
-
-3. **Control Ginecológico y Cardiovascular:**
-   - Perfil lipídico anual y control cardiovascular periódico por riesgo aterogénico de los IA.`,
+2. **Opciones de 3ra Línea según NCCN Colon Cancer:**
+   - **Trifluridina/Tipiracilo (TAS-102) + Bevacizumab:** Opción preferida con beneficio significativo en supervivencia global (Estudio SUNLIGHT).
+   - **Regorafenib (160 mg/día, con escalamiento desde 80 mg/día):** Alternativa como monoterapia según estudio CORRECT/ReDOS.
+   - **Terapia Dirigida según re-biopsia / NGS:** Evaluar si emergió alguna mutación accionable o si califica para ensayos clínicos (ej. inhibidores específicos de KRAS G12D en investigación).`,
         timestamp: Date.now() - 1000 * 60 * 60 * 2 + 1500
       }
     ],
     lastUpdated: Date.now()
   },
 
-  // ── CASO 2: CA DE PULMÓN — ESTADIO IV (EGFR+) ─────────────────────────
+  // ──────────────────────────────────────────────────────────────────────────
+  // CASO 2 — MELANOMA METASTÁSICO CON INMUNOTERAPIA
+  // Validación: Activación de iRECIST (Pembrolizumab), evaluación de
+  // pseudoprogresión / iUPD y respuesta inmunológica confirmada.
+  // ──────────────────────────────────────────────────────────────────────────
   {
     id: "demo-002",
     doctorId: DEMO_USER_ID,
     hcNumber: "DEMO-002",
     name: "HC-DEMO-002",
-    age: 64,
-    ageRange: "61-70",
-    diagnosis: "Adenocarcinoma de Pulmón LSD — EGFR Exón 19 del — Estadio IVB (Metástasis óseas y pleurales)",
+    age: 49,
+    ageRange: "41-50",
+    diagnosis: "Melanoma Cutáneo Metastásico de Tronco — Estadio IV M1c (Metástasis pulmonares y subcutáneas) — BRAF Wild-Type",
     historyText: `HISTORIA CLÍNICA ONCOLÓGICA - HC-DEMO-002
-PACIENTE: Masculino, 64 años. Ex-fumador (15 paquetes/año, abandono hace 10 años).
-DIAGNÓSTICO: Adenocarcinoma de pulmón en lóbulo superior derecho (LSD). TTF-1 positivo, p40 negativo.
-BIOLOGÍA MOLECULAR (NGS): Mutación activadora en EGFR Exón 19 (deleción p.E746_A750del) POSITIVA. ALK negativo, ROS1 negativo. PD-L1 TPS: 15%.
-ESTADIFICACIÓN: cT2b (4.2 cm) cN2 (adenopatía paratraqueal 4R 22 mm) cM1c (derrame pleural con citología positiva y metástasis óseas líticas en T6 y T8) - Estadio IVB.
+PACIENTE: Femenina, 49 años. Sin antecedentes comórbidos mayores.
+DIAGNÓSTICO: Melanoma nodular cutáneo primario en región dorsal resecado en 2022 (Breslow 3.8 mm, ulcerado, Clark IV).
+ESTADIFICACIÓN ACTUAL: Recidiva metastásica sistémica con nódulos pulmonares bilaterales y adenopatías axilares derechas (Estadio IV M1c).
+BIOLOGÍA MOLECULAR: BRAF V600E/K no mutado (Wild-Type), NRAS no mutado, c-KIT negativo. PD-L1 positivo (TPS 60%).
 
-TRATAMIENTO INSTAURADO:
-1. Primera Línea Dirigida: Osimertinib 80 mg/día vía oral continuo (Inhibidor de Tirosina Quinasa EGFR de 3ra generación).
-2. Protección Ósea: Ácido Zoledrónico 4 mg ev cada 4 semanas + Calcio y Vitamina D.
-3. Trámite de Medicación de Alto Costo: Solicitud formal gestionada ante PAMI / Banco Nacional de Drogas Oncológicas.
+TRATAMIENTO:
+- Inmunoterapia de 1ra línea: Pembrolizumab 200 mg ev cada 3 semanas (iniciado en Diciembre 2023).
+- Evolución radiológica:
+  * Basal (Nov 2023): Lesión pulmonar target de 35 mm y adenopatía axilar de 25 mm (Suma: 60 mm).
+  * Control Semana 12 (Marzo 2024): Aumento dimensional inicial leve en pulmón (38 mm) y ganglio axilar (27 mm, Suma: 65 mm, +8.3%), compatible con infiltración linfocitaria / pseudoprogresión (iUPD - Unconfirmed Progressive Disease). Paciente clínicamente asintomática, ECOG 0, sin deterioro funcional. Se decide continuar Pembrolizumab ('treatment beyond progression').
+  * Control Semana 24 (Julio 2024): Marcada reducción de lesiones a 18 mm y 12 mm (Suma: 30 mm, -50% vs basal). Configura Respuesta Parcial Inmunológica Confirmada (iPR / iRECIST).
 
-EVOLUCIÓN CLÍNICA Y RADIOLÓGICA:
-- Basal (Nov 2023): Masa LSD de 42 mm + adenopatía 4R de 22 mm (Suma 64 mm) + derrame pleural y lesiones óseas.
-- Control Mes 3 (Mar 2024): Respuesta Parcial marcada (Masa LSD 24 mm, adenopatía 12 mm, Suma 36 mm, -43.7%). Resolución del derrame pleural.
-- Control Mes 7 (Jul 2024): Lesiones target primarias estables (LSD 23 mm, 4R 12 mm), pero aparición de NUEVA lesión nodular subpleural de 14 mm en lóbulo inferior izquierdo (LII). Configura Progresión de Enfermedad (PD) por RECIST 1.1 / iUPD por iRECIST. Se discute conducta de oligoprogresión.`,
+LABORATORIO:
+Perfil tiroideo y hepático seriado normal (sin tiroiditis ni hepatitis inmunomediada). LDH normalizada (185 U/L).`,
     clinicalContext: `HISTORIA CLÍNICA ONCOLÓGICA - HC-DEMO-002
-PACIENTE: 64 años, ex tabaquista.
-DIAGNÓSTICO: Adenocarcinoma de pulmón LSD Estadio IVB (EGFR Exon 19 del).
-TRATAMIENTO: Osimertinib 80 mg/día + Ácido Zoledrónico 4 mg ev c/28d.
-ESTADO: Progresión por nueva lesión pulmonar contralateral (oligoprogresión vs resistencia molecular).`,
-    clinicalContextUpdatedAt: Date.now() - 1000 * 60 * 60 * 24 * 15,
+PACIENTE: 49 años. Melanoma cutáneo metastásico Estadio IV M1c (BRAF WT).
+TRATAMIENTO: Inmunoterapia con Pembrolizumab 200 mg c/3s.
+EVALUACIÓN IMÁGENES: iRECIST activado. Pseudoprogresión inicial en semana 12 (iUPD) seguida de respuesta parcial inmunológica profunda en semana 24 (iPR).`,
+    clinicalContextUpdatedAt: Date.now() - 1000 * 60 * 60 * 24 * 10,
+    validationCriteria: {
+      scenarioTitle: "Melanoma Metastásico en Inmunoterapia (Pembrolizumab)",
+      primaryObjective: "Comprobar la correcta activación y aplicación de iRECIST, discriminando pseudoprogresión (iUPD) de progresión real.",
+      items: [
+        {
+          label: "Criterio de Respuesta",
+          detail: "iRECIST Activado",
+          expectedBehavior: "El sistema debe detectar la presencia de Pembrolizumab (anti-PD-1) y aplicar el estándar iRECIST para evaluación de respuesta inmunitaria."
+        },
+        {
+          label: "Identificación de Pseudoprogresión",
+          detail: "iUPD en Semana 12 -> Respuesta iPR en Semana 24",
+          expectedBehavior: "Reconocer que el aumento dimensional inicial transitorio sin deterioro clínico representó infiltración inmune y no progresión definitiva."
+        },
+        {
+          label: "Guía de Seguimiento / NCCN",
+          detail: "NCCN Cutaneous Melanoma v3.2024",
+          expectedBehavior: "Seleccionar la guía de Melanoma Cutáneo y monitorear toxicidades inmunomediadas (eje tiroideo, función hepática, LDH)."
+        },
+        {
+          label: "Diferenciación de Métodos de Imagen",
+          detail: "TC Corporal + PET-TC",
+          expectedBehavior: "Diferenciar estudios tomográficos convencionales de estudios PET-TC con captación metabólica FDG."
+        }
+      ]
+    },
     timeline: [
       {
-        date: "10/11/2023",
-        professional: "Dr. Roberto Díaz (Neumonología)",
-        category: "Consulta",
-        note: "Consulta por tos seca persistente de 2 meses, disnea CF II y dolor dorsal continuo. Pérdida de 4 kg de peso.",
+        date: "12/11/2023",
+        professional: "Dr. Esteban Varela (Dermatología Oncológica)",
+        category: "Diagnóstico",
+        note: "Detección de adenomegalia axilar derecha palpable y tos seca. Antecedente de melanoma dorsal resecado en 2022.",
         isKey: true,
-        detail: "Examen respiratorio con hipoventilación en base pulmonar derecha. ECOG 1."
+        detail: "PUNC ganglionar axilar positiva para metástasis de melanoma. Se solicita estudio molecular y estadificación."
       },
       {
-        date: "24/11/2023",
-        professional: "Dra. Marcela Gómez (Diagnóstico por Imágenes)",
+        date: "25/11/2023",
+        professional: "Dr. Carlos Rossi (Diagnóstico por Imágenes)",
         category: "Estudios",
-        note: "TC Toraco-Abdomino-Pelviana con contraste: Masa pulmonar espiculada en LSD de 42 mm con compromiso mediastinal y óseo.",
+        note: "TC Toraco-Abdomino-Pelviana basal: Masa pulmonar en lóbulo superior derecho de 35 mm y adenopatía axilar derecha de 25 mm (Suma: 60 mm).",
         isKey: true,
-        detail: "Adenopatía paratraqueal derecha baja (estación 4R) de 22 mm. Derrame pleural derecho leve. Lesiones líticas en cuerpos vertebrales T6 y T8."
+        detail: "LDH sérica: 340 U/L (elevada). Estadio IV M1c."
       },
       {
         date: "05/12/2023",
-        professional: "Dr. Roberto Díaz (Neumonología)",
-        category: "Procedimiento",
-        note: "Videobroncoscopía + PAAF transbronquial y toracocentesis diagnóstica.",
-        isKey: false,
-        detail: "Citología de líquido pleural positiva para células tumorales. Biopsia bronquial: Adenocarcinoma infiltrante TTF-1 positivo."
-      },
-      {
-        date: "18/12/2023",
         professional: "Dra. Patricia Morales (Biología Molecular)",
         category: "Biología Molecular",
-        note: "Panel Molecular NGS de Cáncer de Pulmón: Mutación en EGFR Exón 19 (deleción) POSITIVA.",
-        isKey: true,
-        detail: "EGFR del Exón 19 detectada. ALK por IHQ negativo, ROS1 negativo. Candidato de primera elección para TKI de 3ra generación (Osimertinib)."
+        note: "Panel Genómico de Melanoma: BRAF V600 Wild-Type (negativo para mutaciones en V600E y V600K). NRAS WT.",
+        isKey: false,
+        detail: "Indicación prioritaria de Inmunoterapia anti-PD-1 en primera línea."
       },
       {
-        date: "28/12/2023",
+        date: "15/12/2023",
         professional: "Dr. Hernán Cortínez (Oncología Clínica)",
         category: "Tratamiento",
-        note: "Inicio de 1ra Línea: Osimertinib 80 mg/día vía oral + Ácido Zoledrónico 4 mg ev mensual. Confección de solicitud PAMI / Banco de Drogas.",
+        note: "Inicio de Inmunoterapia de 1ra Línea con Pembrolizumab 200 mg ev cada 21 días.",
         isKey: true,
-        detail: "Se informa al paciente sobre pautas de alarma y perfil de toxicidad (diarrea, rash cutáneo, neumonitis)."
+        detail: "Se instruye al paciente sobre signos de alarma de toxicidad inmunomediada (colitis, neumonitis, endocrinopatías)."
       },
       {
-        date: "15/03/2024",
-        professional: "Dr. Hernán Cortínez (Oncología Clínica)",
-        category: "Control",
-        note: "Control clínico y tomográfico a los 3 meses de Osimertinib. Respuesta Parcial (PR) significativa (-43.7%).",
-        isKey: true,
-        detail: "Masa LSD reducida a 24 mm, adenopatía 4R a 12 mm. Desaparición del derrame pleural. Alivio completo del dolor dorsal. ECOG 0."
-      },
-      {
-        date: "20/07/2024",
-        professional: "Dra. Marcela Gómez (Diagnóstico por Imágenes)",
+        date: "12/03/2024",
+        professional: "Dr. Carlos Rossi (Diagnóstico por Imágenes)",
         category: "Estudios",
-        note: "TC Tórax, Abdomen y Pelvis: Progresión de Enfermedad (PD) por aparición de nueva lesión nodular en lóbulo inferior izquierdo de 14 mm.",
+        note: "TC Control Semana 12: Aumento leve de masa pulmonar a 38 mm y adenopatía a 27 mm (Suma: 65 mm, +8.3% vs basal).",
         isKey: true,
-        detail: "Masa primaria LSD estable (23 mm) y adenopatía 4R estable (12 mm). Nueva lesión contralateral de 14 mm. Se programa ateneo multidisciplinario."
+        detail: "Sin nuevas lesiones. Paciente asintomática, ECOG 0. Hallazgo compatible con iUPD (Progresión No Confirmada / Pseudoprogresión por iRECIST). Se mantiene tratamiento."
+      },
+      {
+        date: "15/07/2024",
+        professional: "Dr. Carlos Rossi (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "TC Control Semana 24 + PET-TC: Reducción marcada de masa pulmonar a 18 mm (-48.5%) y adenopatía a 12 mm (-52%). Suma: 30 mm (-50% vs basal).",
+        isKey: true,
+        detail: "Respuesta Parcial Inmunológica Confirmada (iPR según iRECIST). Normalización de LDH (185 U/L)."
       }
     ],
     labResults: [
       {
         date: "20/11/2023",
-        test: "CEA",
-        value: 38.4,
-        unit: "ng/mL",
+        test: "LDH",
+        value: 340,
+        unit: "U/L",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
         date: "20/11/2023",
         test: "Hemoglobina",
-        value: 12.1,
+        value: 13.0,
         unit: "g/dL",
         source: "documento",
         professional: "Laboratorio Central"
@@ -511,64 +548,64 @@ ESTADO: Progresión por nueva lesión pulmonar contralateral (oligoprogresión v
       {
         date: "20/11/2023",
         test: "Creatinina",
-        value: 0.95,
+        value: 0.82,
         unit: "mg/dL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
         date: "20/11/2023",
-        test: "Calcio",
-        value: 9.8,
-        unit: "mg/dL",
+        test: "TSH",
+        value: 2.1,
+        unit: "uUI/mL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
         date: "10/03/2024",
-        test: "CEA",
-        value: 8.2,
-        unit: "ng/mL",
+        test: "LDH",
+        value: 260,
+        unit: "U/L",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
         date: "10/03/2024",
+        test: "TSH",
+        value: 2.4,
+        unit: "uUI/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/03/2024",
+        test: "GOT",
+        value: 22,
+        unit: "U/L",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/07/2024",
+        test: "LDH",
+        value: 185,
+        unit: "U/L",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/07/2024",
+        test: "TSH",
+        value: 2.3,
+        unit: "uUI/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/07/2024",
         test: "Hemoglobina",
-        value: 12.6,
+        value: 13.4,
         unit: "g/dL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "10/03/2024",
-        test: "Creatinina",
-        value: 0.90,
-        unit: "mg/dL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "15/07/2024",
-        test: "CEA",
-        value: 19.5,
-        unit: "ng/mL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "15/07/2024",
-        test: "Hemoglobina",
-        value: 12.0,
-        unit: "g/dL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "15/07/2024",
-        test: "Creatinina",
-        value: 0.92,
-        unit: "mg/dL",
         source: "documento",
         professional: "Laboratorio Central"
       }
@@ -577,35 +614,27 @@ ESTADO: Progresión por nueva lesión pulmonar contralateral (oligoprogresión v
       {
         id: "img-demo-002-1",
         type: "TC",
-        date: "24/11/2023",
+        date: "25/11/2023",
         bodyRegion: "Tórax, Abdomen y Pelvis",
-        treatment: "Basal pre-tratamiento",
+        treatment: "Basal pre-inmunoterapia",
         isBaseline: true,
-        relevantFindings: "Masa pulmonar espiculada en LSD de 42 mm. Adenomegalia mediastinal paratraqueal derecha (4R) de 22 mm. Derrame pleural derecho moderado. Lesiones osteolíticas secundarias en T6 y T8.",
+        relevantFindings: "Masa pulmonar sólida en LSD de 35 mm. Adenomegalia axilar derecha de 25 mm. Sin compromiso cerebral en RMN.",
         targetLesions: [
           {
             location: "Masa pulmonar LSD",
-            measurement: 42,
+            measurement: 35,
             lesionKey: "masa_pulmonar_lsd"
           },
           {
-            location: "Adenopatía mediastinal 4R",
-            measurement: 22,
-            lesionKey: "adenopatia_mediastinal_4r"
+            location: "Adenopatía axilar derecha",
+            measurement: 25,
+            lesionKey: "adenopatia_axilar_derecha"
           }
         ],
         nonTargetLesions: [
           {
-            location: "Derrame pleural derecho",
-            status: "Presente / No medible"
-          },
-          {
-            location: "Lesión ósea lítica en T6",
-            status: "Presente"
-          },
-          {
-            location: "Lesión ósea lítica en T8",
-            status: "Presente"
+            location: "Parénquima hepático y óseo",
+            status: "Normal"
           }
         ],
         newLesions: false,
@@ -614,31 +643,27 @@ ESTADO: Progresión por nueva lesión pulmonar contralateral (oligoprogresión v
       {
         id: "img-demo-002-2",
         type: "TC",
-        date: "15/03/2024",
+        date: "12/03/2024",
         bodyRegion: "Tórax, Abdomen y Pelvis",
-        treatment: "Osimertinib 80 mg/día (Mes 3)",
+        treatment: "Inmunoterapia: Pembrolizumab (Semana 12)",
         isBaseline: false,
-        relevantFindings: "Reducción significativa de masa LSD (-43%) y ganglio 4R (-45%). Suma diámetros pasó de 64 mm a 36 mm (-43.7%). Resolución completa del derrame pleural. Respuesta Parcial (PR) según RECIST 1.1.",
+        relevantFindings: "Leve aumento dimensional de masa pulmonar a 38 mm y adenopatía a 27 mm (Suma: 65 mm, +8.3% vs basal). Sin nuevas lesiones. Compatible con iUPD / Pseudoprogresión por iRECIST en paciente asintomática.",
         targetLesions: [
           {
             location: "Masa pulmonar LSD",
-            measurement: 24,
+            measurement: 38,
             lesionKey: "masa_pulmonar_lsd"
           },
           {
-            location: "Adenopatía mediastinal 4R",
-            measurement: 12,
-            lesionKey: "adenopatia_mediastinal_4r"
+            location: "Adenopatía axilar derecha",
+            measurement: 27,
+            lesionKey: "adenopatia_axilar_derecha"
           }
         ],
         nonTargetLesions: [
           {
-            location: "Derrame pleural derecho",
-            status: "Resuelto"
-          },
-          {
-            location: "Lesiones óseas T6/T8",
-            status: "Estables con signos de esclerosis reparativa"
+            location: "Lecho hepático y abdominal",
+            status: "Sin cambios"
           }
         ],
         newLesions: false,
@@ -646,276 +671,245 @@ ESTADO: Progresión por nueva lesión pulmonar contralateral (oligoprogresión v
       },
       {
         id: "img-demo-002-3",
-        type: "TC",
-        date: "20/07/2024",
-        bodyRegion: "Tórax, Abdomen y Pelvis",
-        treatment: "Osimertinib 80 mg/día (Mes 7)",
+        type: "PET-TC",
+        date: "15/07/2024",
+        bodyRegion: "Cuerpo Entero",
+        treatment: "Inmunoterapia: Pembrolizumab (Semana 24)",
         isBaseline: false,
-        relevantFindings: "Lesiones target previas estables (LSD 23 mm, 4R 12 mm). Aparición de NUEVA lesión nodular subpleural de 14 mm en LII. Configura Progresión de Enfermedad (PD) según RECIST 1.1 / iUPD en iRECIST.",
+        relevantFindings: "Excelente respuesta metabólica y morfológica. Masa pulmonar reducida a 18 mm (SUVmax 2.4 vs 11.2 basal) y adenopatía a 12 mm. Suma diámetros: 30 mm (-50% vs basal). Respuesta Parcial Confirmada (iPR según iRECIST).",
+        suvMax: 2.4,
         targetLesions: [
           {
             location: "Masa pulmonar LSD",
-            measurement: 23,
+            measurement: 18,
             lesionKey: "masa_pulmonar_lsd"
           },
           {
-            location: "Adenopatía mediastinal 4R",
+            location: "Adenopatía axilar derecha",
             measurement: 12,
-            lesionKey: "adenopatia_mediastinal_4r"
+            lesionKey: "adenopatia_axilar_derecha"
           }
         ],
         nonTargetLesions: [
           {
-            location: "Lesiones óseas",
-            status: "Estables"
+            location: "Resto del cuerpo",
+            status: "Sin captación patológica"
           }
         ],
-        newLesions: true,
+        newLesions: false,
         extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 25
       }
     ],
     chatHistory: [
       {
         role: "user",
-        text: "¿Cuál es la conducta médica recomendada ante la aparición de esta nueva lesión en LII en un paciente con EGFR mutado en Osimertinib?",
-        timestamp: Date.now() - 1000 * 60 * 60 * 4
+        text: "¿Por qué en la tomografía de semana 12 no se suspendió el Pembrolizumab a pesar del aumento de tamaño de las lesiones?",
+        timestamp: Date.now() - 1000 * 60 * 60 * 3
       },
       {
         role: "model",
-        text: `Ante la detección de una nueva lesión en un paciente con Adenocarcinoma de Pulmón EGFR Exón 19 del en tratamiento con Osimertinib de 1ra línea:
+        text: `En el contexto de tratamiento con **Inmunoterapia (Pembrolizumab)** en Melanoma Metastásico:
 
-1. **Distinguir Oligoprogresión vs Progresión Sistémica:**
-   - Dado que las lesiones preexistentes (LSD y mediastino) permanecen controladas y la progresión se limita a un único nódulo de 14 mm en LII, se clasifica como **Oligoprogresión**.
+1. **Fenómeno de Pseudoprogresión (iRECIST):**
+   - El aumento dimensional inicial de las lesiones (de 60 mm a 65 mm en semana 12) se debió a una intensa **infiltración linfocitaria tumoral y edema inflamatorio**, y no a proliferación tumoral genuina.
+   - Bajo los criterios **iRECIST**, este hallazgo se clasifica como **iUPD (Unconfirmed Progressive Disease)**.
 
-2. **Tratamiento Local Consolidativo ('Beyond Progression'):**
-   - La recomendación actual (NCCN / ESMO) avala realizar tratamiento ablativo local sobre la nueva lesión mediante **Radiocirugía Estereotáctica Corporal (SBRT/SABR)** o resección quirúrgica, **manteniendo el Osimertinib 80 mg/día**, prolongando el beneficio clínico.
+2. **Criterios de Continuación ('Treatment Beyond Progression'):**
+   - Dado que la paciente se encontraba **clínicamente asintomática, con ECOG 0, sin nuevas lesiones ni deterioro orgánico**, las guías recomiendan continuar la inmunoterapia y repetir el estudio por imágenes a las 4-8 semanas para confirmar o descartar progresión.
 
-3. **Estudio de Mecanismos de Resistencia Molecular:**
-   - Se sugiere solicitar Biopsia Líquida (ADN tumoral circulante en plasma por NGS) o re-biopsia tisular de la nueva lesión para investigar:
-     - Mutaciones secundarias en EGFR (ej. C797S).
-     - Mecanismos de bypass (amplificación de MET, mutaciones en HER2, BRAF, PIK3CA).
-     - Transformación histológica a Cáncer de Pulmón de Células Pequeñas (SCLC).
-
-4. **Siguiente Línea Sistémica (si hubiera progresión múltiple):**
-   - Quimioterapia con doblete de Platino + Pemetrexed +/- Amivantamab según el mecanismo molecular identificado.`,
-        timestamp: Date.now() - 1000 * 60 * 60 * 4 + 2000
+3. **Confirmación en Semana 24:**
+   - La TC y PET-TC de semana 24 demostraron una **reducción del -50% (Suma: 30 mm)** con disminución drástica del SUVmax, confirmando una **Respuesta Parcial Inmunológica (iPR)** profunda y duradera.`,
+        timestamp: Date.now() - 1000 * 60 * 60 * 3 + 1800
       }
     ],
     lastUpdated: Date.now()
   },
 
-  // ── CASO 3: CA COLORRECTAL — POST-METASTASECTOMÍA ────────────────────
+  // ──────────────────────────────────────────────────────────────────────────
+  // CASO 3 — CÁNCER DE PÁNCREAS
+  // Validación: Selección unívoca de Guía NCCN Pancreatic Adenocarcinoma
+  // (NO confundir con Colon ni Mama), CA 19-9 seriado, protocolo pancreático.
+  // ──────────────────────────────────────────────────────────────────────────
   {
     id: "demo-003",
     doctorId: DEMO_USER_ID,
     hcNumber: "DEMO-003",
     name: "HC-DEMO-003",
-    age: 51,
-    ageRange: "51-60",
-    diagnosis: "Adenocarcinoma de Colon Sigmoides — Estadio IV Oligometastásico Resecado (Metastasectomía Hepática R0) — En Vigilancia Activa",
+    age: 66,
+    ageRange: "61-70",
+    diagnosis: "Adenocarcinoma Ductal de Cabeza de Páncreas — Estadio IIB (pT2 pN1 M0) Resecado — Post-Duodenopancreatectomía Cefálica (Whipple)",
     historyText: `HISTORIA CLÍNICA ONCOLÓGICA - HC-DEMO-003
-PACIENTE: Masculino, 51 años. Sin comorbilidades.
-DIAGNÓSTICO: Adenocarcinoma de colon sigmoides con metástasis hepática sincrónica solitaria resecable en segmento VI.
-BIOLOGÍA MOLECULAR: RAS Wild-Type (KRAS y NRAS no mutados), BRAF V600E negativo, Inestabilidad Microsatelital Estable (MSS / pMMR).
-ESTADIFICACIÓN: cT3 cN1a cM1a (Hígado) - Estadio IVA oligometastásico resecable.
+PACIENTE: Masculino, 66 años. Antecedente de diabetes mellitus tipo 2 de reciente diagnóstico (1 año).
+DIAGNÓSTICO: Adenocarcinoma ductal invasor de cabeza de páncreas, grado histológico 2.
+ESTADIFICACIÓN POST-QUIRÚRGICA: Tumor de 3.2 cm en cabeza pancreática, 2 de 18 ganglios linfáticos regionales comprometidos, márgenes quirúrgicos libres R0 (>1 mm retroperitoneal y vascular) - Estadio IIB (pT2 pN1 M0).
 
-TRATAMIENTO REALIZADO:
-1. Cirugía simultánea R0 (22/08/2022): Colectomía sigmoidea oncológica + Resección hepática atípica segmento VI con márgenes libres >1 cm.
-   Anatomía Patológica: Adenocarcinoma moderadamente diferenciado, invasión hasta subserosa (pT3), 2/18 ganglios positivos (pN1a), metástasis hepática de 3.2 cm con margen libre de 12 mm (ypT3 pN1a pM1a R0).
-2. Quimioterapia Adyuvante Perioperatoria: mFOLFOX6 x 12 ciclos (Oxaliplatino 85 mg/m² + Leucovorina 400 mg/m² + 5-Fluorouracilo en bolo e infusión continua de 46 hs) finalizados en Marzo 2023.
-3. Vigilancia Activa: Sin quimioterapia de mantenimiento. Controles trimestrales de CEA y semestrales de TC Toraco-Abdomino-Pelviana.
-
-ESTADO ACTUAL (Agosto 2024):
-Mes 17 post-finalización de quimioterapia. Paciente asintomático, reinserción laboral completa, ECOG 0. CEA en valores normales estables (1.6 ng/mL). TC TAP de control y videocolonoscopía sin evidencia de recidiva tumoral local ni a distancia (NED - No Evidence of Disease).`,
+TRATAMIENTO MULTIMODAL:
+1. Cirugía (18/10/2023): Duodenopancreatectomía cefálica (Procedimiento de Whipple) con linfadenectomía regional estándar.
+2. Quimioterapia Adyuvante (Diciembre 2023 - Junio 2024):
+   - Esquema: mFOLFIRINOX modificado (Oxaliplatino 85 mg/m² + Irinotecán 150 mg/m² + Leucovorina + 5-FU infusión continua 2400 mg/m² en 46 hs, sin bolo) x 12 ciclos cada 14 días completados exitosamente.
+   - Soporte: Filgrastim profiláctico y enzimas pancreáticas sustitutivas (Pancreatina 25.000 UI con comidas).
+3. Estado Actual (Agosto 2024):
+   - Paciente asintomático, recuperación de peso (+3 kg), buen control glucémico con Metformina.
+   - Marcador CA 19-9 descendió de 380 U/mL (pre-quirúrgico) a 16 U/mL (en rango normal).
+   - TC Abdomen con protocolo pancreático trifásico sin evidencia de recidiva locorregional ni metástasis hepáticas (NED).`,
     clinicalContext: `HISTORIA CLÍNICA ONCOLÓGICA - HC-DEMO-003
-PACIENTE: Masculino, 51 años.
-DIAGNÓSTICO: Ca Colon Sigmoides Estadio IV resecado (Metastasectomía R0). RAS WT, MSS.
-TRATAMIENTO: Cirugía simultánea sigmoides + hígado R0 -> mFOLFOX6 x 12 ciclos completados.
-ESTADO: Vigilancia activa en remisión completa (NED).`,
-    clinicalContextUpdatedAt: Date.now() - 1000 * 60 * 60 * 24 * 30,
+PACIENTE: 66 años. Adenocarcinoma de cabeza de páncreas Estadio IIB (pT2 pN1 M0).
+TRATAMIENTO: Cirugía de Whipple R0 -> mFOLFIRINOX adyuvante x 12 ciclos completados.
+ESTADO: Vigilancia post-curativa. CA 19-9 normalizado. TC trifásica sin recidiva.`,
+    clinicalContextUpdatedAt: Date.now() - 1000 * 60 * 60 * 24 * 8,
+    validationCriteria: {
+      scenarioTitle: "Adenocarcinoma de Páncreas Resecado (Post-Whipple + mFOLFIRINOX)",
+      primaryObjective: "Comprobar que el sistema selecciona inequívocamente la guía NCCN Pancreatic Adenocarcinoma y NO utiliza guías de colon, mama u otras estirpes.",
+      items: [
+        {
+          label: "Correspondencia de Guía NCCN",
+          detail: "NCCN Pancreatic Adenocarcinoma v2.2024",
+          expectedBehavior: "El sistema debe vincular con exactitud la guía de Adenocarcinoma de Páncreas, descartando colangiocarcinoma o tumores de colon/estómago."
+        },
+        {
+          label: "Protocolo de Seguimiento",
+          detail: "Vigilancia cada 3-6 meses con TC trifásica y CA 19-9",
+          expectedBehavior: "Recomendar TC abdominal trifásica/tórax y CA 19-9 periódico durante los primeros 2 años post-tratamiento adyuvante."
+        },
+        {
+          label: "Monitoreo de Marcador CA 19-9",
+          detail: "Descenso de 380 U/mL a 16 U/mL",
+          expectedBehavior: "Validar la cinética del CA 19-9 como marcador específico de respuesta y vigilancia en adenocarcinoma pancreático."
+        },
+        {
+          label: "Manejo de Soporte Digestivo",
+          detail: "Terapia de Reemplazo Enzimático Pancreático (TREP)",
+          expectedBehavior: "Identificar insuficiencia exocrina post-Whipple y requerimiento de enzimas pancreáticas (Pancreatina)."
+        }
+      ]
+    },
     timeline: [
       {
-        date: "14/06/2022",
-        professional: "Dra. Clara Méndez (Gastroenterología)",
-        category: "Consulta",
-        note: "Consulta por rectorragia intermitente de 3 meses, alteración del ritmo evacuatorio y dolor en fosa ilíaca izquierda.",
+        date: "05/09/2023",
+        professional: "Dr. Jorge Alemán (Gastroenterología)",
+        category: "Diagnóstico",
+        note: "Consulta por ictericia indolora progresiva, coluria, acolia y pérdida de 5 kg. Signo de Courvoisier-Terrier positivo.",
         isKey: true,
-        detail: "Tacto rectal negativo. Se indica videocolonoscopía total urgente."
-      },
-      {
-        date: "28/06/2022",
-        professional: "Dra. Clara Méndez (Gastroenterología)",
-        category: "Procedimiento",
-        note: "Videocolonoscopía: Lesión tumoral vegetante e infiltrante en sigmoides a 25 cm del margen anal. Biopsia: Adenocarcinoma.",
-        isKey: true,
-        detail: "Biopsia concluyente para adenocarcinoma moderadamente diferenciado de colon."
-      },
-      {
-        date: "15/07/2022",
-        professional: "Dr. Gonzalo Ramos (Diagnóstico por Imágenes)",
-        category: "Estudios",
-        note: "TC TAP + RMN Hepática con contraste: Masa sigmoidea de 45 mm y lesión focal hepática solitaria en segmento VI de 35 mm resecable.",
-        isKey: true,
-        detail: "Sin compromiso extrahepático ni carcinomatosis peritoneal. Discutido en ateneo quirúrgico hepatobiliar: Metástasis resecable."
-      },
-      {
-        date: "08/08/2022",
-        professional: "Dra. Viviana López (Patología Molecular)",
-        category: "Biología Molecular",
-        note: "Panel Molecular de Cáncer Colorrectal: RAS Wild-Type (KRAS/NRAS no mutados), BRAF V600E WT, Microsatélites Estables (MSS).",
-        isKey: false,
-        detail: "Perfil genómico favorable para opciones sistémicas con anti-EGFR si fuera requerido en el futuro."
-      },
-      {
-        date: "22/08/2022",
-        professional: "Dr. Ignacio Ferrara (Cirugía Oncológica)",
-        category: "Cirugía",
-        note: "Cirugía simultánea: Sigmoidectomía oncológica + Metastasectomía hepática de segmento VI con márgenes R0.",
-        isKey: true,
-        detail: "Recuperación postoperatoria sin complicaciones mayores. Alta hospitalaria al día 6."
-      },
-      {
-        date: "05/10/2022",
-        professional: "Dr. Esteban Morales (Oncología Clínica)",
-        category: "Tratamiento",
-        note: "Inicio de Quimioterapia Adyuvante: Esquema mFOLFOX6 cada 14 días (plan 12 ciclos).",
-        isKey: true,
-        detail: "Oxaliplatino 85 mg/m² + Leucovorina 400 mg/m² + 5-FU bolo 400 mg/m² e infusión continua 2400 mg/m² en 46 hs."
-      },
-      {
-        date: "20/03/2023",
-        professional: "Dr. Esteban Morales (Oncología Clínica)",
-        category: "Evolución",
-        note: "Finalización exitosa de los 12 ciclos de mFOLFOX6. Neurotoxicidad periférica leve G1. Estado de remisión completa (NED).",
-        isKey: true,
-        detail: "Pasa a programa estricto de vigilancia clínica, bioquímica e imagenológica."
+        detail: "Bilirrubina total: 8.4 mg/dL. CA 19-9: 380 U/mL. Se solicita TC trifásica urgente."
       },
       {
         date: "15/09/2023",
-        professional: "Dr. Esteban Morales (Oncología Clínica)",
-        category: "Control",
-        note: "Control semestral (Mes 6 post-QT): TC TAP sin lesiones recidivantes. CEA: 1.8 ng/mL.",
-        isKey: false,
-        detail: "Hígado remanente homogéneo sin nuevas lesiones. Fosas ilíacas y lecho de anastomosis sin alteraciones."
+        professional: "Dr. Gonzalo Ramos (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "TC Abdomen protocolo pancreático: Masa en cabeza de páncreas de 32 mm con dilatación del Wirsung (6 mm) y colédoco (14 mm). Sin contacto vascular >180°.",
+        isKey: true,
+        detail: "Tumor pancreático resecable sin metástasis a distancia. RMN confirma indemnidad del eje mesentérico-portal."
       },
       {
-        date: "18/03/2024",
-        professional: "Dr. Esteban Morales (Oncología Clínica)",
-        category: "Control",
-        note: "Control anual (Mes 12 post-QT): TC TAP de control y Videocolonoscopía de seguimiento.",
+        date: "18/10/2023",
+        professional: "Dr. Ignacio Ferrara (Cirugía Hepatobiliopancreática)",
+        category: "Cirugía",
+        note: "Duodenopancreatectomía Cefálica (Operación de Whipple) con reconstrucción en Y de Roux.",
         isKey: true,
-        detail: "Colonoscopía: Anastomosis ampliamente permeable sin signos de recidiva local. Sin pólipos sincrónicos. TC TAP sin evidencia tumoral."
+        detail: "Anatomía Patológica: Adenocarcinoma ductal invasor G2, 32 mm, 2/18 ganglios positivos. Márgenes quirúrgicos libres R0 (>1 mm). pT2 pN1 M0."
+      },
+      {
+        date: "01/12/2023",
+        professional: "Dr. Esteban Morales (Oncología Clínica)",
+        category: "Tratamiento",
+        note: "Inicio de Quimioterapia Adyuvante: mFOLFIRINOX modificado cada 14 días (plan 12 ciclos).",
+        isKey: true,
+        detail: "Soporte con enzimas pancreáticas y Filgrastim preventivo."
+      },
+      {
+        date: "15/06/2024",
+        professional: "Dr. Esteban Morales (Oncología Clínica)",
+        category: "Evolución",
+        note: "Finalización exitosa de los 12 ciclos de mFOLFIRINOX. Toxicidad manejada: Diarrea G1 y neutropenia G1 resueltas.",
+        isKey: true,
+        detail: "Pasa a plan de vigilancia activa clínica, imagenológica y bioquímica."
       },
       {
         date: "10/08/2024",
-        professional: "Dr. Esteban Morales (Oncología Clínica)",
-        category: "Control",
-        note: "Control clínico y de laboratorio (Mes 17 post-QT). Paciente asintomático con excelente calidad de vida, ECOG 0. CEA normal (1.6 ng/mL).",
+        professional: "Dr. Gonzalo Ramos (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "TC Toraco-Abdomino-Pelviana con contraste trifásico: Lecho quirúrgico limpio, anastomosis biliodigestiva y pancreatoyeyunal sin alteraciones. Hígado homogéneo sin nódulos.",
         isKey: true,
-        detail: "Se planifica próximo control tomográfico y laboratorio semestral para Marzo 2025."
+        detail: "Estudio de vigilancia sin evidencia de recidiva tumoral. CA 19-9 en 16 U/mL."
       }
     ],
     labResults: [
       {
-        date: "10/07/2022",
-        test: "CEA",
-        value: 42.1,
-        unit: "ng/mL",
+        date: "08/09/2023",
+        test: "CA 19-9",
+        value: 380,
+        unit: "U/mL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "10/07/2022",
-        test: "Hemoglobina",
-        value: 11.2,
-        unit: "g/dL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "10/07/2022",
-        test: "Creatinina",
-        value: 0.88,
+        date: "08/09/2023",
+        test: "Bilirrubina total",
+        value: 8.4,
         unit: "mg/dL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "15/09/2022",
-        test: "CEA",
-        value: 2.1,
-        unit: "ng/mL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "15/09/2022",
-        test: "Hemoglobina",
-        value: 12.0,
-        unit: "g/dL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "22/03/2023",
-        test: "CEA",
-        value: 1.8,
-        unit: "ng/mL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "22/03/2023",
-        test: "Hemoglobina",
-        value: 13.5,
-        unit: "g/dL",
-        source: "documento",
-        professional: "Laboratorio Central"
-      },
-      {
-        date: "22/03/2023",
-        test: "GOT",
-        value: 24,
+        date: "08/09/2023",
+        test: "FAL",
+        value: 420,
         unit: "U/L",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "22/03/2023",
-        test: "GPT",
-        value: 28,
-        unit: "U/L",
+        date: "15/11/2023",
+        test: "CA 19-9",
+        value: 45,
+        unit: "U/mL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "12/03/2024",
-        test: "CEA",
-        value: 1.5,
-        unit: "ng/mL",
+        date: "15/11/2023",
+        test: "Bilirrubina total",
+        value: 1.1,
+        unit: "mg/dL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "12/03/2024",
+        date: "10/03/2024",
+        test: "CA 19-9",
+        value: 18,
+        unit: "U/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/03/2024",
         test: "Hemoglobina",
-        value: 14.1,
+        value: 12.5,
         unit: "g/dL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "08/08/2024",
-        test: "CEA",
-        value: 1.6,
-        unit: "ng/mL",
+        date: "05/08/2024",
+        test: "CA 19-9",
+        value: 16,
+        unit: "U/mL",
         source: "documento",
         professional: "Laboratorio Central"
       },
       {
-        date: "08/08/2024",
+        date: "05/08/2024",
+        test: "Creatinina",
+        value: 0.85,
+        unit: "mg/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "05/08/2024",
         test: "Hemoglobina",
-        value: 14.3,
+        value: 13.8,
         unit: "g/dL",
         source: "documento",
         professional: "Laboratorio Central"
@@ -925,117 +919,720 @@ ESTADO: Vigilancia activa en remisión completa (NED).`,
       {
         id: "img-demo-003-1",
         type: "TC",
-        date: "15/07/2022",
-        bodyRegion: "Tórax, Abdomen y Pelvis",
-        treatment: "Basal preoperatorio",
+        date: "15/09/2023",
+        bodyRegion: "Abdomen y Pelvis (Trifásica)",
+        treatment: "Basal pre-quirúrgico",
         isBaseline: true,
-        relevantFindings: "Masa estenosante en sigmoides de 45 mm. Lesión focal hipervascular única en segmento hepático VI de 35 mm. Sin adenomegalias a distancia ni metástasis pulmonares.",
+        relevantFindings: "Masa hipodensa en cabeza pancreática de 32 mm con dilatación del conducto pancreático principal. Eje mesentérico-portal permeable sin invasión vascular.",
         targetLesions: [
           {
-            location: "Masa tumoral sigmoides",
-            measurement: 45,
-            lesionKey: "masa_tumoral_sigmoides"
-          },
-          {
-            location: "Metástasis hepática segmento VI",
-            measurement: 35,
-            lesionKey: "metastasis_hepatica_segmento_vi"
+            location: "Masa en cabeza de páncreas",
+            measurement: 32,
+            lesionKey: "masa_en_cabeza_de_pancreas"
           }
         ],
         nonTargetLesions: [
           {
-            location: "Ganglios mesentéricos regionales",
-            status: "Presente"
+            location: "Hígado",
+            status: "Normal sin metástasis"
           }
         ],
         newLesions: false,
-        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 760
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 340
       },
       {
         id: "img-demo-003-2",
         type: "TC",
-        date: "28/02/2023",
-        bodyRegion: "Tórax, Abdomen y Pelvis",
-        treatment: "Post-cirugía / En curso de mFOLFOX6",
+        date: "10/08/2024",
+        bodyRegion: "Tórax, Abdomen y Pelvis (Trifásica)",
+        treatment: "Vigilancia post-tratamiento adyuvante",
         isBaseline: false,
-        relevantFindings: "Cambios anatómicos post-colectomía y metastasectomía hepática de segmento VI. Sin evidencia de lesiones residuales ni recidiva tumoral. Remisión Completa (CR) / Sin evidencia de enfermedad (NED).",
+        relevantFindings: "Cambios anatómicos habituales post-Whipple. Sin lesiones ocupantes de espacio residuales ni recidiva en lecho quirúrgico. Parénquima hepático homogéneo.",
         targetLesions: [
           {
-            location: "Masa tumoral sigmoides",
+            location: "Masa en cabeza de páncreas",
             measurement: 0,
-            lesionKey: "masa_tumoral_sigmoides"
-          },
-          {
-            location: "Metástasis hepática segmento VI",
-            measurement: 0,
-            lesionKey: "metastasis_hepatica_segmento_vi"
+            lesionKey: "masa_en_cabeza_de_pancreas"
           }
         ],
         nonTargetLesions: [
           {
-            location: "Lechos quirúrgicos",
-            status: "Sin lesiones recidivantes"
+            location: "Área pancreatoduodenal y hepática",
+            status: "Sin signos de enfermedad activa (NED)"
           }
         ],
         newLesions: false,
-        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 530
-      },
-      {
-        id: "img-demo-003-3",
-        type: "TC",
-        date: "18/03/2024",
-        bodyRegion: "Tórax, Abdomen y Pelvis",
-        treatment: "Vigilancia activa (1 año post-tratamiento)",
-        isBaseline: false,
-        relevantFindings: "Estudio tomográfico de alta resolución. Parénquima hepático y pulmonar limpios, sin lesiones focales sospechosas. Sin recidiva locorregional en anastomosis cólica.",
-        targetLesions: [
-          {
-            location: "Masa tumoral sigmoides",
-            measurement: 0,
-            lesionKey: "masa_tumoral_sigmoides"
-          },
-          {
-            location: "Metástasis hepática segmento VI",
-            measurement: 0,
-            lesionKey: "metastasis_hepatica_segmento_vi"
-          }
-        ],
-        nonTargetLesions: [
-          {
-            location: "Área toracoabdominal",
-            status: "Sin evidencia tumoral (NED)"
-          }
-        ],
-        newLesions: false,
-        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 160
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 14
       }
     ],
     chatHistory: [
       {
         role: "user",
-        text: "¿Cuál es el protocolo de vigilancia estricto post-metastasectomía hepática R0 según guías internacionales?",
+        text: "¿Cuál es el esquema de seguimiento específico según la guía NCCN para un paciente con Adenocarcinoma de Páncreas post-Whipple en remisión?",
+        timestamp: Date.now() - 1000 * 60 * 60 * 4
+      },
+      {
+        role: "model",
+        text: `Según la guía **NCCN Pancreatic Adenocarcinoma (v2.2024)** para pacientes con resección quirúrgica R0 y adyuvancia completada:
+
+1. **Consultas Clínicas:**
+   - Cada 3 a 6 meses durante los primeros 2 años.
+   - Cada 6 a 12 meses a partir del año 3.
+
+2. **Estudios de Imágenes:**
+   - **TC Abdominal con protocolo trifásico pancreático / Tórax con contraste:** Cada 3 a 6 meses durante los primeros 2 años.
+   - La RMN con colangiorresonancia es una alternativa válida ante alergia al yodo o dudas sobre el parénquima hepático residual.
+
+3. **Monitoreo de Marcadores Tumorales:**
+   - **CA 19-9 sérico:** Medir en cada consulta clínica y correlacionar con las imágenes. Una elevación progresiva del CA 19-9 precede frecuentemente a la recurrencia radiológica.
+
+4. **Soporte Metabólico y Nutricional:**
+   - Monitorear diabetes pancreatogénica (Tipo 3c) y asegurar dosis óptimas de Terapia de Reemplazo Enzimático Pancreático (TREP) para prevenir desnutrición y déficit de vitaminas liposolubles.`,
+        timestamp: Date.now() - 1000 * 60 * 60 * 4 + 1600
+      }
+    ],
+    lastUpdated: Date.now()
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // CASO 4 — CÁNCER DE MAMA LOCALIZADO
+  // Validación: Guía de Seguimiento de Enfermedad Curativa Localizada
+  // (Mamografía anual, NO TAC ni marcadores rutinarios según ASCO/NCCN).
+  // ──────────────────────────────────────────────────────────────────────────
+  {
+    id: "demo-004",
+    doctorId: DEMO_USER_ID,
+    hcNumber: "DEMO-004",
+    name: "HC-DEMO-004",
+    age: 52,
+    ageRange: "51-60",
+    diagnosis: "Carcinoma Ductal Invasor de Mama Derecha — Estadio IA (pT1c pN0(sn) M0) — Luminal A (RH+ HER2-)",
+    historyText: `HISTORIA CLÍNICA ONCOLÓGICA - HC-DEMO-004
+PACIENTE: Femenina, 52 años. Menopausia a los 50 años. Sin antecedentes familiares de cáncer de mama ni ovario.
+DIAGNÓSTICO: Carcinoma ductal invasor de mama derecha (CDI), Grado Histológico 1 (Nottingham 4/9).
+INMUNOHISTOQUÍMICA: RE 98% (fuerte), RP 90% (fuerte), HER2 Negativo (0), Ki-67: 8%. Subtipo Luminal A de bajo riesgo.
+ESTADIFICACIÓN: Tumor de 14 mm, Ganglio Centinela Negativo (0/3 ganglios examinados), sin metástasis a distancia - Estadio IA (pT1c pN0(sn) cM0).
+
+TRATAMIENTO REALIZADO:
+1. Cirugía (10/03/2023): Tumorectomía / Cuadrantectomía superointerna derecha + Biopsia de Ganglio Centinela (BSGC) con márgenes libres >10 mm.
+2. Radioterapia Adyuvante (Mayo-Junio 2023): 40.05 Gy en 15 fracciones (Hipofraccionamiento moderado) sobre mama derecha + Boost de 10 Gy al lecho quirúrgico.
+3. Hormonoterapia Adyuvante (Julio 2023 - Presente): Tamoxifeno 20 mg/día vía oral (plan 5 años).
+
+ESTADO ACTUAL (Agosto 2024 - Mes 14 de vigilancia):
+Paciente asintomática, ECOG 0. Examen mamario y axilar normal. Mamografía bilateral de control al año post-radioterapia normal (BI-RADS 2 - benigno).
+Densitometría ósea basal normal.`,
+    clinicalContext: `HISTORIA CLÍNICA ONCOLÓGICA - HC-DEMO-004
+PACIENTE: 52 años. Ca Mama Derecha Estadio IA (pT1c pN0 M0), Luminal A.
+TRATAMIENTO: Cirugía conservadora + BSGC (0/3) -> Radioterapia hipofraccionada -> Tamoxifeno 20 mg/d.
+ESCENARIO: Vigilancia post-curativa localizada. Mamografía anual. Sin indicación de TAC ni CA 15-3.`,
+    clinicalContextUpdatedAt: Date.now() - 1000 * 60 * 60 * 24 * 5,
+    validationCriteria: {
+      scenarioTitle: "Cáncer de Mama Localizado (Estadio IA Luminal A en Vigilancia Curativa)",
+      primaryObjective: "Comprobar que el sistema aplica estrictamente las recomendaciones de seguimiento curativo localizado (NO solicitar TAC corporal ni marcadores tumorales de rutina).",
+      items: [
+        {
+          label: "Diferenciación Localizado vs Metastásico",
+          detail: "Vigilancia Curativa (Estadio IA)",
+          expectedBehavior: "El sistema debe reconocer que es una enfermedad localizada en remisión y NO aplicar esquemas de monitoreo metastásico."
+        },
+        {
+          label: "Restricción de Estudios Innecesarios",
+          detail: "NO TC corporal ni CA 15-3/CEA de rutina",
+          expectedBehavior: "Recomendar exclusivamente mamografía anual y examen físico, advirtiendo contra el sobrediagnóstico con TC o PET en estadios tempranos asintomáticos (ASCO/NCCN)."
+        },
+        {
+          label: "Monitoreo Específico de Terapia Endocrina",
+          detail: "Tamoxifeno 20 mg/día",
+          expectedBehavior: "Control ginecológico ante síntomas y vigilancia de adherencia durante 5 años."
+        },
+        {
+          label: "Guía NCCN Correspondiente",
+          detail: "NCCN Breast Cancer v4.2024 — Escenario Localizado",
+          expectedBehavior: "Vincular el perfil de seguimiento a la guía de Cáncer de Mama en escenario de vigilancia post-tratamiento curativo."
+        }
+      ]
+    },
+    timeline: [
+      {
+        date: "15/01/2023",
+        professional: "Dra. Sofía Martínez (Mastología)",
+        category: "Diagnóstico",
+        note: "Mamografía de screening: Nódulo espiculado de 13 mm en cuadrante superointerno mama derecha (BI-RADS 4C).",
+        isKey: true,
+        detail: "Biopsia Core: Carcinoma Ductal Invasor G1. RE 98%, RP 90%, HER2 0, Ki-67: 8%."
+      },
+      {
+        date: "10/03/2023",
+        professional: "Dra. Sofía Martínez (Cirugía Mastológica)",
+        category: "Cirugía",
+        note: "Cuadrantectomía superointerna derecha + Biopsia de Ganglio Centinela (0/3 ganglios comprometidos).",
+        isKey: true,
+        detail: "Márgenes libres >10 mm. Informe patológico final: pT1c pN0(sn) M0 - Estadio IA."
+      },
+      {
+        date: "15/05/2023",
+        professional: "Dr. Marcos Valenzuela (Radioterapia)",
+        category: "Tratamiento",
+        note: "Radioterapia adyuvante hipofraccionada sobre mama derecha (40 Gy en 15 fracciones) + boost de 10 Gy.",
+        isKey: false,
+        detail: "Tratamiento finalizado el 10/06/2023 sin toxicidad cutánea mayor."
+      },
+      {
+        date: "01/07/2023",
+        professional: "Dra. Elena Silva (Oncología Clínica)",
+        category: "Tratamiento",
+        note: "Inicio de Hormonoterapia Adyuvante: Tamoxifeno 20 mg/día vía oral (plan 5 años).",
+        isKey: true,
+        detail: "Pautas de alarma: Sangrado uterino anormal o síntomas tromboembólicos."
+      },
+      {
+        date: "10/07/2024",
+        professional: "Dr. Carlos Rossi (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "Mamografía bilateral de control al año post-radioterapia: Mama derecha con cambios cicatrizales estables, sin nódulos nuevos ni microcalcificaciones sospechosas (BI-RADS 2).",
+        isKey: true,
+        detail: "Mama izquierda normal (BI-RADS 1). Paciente en remisión completa sostenida."
+      }
+    ],
+    labResults: [
+      {
+        date: "20/01/2023",
+        test: "Hemoglobina",
+        value: 13.6,
+        unit: "g/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "20/01/2023",
+        test: "Creatinina",
+        value: 0.76,
+        unit: "mg/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "05/07/2024",
+        test: "Hemoglobina",
+        value: 13.8,
+        unit: "g/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "05/07/2024",
+        test: "Creatinina",
+        value: 0.78,
+        unit: "mg/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "05/07/2024",
+        test: "GOT",
+        value: 20,
+        unit: "U/L",
+        source: "documento",
+        professional: "Laboratorio Central"
+      }
+    ],
+    imagingStudies: [
+      {
+        id: "img-demo-004-1",
+        type: "Ecografía",
+        date: "20/01/2023",
+        bodyRegion: "Mamas y Axilas",
+        treatment: "Basal pre-quirúrgico",
+        isBaseline: true,
+        relevantFindings: "Nódulo sólido hipoecoico de 14 mm en CSI mama derecha. Axila derecha con ganglios de morfología oval habitual con hilio graso conservado.",
+        targetLesions: [
+          {
+            location: "Nódulo mamario CSI derecha",
+            measurement: 14,
+            lesionKey: "nodulo_mamario_csi_derecha"
+          }
+        ],
+        nonTargetLesions: [
+          {
+            location: "Axila derecha",
+            status: "Normal sin adenomegalias sospechosas"
+          }
+        ],
+        newLesions: false,
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 580
+      },
+      {
+        id: "img-demo-004-2",
+        type: "Mamografía",
+        date: "10/07/2024",
+        bodyRegion: "Mamas Bilateral",
+        treatment: "Vigilancia anual post-cirugía y radioterapia",
+        isBaseline: false,
+        relevantFindings: "Mamografía digital bilateral: Cambios post-quirúrgicos y radioterápicos habituales en CSI mama derecha. Sin distorsiones arquitecturales ni microcalcificaciones sospechosas. BI-RADS 2.",
+        targetLesions: [
+          {
+            location: "Nódulo mamario CSI derecha",
+            measurement: 0,
+            lesionKey: "nodulo_mamario_csi_derecha"
+          }
+        ],
+        nonTargetLesions: [
+          {
+            location: "Ambas mamas y axilas",
+            status: "Sin signos de recidiva"
+          }
+        ],
+        newLesions: false,
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 45
+      }
+    ],
+    chatHistory: [
+      {
+        role: "user",
+        text: "¿Es necesario solicitar una tomografía de tórax y abdomen o análisis de CA 15-3 en el control anual de esta paciente?",
+        timestamp: Date.now() - 1000 * 60 * 60 * 5
+      },
+      {
+        role: "model",
+        text: `**No se recomienda solicitar tomografías corporales ni marcadores tumorales (CA 15-3 / CEA) de rutina** en esta paciente.
+
+### Fundamentación según Guías NCCN y ASCO:
+1. **Estadio Temprano (IA pT1c pN0 M0):**
+   - El riesgo de recaída a distancia en Cáncer de Mama Luminal A Estadio IA es muy bajo.
+2. **Evidencia Clínica:**
+   - Múltiples ensayos clínicos aleatorizados demostraron que la realización de TC, PET o marcadores tumorales rutinarios en pacientes asintomáticas **no mejora la supervivencia global ni la calidad de vida**, e incrementa falsos positivos, biopsias innecesarias y radiación médica.
+3. **Esquema de Vigilancia Indicado:**
+   - **Examen físico y anamnesis:** Cada 3 a 6 meses los primeros 3 años, luego cada 6-12 meses.
+   - **Mamografía bilateral:** Anual.
+   - **Continuar Tamoxifeno 20 mg/día:** Completar 5 años evaluando adherencia y tolerancia.`,
+        timestamp: Date.now() - 1000 * 60 * 60 * 5 + 1700
+      }
+    ],
+    lastUpdated: Date.now()
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // CASO 5 — HISTORIA CLÍNICA EXTENSA (4 AÑOS DE EVOLUCIÓN MULTIMODAL)
+  // Validación: Procesamiento de historias clínicas densas, múltiples métodos
+  // de imágenes (TC, PET, RM, Eco), 16 eventos cronológicos y 20+ laboratorios.
+  // ──────────────────────────────────────────────────────────────────────────
+  {
+    id: "demo-005",
+    doctorId: DEMO_USER_ID,
+    hcNumber: "DEMO-005",
+    name: "HC-DEMO-005",
+    age: 68,
+    ageRange: "61-70",
+    diagnosis: "Adenocarcinoma de Pulmón Lóbulo Superior Izquierdo — EGFR Exón 19 del — Multitratado con 4 Años de Evolución (Cirugía -> Recidiva Mediastinal -> Metástasis Cerebral Oligomutacional con SRS -> Osimertinib)",
+    historyText: `HISTORIA CLÍNICA ONCOLÓGICA EXTENSA - HC-DEMO-005 (4 AÑOS DE EVOLUCIÓN)
+PACIENTE: Femenina, 68 años. No fumadora.
+DIAGNÓSTICO INICIAL (2020): Adenocarcinoma de pulmón en Lóbulo Superior Izquierdo (LSI), Estadio IIA (pT2b pN0 M0) resecado.
+BIOLOGÍA MOLECULAR: Mutación en EGFR Exón 19 (deleción p.E746_A750del) POSITIVA. ALK negativo, ROS1 negativo.
+
+CRONOLOGÍA DE TRATAMIENTOS Y RECURRENCIAS:
+1. Año 2020:
+   - Cirugía (15/03/2020): Lobectomía pulmonar superior izquierda + Linfadenectomía mediastinal sistemática. AP: Adenocarcinoma de 4.2 cm, ganglios 0/14 (pT2b pN0).
+   - Quimioterapia Adyuvante (Mayo-Agosto 2020): Cisplatino + Vinorelbina x 4 ciclos.
+2. Año 2021:
+   - Recidiva Mediastinal (Noviembre 2021): TC y PET-TC evidencian masa ganglionar en ventana aortopulmonar (estación 5) de 28 mm (SUVmax 9.8).
+   - Tratamiento de 1ra Línea Dirigida (Diciembre 2021 - Agosto 2022): Gefitinib 250 mg/día vo con Respuesta Parcial inicial.
+3. Año 2022:
+   - Progresión Sistémica y Cerebral (Septiembre 2022): RMN de Cerebro detecta lesión metastásica única solitaria de 14 mm en lóbulo frontal derecho. Biopsia líquida plasma confirma persistencia de EGFR Exon 19 del y descartó mutación T790M.
+   - Radiocirugía Estereotáctica Cerebral (SRS / CyberKnife, 10/10/2022): 21 Gy en dosis única a la lesión frontal derecha con control local completo.
+   - Pase a 2da Línea con Osimertinib 80 mg/día vo (Inhibidor de 3ra generación con alta penetrancia en SNC) iniciado el 20/10/2022.
+4. Años 2023 - 2024:
+   - Control sostenido de enfermedad sistémica y cerebral bajo Osimertinib continuo.
+   - Última evaluación (Agosto 2024): TC TAP y RMN de cerebro muestran estabilidad completa de la lesión tratada con SRS y nódulo mediastinal residual cicatrizal de 8 mm.
+
+LABORATORIOS SERIADOS:
+Más de 20 registros seriados de función renal, hemograma, enzimas hepáticas y CEA a lo largo de 4 años, mostrando excelente tolerancia a Osimertinib sin toxicidades grado >2.`,
+    clinicalContext: `HISTORIA CLÍNICA EXTENSA - HC-DEMO-005 (4 AÑOS)
+DIAGNÓSTICO: Ca Pulmón EGFR Exon 19 del, Estadio IIA -> Recidiva mediastinal -> Metástasis cerebral con SRS -> Osimertinib 80 mg/d desde 2022.
+IMÁGENES: TC, PET-TC, RMN de Cerebro y Ecografía a lo largo de 4 años.
+VALIDACIÓN: Recuperación cronológica y multimodalidad sin alucinaciones.`,
+    clinicalContextUpdatedAt: Date.now() - 1000 * 60 * 60 * 24 * 2,
+    validationCriteria: {
+      scenarioTitle: "Historia Clínica Extensa (4 Años de Evolución Multimodal y Tratamientos Seriados)",
+      primaryObjective: "Comprobar que el sistema procesa historiales médicos largos y complejos con múltiples métodos de imagen y eventos cronológicos sin perder la línea de tiempo ni confundir líneas terapéuticas.",
+      items: [
+        {
+          label: "Recuperación Cronológica",
+          detail: "Línea de tiempo de 4 años (2020 a 2024)",
+          expectedBehavior: "Mantener el orden secuencial estricto: Cirugía 2020 -> QT adyuvante -> Recidiva 2021 -> Gefitinib -> SRS cerebral 2022 -> Osimertinib."
+        },
+        {
+          label: "Diferenciación Multimodal de Imágenes",
+          detail: "TC TAP + PET-TC + RMN Cerebral + Ecografía",
+          expectedBehavior: "Identificar y clasificar correctamente los diferentes métodos de diagnóstico por imágenes sin mezclar sus hallazgos."
+        },
+        {
+          label: "Normalización de Laboratorios",
+          detail: "Más de 20 determinaciones analíticas",
+          expectedBehavior: "Normalizar nombres alternativos de pruebas y presentar curvas evolutivas continuas de marcadores y hemograma."
+        },
+        {
+          label: "Penetrancia en SNC y Terapia Dirigida",
+          detail: "Radiocirugía (SRS) + Osimertinib",
+          expectedBehavior: "Reconocer el rol del TKI de 3ra generación (Osimertinib) en el control de metástasis del SNC en NSCLC EGFR mutado."
+        }
+      ]
+    },
+    timeline: [
+      {
+        date: "10/02/2020",
+        professional: "Dr. Roberto Díaz (Neumonología)",
+        category: "Diagnóstico",
+        note: "Hallazgo de nódulo pulmonar espiculado de 42 mm en LSI en tomografía de chequeo.",
+        isKey: true,
+        detail: "Biopsia por punción: Adenocarcinoma TTF-1 positivo."
+      },
+      {
+        date: "15/03/2020",
+        professional: "Dr. Marcelo Castelli (Cirugía Torácica)",
+        category: "Cirugía",
+        note: "Lobectomía superior izquierda + Linfadenectomía mediastinal sistemática.",
+        isKey: true,
+        detail: "AP: Adenocarcinoma invasor de 42 mm, ganglios 0/14 (pT2b pN0 M0). Estadio IIA."
+      },
+      {
+        date: "10/05/2020",
+        professional: "Dr. Hernán Cortínez (Oncología Clínica)",
+        category: "Tratamiento",
+        note: "Quimioterapia Adyuvante: Cisplatino 75 mg/m² + Vinorelbina 25 mg/m² x 4 ciclos completados en Agosto 2020.",
+        isKey: true,
+        detail: "Estudio NGS reporta deleción en Exón 19 de EGFR positiva."
+      },
+      {
+        date: "15/11/2021",
+        professional: "Dr. Carlos Rossi (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "TC y PET-TC de control: Recidiva locorregional en ganglio de ventana aortopulmonar (estación 5) de 28 mm (SUVmax 9.8).",
+        isKey: true,
+        detail: "Sin metástasis a distancia detectadas en ese momento."
+      },
+      {
+        date: "01/12/2021",
+        professional: "Dr. Hernán Cortínez (Oncología Clínica)",
+        category: "Tratamiento",
+        note: "Inicio de 1ra Línea de Terapia Dirigida: Gefitinib 250 mg/día vía oral.",
+        isKey: true,
+        detail: "Respuesta Parcial (PR) documentada a los 3 meses de tratamiento."
+      },
+      {
+        date: "15/09/2022",
+        professional: "Dr. Carlos Rossi (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "RMN de Cerebro con contraste: Aparición de lesión metastásica única de 14 mm en lóbulo frontal derecho con edema perilesional leve.",
+        isKey: true,
+        detail: "TC torácica muestra estabilidad en ganglio mediastinal (16 mm). Oligometástasis cerebral."
+      },
+      {
+        date: "10/10/2022",
+        professional: "Dr. Marcos Valenzuela (Radiocirugía)",
+        category: "Tratamiento",
+        note: "Radiocirugía Estereotáctica Cerebral (SRS): 21 Gy en fracción única sobre lesión frontal derecha.",
+        isKey: true,
+        detail: "Procedimiento ambulatorio sin complicaciones neurológicas agudas."
+      },
+      {
+        date: "20/10/2022",
+        professional: "Dr. Hernán Cortínez (Oncología Clínica)",
+        category: "Tratamiento",
+        note: "Inicio de 2da Línea con Osimertinib 80 mg/día vía oral continuo.",
+        isKey: true,
+        detail: "Indicación por mayor actividad y control en Sistema Nervioso Central (SNC)."
+      },
+      {
+        date: "15/08/2023",
+        professional: "Dr. Carlos Rossi (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "RMN Cerebro y TC TAP: Lesión cerebral frontal derecha reducida a 4 mm cicatrizal. Ganglio mediastinal estable en 9 mm.",
+        isKey: false,
+        detail: "Respuesta sostenida a Osimertinib + SRS tras 10 meses."
+      },
+      {
+        date: "12/08/2024",
+        professional: "Dr. Carlos Rossi (Diagnóstico por Imágenes)",
+        category: "Estudios",
+        note: "Control a los 4 años del diagnóstico: RMN cerebral sin recidiva. TC TAP con remisión y estabilidad dimensional completa.",
+        isKey: true,
+        detail: "Paciente en excelente estado funcional (ECOG 0), continuando con Osimertinib 80 mg/d."
+      }
+    ],
+    labResults: [
+      {
+        date: "15/02/2020",
+        test: "CEA",
+        value: 18.2,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "15/02/2020",
+        test: "Hemoglobina",
+        value: 13.5,
+        unit: "g/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/09/2020",
+        test: "CEA",
+        value: 2.1,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/11/2021",
+        test: "CEA",
+        value: 14.8,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/11/2021",
+        test: "Creatinina",
+        value: 0.88,
+        unit: "mg/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "15/03/2022",
+        test: "CEA",
+        value: 4.2,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/09/2022",
+        test: "CEA",
+        value: 11.6,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "15/01/2023",
+        test: "CEA",
+        value: 3.0,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "15/01/2023",
+        test: "Hemoglobina",
+        value: 13.1,
+        unit: "g/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/08/2023",
+        test: "CEA",
+        value: 2.4,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "10/08/2023",
+        test: "Creatinina",
+        value: 0.84,
+        unit: "mg/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "15/02/2024",
+        test: "CEA",
+        value: 2.0,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "15/02/2024",
+        test: "Hemoglobina",
+        value: 13.6,
+        unit: "g/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "08/08/2024",
+        test: "CEA",
+        value: 1.8,
+        unit: "ng/mL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "08/08/2024",
+        test: "Creatinina",
+        value: 0.82,
+        unit: "mg/dL",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "08/08/2024",
+        test: "GOT",
+        value: 24,
+        unit: "U/L",
+        source: "documento",
+        professional: "Laboratorio Central"
+      },
+      {
+        date: "08/08/2024",
+        test: "GPT",
+        value: 26,
+        unit: "U/L",
+        source: "documento",
+        professional: "Laboratorio Central"
+      }
+    ],
+    imagingStudies: [
+      {
+        id: "img-demo-005-1",
+        type: "TC",
+        date: "10/02/2020",
+        bodyRegion: "Tórax, Abdomen y Pelvis",
+        treatment: "Basal inicial",
+        isBaseline: true,
+        relevantFindings: "Masa espiculada en LSI de 42 mm. Sin adenopatías mediastinales sospechosas en TC inicial.",
+        targetLesions: [
+          {
+            location: "Masa en LSI",
+            measurement: 42,
+            lesionKey: "masa_en_lsi"
+          }
+        ],
+        nonTargetLesions: [
+          {
+            location: "Mediastino y abdomen",
+            status: "Normal"
+          }
+        ],
+        newLesions: false,
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 1600
+      },
+      {
+        id: "img-demo-005-2",
+        type: "PET-TC",
+        date: "15/11/2021",
+        bodyRegion: "Cuerpo Entero",
+        treatment: "Recidiva Mediastinal (2021)",
+        isBaseline: false,
+        relevantFindings: "Captación patológica intensa en ganglio de ventana aortopulmonar (28 mm, SUVmax 9.8). Lecho quirúrgico pulmonar sin masa.",
+        suvMax: 9.8,
+        targetLesions: [
+          {
+            location: "Ganglio ventana aortopulmonar",
+            measurement: 28,
+            lesionKey: "ganglio_ventana_aortopulmonar"
+          }
+        ],
+        nonTargetLesions: [
+          {
+            location: "Cuerpo entero",
+            status: "Sin otras metástasis"
+          }
+        ],
+        newLesions: true,
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 1000
+      },
+      {
+        id: "img-demo-005-3",
+        type: "RMN",
+        date: "15/09/2022",
+        bodyRegion: "Cerebro con Contraste",
+        treatment: "Progresión en SNC (2022)",
+        isBaseline: false,
+        relevantFindings: "RMN Cerebral: Formación nodular única con realce anular de 14 mm en polo frontal derecho con edema vasogénico leve. Candidata a Radiocirugía.",
+        targetLesions: [
+          {
+            location: "Metástasis cerebral frontal derecha",
+            measurement: 14,
+            lesionKey: "metastasis_cerebral_frontal_derecha"
+          },
+          {
+            location: "Ganglio ventana aortopulmonar",
+            measurement: 16,
+            lesionKey: "ganglio_ventana_aortopulmonar"
+          }
+        ],
+        nonTargetLesions: [
+          {
+            location: "Parénquima cerebral",
+            status: "Sin otras lesiones"
+          }
+        ],
+        newLesions: true,
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 700
+      },
+      {
+        id: "img-demo-005-4",
+        type: "TC",
+        date: "12/08/2024",
+        bodyRegion: "Tórax, Abdomen y Pelvis",
+        treatment: "En curso de Osimertinib 80 mg/d (Año 4)",
+        isBaseline: false,
+        relevantFindings: "Control a los 4 años. Nódulo ganglionar mediastinal residual inactivo de 8 mm. RMN de cerebro concomitante sin recidiva tumoral. Estabilidad completa prolongada.",
+        targetLesions: [
+          {
+            location: "Metástasis cerebral frontal derecha",
+            measurement: 0,
+            lesionKey: "metastasis_cerebral_frontal_derecha"
+          },
+          {
+            location: "Ganglio ventana aortopulmonar",
+            measurement: 8,
+            lesionKey: "ganglio_ventana_aortopulmonar"
+          }
+        ],
+        nonTargetLesions: [
+          {
+            location: "Tórax, abdomen y encéfalo",
+            status: "Estable / Sin signos de progresión"
+          }
+        ],
+        newLesions: false,
+        extractedAt: Date.now() - 1000 * 60 * 60 * 24 * 12
+      }
+    ],
+    chatHistory: [
+      {
+        role: "user",
+        text: "¿Cómo ha sido la secuencia cronológica de tratamientos de este paciente desde 2020 y cuál es el fundamento de mantener Osimertinib actualmente?",
         timestamp: Date.now() - 1000 * 60 * 60 * 6
       },
       {
         role: "model",
-        text: `En pacientes con Cáncer Colorrectal Estadio IV resecado con intención curativa (R0) y quimioterapia perioperatoria completada:
+        text: `### Resumen Cronológico de Tratamientos (2020–2024):
 
-1. **Monitoreo de Antígeno Carcinoembrionario (CEA):**
-   - Dosaje cada 3 meses durante los primeros 2 años.
-   - Dosaje cada 6 meses entre los años 3 y 5.
-   - *Nota:* Una elevación confirmada del CEA obliga a descartar recidiva hepática/pulmonar temprana mediante TC o RMN hepática con contraste hepatoespecífico.
+1. **Marzo – Agosto 2020:**
+   - **Cirugía Curativa:** Lobectomía superior izquierda + Linfadenectomía (Estadio IIA pT2b pN0 M0).
+   - **Quimioterapia Adyuvante:** Cisplatino + Vinorelbina x 4 ciclos.
 
-2. **Estudios de Imágenes (TC Toraco-Abdomino-Pelviana):**
-   - TC TAP con contraste endovenoso cada 3 a 6 meses durante los primeros 2 años.
-   - Luego cada 6 a 12 meses hasta completar 5 años.
+2. **Diciembre 2021 – Agosto 2022 (Recidiva Mediastinal):**
+   - Detección de masa en ventana aortopulmonar (28 mm).
+   - **1ra Línea Dirigida:** Gefitinib 250 mg/día (Respuesta Parcial).
 
-3. **Videocolonoscopía:**
-   - Realizar al año de la cirugía resectiva.
-   - Si no hay pólipos ni lesiones avanzadas, repetir a los 3 años y luego cada 5 años.
+3. **Octubre 2022 (Oligoprogresión Cerebral):**
+   - Aparición de metástasis cerebral solitaria de 14 mm en lóbulo frontal derecho.
+   - **Tratamiento Local Ablativo:** Radiocirugía Estereotáctica (SRS) con 21 Gy en dosis única.
 
-4. **Fundamento Clínico:**
-   - Hasta un 50-60% de las recurrencias post-metastasectomía hepática ocurren en los primeros 2 años. La detección precoz permite re-resección o terapias ablativas (RFA/SBRT) con impacto positivo en sobrevida global.`,
-        timestamp: Date.now() - 1000 * 60 * 60 * 6 + 1800
+4. **Octubre 2022 – Presente:**
+   - **Pase a 2da Línea con Osimertinib 80 mg/día:**
+     - *Fundamento:* Alta penetrancia de la barrera hematoencefálica y superioridad demostrada en control intracraneal y supervivencia libre de progresión en adenocarcinoma de pulmón con deleción del Exón 19 de EGFR.
+     - *Resultado actual (Agosto 2024):* Control prolongado (>22 meses) con respuesta completa cerebral y enfermedad residual mediastinal milimétrica estable.`,
+        timestamp: Date.now() - 1000 * 60 * 60 * 6 + 2200
       }
     ],
     lastUpdated: Date.now()

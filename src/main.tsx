@@ -20,7 +20,8 @@ import {
     Upload, Activity, Trash2, Menu, X, Clock,
     Loader2, AlertCircle, Info, Terminal, ChevronDown,
     Calendar, PenTool, ClipboardCheck, Wrench, Calculator, Pill,
-    PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2, Filter, Sparkles
+    PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2, Filter, Sparkles,
+    ShieldCheck, CheckCircle2
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -31,7 +32,7 @@ import { User } from 'firebase/auth';
 import AuthWrapper, { logout } from './components/AuthWrapper';
 import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, normalizeLabTestName } from './utils/aiProxy';
 import { saveClinicalContext, clearClinicalContext } from './services/patientService';
-import { demoPatients } from './mocks/demoCases';
+import { demoPatients, ClinicalValidationChecklist } from './mocks/demoCases';
 
 // --- RANGOS ETARIOS ---
 const AGE_RANGES = ['0-18', '19-30', '31-40', '41-50', '51-60', '61-70', '71-80', '80+'];
@@ -78,6 +79,7 @@ interface Patient {
     timeline?: ClinicalEvent[];
     labResults?: LabResult[];
     imagingStudies?: ImagingStudy[];
+    validationCriteria?: ClinicalValidationChecklist;
 }
 
 interface FileData { name: string; type: string; data: string; }
@@ -216,6 +218,7 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
     const [showToolsMenu, setShowToolsMenu] = useState(false);
     const [showCalculatorModal, setShowCalculatorModal] = useState(false);
     const [showDrugsModal, setShowDrugsModal] = useState(false);
+    const [showValidationModal, setShowValidationModal] = useState(false);
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
@@ -849,8 +852,10 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
                         <div>
                             <div className="flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest px-2 mb-3">
-                                <span>Casos Clínicos</span>
-                                <button onClick={() => setShowNewPatientModal(true)} className="text-blue-600 bg-blue-50 p-1 rounded-lg"><Plus size={14}/></button>
+                                <span>{isDemoMode ? 'PACIENTES DEMO — DATOS FICTICIOS' : 'Casos Clínicos'}</span>
+                                {!isDemoMode && (
+                                    <button onClick={() => setShowNewPatientModal(true)} className="text-blue-600 bg-blue-50 p-1 rounded-lg"><Plus size={14}/></button>
+                                )}
                             </div>
                             <div className="px-2 mb-3">
                                 <div className="relative">
@@ -887,8 +892,15 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                         className={`group w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer ${selectedPatientId === p.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'hover:bg-blue-50/50 border border-transparent hover:border-blue-100/60'}`}
                                     >
                                         <div className="flex flex-col pr-2 flex-1 min-w-0">
-                                            <span className="font-bold text-xs">HC-{p.hcNumber}</span>
-                                            <span className={`text-[10px] font-semibold truncate ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-bold text-xs">HC-{p.hcNumber}</span>
+                                                {p.validationCriteria && (
+                                                    <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded truncate max-w-[130px] ${selectedPatientId === p.id ? 'bg-blue-700 text-blue-100' : 'bg-amber-100 text-amber-800'}`}>
+                                                        {p.validationCriteria.scenarioTitle.split('(')[0].trim()}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span className={`text-[10px] font-semibold truncate mt-0.5 ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
                                         </div>
                                         <button
                                             onClick={e => handleDeletePatient(p.id, e)}
@@ -960,6 +972,18 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                         </div>
                         {/* Botones Header Derecho */}
                         <div className="flex items-center gap-2">
+                            {isDemoMode && selP?.validationCriteria && (
+                                <button
+                                    onClick={() => setShowValidationModal(true)}
+                                    className="px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-wider uppercase transition-all bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 shadow-sm active:scale-95"
+                                    title="Ver Criterios y Pruebas de Validación Clínica del Caso"
+                                >
+                                    <ShieldCheck size={14} className="text-amber-600" />
+                                    <span className="hidden sm:inline">Pruebas del Caso</span>
+                                    <span className="bg-amber-200 text-amber-900 text-[9px] px-1.5 py-0.5 rounded-full font-black">{selP.validationCriteria.items.length}</span>
+                                </button>
+                            )}
+
                             {selP && (
                                 <button
                                     onClick={() => setShowEvolutionModal(true)}
@@ -1628,6 +1652,64 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 />
                 {showCalculatorModal && <OncoCalculator onClose={() => setShowCalculatorModal(false)} />}
                 {showDrugsModal && <DrugReference onClose={() => setShowDrugsModal(false)} />}
+
+                {/* ── MODAL CRITERIOS DE VALIDACIÓN CLÍNICA (MODO DEMO) ── */}
+                {showValidationModal && selP?.validationCriteria && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-amber-100">
+                            <div className="p-6 border-b bg-gradient-to-r from-amber-500/10 via-amber-50 to-white flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-amber-500 text-white rounded-2xl flex items-center justify-center shadow-md shadow-amber-200">
+                                        <ShieldCheck size={22} />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-black uppercase tracking-widest bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-md">Control de Calidad / Regresión Clínica</span>
+                                            <span className="text-xs font-bold text-gray-500">HC-{selP.hcNumber}</span>
+                                        </div>
+                                        <h3 className="text-base font-black text-gray-800 tracking-tight mt-0.5">{selP.validationCriteria.scenarioTitle}</h3>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowValidationModal(false)} className="text-gray-400 hover:text-gray-600 p-2 rounded-xl hover:bg-gray-100 transition-colors">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            
+                            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4">
+                                    <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider block mb-1">Objetivo Clínico Principal</span>
+                                    <p className="text-xs text-amber-950 leading-relaxed font-medium">{selP.validationCriteria.primaryObjective}</p>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-1 block">Comportamientos Evaluados en este Caso</span>
+                                    {selP.validationCriteria.items.map((item, idx) => (
+                                        <div key={idx} className="bg-gray-50 hover:bg-gray-100/80 transition-colors border border-gray-200/70 rounded-2xl p-4 space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
+                                                    <span className="font-black text-gray-800 text-xs">{item.label}</span>
+                                                </div>
+                                                <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">{item.detail}</span>
+                                            </div>
+                                            <p className="text-[11px] text-gray-600 pl-6 leading-relaxed">{item.expectedBehavior}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="p-4 border-t bg-gray-50/50 flex items-center justify-between text-xs">
+                                <span className="text-[10px] text-gray-400 font-medium">Este panel sirve como referencia de QA y control de calidad durante las pruebas.</span>
+                                <button
+                                    onClick={() => setShowValidationModal(false)}
+                                    className="bg-gray-900 hover:bg-gray-800 text-white font-black px-4 py-2 rounded-xl text-xs transition-all shadow-sm"
+                                >
+                                    Entendido
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
