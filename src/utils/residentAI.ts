@@ -54,40 +54,15 @@ export const getResidentChatResponse = async (msgs: ChatMessage[], newMsg: strin
     }
 };
 
-export const extractResidentTimeline = async (text: string, files: FileData[]): Promise<ClinicalEvent[]> => {
-    if (!text && (!files || files.length === 0)) return [];
-    
-    try {
-        const parts: any[] = [{ text: `
-            Eres un oncólogo experto. Extrae todos los eventos clínicos del paciente cronológicamente.
-            
-            REGLAS:
-            1. ❌ Extrae TODOS los eventos documentados a lo largo de toda la historia clínica.
-            2. Si en la misma fecha ocurren sucesos de distinta naturaleza, registra cada uno en su categoría sin omitir ninguno.
-            3. HITOS ONCOLÓGICOS CLAVE (isKey = true): Biopsia/Diagnóstico, Inmunohistoquímica, Estadio TNM, Cirugías oncológicas, inicio/cambio de Quimioterapia/Inmunoterapia/RT, progresión/respuesta. "note" DEBE SER MUY DETALLADO (fechas, esquema, dosis, estadios, marcadores).
-            4. EVENTOS SECUNDARIOS (isKey = false): Controles o laboratorios estables. "note" DEBE SER CONCISO Y CLARO.
-            
-            Format JSON array:
-            [
-              { "date": "DD/MM/YYYY", "professional": "Especialidad", "category": "Consulta|Imagen|Lab|Cirugía|Quimio|Radio|Evolución", "note": "resumen", "isKey": true/false, "detail": "detalle opcional" }
-            ]
-        `}];
-        
-        if (text) parts.push({ text: `Notas: ${text}` });
-        files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+import { extractTimelineSecure } from './aiProxy';
 
-        const res = await callGemini({ parts, responseMimeType: "application/json" });
-
-        if (res.text) {
-            const txt = typeof res.text === 'function' ? res.text() : res.text;
-            const events = parseJsonArraySafely(txt);
-            return events.sort((a: any, b: any) => parseDate(a.date) - parseDate(b.date));
-        }
-        return [];
-    } catch (err) {
-        console.error("Error en extractResidentTimeline:", err);
-        return [];
-    }
+export const extractResidentTimeline = async (
+    text: string, 
+    files: FileData[],
+    onProgress?: (progress: { current: number; total: number; message: string; stage?: string }) => void,
+    onWarning?: (msg: string) => void
+): Promise<ClinicalEvent[]> => {
+    return extractTimelineSecure(text, files, onProgress, onWarning);
 };
 
 // --- GENERADORES CON FORMATO "AUDITORÍA" UNIFICADO ---

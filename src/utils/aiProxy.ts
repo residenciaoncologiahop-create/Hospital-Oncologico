@@ -223,18 +223,33 @@ export const parseJsonArraySafely = (rawText: string): any[] => {
   return results;
 };
 
-// ── Extracción de Timeline ─────────────────────
+import { splitFilesIntoProcessableChunks, DocumentChunk } from './pdfChunker';
+import { consolidateTimelineEvents, ClinicalEvent } from './timelineConsolidator';
+export { consolidateTimelineEvents, normalizeEventCategory, normalizeEventDate } from './timelineConsolidator';
+export { splitPdfIntoChunks, splitFilesIntoProcessableChunks } from './pdfChunker';
+export type { ClinicalEvent } from './timelineConsolidator';
+export type { DocumentChunk } from './pdfChunker';
+
+export interface TimelineProgressCallback {
+  (progress: { current: number; total: number; message: string; stage?: string }): void;
+}
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// ── Extracción de Timeline (Procesamiento Progresivo Multi-Bloque) ─────────────────────
 export const extractTimelineSecure = async (
   text: string,
-  files: FileData[]
-): Promise<any[]> => {
-  if (!text && files.length === 0) return [];
+  files: FileData[],
+  onProgress?: TimelineProgressCallback,
+  onWarning?: (msg: string) => void
+): Promise<ClinicalEvent[]> => {
+  if (!text && (!files || files.length === 0)) return [];
 
   const instructionText = `
     Eres un asistente médico experto en oncología. Analiza toda la documentación y extrae la cronología clínica completa del paciente.
 
     REGLAS DE EXTRACCIÓN Y COBERTURA:
-    1. ❌ Extrae TODOS los eventos clínicos documentados a lo largo de la historia clínica sin omitir ninguno.
+    1. ❌ Extrae TODOS los eventos clínicos documentados a lo largo de este fragmento de historia clínica sin omitir ninguno.
     2. Si en la misma fecha ocurren sucesos de distinta índole (ej: una Cirugía y una Biopsia, o una Quimio y un Control/Estudio), registra cada acontecimiento relevante por separado en su categoría correspondiente.
     3. No inventes eventos ni repitas el mismo acontecimiento idéntico.
 
@@ -244,7 +259,7 @@ export const extractTimelineSecure = async (
 
     Fechas: formato DD/MM/YYYY (o S/F si no figura fecha exacta).
 
-    Categorías permitidas (usar exactamente estas palabras): Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución.
+    Categorías permitidas (usar exactamente estas palabras): Consulta, Imagen, Lab, Cirugía, Quimio, Radio, Evolución, Anatomía Patológica, Diagnóstico.
 
     CRITERIO DE HITOS ONCOLÓGICOS CLAVE (isKey):
     - isKey = true EXCLUSIVAMENTE para HITOS ONCOLÓGICOS DETERMINANTES:
@@ -274,70 +289,110 @@ export const extractTimelineSecure = async (
     ]
   `;
 
-  const parts = buildParts(instructionText, []);
-  if (text) parts.push({ text: `Notas clínicas anónimas: ${text}` });
-  files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+  const accumulatedRawEvents: any[] = [];
+  const failedChunks: string[] = [];
 
   try {
-    const res = await callGemini({ parts, responseMimeType: "application/json" });
-    return parseJsonArraySafely(res.text || '');
-  } catch (err) {
-    console.error("Error en extractTimelineSecure:", err);
-    return [];
+    // 1. Particionar archivos PDF en bloques de páginas manejables
+    const chunks = await splitFilesIntoProcessableChunks(files || []);
+
+    if (chunks.length > 0) {
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        if (onProgress) {
+          onProgress({
+            current: i + 1,
+            total: chunks.length,
+            message: `Extrayendo eventos clínicos: ${chunk.label}...`,
+            stage: 'extracting',
+          });
+        }
+
+        const parts = buildParts(instructionText, []);
+        // Si hay texto clínico y es el primer bloque, incluirlo
+        if (text && i === 0 && chunks.length === 1) {
+          parts.push({ text: `Notas clínicas anónimas: ${text}` });
+        }
+        parts.push({
+          inlineData: { mimeType: chunk.file.type, data: chunk.file.data },
+        });
+
+        try {
+          const res = await callGemini({ parts, responseMimeType: 'application/json' });
+          const parsed = parseJsonArraySafely(res.text || '');
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            accumulatedRawEvents.push(...parsed);
+          }
+        } catch (chunkErr: any) {
+          console.warn(`[extractTimelineSecure] Error en bloque "${chunk.label}":`, chunkErr);
+          failedChunks.push(chunk.label);
+          if (onWarning) {
+            onWarning(`No se pudo procesar completamente ${chunk.label} (${chunkErr.message || 'Error'}).`);
+          }
+        }
+
+        // Pequeña pausa entre bloques para respetar rate limits si hay múltiples bloques
+        if (i < chunks.length - 1) {
+          await sleep(600);
+        }
+      }
+    }
+
+    // 2. Si hay texto clínico puro sin archivos o con múltiples archivos, procesarlo
+    if (text && (chunks.length === 0 || chunks.length > 1)) {
+      if (onProgress) {
+        onProgress({
+          current: chunks.length || 1,
+          total: chunks.length || 1,
+          message: 'Extrayendo eventos de las notas clínicas de texto...',
+          stage: 'text',
+        });
+      }
+      try {
+        const parts = buildParts(instructionText, []);
+        parts.push({ text: `Notas clínicas anónimas:\n${text}` });
+        const res = await callGemini({ parts, responseMimeType: 'application/json' });
+        const parsed = parseJsonArraySafely(res.text || '');
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          accumulatedRawEvents.push(...parsed);
+        }
+      } catch (textErr: any) {
+        console.warn('[extractTimelineSecure] Error en extracción de texto:', textErr);
+        if (onWarning) {
+          onWarning(`Error al extraer eventos de las notas de texto: ${textErr.message}`);
+        }
+      }
+    }
+
+    if (onProgress) {
+      onProgress({
+        current: chunks.length || 1,
+        total: chunks.length || 1,
+        message: 'Consolidando y ordenando cronología clínica...',
+        stage: 'consolidating',
+      });
+    }
+
+    // 3. Consolidar, deduplicar entre bloques y ordenar cronológicamente
+    const consolidated = consolidateTimelineEvents([], accumulatedRawEvents);
+
+    if (failedChunks.length > 0 && onWarning) {
+      onWarning(`Atención: ${failedChunks.length} bloque(s) tuvieron dificultades: ${failedChunks.join(', ')}.`);
+    }
+
+    return consolidated;
+  } catch (err: any) {
+    console.error('Error general en extractTimelineSecure:', err);
+    if (onWarning) {
+      onWarning(`Error general en la extracción de eventos: ${err.message}`);
+    }
+    return consolidateTimelineEvents([], accumulatedRawEvents);
   }
 };
 
-// ── Normalización de Parámetros de Laboratorio ─────────────────
-export const normalizeLabTestName = (rawName: string): string => {
-  if (!rawName) return '';
-  const name = rawName.trim();
-  const lower = name.toLowerCase();
-
-  // Hemograma
-  if (/^(hb|hgb|hemog|hemo|hg)$/i.test(lower) || lower.includes('hemoglobina')) return 'Hemoglobina';
-  if (/^(hto|hct)$/i.test(lower) || lower.includes('hematocrito')) return 'Hematocrito';
-  if (/^(gb|g\.b\.|wbc|blancos)$/i.test(lower) || lower.includes('leucocito') || lower.includes('glóbulos blancos')) return 'Leucocitos';
-  if (/^(plaq|plt|platelets)$/i.test(lower) || lower.includes('plaqueta')) return 'Plaquetas';
-  if (/^(neut|neu|anc|pmn|segmentados)$/i.test(lower) || lower.includes('neutrófilo')) return 'Neutrófilos';
-
-  // Función renal
-  if (/^(cr|crea|creat)$/i.test(lower) || lower.includes('creatinina')) return 'Creatinina';
-  if (/^(bun|azoemia)$/i.test(lower) || lower.includes('urea')) return 'Urea';
-
-  // Función hepática
-  if (/^(bt|bil t|bil total)$/i.test(lower) || lower.includes('bilirrubina total')) return 'Bilirrubina total';
-  if (lower.includes('bilirrubina directa')) return 'Bilirrubina directa';
-  if (lower.includes('bilirrubina indirecta')) return 'Bilirrubina indirecta';
-  if (/^(got|ast)$/i.test(lower)) return 'GOT';
-  if (/^(gpt|alt)$/i.test(lower)) return 'GPT';
-  if (/^(fal|alp)$/i.test(lower) || lower.includes('fosfatasa alcalina')) return 'FAL';
-  if (/^(ggt)$/i.test(lower)) return 'GGT';
-  if (lower.includes('albúmina') || lower.includes('albumina')) return 'Albúmina';
-
-  // Electrolitos
-  if (/^(na|sodio)$/i.test(lower)) return 'Sodio';
-  if (/^(k|potasio)$/i.test(lower)) return 'Potasio';
-  if (/^(ca|calcio)$/i.test(lower)) return 'Calcio';
-  if (/^(mg|magnesio)$/i.test(lower)) return 'Magnesio';
-
-  // Coagulación
-  if (/^(inr)$/i.test(lower)) return 'INR';
-  if (/^(ttpa|kptt)$/i.test(lower)) return 'TTPA';
-  if (lower.includes('fibrinógeno') || lower.includes('fibrinogeno')) return 'Fibrinógeno';
-
-  // Marcadores tumorales
-  if (/^(cea)$/i.test(lower) || lower.includes('antígeno carcinoembrionario')) return 'CEA';
-  if (/^(ca 19-9|ca19-9|ca 19.9)$/i.test(lower)) return 'CA 19-9';
-  if (/^(ca 125|ca125)$/i.test(lower)) return 'CA 125';
-  if (/^(ca 15-3|ca15-3|ca 15.3)$/i.test(lower)) return 'CA 15-3';
-  if (/^(psa)$/i.test(lower)) return 'PSA';
-  if (/^(afp)$/i.test(lower) || lower.includes('alfafetoproteína')) return 'AFP';
-  if (/^(beta-hcg|b-hcg|bhcg|β-hcg)$/i.test(lower)) return 'β-HCG';
-  if (lower.includes('calcitonina')) return 'Calcitonina';
-  if (lower.includes('tireoglobulina')) return 'Tireoglobulina';
-
-  return name;
-};
+// ── Normalización y Validación de Parámetros de Laboratorio ───
+export { normalizeLabTestName, normalizeLabUnit, isPlausibleLabResult, validateLabResult } from './labValidation';
+import { normalizeLabTestName, isPlausibleLabResult } from './labValidation';
 
 // ── Extracción de Laboratorios ─────────────────
 export const extractLabsSecure = async (
@@ -412,13 +467,20 @@ export const extractLabsSecure = async (
       const date = item.date ? item.date.trim() : 'S/F';
       const key = `${date}|${normTest.toLowerCase()}`;
       const valNum = parseFloat(String(item.value).replace(',', '.'));
+      const unit = item.unit || '';
 
-      if (!isNaN(valNum) && valNum !== 0 && !resultMap.has(key)) {
+      // Validación de plausibilidad clínica: descarta valores imposibles o errores de OCR sin alterar valores originales
+      if (
+        !isNaN(valNum) &&
+        valNum !== 0 &&
+        !resultMap.has(key) &&
+        isPlausibleLabResult(normTest, valNum, unit)
+      ) {
         resultMap.set(key, {
           ...item,
           test: normTest,
           value: valNum,
-          unit: item.unit || ''
+          unit: unit
         });
       }
     }

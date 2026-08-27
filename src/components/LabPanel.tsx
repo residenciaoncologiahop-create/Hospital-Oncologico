@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Plus, TestTube, Activity } from 'lucide-react';
-import { normalizeLabTestName } from '../utils/aiProxy';
+import { normalizeLabTestName, isPlausibleLabResult } from '../utils/labValidation';
 
 export interface LabResult {
   date: string;
@@ -36,12 +36,14 @@ const PREFERRED_LAB_ORDER = [
 ];
 
 const LabPanel: React.FC<Props> = ({ results, onAddManual, isResident = false }) => {
-  // Normalizar y obtener lista única de tests ordenados por categoría clínica (Regla 6)
+  // Normalizar y filtrar únicamente valores clínicamente plausibles (descartando errores de extracción/OCR)
   const normalizedResults = useMemo(() => {
-    return results.map(r => ({
-      ...r,
-      test: normalizeLabTestName(r.test)
-    }));
+    return results
+      .map(r => ({
+        ...r,
+        test: normalizeLabTestName(r.test)
+      }))
+      .filter(r => isPlausibleLabResult(r.test, r.value, r.unit));
   }, [results]);
 
   const availableTests = useMemo(() => {
@@ -57,6 +59,7 @@ const LabPanel: React.FC<Props> = ({ results, onAddManual, isResident = false })
   }, [normalizedResults]);
 
   const [selectedTest, setSelectedTest] = useState<string>(availableTests[0] || '');
+  const activeTest = availableTests.includes(selectedTest) ? selectedTest : (availableTests[0] || '');
   
   // Estado para carga manual
   const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
@@ -66,23 +69,31 @@ const LabPanel: React.FC<Props> = ({ results, onAddManual, isResident = false })
 
   // Filtrar y ordenar datos para el gráfico
   const chartData = useMemo(() => {
-    if (!selectedTest) return [];
+    if (!activeTest) return [];
     return normalizedResults
-      .filter(r => r.test === selectedTest)
+      .filter(r => r.test === activeTest)
       .sort((a, b) => {
         const dateA = a.date.split('/').reverse().join('-');
         const dateB = b.date.split('/').reverse().join('-');
         return new Date(dateA).getTime() - new Date(dateB).getTime();
       });
-  }, [normalizedResults, selectedTest]);
+  }, [normalizedResults, activeTest]);
 
   const handleAdd = () => {
     if (!onAddManual || !manualTest || !manualValue) return;
+    const valNum = parseFloat(manualValue.replace(',', '.'));
+    const normTest = normalizeLabTestName(manualTest);
+
+    if (!isPlausibleLabResult(normTest, valNum, manualUnit)) {
+      alert('El valor ingresado no es clínicamente plausible para el parámetro y unidad especificados.');
+      return;
+    }
+
     const [y, m, d] = manualDate.split('-');
     const newItem: LabResult = {
       date: `${d}/${m}/${y}`,
       test: manualTest,
-      value: parseFloat(manualValue),
+      value: valNum,
       unit: manualUnit,
       source: 'manual',
       professional: 'Médico tratante' // Se asigna al usuario actual en el padre
@@ -122,7 +133,7 @@ const LabPanel: React.FC<Props> = ({ results, onAddManual, isResident = false })
             <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">Parámetro</h3>
             <select 
               className="bg-transparent font-bold text-gray-800 outline-none cursor-pointer min-w-[150px]"
-              value={selectedTest}
+              value={activeTest}
               onChange={(e) => setSelectedTest(e.target.value)}
             >
               {availableTests.length === 0 && <option>Sin datos</option>}
@@ -130,7 +141,7 @@ const LabPanel: React.FC<Props> = ({ results, onAddManual, isResident = false })
             </select>
           </div>
         </div>
-        {availableTests.length > 0 && selectedTest && (
+        {availableTests.length > 0 && activeTest && (
            <div className="text-right">
              <p className="text-[10px] text-gray-400 font-bold uppercase">Último valor</p>
              <p className="text-lg font-black text-indigo-600">

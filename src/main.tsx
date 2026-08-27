@@ -30,7 +30,7 @@ import ClinicalEvolutionModal from './components/ClinicalEvolutionModal';
 
 import { User } from 'firebase/auth';
 import AuthWrapper, { logout } from './components/AuthWrapper';
-import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, normalizeLabTestName } from './utils/aiProxy';
+import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, normalizeLabTestName, isPlausibleLabResult, consolidateTimelineEvents } from './utils/aiProxy';
 import { saveClinicalContext, clearClinicalContext } from './services/patientService';
 import { demoPatients, ClinicalValidationChecklist } from './mocks/demoCases';
 
@@ -322,8 +322,9 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
             ? p.timeline.map((e: any) => `• [${e.date}] ${e.category ? `(${e.category}) ` : ''}${e.professional ? `[${e.professional}]: ` : ''}${e.note}${e.detail ? ` — Detalle: ${e.detail}` : ''}`).join('\n')
             : 'Sin eventos previos registrados en la cronología.';
 
-        const labsText = (p.labResults && p.labResults.length > 0)
-            ? p.labResults.map((l: any) => `• ${l.date ? `[${l.date}] ` : ''}${l.testName}: ${l.value} ${l.unit || ''} ${l.isAbnormal ? '(Fuera de rango)' : ''}`).join('\n')
+        const validLabs = (p.labResults || []).filter((l: any) => isPlausibleLabResult(l.test || l.testName, l.value, l.unit));
+        const labsText = (validLabs.length > 0)
+            ? validLabs.map((l: any) => `• ${l.date ? `[${l.date}] ` : ''}${l.test || l.testName}: ${l.value} ${l.unit || ''} ${l.isAbnormal ? '(Fuera de rango)' : ''}`).join('\n')
             : '';
 
         const imagingText = (p.imagingStudies && p.imagingStudies.length > 0)
@@ -392,30 +393,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
     };
 
     const deduplicateTimelineEvents = (eventsList: ClinicalEvent[]): ClinicalEvent[] => {
-        const seen = new Map<string, ClinicalEvent>();
-        for (const ev of eventsList) {
-            const normDate = (ev.date || 'S/F').trim();
-            const normCat = (ev.category || 'General').toLowerCase().trim();
-            const normNote = (ev.note || '')
-                .toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-z0-9]/g, '');
-            const noteSnippet = normNote.substring(0, 120);
-            const key = `${normDate}|${normCat}|${noteSnippet}`;
-
-            if (!seen.has(key)) {
-                seen.set(key, ev);
-            } else {
-                const existing = seen.get(key)!;
-                const existingScore = (existing.isKey ? 10 : 0) + (existing.note?.length || 0) + (existing.detail?.length || 0);
-                const newScore = (ev.isKey ? 10 : 0) + (ev.note?.length || 0) + (ev.detail?.length || 0);
-                if (newScore > existingScore) {
-                    seen.set(key, ev);
-                }
-            }
-        }
-        return Array.from(seen.values());
+        return consolidateTimelineEvents([], eventsList);
     };
 
     const handleProcessDocuments = async () => {
@@ -423,31 +401,24 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         isProcessingRef.current = true;
         setIsProcessingDocs(true);
         setLastError(null);
+        const extractionWarnings: string[] = [];
         try {
             // Las 3 extracciones corren en paralelo
             const [rawEvents, extractedLabs, extractedImaging] = await Promise.all([
-                extractTimelineSecure(historyText, historyFiles),
+                extractTimelineSecure(historyText, historyFiles, undefined, (w) => extractionWarnings.push(w)),
                 extractLabsSecure(historyText, historyFiles),
                 extractImagingFromHistorySecure(historyText, historyFiles),
             ]);
 
-            const events = rawEvents.map((e: any) => ({
-                date: e.date || e.fecha || "S/F",
-                professional: e.professional || e.profesional || e.medico || "N/A",
-                category: e.category || e.categoria || e.tipo || "General",
-                note: e.note || e.nota || e.descripcion || "Evento",
-                isKey: !!e.isKey || !!e.clave || !!e.importante,
-                ...(e.detail ? { detail: e.detail } : {}),
-            }));
-            const combinedTimeline = sortTimeline(
-                deduplicateTimelineEvents([...(timeline || []), ...events])
-            );
+            const combinedTimeline = consolidateTimelineEvents(timeline || [], rawEvents);
             setTimeline(combinedTimeline);
 
-            const currentLabs = patients.find(p => p.id === selectedPatientId)?.labResults || [];
+            const currentLabs = (patients.find(p => p.id === selectedPatientId)?.labResults || [])
+                .filter((l: any) => isPlausibleLabResult(l.test, l.value, l.unit));
+            const validExtractedLabs = extractedLabs.filter((l: any) => isPlausibleLabResult(l.test, l.value, l.unit));
             const combinedLabs = deduplicateByKey(
                 currentLabs,
-                extractedLabs,
+                validExtractedLabs,
                 (l: any) => `${l.date}|${normalizeLabTestName(l.test)}`
             );
 
@@ -508,7 +479,8 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 }
             }
 
-            alert(`Procesado: ${events.length} eventos y ${extractedLabs.length} laboratorios.`);
+            const warningMsg = extractionWarnings.length > 0 ? `\n\nAvisos en procesamiento:\n• ${extractionWarnings.join('\n• ')}` : '';
+            alert(`Procesado: ${rawEvents.length} eventos extraídos (${combinedTimeline.length} totales en cronología) y ${validExtractedLabs.length} laboratorios.${warningMsg}`);
         } catch (e: any) {
             setLastError(e.message);
         } finally {
@@ -519,8 +491,10 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
 
     const handleAddManualLab = async (newLab: LabResult) => {
         if (!selectedPatientId) return;
+        if (!isPlausibleLabResult(newLab.test, newLab.value, newLab.unit)) return;
         const labWithAuthor = { ...newLab, professional: doctorName || 'Manual' };
-        const currentLabs = patients.find(p => p.id === selectedPatientId)?.labResults || [];
+        const currentLabs = (patients.find(p => p.id === selectedPatientId)?.labResults || [])
+            .filter((l: any) => isPlausibleLabResult(l.test, l.value, l.unit));
         const updatedLabs = [...currentLabs, labWithAuthor];
         if (isDemoMode) {
             setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, labResults: updatedLabs, lastUpdated: Date.now() } : p));
@@ -577,19 +551,8 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         if (!selectedPatientId || !files || files.length === 0) return 0;
         try {
             const rawEvents = await extractTimelineSecure('', files);
-            const events: ClinicalEvent[] = rawEvents.map((e: any) => ({
-                date: e.date || e.fecha || "S/F",
-                professional: e.professional || e.profesional || e.medico || "N/A",
-                category: e.category || e.categoria || e.tipo || "General",
-                note: e.note || e.nota || e.descripcion || "Estudio",
-                isKey: !!e.isKey || !!e.clave || !!e.importante,
-                ...(e.detail ? { detail: e.detail } : {}),
-            })).filter(e => e.note && e.note.trim() !== '');
-
-            if (events.length > 0) {
-                const combinedTimeline = sortTimeline(
-                    deduplicateTimelineEvents([...(timeline || []), ...events])
-                );
+            if (rawEvents.length > 0) {
+                const combinedTimeline = consolidateTimelineEvents(timeline || [], rawEvents);
                 setTimeline(combinedTimeline);
                 if (isDemoMode) {
                     setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, timeline: combinedTimeline, lastUpdated: Date.now() } : p));
