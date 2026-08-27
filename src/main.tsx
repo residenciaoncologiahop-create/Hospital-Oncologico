@@ -1628,6 +1628,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
 
                 {selP && (
                     <ClinicalEvolutionModal
+                        key={selP.id || selP.hcNumber}
                         isOpen={showEvolutionModal}
                         onClose={() => setShowEvolutionModal(false)}
                         patientData={{

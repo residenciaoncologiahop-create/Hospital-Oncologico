@@ -52,13 +52,20 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
   useEffect(() => {
     if (isOpen) {
       setStep('input');
+      setAttachedFiles([]);
+      setNoNewStudies(false);
+      setActualidad('');
+      setExamenFisico('');
+      setPlan('');
       setEvolutionText('');
+      setIsGenerating(false);
       setCopied(false);
       setSavedToTimeline(false);
+      setIsSavingToTimeline(false);
       setStudiesAddedCount(0);
       setErrorMsg(null);
     }
-  }, [isOpen]);
+  }, [isOpen, patientData.hcOrName]);
 
   if (!isOpen) return null;
 

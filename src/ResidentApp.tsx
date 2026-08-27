@@ -743,6 +743,7 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
 
       {selectedPatient && (
         <ClinicalEvolutionModal
+          key={selectedPatient.id || selectedPatient.name}
           isOpen={showEvolutionModal}
           onClose={() => setShowEvolutionModal(false)}
           patientData={{
