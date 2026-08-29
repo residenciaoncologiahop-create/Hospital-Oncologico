@@ -437,7 +437,25 @@ export const nccnGuidelines: NCCNGuideline[] = [
     specialConsiderations: 'Evaluación de receptores de somatostatina por PET DOTATATE. En pacientes con análogos de somatostatina (octreotida/lanreotida): monitoreo de respuesta y función biliar/glucemia.',
     source: 'NCCN Neuroendocrine and Adrenal Tumors v1.2024',
     version: 'v1.2024',
-    organization: 'NCCN'
+    organization: 'NCCN',
+    scenarios: {
+      localizedSurveillance: {
+        scenarioTitle: 'Vigilancia post-resección / Control de TNE localizado (Estadios I–III resecados, NED)',
+        intention: 'Monitoreo de recurrencia locorregional o hepática y control de funcionalidad hormonal.',
+        schedule: 'TNE bien diferenciados (G1–G2): consulta clínica cada 3–6 meses años 1–2, luego cada 6–12 meses hasta año 10. TNE G3: cada 2–3 meses.',
+        imaging: 'TAC o RM multiparamétrica con contraste trifásico de abdomen y pelvis cada 3–6 meses por 2 años, luego cada 6–12 meses. PET-TC 68Ga-DOTATATE ante sospecha de recidiva.',
+        labs: 'Cromogranina A (CgA) periódica si basal elevada. 5-HIAA en orina de 24h si funcional.',
+        specialRules: 'NO aplicar protocolos de adenocarcinoma pancreático ductal ni solicitar CA 19-9 de rutina en TNE puros.'
+      },
+      activeMetastatic: {
+        scenarioTitle: 'TNE metastásico activo / Monitoreo bajo Análogos de Somatostatina / PRRT / Terapia sistémica',
+        intention: 'Evaluación seriada de estabilidad / progresión tumoral y control de hipersecreción hormonal.',
+        schedule: 'Evaluación clínica cada 2–3 meses o en coincidencia con ciclos de análogos de somatostatina (octreotida/lanreotida) o PRRT.',
+        imaging: 'TAC/RM multiparamétrica abdominal cada 3–6 meses para evaluar respuesta tumoral. PET-TC con 68Ga-DOTATATE para re-estadificación o evaluar expresión de SSTR.',
+        labs: 'Cromogranina A sérica periódica, función hepática y renal completa, y péptidos específicos si es secretor.',
+        specialRules: 'Monitoreo de función biliar (litiasis por análogos) y glucemia. Evaluar toxicidad hematológica y renal si PRRT.'
+      }
+    }
   },
 
   {
@@ -725,10 +743,28 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
     histology = 'Carcinoma de células claras';
   } else if (targetSearchStr.includes('seroso')) {
     histology = 'Carcinoma seroso';
+  } else if (organ !== 'Desconocido / No identificado') {
+    // Si el órgano es conocido, asignar la estirpe estándar predominante según NCCN
+    if (organ === 'Páncreas') histology = 'Adenocarcinoma de páncreas';
+    else if (organ === 'Mama') histology = 'Carcinoma invasor de mama';
+    else if (organ === 'Colon') histology = 'Adenocarcinoma de colon';
+    else if (organ === 'Recto') histology = 'Adenocarcinoma de recto';
+    else if (organ === 'Próstata') histology = 'Adenocarcinoma de próstata';
+    else if (organ === 'Cuello uterino (Cérvix)') histology = 'Carcinoma epidermoide de cérvix';
+    else if (organ === 'Endometrio / Útero') histology = 'Adenocarcinoma endometrioide';
+    else if (organ === 'Ovario') histology = 'Carcinoma seroso de alto grado';
+    else if (organ === 'Estómago') histology = 'Adenocarcinoma gástrico';
+    else if (organ === 'Vejiga') histology = 'Carcinoma urotelial';
+    else if (organ === 'Riñón') histology = 'Carcinoma de células claras de riñon';
+    else if (organ === 'Testículo') histology = 'Seminoma';
+    else if (organ === 'Pulmón') histology = 'Carcinoma de células no pequeñas (NSCLC)';
+    else if (organ === 'Vías biliares / Vesícula') histology = 'Colangiocarcinoma / Adenocarcinoma biliar';
+    else if (organ === 'Piel') histology = 'Carcinoma basocelular';
   }
 
-  // Detección de diagnóstico incompleto (neoplasia sin histología)
+  // Detección de diagnóstico incompleto (neoplasia sin histología y sin órgano identificable)
   if (
+    organ === 'Desconocido / No identificado' &&
     (targetSearchStr.includes('neoplasia') || targetSearchStr.includes('tumor') || targetSearchStr.includes('lesion') || targetSearchStr.includes('masa')) &&
     histology === 'No especificada / Pendiente de confirmación'
   ) {
@@ -931,32 +967,29 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
       modeLabel = 'Modo C — Vigilancia intensiva post-tratamiento de metástasis (NED)';
       treatmentIntent = 'Vigilancia post-tratamiento curativo';
     } else {
-      diseaseStatus = 'INDETERMINATE';
-      diseaseStatusDescription = 'Estadio IV con estado actual de enfermedad indeterminado (no se puede asegurar NED ni enfermedad activa).';
-      followUpMode = 'INDETERMINATE_STATUS';
-      modeLabel = 'Estado de Enfermedad Indeterminado';
-      treatmentIntent = 'Pendiente de confirmación diagnóstica';
+      diseaseStatus = 'ACTIVE_METASTATIC';
+      diseaseStatusDescription = 'Enfermedad metastásica / Estadio IV (Control y monitoreo de respuesta).';
+      followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      modeLabel = 'Modo B — Enfermedad metastásica activa / Evaluación de respuesta a tratamiento sistémico';
+      treatmentIntent = 'Control tumoral y evaluación de respuesta a tratamiento sistémico';
     }
   } else {
-    // Estadios I, II, III
+    // Estadios I, II, III o enfermedad localizada / no metastásica
     if (hasProgression) {
       diseaseStatus = 'PROGRESSION';
       diseaseStatusDescription = 'Recidiva o progresión de enfermedad documentada.';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
       modeLabel = 'Modo B — Recidiva activa / Re-estadificación y evaluación terapéutica';
       treatmentIntent = 'Reevaluación diagnóstica y terapéutica';
-    } else if (hasNED || isTreatmentCompletedOrNone || combined.includes('postquirurgico') || combined.includes('resecado') || combined.includes('postoperatorio') || combined.includes('hemicolectomia') || combined.includes('colectomia')) {
-      diseaseStatus = 'NED';
-      diseaseStatusDescription = 'Enfermedad localizada resecada con intención curativa, actualmente sin evidencia de enfermedad (NED).';
-      followUpMode = 'CURATIVE_SURVEILLANCE';
-      modeLabel = 'Modo A — Vigilancia post-tratamiento curativo (Enfermedad localizada resecada)';
-      treatmentIntent = 'Detección precoz de recidiva locorregional o sistémica curable';
     } else {
-      diseaseStatus = 'INDETERMINATE';
-      diseaseStatusDescription = 'Estado de enfermedad no documentado con suficiente precisión para determinar vigilancia vs enfermedad activa.';
-      followUpMode = 'INDETERMINATE_STATUS';
-      modeLabel = 'Estado de Enfermedad Indeterminado';
-      treatmentIntent = 'Pendiente de confirmación';
+      const isResectedOrNED = hasNED || isTreatmentCompletedOrNone || combined.includes('postquirurgico') || combined.includes('resecado') || combined.includes('postoperatorio') || combined.includes('hemicolectomia') || combined.includes('colectomia');
+      diseaseStatus = 'NED';
+      diseaseStatusDescription = isResectedOrNED
+        ? 'Enfermedad localizada resecada con intención curativa, actualmente sin evidencia de enfermedad (NED).'
+        : 'Enfermedad localizada / en seguimiento, sin evidencia de progresión documentada (Vigilancia oncológica).';
+      followUpMode = 'CURATIVE_SURVEILLANCE';
+      modeLabel = 'Modo A — Vigilancia post-tratamiento curativo (Enfermedad localizada)';
+      treatmentIntent = 'Detección precoz de recidiva locorregional o sistémica curable';
     }
   }
 
