@@ -759,7 +759,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
     const isLabTab = activeTab === 'labs' || activeTab === 'imaging';
 
     return (
-        <div className="flex flex-col h-screen overflow-hidden">
+        <div className="flex flex-col h-screen overflow-hidden bg-[#f8f9fa]">
             <style>{`
                 .fs-large { font-size: 112% !important; }
                 .fs-large .text-\\[10px\\] { font-size: 12px !important; }
@@ -795,11 +795,11 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 </div>
             )}
 
-            <div className={`flex flex-1 min-h-0 bg-white text-gray-800 font-medium text-xs overflow-hidden ${fontSize === 'large' ? 'fs-large' : fontSize === 'xl' ? 'fs-xl' : ''}`}>
+            <div className={`flex flex-1 min-h-0 bg-[#f8f9fa] text-gray-800 font-medium text-xs overflow-hidden ${fontSize === 'large' ? 'fs-large' : fontSize === 'xl' ? 'fs-xl' : ''}`}>
 
                 {/* ── SIDEBAR ─────────────────────────────────── */}
                 <aside className={`fixed inset-y-0 left-0 z-40 bg-gray-50 border-r lg:static flex flex-col transition-all duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} ${sidebarOpen ? 'w-72 lg:translate-x-0' : 'w-0 lg:translate-x-0 overflow-hidden'}`}>
-                    <div className="px-5 py-4 border-b flex items-center justify-between bg-white">
+                    <div className="px-5 py-4 border-b flex items-center justify-between bg-[#f8f9fa]">
                         <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-500 rounded-xl flex items-center justify-center shadow-md shadow-blue-100">
                                 <Activity size={16} className="text-white"/>
@@ -880,8 +880,8 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
 
 
                     <div className="relative">
-                        <div className="absolute -top-8 left-0 right-0 h-8 bg-gradient-to-b from-transparent to-white pointer-events-none z-10"/>
-                        <div className="p-5 border-t bg-white flex flex-col space-y-3">
+                        <div className="absolute -top-8 left-0 right-0 h-8 bg-gradient-to-b from-transparent to-[#f8f9fa] pointer-events-none z-10"/>
+                        <div className="p-5 border-t bg-[#f8f9fa] flex flex-col space-y-3">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3 truncate">
                                 <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-md">{doctorName[0].toUpperCase()}</div>
@@ -912,7 +912,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 <main className="flex-1 flex flex-col h-full overflow-hidden relative">
 
                     {/* Header */}
-                    <header className="bg-white border-b h-14 flex items-center px-5 justify-between z-20 shadow-sm">
+                    <header className="bg-[#f8f9fa] border-b h-14 flex items-center px-5 justify-between z-20 shadow-xs">
                         <div className="flex items-center gap-3">
                             <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={22}/></button>
                             <button
@@ -1064,7 +1064,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                     {selP ? (
                         <>
                             {/* Panel principal ancho completo */}
-                            <div className="flex-1 flex flex-col bg-white overflow-hidden">
+                            <div className="flex-1 flex flex-col bg-[#f8f9fa] overflow-hidden">
 
                                 {/* Tabs */}
                                 <div className="flex border-b bg-gray-50/50 flex-shrink-0">
@@ -1393,8 +1393,8 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                             {showChat && (
                                 <div className="fixed inset-0 z-50 flex justify-end">
                                     <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm" onClick={closeChat}/>
-                                    <div className={`relative bg-gray-50 flex flex-col h-full shadow-2xl transition-all duration-300 ${isChatFullScreen ? 'w-full max-w-full' : 'w-full max-w-lg'} ${closingChat ? 'animate-out slide-out-to-right duration-300' : 'animate-in slide-in-from-right duration-300'}`}>
-                                        <div className="flex items-center justify-between px-6 py-4 bg-white border-b">
+                                    <div className={`relative bg-[#f8f9fa] flex flex-col h-full shadow-2xl transition-all duration-300 ${isChatFullScreen ? 'w-full max-w-full' : 'w-full max-w-lg'} ${closingChat ? 'animate-out slide-out-to-right duration-300' : 'animate-in slide-in-from-right duration-300'}`}>
+                                        <div className="flex items-center justify-between px-6 py-4 bg-[#f8f9fa] border-b">
                                             <div className="flex items-center gap-2.5">
                                                 <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center shadow-md shadow-blue-100">
                                                     <Activity size={13} className="text-white"/>
@@ -1475,7 +1475,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                             <div ref={chatEndRef}/>
                                         </div>
 
-                                        <div className="p-4 bg-white/90 backdrop-blur-md border-t">
+                                        <div className="p-4 bg-[#f8f9fa]/95 backdrop-blur-md border-t">
                                             <div className="flex items-center bg-gray-50 rounded-2xl border-2 border-transparent focus-within:border-blue-100 focus-within:bg-white transition-all p-2.5 pl-4 gap-2">
                                                 <textarea
                                                     className="flex-1 bg-transparent text-sm font-medium outline-none resize-none max-h-32 scrollbar-hide py-1"
@@ -1500,7 +1500,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                         </>
                     ) : (
                         /* Pantalla vacía */
-                        <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 relative overflow-hidden">
+                        <div className="flex-1 flex flex-col items-center justify-center bg-[#f8f9fa] relative overflow-hidden">
                             <div className="absolute inset-0 pointer-events-none">
                                 <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-60"/>
                                 <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-indigo-50 rounded-full blur-3xl opacity-40"/>

@@ -9,7 +9,7 @@ import ResidentApp from './ResidentApp';
  */
 const ModeSelector = ({ onSelect }: { onSelect: (mode: 'doctor' | 'resident') => void }) => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center p-6 font-sans">
+    <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-6 font-sans">
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
         
         {/* OPCIÓN 1: MODO PROFESIONAL */}

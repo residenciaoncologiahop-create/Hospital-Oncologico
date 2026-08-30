@@ -60,7 +60,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onEnterDemo }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-6">
       <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-sm w-full border border-gray-100">
         
         {/* Header */}

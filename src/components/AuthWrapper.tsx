@@ -69,7 +69,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   // Firebase verificando sesión guardada
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center">
         <div className="text-center space-y-3">
           <Loader2 size={40} className="animate-spin text-blue-600 mx-auto" />
           <p className="text-xs font-black text-gray-300 uppercase tracking-widest">

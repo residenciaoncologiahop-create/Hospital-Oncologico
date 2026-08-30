@@ -256,11 +256,11 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
   };
 
   return (
-    <div className="flex h-screen bg-white text-gray-800 font-sans text-xs overflow-hidden">
+    <div className="flex h-screen bg-[#f8f9fa] text-gray-800 font-sans text-xs overflow-hidden">
       
       {/* SIDEBAR */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-50 border-r transform lg:translate-x-0 lg:static flex flex-col transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 border-b flex items-center justify-between bg-white">
+        <div className="p-6 border-b flex items-center justify-between bg-[#f8f9fa]">
           <div className="flex items-center space-x-2 text-indigo-600 font-black text-xl tracking-tighter"><GraduationCap size={24} /><span>OncoResidente</span></div>
           <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden text-gray-300"><X size={24}/></button>
         </div>
@@ -294,7 +294,7 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
             ))}
           </div>
         </div>
-        <div className="p-4 border-t bg-white">
+        <div className="p-4 border-t bg-[#f8f9fa]">
           <button onClick={handleExit} className="w-full flex items-center justify-center space-x-2 text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50">
             <LogOut size={14} /><span className="text-[10px] font-bold uppercase tracking-widest">Salir</span>
           </button>
@@ -302,8 +302,8 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
       </aside>
 
       {/* MAIN */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50">
-        <header className="bg-white/80 backdrop-blur-md border-b h-16 flex items-center px-6 justify-between z-20">
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#f8f9fa]">
+        <header className="bg-[#f8f9fa]/95 backdrop-blur-md border-b h-16 flex items-center px-6 justify-between z-20">
           <div className="flex items-center space-x-4">
             <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-gray-400"><Menu size={24} /></button>
             <div className="flex flex-col">
@@ -333,11 +333,11 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             
             {/* PANEL IZQUIERDO — ancho completo siempre */}
-            <div className={`${isLearningMode ? 'w-full' : 'w-full'} flex flex-col bg-white h-full transition-all duration-300`}>
+            <div className={`${isLearningMode ? 'w-full' : 'w-full'} flex flex-col bg-[#f8f9fa] h-full transition-all duration-300`}>
               <div className="flex border-b text-[10px] font-black uppercase tracking-[0.2em] bg-gray-50/50">
-                <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-indigo-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>1. Datos</button>
-                <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-indigo-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>2. Historia</button>
-                <button onClick={() => setActiveTab('forms')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'forms' ? 'text-indigo-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>3. Trámites</button>
+                <button onClick={() => setActiveTab('docs')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'docs' ? 'text-indigo-600 bg-[#f8f9fa]' : 'text-gray-400 hover:text-gray-600'}`}>1. Datos</button>
+                <button onClick={() => setActiveTab('timeline')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'timeline' ? 'text-indigo-600 bg-[#f8f9fa]' : 'text-gray-400 hover:text-gray-600'}`}>2. Historia</button>
+                <button onClick={() => setActiveTab('forms')} className={`flex-1 py-4 transition-all border-r border-gray-100 ${activeTab === 'forms' ? 'text-indigo-600 bg-[#f8f9fa]' : 'text-gray-400 hover:text-gray-600'}`}>3. Trámites</button>
                 <button onClick={() => setActiveTab('learning')} className={`flex-1 py-4 transition-all ${activeTab === 'learning' ? 'text-white bg-indigo-600' : 'text-indigo-400 hover:text-indigo-600'}`}>4. Aprender</button>
               </div>
 
@@ -551,7 +551,7 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                 <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm" onClick={() => setShowChat(false)}/>
                 <div className={`relative bg-gray-50 flex flex-col h-full shadow-2xl transition-all duration-300 ${isChatFullScreen ? 'w-full max-w-full' : 'w-full max-w-lg'}`}>
                   {/* Header */}
-                  <div className="flex items-center justify-between px-6 py-4 bg-white border-b">
+                  <div className="flex items-center justify-between px-6 py-4 bg-[#f8f9fa] border-b">
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-400 flex items-center justify-center shadow-md shadow-indigo-100">
                         <Activity size={13} className="text-white"/>
@@ -616,7 +616,7 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                     <div ref={chatEndRef}/>
                   </div>
                   {/* Input */}
-                  <div className="p-4 bg-white/90 backdrop-blur-md border-t">
+                  <div className="p-4 bg-[#f8f9fa]/95 backdrop-blur-md border-t">
                     <div className="flex items-center bg-gray-50 rounded-2xl border-2 border-transparent focus-within:border-indigo-100 focus-within:bg-white transition-all p-2.5 pl-4 gap-2">
                       <textarea
                         className="flex-1 bg-transparent text-sm font-medium outline-none resize-none max-h-32 scrollbar-hide py-1"
