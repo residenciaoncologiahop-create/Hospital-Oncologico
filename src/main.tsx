@@ -223,8 +223,48 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
     const [isAuditing, setIsAuditing] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
 
-    const chatEndRef = useRef<HTMLDivElement>(null);
+    const chatContainerRef = useRef<HTMLDivElement>(null);
+    const isAtBottomRef = useRef(true);
+    const [showScrollBottom, setShowScrollBottom] = useState(false);
+    const [streamingMsg, setStreamingMsg] = useState<{ role: 'model'; text: string; timestamp: number } | null>(null);
+    const streamingTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isProcessingRef = useRef(false);
+
+    const handleChatScroll = () => {
+        if (!chatContainerRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+        const atBottom = distanceFromBottom <= 70;
+        isAtBottomRef.current = atBottom;
+        setShowScrollBottom(!atBottom);
+    };
+
+    const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({
+                top: chatContainerRef.current.scrollHeight,
+                behavior
+            });
+            isAtBottomRef.current = true;
+            setShowScrollBottom(false);
+        }
+    };
+
+    useEffect(() => {
+        if (showChat) {
+            setTimeout(() => {
+                scrollToBottom('smooth');
+            }, 100);
+        }
+    }, [showChat]);
+
+    useEffect(() => {
+        return () => {
+            if (streamingTimerRef.current) {
+                clearInterval(streamingTimerRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         getOrInitFingerprint();
@@ -261,10 +301,6 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
     }, [user.uid, isDemoMode]);
 
     useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [chatMessages, isTyping]);
-
-    useEffect(() => {
         if (!selectedPatientId) return;
         // Skip snapshot-driven resets while handleProcessDocuments is running.
         // Without this guard, every updateDoc call inside processing triggers onSnapshot,
@@ -272,6 +308,12 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
         if (isProcessingRef.current) return;
         const p = patients.find(pat => pat.id === selectedPatientId);
         if (!p) return;
+
+        if (streamingTimerRef.current) {
+            clearInterval(streamingTimerRef.current);
+            streamingTimerRef.current = null;
+        }
+        setStreamingMsg(null);
 
         setTimeline(p.timeline || []);
         setChatMessages(p.chatHistory || []);
@@ -595,12 +637,58 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         setChatMessages(updatedUser);
         setChatInput('');
         setIsTyping(true);
+
+        // Smooth scroll when user sends message
+        isAtBottomRef.current = true;
+        setShowScrollBottom(false);
+        setTimeout(() => {
+            if (chatContainerRef.current) {
+                chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
+            }
+        }, 50);
+
         try {
             const responseText = await getChatResponseSecure(updatedUser, newUserMsg.text, getAnonContext(p), [...historyFiles, ...guidelineFiles]);
-            const newAiMsg: ChatMessage = { role: 'model', text: responseText || '', timestamp: Date.now() };
-            const updatedAI = [...updatedUser, newAiMsg];
+            setIsTyping(false);
+
+            if (!responseText) return;
+
+            const finalAiMsg: ChatMessage = { role: 'model', text: responseText, timestamp: Date.now() };
+            const updatedAI = [...updatedUser, finalAiMsg];
             const cleanHistory = sanitizeChatHistory(updatedAI);
-            setChatMessages(cleanHistory);
+
+            // Progressive streaming appearance
+            if (streamingTimerRef.current) {
+                clearInterval(streamingTimerRef.current);
+            }
+
+            let currentIndex = 0;
+            const totalLength = responseText.length;
+            const chunkSize = Math.max(3, Math.ceil(totalLength / 100));
+
+            setStreamingMsg({ role: 'model', text: '', timestamp: finalAiMsg.timestamp });
+
+            streamingTimerRef.current = setInterval(() => {
+                currentIndex += chunkSize;
+                if (currentIndex >= totalLength) {
+                    if (streamingTimerRef.current) clearInterval(streamingTimerRef.current);
+                    streamingTimerRef.current = null;
+                    setStreamingMsg(null);
+                    setChatMessages(cleanHistory);
+
+                    if (isAtBottomRef.current && chatContainerRef.current) {
+                        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                    }
+                } else {
+                    const partial = responseText.slice(0, currentIndex);
+                    setStreamingMsg({ role: 'model', text: partial, timestamp: finalAiMsg.timestamp });
+
+                    if (isAtBottomRef.current && chatContainerRef.current) {
+                        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                    }
+                }
+            }, 18);
+
             if (isDemoMode) {
                 setPatients(prev => prev.map(pat => pat.id === selectedPatientId ? { ...pat, chatHistory: cleanHistory, lastUpdated: Date.now() } : pat));
             } else {
@@ -610,8 +698,8 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         } catch (e: any) {
             console.error("Error en chat o guardado Firestore:", e);
             setLastError(e.message || "Error al procesar el mensaje");
-        } finally {
             setIsTyping(false);
+            setStreamingMsg(null);
         }
     };
 
@@ -1426,8 +1514,12 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                             </div>
                                         )}
 
-                                        <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-hide">
-                                            {chatMessages.length === 0 && (
+                                        <div 
+                                            ref={chatContainerRef}
+                                            onScroll={handleChatScroll}
+                                            className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-hide relative"
+                                        >
+                                            {chatMessages.length === 0 && !streamingMsg && (
                                                 <div className="flex flex-col items-center justify-center h-full text-center space-y-4 select-none">
                                                     <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
                                                         <MessageSquare size={36} className="text-blue-200 mx-auto"/>
@@ -1460,6 +1552,22 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                                     )}
                                                 </div>
                                             ))}
+                                            {streamingMsg && (
+                                                <div className="flex items-end gap-2 justify-start">
+                                                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-100 mb-1">
+                                                        <Activity size={13} className="text-white"/>
+                                                    </div>
+                                                    <div className="max-w-[82%] rounded-2xl shadow-sm bg-white border border-gray-100 rounded-bl-sm px-5 py-4">
+                                                        <div className="leading-relaxed space-y-1 text-[13px] font-normal text-gray-700">
+                                                            {renderMarkdown(streamingMsg.text)}
+                                                            <span className="inline-block w-1.5 h-3.5 bg-blue-500 rounded-sm animate-pulse align-middle ml-1" />
+                                                        </div>
+                                                        <div className="text-[9px] mt-2 font-black uppercase tracking-widest text-gray-300">
+                                                            {new Date(streamingMsg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                             {isTyping && (
                                                 <div className="flex items-end gap-2">
                                                     <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-100">
@@ -1472,8 +1580,21 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                                     </div>
                                                 </div>
                                             )}
-                                            <div ref={chatEndRef}/>
                                         </div>
+
+                                        {/* Botón flotante para descender al final si el usuario hizo scroll arriba */}
+                                        {showScrollBottom && (
+                                            <div className="absolute bottom-20 right-6 z-20">
+                                                <button
+                                                    onClick={() => scrollToBottom('smooth')}
+                                                    className="bg-white/95 hover:bg-white text-gray-700 hover:text-blue-600 border border-gray-200 shadow-xl px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all hover:scale-105 active:scale-95 animate-in fade-in zoom-in duration-200"
+                                                    title="Desplazarse al final"
+                                                >
+                                                    <ChevronDown size={14} className="text-blue-600 animate-bounce" />
+                                                    <span>Ir al final</span>
+                                                </button>
+                                            </div>
+                                        )}
 
                                         <div className="p-4 bg-[#f8f9fa]/95 backdrop-blur-md border-t">
                                             <div className="flex items-center bg-gray-50 rounded-2xl border-2 border-transparent focus-within:border-blue-100 focus-within:bg-white transition-all p-2.5 pl-4 gap-2">

@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Activity, Plus, Search, Trash2, LogOut, Menu, X, 
   FileText, Clock, GraduationCap, Calculator, Pill, 
-  MessageSquare, Loader2, AlertCircle, ClipboardList, CalendarHeart, Info, Maximize2, Minimize2, Sparkles
+  MessageSquare, Loader2, AlertCircle, ClipboardList, CalendarHeart, Info, Maximize2, Minimize2, Sparkles,
+  ChevronDown
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -60,7 +61,56 @@ const ResidentApp = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [isChatFullScreen, setIsChatFullScreen] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [streamingMsg, setStreamingMsg] = useState<{ role: 'model'; text: string; timestamp: number } | null>(null);
+  const streamingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleChatScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const atBottom = distanceFromBottom <= 70;
+    isAtBottomRef.current = atBottom;
+    setShowScrollBottom(!atBottom);
+  };
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior
+      });
+      isAtBottomRef.current = true;
+      setShowScrollBottom(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showChat) {
+      setTimeout(() => {
+        scrollToBottom('smooth');
+      }, 100);
+    }
+  }, [showChat]);
+
+  useEffect(() => {
+    return () => {
+      if (streamingTimerRef.current) {
+        clearInterval(streamingTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (streamingTimerRef.current) {
+      clearInterval(streamingTimerRef.current);
+      streamingTimerRef.current = null;
+    }
+    setStreamingMsg(null);
+  }, [selectedId]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('oncoguide_chat', { detail: { open: showChat } }));
@@ -78,8 +128,6 @@ const ResidentApp = () => {
     p.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
   );
   const isLearningMode = activeTab === 'learning';
-
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [selectedPatient?.chatHistory, isTyping]);
 
   const updateCurrentPatient = (updates: Partial<ResidentPatient>) => {
     setPatients(prev => prev.map(p => p.id === selectedId ? { ...p, ...updates, lastUpdated: Date.now() } : p));
@@ -126,7 +174,7 @@ const ResidentApp = () => {
       if (/^##\s+/.test(line)) {
         const heading = line.replace(/^##\s+/, '');
         return (
-          <h3 key={i} className="text-xs font-black uppercase tracking-wider text-indigo-950 mt-3.5 mb-1.5">
+          <h3 key={i} className="text-xs font-black uppercase tracking-wider text-indigo-950 mt-3 mb-1.5">
             {heading}
           </h3>
         );
@@ -152,6 +200,15 @@ const ResidentApp = () => {
     updateCurrentPatient({ chatHistory: updatedHistory });
     setChatInput(''); setIsTyping(true);
 
+    // Smooth scroll when user sends message
+    isAtBottomRef.current = true;
+    setShowScrollBottom(false);
+    setTimeout(() => {
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
+      }
+    }, 50);
+
     const eventsText = (selectedPatient.timeline && selectedPatient.timeline.length > 0)
       ? selectedPatient.timeline.map((e: any) => `• [${e.date}] ${e.category ? `(${e.category}) ` : ''}${e.professional ? `[${e.professional}]: ` : ''}${e.note}${e.detail ? ` — Detalle: ${e.detail}` : ''}`).join('\n')
       : 'Sin eventos previos registrados en la cronología.';
@@ -166,10 +223,50 @@ ${eventsText}
 NOTAS CLÍNICAS Y DOCUMENTACIÓN:
 ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
 
-    const response = await getResidentChatResponse(updatedHistory, newMsg.text, context, selectedPatient.files);
-    const aiMsg = { role: 'model' as const, text: response, timestamp: Date.now() };
-    updateCurrentPatient({ chatHistory: [...updatedHistory, aiMsg] });
-    setIsTyping(false);
+    try {
+      const response = await getResidentChatResponse(updatedHistory, newMsg.text, context, selectedPatient.files);
+      setIsTyping(false);
+
+      if (!response) return;
+
+      const aiMsg = { role: 'model' as const, text: response, timestamp: Date.now() };
+
+      // Progressive streaming appearance
+      if (streamingTimerRef.current) {
+        clearInterval(streamingTimerRef.current);
+      }
+
+      let currentIndex = 0;
+      const totalLength = response.length;
+      const chunkSize = Math.max(3, Math.ceil(totalLength / 100));
+
+      setStreamingMsg({ role: 'model', text: '', timestamp: aiMsg.timestamp });
+
+      streamingTimerRef.current = setInterval(() => {
+        currentIndex += chunkSize;
+        if (currentIndex >= totalLength) {
+          if (streamingTimerRef.current) clearInterval(streamingTimerRef.current);
+          streamingTimerRef.current = null;
+          setStreamingMsg(null);
+          updateCurrentPatient({ chatHistory: [...updatedHistory, aiMsg] });
+
+          if (isAtBottomRef.current && chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          }
+        } else {
+          const partial = response.slice(0, currentIndex);
+          setStreamingMsg({ role: 'model', text: partial, timestamp: aiMsg.timestamp });
+
+          if (isAtBottomRef.current && chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          }
+        }
+      }, 18);
+    } catch (e: any) {
+      console.error("Error en chat asistente residente:", e);
+      setIsTyping(false);
+      setStreamingMsg(null);
+    }
   };
 
   const handleProcessTimeline = async () => {
@@ -575,8 +672,12 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                     </div>
                   </div>
                   {/* Mensajes */}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
-                    {selectedPatient.chatHistory.length === 0 && (
+                  <div 
+                    ref={chatContainerRef}
+                    onScroll={handleChatScroll}
+                    className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide relative"
+                  >
+                    {selectedPatient.chatHistory.length === 0 && !streamingMsg && (
                       <div className="flex flex-col items-center justify-center h-full text-center space-y-4 select-none opacity-40">
                         <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
                           <MessageSquare size={36} className="text-indigo-200 mx-auto"/>
@@ -601,6 +702,22 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                         </div>
                       </div>
                     ))}
+                    {streamingMsg && (
+                      <div className="flex items-end gap-2 justify-start">
+                        <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-100 mb-1">
+                          <Activity size={13} className="text-white"/>
+                        </div>
+                        <div className="max-w-[82%] rounded-2xl shadow-sm bg-white border border-gray-100 rounded-bl-sm px-5 py-4">
+                          <div className="leading-relaxed space-y-1 text-xs font-normal text-gray-700">
+                            {renderMarkdown(streamingMsg.text)}
+                            <span className="inline-block w-1.5 h-3.5 bg-indigo-500 rounded-sm animate-pulse align-middle ml-1" />
+                          </div>
+                          <div className="text-[9px] mt-2 font-black uppercase tracking-widest text-gray-300">
+                            {new Date(streamingMsg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {isTyping && (
                       <div className="flex items-end gap-2">
                         <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-400 flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-100">
@@ -613,8 +730,21 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                         </div>
                       </div>
                     )}
-                    <div ref={chatEndRef}/>
                   </div>
+
+                  {/* Botón flotante para descender al final si el usuario hizo scroll arriba */}
+                  {showScrollBottom && (
+                    <div className="absolute bottom-20 right-6 z-20">
+                      <button
+                        onClick={() => scrollToBottom('smooth')}
+                        className="bg-white/95 hover:bg-white text-gray-700 hover:text-indigo-600 border border-gray-200 shadow-xl px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all hover:scale-105 active:scale-95 animate-in fade-in zoom-in duration-200"
+                        title="Desplazarse al final"
+                      >
+                        <ChevronDown size={14} className="text-indigo-600 animate-bounce" />
+                        <span>Ir al final</span>
+                      </button>
+                    </div>
+                  )}
                   {/* Input */}
                   <div className="p-4 bg-[#f8f9fa]/95 backdrop-blur-md border-t">
                     <div className="flex items-center bg-gray-50 rounded-2xl border-2 border-transparent focus-within:border-indigo-100 focus-within:bg-white transition-all p-2.5 pl-4 gap-2">
