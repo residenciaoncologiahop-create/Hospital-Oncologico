@@ -7,6 +7,7 @@ import { callGemini } from '../utils/aiProxy';
 import { ADMIN_FORMS_REGISTRY } from '../services/adminForms/registry';
 import { AdminFormDefinition, AdminFormContext } from '../services/adminForms/types';
 import AdminFormReviewModal from './adminForms/AdminFormReviewModal';
+import FormPreviewModal from './FormPreviewModal';
 
 interface FormManagerProps {
   patient: any;
@@ -58,6 +59,19 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   });
   const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
   const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
+
+  // Estados para Vista Previa interactiva de Formularios PDF antes de su descarga definitiva
+  const [activePreview, setActivePreview] = useState<{
+    formType: 'pami' | 'admision' | 'renovacion' | 'dinadic' | 'summary';
+    title: string;
+    code: string;
+    subtitle?: string;
+    blob: Blob | null;
+    filename: string;
+  } | null>(null);
+  const [isPreviewUpdating, setIsPreviewUpdating] = useState(false);
+  const [dinadicData, setDinadicData] = useState<any>(null);
+  const [summaryTextContent, setSummaryTextContent] = useState<string>('');
 
   // Estados y flujo para Nuevos Formularios Administrativos Modulares
   const [selectedAdminForm, setSelectedAdminForm] = useState<AdminFormDefinition | null>(null);
@@ -931,11 +945,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
 
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Resumen_Clinico_${data.context}_${data.nombre || patient?.name || 'Paciente'}.pdf`;
-        link.click();
-        setStatus('¡Listo!');
+        const filename = `Resumen_Clinico_${data.context}_${data.nombre || patient?.name || 'Paciente'}.pdf`;
+        setSummaryTextContent(summaryText);
+        setActivePreview({
+          formType: 'summary',
+          title: `Resumen de Historia Clínica (${data.context})`,
+          code: 'RESUMEN',
+          subtitle: `Fármaco solicitado: ${drugName}`,
+          blob,
+          filename,
+        });
+        setShowSummaryModal(false);
     } catch (e: any) {
         alert("Error al generar resumen clínico: " + e.message);
     } finally {
@@ -1102,7 +1122,8 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       };
 
       setPamiFormData(mergedData);
-      setShowPamiReviewModal(true);
+      setStatus('Generando vista previa del Formulario PAMI...');
+      await fillPamiPDFFromData(mergedData);
       setShowPamiMissingConfirm(false);
     } catch (e: any) {
       alert("Error al preparar formulario PAMI: " + e.message);
@@ -1265,22 +1286,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `PAMI_${finalName.replace(/\s+/g, '_')}.pdf`;
-      link.click();
-      setStatus('¡Listo!');
-      
-      const effectiveDrug = activeDrugs.join(' + ') || 'PAMI';
-      setLastRegenParams(prev => ({
-        ...prev,
-        pami: {
-          drugName: effectiveDrug,
-          accumulatedCorrections: prev['pami']?.accumulatedCorrections || ''
-        }
-      }));
-      setFormGenerated(prev => ({ ...prev, pami: true }));
-      setFormCorrections(prev => ({ ...prev, pami: '' }));
+      const filename = `PAMI_${finalName.replace(/\s+/g, '_')}.pdf`;
+      setActivePreview({
+        formType: 'pami',
+        title: 'Formulario PAMI Oncológico',
+        code: 'PAMI',
+        subtitle: `Paciente: ${finalName}`,
+        blob,
+        filename,
+      });
       setShowPamiReviewModal(false);
       setShowPamiMissingConfirm(false);
     } catch (e: any) {

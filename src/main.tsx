@@ -10,6 +10,7 @@ import { extractImagingFromHistorySecure } from './utils/aiProxy';
 import { requestNotificationPermission } from './utils/notificationService';
 import OncoCalculator from './components/OncoCalculator';
 import DrugReference from './components/DrugReference';
+import PracticeStatsModal from './components/PracticeStatsModal';
 
 // --- FIREBASE IMPORTS ---
 import { db } from './lib/firebase';
@@ -17,9 +18,9 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where
 
 import { 
     FileText, MessageSquare, Plus, LogOut, Search,
-    Upload, Activity, Trash2, Menu, X, Clock,
+    Upload, Activity, Trash2, Pencil, Menu, X, Clock,
     Loader2, AlertCircle, Info, Terminal, ChevronDown,
-    Calendar, PenTool, ClipboardCheck, Wrench, Calculator, Pill,
+    Calendar, PenTool, ClipboardCheck, Wrench, Calculator, Pill, BarChart3,
     PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2, Filter, Sparkles,
     ShieldCheck, CheckCircle2
 } from 'lucide-react';
@@ -186,6 +187,12 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
     const [newPatientAgeRange, setNewPatientAgeRange] = useState('41-50');
     const [newPatientDiagnosis, setNewPatientDiagnosis] = useState('');
 
+    const [showEditPatientModal, setShowEditPatientModal] = useState(false);
+    const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+    const [editPatientHC, setEditPatientHC] = useState('');
+    const [editPatientAgeRange, setEditPatientAgeRange] = useState('41-50');
+    const [editPatientDiagnosis, setEditPatientDiagnosis] = useState('');
+
     const [historyText, setHistoryText] = useState('');
     const [historyFiles, setHistoryFiles] = useState<FileData[]>([]);
     const [timeline, setTimeline] = useState<ClinicalEvent[]>([]);
@@ -218,6 +225,7 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
     const [showToolsMenu, setShowToolsMenu] = useState(false);
     const [showCalculatorModal, setShowCalculatorModal] = useState(false);
     const [showDrugsModal, setShowDrugsModal] = useState(false);
+    const [showStatsModal, setShowStatsModal] = useState(false);
     const [showValidationModal, setShowValidationModal] = useState(false);
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
@@ -745,6 +753,62 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         }
     };
 
+    const handleStartEditPatient = (p: Patient, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingPatient(p);
+        setEditPatientHC(p.hcNumber || '');
+        setEditPatientAgeRange(p.ageRange || '41-50');
+        setEditPatientDiagnosis(p.diagnosis || '');
+        setShowEditPatientModal(true);
+    };
+
+    const handleSaveEditedPatient = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingPatient) return;
+        if (!editPatientHC.trim()) return;
+
+        const updatedHC = editPatientHC.trim();
+        const updatedAgeRange = editPatientAgeRange;
+        const updatedDiagnosis = editPatientDiagnosis.trim();
+
+        if (isDemoMode) {
+            setPatients(prev => prev.map(p => p.id === editingPatient.id ? {
+                ...p,
+                hcNumber: updatedHC,
+                name: `HC-${updatedHC}`,
+                ageRange: updatedAgeRange,
+                diagnosis: updatedDiagnosis,
+                lastUpdated: Date.now()
+            } : p));
+            setShowEditPatientModal(false);
+            setEditingPatient(null);
+            return;
+        }
+
+        try {
+            await updateDoc(doc(db, "patients", editingPatient.id), {
+                hcNumber: updatedHC,
+                name: `HC-${updatedHC}`,
+                ageRange: updatedAgeRange,
+                diagnosis: updatedDiagnosis,
+                lastUpdated: Date.now()
+            });
+            setPatients(prev => prev.map(p => p.id === editingPatient.id ? {
+                ...p,
+                hcNumber: updatedHC,
+                name: `HC-${updatedHC}`,
+                ageRange: updatedAgeRange,
+                diagnosis: updatedDiagnosis,
+                lastUpdated: Date.now()
+            } : p));
+            logAction("EDIT_PATIENT", editingPatient.id, doctorName);
+            setShowEditPatientModal(false);
+            setEditingPatient(null);
+        } catch (error: any) {
+            setLastError("Error al actualizar caso: " + error.message);
+        }
+    };
+
     const getEffectiveClinicalText = () => {
         const selP = patients.find(p => p.id === selectedPatientId);
         const diagnosisBlock = selP?.diagnosis ? `DIAGNÓSTICO ONCOLÓGICO PRINCIPAL: ${selP.diagnosis}` : '';
@@ -953,12 +1017,22 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                             </div>
                                             <span className={`text-[10px] font-semibold truncate mt-0.5 ${selectedPatientId === p.id ? 'text-blue-100 opacity-80' : 'text-gray-400'}`}>{p.diagnosis}</span>
                                         </div>
-                                        <button
-                                            onClick={e => handleDeletePatient(p.id, e)}
-                                            className={`p-1.5 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedPatientId === p.id ? 'text-blue-200 hover:text-white hover:bg-blue-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}
-                                        >
-                                            <Trash2 size={12}/>
-                                        </button>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                                onClick={e => handleStartEditPatient(p, e)}
+                                                className={`p-1.5 rounded-full hover:bg-blue-100 hover:text-blue-600 transition-colors ${selectedPatientId === p.id ? 'text-blue-200 hover:text-white hover:bg-blue-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}
+                                                title="Editar caso clínico"
+                                            >
+                                                <Pencil size={12}/>
+                                            </button>
+                                            <button
+                                                onClick={e => handleDeletePatient(p.id, e)}
+                                                className={`p-1.5 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ${selectedPatientId === p.id ? 'text-blue-200 hover:text-white hover:bg-blue-500' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}
+                                                title="Eliminar caso clínico"
+                                            >
+                                                <Trash2 size={12}/>
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -1140,6 +1214,22 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                                 <div>
                                                     <div className="text-xs font-black text-gray-800 group-hover:text-purple-700">Fármacos</div>
                                                     <div className="text-[10px] text-gray-400 font-medium leading-tight">Vademécum oncológico</div>
+                                                </div>
+                                            </button>
+
+                                            <button
+                                                onClick={() => {
+                                                    setShowToolsMenu(false);
+                                                    setShowStatsModal(true);
+                                                }}
+                                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-emerald-50 group transition-colors"
+                                            >
+                                                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+                                                    <BarChart3 size={16} />
+                                                </div>
+                                                <div>
+                                                    <div className="text-xs font-black text-gray-800 group-hover:text-emerald-700">Estadísticas de mi práctica</div>
+                                                    <div className="text-[10px] text-gray-400 font-medium leading-tight">Métricas y perfil clínico</div>
                                                 </div>
                                             </button>
                                         </div>
@@ -1710,6 +1800,71 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                     </div>
                 )}
 
+                {/* ── MODAL EDITAR CASO ────────────────────────── */}
+                {showEditPatientModal && editingPatient && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-md p-6">
+                        <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden transform animate-in fade-in zoom-in duration-300">
+                            <div className="p-8 border-b flex justify-between items-center bg-gray-50/50">
+                                <h3 className="font-black text-gray-800 text-xs uppercase tracking-widest">Modificar Caso Clínico</h3>
+                                <button onClick={() => { setShowEditPatientModal(false); setEditingPatient(null); }} className="text-gray-300 hover:text-gray-600"><X size={24}/></button>
+                            </div>
+                            <form onSubmit={handleSaveEditedPatient} className="p-8 space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Número de Historia Clínica</label>
+                                    <input
+                                        type="text" required autoFocus
+                                        className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all"
+                                        placeholder="Ej: 9014766"
+                                        value={editPatientHC}
+                                        onChange={e => setEditPatientHC(e.target.value)}
+                                    />
+                                </div>
+                                <div className="flex space-x-4">
+                                    <div className="w-1/2 space-y-2">
+                                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Rango Etario / Edad</label>
+                                        <select
+                                            className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all"
+                                            value={editPatientAgeRange}
+                                            onChange={e => setEditPatientAgeRange(e.target.value)}
+                                        >
+                                            {!AGE_RANGES.includes(editPatientAgeRange) && editPatientAgeRange && (
+                                                <option value={editPatientAgeRange}>{editPatientAgeRange} años</option>
+                                            )}
+                                            {AGE_RANGES.map(r => <option key={r} value={r}>{r} años</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="w-1/2 space-y-2">
+                                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Diagnóstico / Tumor</label>
+                                        <input
+                                            type="text" required
+                                            className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all"
+                                            placeholder="Ej: Ca Mama"
+                                            value={editPatientDiagnosis}
+                                            onChange={e => setEditPatientDiagnosis(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-[9px] text-gray-300 text-center leading-relaxed">Los datos se almacenan sin nombre ni DNI del paciente, en cumplimiento con la Ley 25.326.</p>
+                                <div className="flex gap-3">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => { setShowEditPatientModal(false); setEditingPatient(null); }} 
+                                        className="w-1/3 bg-gray-100 text-gray-500 py-4 rounded-xl text-xs font-black hover:bg-gray-200 transition-all uppercase tracking-widest"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        className="flex-1 bg-blue-600 text-white py-4 rounded-xl text-xs font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase tracking-widest"
+                                    >
+                                        Guardar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
                 {selP && (
                     <ClinicalEvolutionModal
                         key={selP.id || selP.hcNumber}
@@ -1737,6 +1892,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 />
                 {showCalculatorModal && <OncoCalculator onClose={() => setShowCalculatorModal(false)} />}
                 {showDrugsModal && <DrugReference onClose={() => setShowDrugsModal(false)} />}
+                {showStatsModal && <PracticeStatsModal patients={patients} onClose={() => setShowStatsModal(false)} />}
 
                 {/* ── MODAL CRITERIOS DE VALIDACIÓN CLÍNICA (MODO DEMO) ── */}
                 {showValidationModal && selP?.validationCriteria && (
