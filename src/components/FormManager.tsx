@@ -665,6 +665,220 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     setShowSummaryModal(true);
   };
 
+  // --- DIBUJADOR DEL PDF DE RESUMEN CLÍNICO (EXACTA LÓGICA Y COORDENADAS) ---
+  const drawClinicalSummaryPdf = async (
+    data: typeof summaryData,
+    summaryText: string
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const today = new Date().toLocaleDateString('es-AR');
+    const entityLabel = data.context === 'PAMI'
+        ? "PROGRAMA DE ATENCIÓN MÉDICA INTEGRAL — PAMI"
+        : data.context === 'PROFE'
+        ? "PROGRAMA FEDERAL DE SALUD — PROFE / INCLUIR SALUD"
+        : data.context === 'BANCO DE DROGAS'
+        ? "BANCO NACIONAL DE DROGAS ONCOLÓGICAS"
+        : `SOLICITUD ANTE: ${data.context}`;
+
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    
+    let page = pdfDoc.addPage();
+    const { width, height } = page.getSize();
+    
+    const marginX = 54; 
+    const marginTop = 36;
+    const marginBottom = 54; 
+    let y = height - marginTop;
+
+    let logoLoaded = false;
+    try {
+        const logoUrl = window.location.origin + '/img/header_logo.png';
+        const logoRes = await fetch(logoUrl);
+        if (logoRes.ok) {
+            const logoBytes = await logoRes.arrayBuffer();
+            const pngImage = await pdfDoc.embedPng(logoBytes);
+            const pngDims = pngImage.scale(0.38);
+            page.drawImage(pngImage, {
+                x: (width - pngDims.width) / 2,
+                y: y - pngDims.height,
+                width: pngDims.width,
+                height: pngDims.height,
+            });
+            y -= (pngDims.height + 24); 
+            logoLoaded = true;
+        }
+    } catch { /* logo load failed */ }
+
+    if (!logoLoaded) {
+        const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL";
+        const headerWidth = fontBold.widthOfTextAtSize(headerText, 13);
+        page.drawText(headerText, { x: (width - headerWidth) / 2, y, size: 13, font: fontBold });
+        y -= 24;
+    }
+
+    // Título del documento
+    const docTitle = "RESUMEN DE HISTORIA CLÍNICA";
+    const titleWidth = fontBold.widthOfTextAtSize(docTitle, 13);
+    page.drawText(docTitle, { x: (width - titleWidth) / 2, y, size: 13, font: fontBold });
+    y -= 16;
+
+    // Subtítulo
+    const subTitleWidth = fontBold.widthOfTextAtSize(entityLabel, 10.5);
+    page.drawText(entityLabel, { x: (width - subTitleWidth) / 2, y, size: 10.5, font: fontBold });
+    y -= 18;
+
+    // Lugar y Fecha
+    const dateText = `Córdoba Capital, ${today}`;
+    const dateWidth = font.widthOfTextAtSize(dateText, 9.5);
+    page.drawText(dateText, { x: width - marginX - dateWidth, y, size: 9.5, font });
+    y -= 10;
+
+    // Línea divisoria superior
+    page.drawLine({
+        start: { x: marginX, y },
+        end: { x: width - marginX, y },
+        thickness: 0.8,
+        color: rgb(0, 0, 0)
+    });
+    y -= 22;
+
+    // 1. IDENTIFICACIÓN
+    page.drawText("IDENTIFICACION", { x: marginX, y, size: 10.5, font: fontBold });
+    y -= 4;
+    page.drawLine({
+        start: { x: marginX, y },
+        end: { x: width - marginX, y },
+        thickness: 0.8,
+        color: rgb(0, 0, 0)
+    });
+    y -= 16;
+
+    const drawIdentLine = (label: string, value: string) => {
+        const labelText = `${label}: `;
+        page.drawText(labelText, { x: marginX, y, size: 9.5, font });
+        const lw = font.widthOfTextAtSize(labelText, 9.5);
+        page.drawText(value || '---', { x: marginX + lw, y, size: 9.5, font });
+        y -= 14;
+    };
+
+    drawIdentLine("Nombre", (data.nombre || patient?.name || '').toUpperCase());
+    drawIdentLine("Fecha de nacimiento", data.fnac || patient?.birthDate || '');
+    drawIdentLine("Edad", data.edad ? `${data.edad} años` : (patient?.age ? `${patient.age} años` : ''));
+    drawIdentLine("Sexo", data.sexo || patient?.gender || 'Masculino');
+    drawIdentLine("DNI", data.dni || patient?.dni || '');
+    drawIdentLine("Historia Clínica", data.hc || patient?.hcNumber || patient?.id || '');
+
+    y -= 10;
+
+    // Limpieza y partición del texto generado
+    const cleanSummary = summaryText
+        .replace(/(\r\n|\n|\r)/gm, "\n")
+        .replace(/\*\*/g, "")
+        .replace(/###/g, "")
+        .replace(/##/g, "")
+        .replace(/#/g, "");
+
+    const rawParagraphs = cleanSummary.split('\n');
+    const contentWidth = width - (marginX * 2);
+    const fontSizeBody = 9.5;
+    const fontSizeHeader = 10.5;
+    const lineHeight = 13.5;
+
+    for (const p of rawParagraphs) {
+        const trimmed = p.trim();
+        if (!trimmed) {
+            y -= 6;
+            continue;
+        }
+
+        const upper = trimmed.toUpperCase();
+        
+        // Omitir si la IA repite el bloque de IDENTIFICACIÓN
+        if (upper.includes("IDENTIFICACION") || upper.includes("IDENTIFICACIÓN")) {
+            continue;
+        }
+        if (upper.startsWith("NOMBRE:") || upper.startsWith("FECHA DE NACIMIENTO:") || upper.startsWith("EDAD:") || upper.startsWith("SEXO:") || upper.startsWith("DNI:") || upper.startsWith("HISTORIA CLÍNICA:") || upper.startsWith("HISTORIA CLINICA:")) {
+            continue;
+        }
+
+        const isSectionHeader = (
+            upper === 'RESUMEN CLINICO' || upper === 'RESUMEN CLÍNICO' ||
+            upper.startsWith('RESUMEN CLINICO') || upper.startsWith('RESUMEN CLÍNICO') ||
+            upper === 'JUSTIFICACION' || upper === 'JUSTIFICACIÓN' ||
+            upper.startsWith('JUSTIFICACION') || upper.startsWith('JUSTIFICACIÓN')
+        ) && trimmed.length < 40;
+
+        if (isSectionHeader) {
+            const headerText = upper.includes('JUSTIFICAC') ? 'JUSTIFICACION' : 'RESUMEN CLINICO';
+            y -= 14;
+            if (y < marginBottom + 60) {
+                page = pdfDoc.addPage();
+                y = height - marginTop - 20;
+            }
+            page.drawText(headerText, { x: marginX, y, size: fontSizeHeader, font: fontBold });
+            y -= 4;
+            page.drawLine({
+                start: { x: marginX, y },
+                end: { x: width - marginX, y },
+                thickness: 0.8,
+                color: rgb(0, 0, 0)
+            });
+            y -= 16;
+            continue;
+        }
+
+        const words = trimmed.split(' ');
+        let currentLine = '';
+
+        for (const word of words) {
+            const testLine = currentLine ? `${currentLine} ${word}` : word;
+            const testWidth = font.widthOfTextAtSize(testLine, fontSizeBody);
+
+            if (testWidth > contentWidth) {
+                if (y < marginBottom + 30) {
+                    page = pdfDoc.addPage();
+                    y = height - marginTop - 20;
+                }
+                page.drawText(currentLine, { x: marginX, y, size: fontSizeBody, font });
+                y -= lineHeight;
+                currentLine = word;
+            } else {
+                currentLine = testLine;
+            }
+        }
+
+        if (currentLine) {
+            if (y < marginBottom + 30) {
+                page = pdfDoc.addPage();
+                y = height - marginTop - 20;
+            }
+            page.drawText(currentLine, { x: marginX, y, size: fontSizeBody, font });
+            y -= (lineHeight + 3);
+        }
+    }
+
+    const footerY = 65;
+    if (y < footerY + 30) {
+        page = pdfDoc.addPage();
+    }
+    
+    const docName = doctorData.nombre ? `Dr/a. ${doctorData.nombre}` : 'Médico Tratante';
+    const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : '';
+    const docEsp = doctorData.especialidad || 'Oncología Clínica';
+
+    page.drawText(docName, { x: width - marginX - 220, y: footerY, size: 9.5, font: fontBold });
+    if (docMat) page.drawText(docMat, { x: width - marginX - 220, y: footerY - 12, size: 8.5, font });
+    page.drawText(docEsp, { x: width - marginX - 220, y: footerY - 24, size: 8.5, font });
+    page.drawText('Servicio de Oncología Clínica', { x: width - marginX - 220, y: footerY - 36, size: 8.5, font });
+    page.drawText('Hospital Oncológico Provincial - Córdoba', { x: width - marginX - 220, y: footerY - 48, size: 8, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
+
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const filename = `Resumen_Clinico_${data.context}_${data.nombre || patient?.name || 'Paciente'}.pdf`;
+    return { blob, filename };
+  };
+
   // --- GENERADOR DE RESUMEN CLÍNICO ---
   const generateClinicalSummary = async (
     data: typeof summaryData,
@@ -747,206 +961,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         const res = await callGemini({ parts });
         const summaryText = res.text || "No se pudo generar el texto.";
 
-        setStatus('Generando PDF...');
-
-        const pdfDoc = await PDFDocument.create();
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        
-        let page = pdfDoc.addPage();
-        const { width, height } = page.getSize();
-        
-        const marginX = 54; 
-        const marginTop = 36;
-        const marginBottom = 54; 
-        let y = height - marginTop;
-
-        let logoLoaded = false;
-        try {
-            const logoUrl = window.location.origin + '/img/header_logo.png';
-            const logoRes = await fetch(logoUrl);
-            if (logoRes.ok) {
-                const logoBytes = await logoRes.arrayBuffer();
-                const pngImage = await pdfDoc.embedPng(logoBytes);
-                const pngDims = pngImage.scale(0.38);
-                page.drawImage(pngImage, {
-                    x: (width - pngDims.width) / 2,
-                    y: y - pngDims.height,
-                    width: pngDims.width,
-                    height: pngDims.height,
-                });
-                y -= (pngDims.height + 24); 
-                logoLoaded = true;
-            }
-        } catch { /* logo load failed */ }
-
-        if (!logoLoaded) {
-            const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL";
-            const headerWidth = fontBold.widthOfTextAtSize(headerText, 13);
-            page.drawText(headerText, { x: (width - headerWidth) / 2, y, size: 13, font: fontBold });
-            y -= 24;
-        }
-
-        // Título del documento
-        const docTitle = "RESUMEN DE HISTORIA CLÍNICA";
-        const titleWidth = fontBold.widthOfTextAtSize(docTitle, 13);
-        page.drawText(docTitle, { x: (width - titleWidth) / 2, y, size: 13, font: fontBold });
-        y -= 16;
-
-        // Subtítulo
-        const subTitleWidth = fontBold.widthOfTextAtSize(entityLabel, 10.5);
-        page.drawText(entityLabel, { x: (width - subTitleWidth) / 2, y, size: 10.5, font: fontBold });
-        y -= 18;
-
-        // Lugar y Fecha
-        const dateText = `Córdoba Capital, ${today}`;
-        const dateWidth = font.widthOfTextAtSize(dateText, 9.5);
-        page.drawText(dateText, { x: width - marginX - dateWidth, y, size: 9.5, font });
-        y -= 10;
-
-        // Línea divisoria superior
-        page.drawLine({
-            start: { x: marginX, y },
-            end: { x: width - marginX, y },
-            thickness: 0.8,
-            color: rgb(0, 0, 0)
-        });
-        y -= 22;
-
-        // 1. IDENTIFICACIÓN
-        page.drawText("IDENTIFICACION", { x: marginX, y, size: 10.5, font: fontBold });
-        y -= 4;
-        page.drawLine({
-            start: { x: marginX, y },
-            end: { x: width - marginX, y },
-            thickness: 0.8,
-            color: rgb(0, 0, 0)
-        });
-        y -= 16;
-
-        const drawIdentLine = (label: string, value: string) => {
-            const labelText = `${label}: `;
-            page.drawText(labelText, { x: marginX, y, size: 9.5, font });
-            const lw = font.widthOfTextAtSize(labelText, 9.5);
-            page.drawText(value || '---', { x: marginX + lw, y, size: 9.5, font });
-            y -= 14;
-        };
-
-        drawIdentLine("Nombre", (data.nombre || patient?.name || '').toUpperCase());
-        drawIdentLine("Fecha de nacimiento", data.fnac || patient?.birthDate || '');
-        drawIdentLine("Edad", data.edad ? `${data.edad} años` : (patient?.age ? `${patient.age} años` : ''));
-        drawIdentLine("Sexo", data.sexo || patient?.gender || 'Masculino');
-        drawIdentLine("DNI", data.dni || patient?.dni || '');
-        drawIdentLine("Historia Clínica", data.hc || patient?.hcNumber || patient?.id || '');
-
-        y -= 10;
-
-        // Limpieza y partición del texto generado
-        const cleanSummary = summaryText
-            .replace(/(\r\n|\n|\r)/gm, "\n")
-            .replace(/\*\*/g, "")
-            .replace(/###/g, "")
-            .replace(/##/g, "")
-            .replace(/#/g, "");
-
-        const rawParagraphs = cleanSummary.split('\n');
-        const contentWidth = width - (marginX * 2);
-        const fontSizeBody = 9.5;
-        const fontSizeHeader = 10.5;
-        const lineHeight = 13.5;
-
-        for (const p of rawParagraphs) {
-            const trimmed = p.trim();
-            if (!trimmed) {
-                y -= 6;
-                continue;
-            }
-
-            const upper = trimmed.toUpperCase();
-            
-            // Omitir si la IA repite el bloque de IDENTIFICACIÓN
-            if (upper.includes("IDENTIFICACION") || upper.includes("IDENTIFICACIÓN")) {
-                continue;
-            }
-            if (upper.startsWith("NOMBRE:") || upper.startsWith("FECHA DE NACIMIENTO:") || upper.startsWith("EDAD:") || upper.startsWith("SEXO:") || upper.startsWith("DNI:") || upper.startsWith("HISTORIA CLÍNICA:") || upper.startsWith("HISTORIA CLINICA:")) {
-                continue;
-            }
-
-            const isSectionHeader = (
-                upper === 'RESUMEN CLINICO' || upper === 'RESUMEN CLÍNICO' ||
-                upper.startsWith('RESUMEN CLINICO') || upper.startsWith('RESUMEN CLÍNICO') ||
-                upper === 'JUSTIFICACION' || upper === 'JUSTIFICACIÓN' ||
-                upper.startsWith('JUSTIFICACION') || upper.startsWith('JUSTIFICACIÓN')
-            ) && trimmed.length < 40;
-
-            if (isSectionHeader) {
-                const headerText = upper.includes('JUSTIFICAC') ? 'JUSTIFICACION' : 'RESUMEN CLINICO';
-                y -= 14;
-                if (y < marginBottom + 60) {
-                    page = pdfDoc.addPage();
-                    y = height - marginTop - 20;
-                }
-                page.drawText(headerText, { x: marginX, y, size: fontSizeHeader, font: fontBold });
-                y -= 4;
-                page.drawLine({
-                    start: { x: marginX, y },
-                    end: { x: width - marginX, y },
-                    thickness: 0.8,
-                    color: rgb(0, 0, 0)
-                });
-                y -= 16;
-                continue;
-            }
-
-            const words = trimmed.split(' ');
-            let currentLine = '';
-
-            for (const word of words) {
-                const testLine = currentLine ? `${currentLine} ${word}` : word;
-                const testWidth = font.widthOfTextAtSize(testLine, fontSizeBody);
-
-                if (testWidth > contentWidth) {
-                    if (y < marginBottom + 30) {
-                        page = pdfDoc.addPage();
-                        y = height - marginTop - 20;
-                    }
-                    page.drawText(currentLine, { x: marginX, y, size: fontSizeBody, font });
-                    y -= lineHeight;
-                    currentLine = word;
-                } else {
-                    currentLine = testLine;
-                }
-            }
-
-            if (currentLine) {
-                if (y < marginBottom + 30) {
-                    page = pdfDoc.addPage();
-                    y = height - marginTop - 20;
-                }
-                page.drawText(currentLine, { x: marginX, y, size: fontSizeBody, font });
-                y -= (lineHeight + 3);
-            }
-        }
-
-        const footerY = 65;
-        if (y < footerY + 30) {
-            page = pdfDoc.addPage();
-        }
-        
-        const docName = doctorData.nombre ? `Dr/a. ${doctorData.nombre}` : 'Médico Tratante';
-        const docMat = doctorData.matricula ? `M.P. ${doctorData.matricula}` : '';
-        const docEsp = doctorData.especialidad || 'Oncología Clínica';
-
-        page.drawText(docName, { x: width - marginX - 220, y: footerY, size: 9.5, font: fontBold });
-        if (docMat) page.drawText(docMat, { x: width - marginX - 220, y: footerY - 12, size: 8.5, font });
-        page.drawText(docEsp, { x: width - marginX - 220, y: footerY - 24, size: 8.5, font });
-        page.drawText('Servicio de Oncología Clínica', { x: width - marginX - 220, y: footerY - 36, size: 8.5, font });
-        page.drawText('Hospital Oncológico Provincial - Córdoba', { x: width - marginX - 220, y: footerY - 48, size: 8, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
-
-        const pdfBytes = await pdfDoc.save();
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-        const filename = `Resumen_Clinico_${data.context}_${data.nombre || patient?.name || 'Paciente'}.pdf`;
+        setStatus('Preparando vista previa del Resumen Clínico...');
         setSummaryTextContent(summaryText);
+        const { blob, filename } = await drawClinicalSummaryPdf(data, summaryText);
         setActivePreview({
           formType: 'summary',
           title: `Resumen de Historia Clínica (${data.context})`,
@@ -1493,12 +1510,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `Admision_BancoDrogas_${finalPatientName.replace(/\s+/g, '_')}.pdf`; link.click();
-      setStatus('¡Listo!');
-      setLastRegenParams(prev => ({ ...prev, admision: { drugName: d.droga_1.trim(), accumulatedCorrections: '' } }));
-      setFormGenerated(prev => ({ ...prev, admision: true }));
-      setFormCorrections(prev => ({ ...prev, admision: '' }));
+      const filename = `Admision_BancoDrogas_${finalPatientName.replace(/\s+/g, '_')}.pdf`;
+      setActivePreview({
+        formType: 'admision',
+        title: 'ADMISIÓN BANCO DE DROGAS',
+        code: 'BANCO-ADM',
+        subtitle: `Paciente: ${finalPatientName}`,
+        blob,
+        filename,
+      });
       setShowBancoModal(null);
       setShowBancoMissingConfirm(false);
     } catch (e: any) { alert('Error al generar Admisión: ' + e.message); }
@@ -1619,12 +1639,15 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
 
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `Renovacion_BancoDrogas_${finalPatientName.replace(/\s+/g, '_')}.pdf`; link.click();
-      setStatus('¡Listo!');
-      setLastRegenParams(prev => ({ ...prev, renovacion: { drugName: d.droga_1.trim(), accumulatedCorrections: '' } }));
-      setFormGenerated(prev => ({ ...prev, renovacion: true }));
-      setFormCorrections(prev => ({ ...prev, renovacion: '' }));
+      const filename = `Renovacion_BancoDrogas_${finalPatientName.replace(/\s+/g, '_')}.pdf`;
+      setActivePreview({
+        formType: 'renovacion',
+        title: 'RENOVACIÓN BANCO DE DROGAS',
+        code: 'BANCO-REN',
+        subtitle: `Paciente: ${finalPatientName}`,
+        blob,
+        filename,
+      });
       setShowBancoModal(null);
       setShowBancoMissingConfirm(false);
     } catch (e: any) { alert('Error al generar Renovación: ' + e.message); }
@@ -1639,6 +1662,120 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       if (bancoFormData.context === 'admision') fillAdmisionPDFFromData(bancoFormData);
       else fillRenovacionPDFFromData(bancoFormData);
     }
+  };
+
+  // --- DIBUJADOR DEL PDF DE DINADIC (EXACTA LÓGICA Y COORDENADAS) ---
+  const drawDinadicPdf = async (
+    d: any,
+    esquema: typeof esquemaData
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const today = new Date().toLocaleDateString('es-AR');
+    let alturaCorregida = d.altura ? String(d.altura).replace(',', '.') : '';
+    if (alturaCorregida && parseFloat(alturaCorregida) < 3) alturaCorregida = String(Math.round(parseFloat(alturaCorregida) * 100));
+    const bsa = calculateBSA(d.peso, alturaCorregida);
+
+    const formUrl = window.location.origin + '/forms/nuevo_dinadic.pdf';
+    const pdfRes = await fetch(formUrl);
+    if (!pdfRes.ok) throw new Error('No se encontró el formulario DINADIC.');
+    const pdfDoc = await PDFDocument.load(await pdfRes.arrayBuffer());
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const pages = pdfDoc.getPages();
+    const p1 = pages[0];
+    const p2 = pages[1];
+    const pH = 841.9;
+    const FS = 8;
+    const maxW = 480;
+    const lineSpacing = 12;
+
+    // offset corregido a +3 (encima de la línea de puntos)
+    const draw = (page: any, x: number, top: number, text: string, fs = FS, f = font) => {
+      if (!text?.trim()) return;
+      const str = String(text).trim();
+      page.drawText(str, { x, y: pH - top + 3, size: fs, font: f });
+    };
+
+    const drawLines = (page: any, x: number, firstTop: number, text: string, maxLines: number, fs = FS) => {
+      if (!text?.trim()) return;
+      const charPerLine = Math.floor(maxW / (0.52 * fs));
+      const words = String(text).trim().split(' ');
+      const lines: string[] = [];
+      let cur = '';
+      for (const w of words) {
+        if (lines.length >= maxLines) break;
+        const test = cur ? cur + ' ' + w : w;
+        if (test.length > charPerLine && cur) { lines.push(cur); cur = w; }
+        else { cur = test; }
+      }
+      if (cur && lines.length < maxLines) lines.push(cur);
+      lines.forEach((line, i) => {
+        page.drawText(line, { x, y: pH - firstTop + 3 - i * lineSpacing, size: fs, font });
+      });
+    };
+
+    // ─── PÁGINA 1 ───
+    draw(p1, 153, 285.5, d.nombre_apellido);
+    draw(p1, 276, 297.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
+    draw(p1, 87,  309.5, d.edad);
+    draw(p1, 229, 309.5, d.sexo);
+    draw(p1, 115, 321.5, d.domicilio);
+    draw(p1, 110, 333.5, d.localidad);
+    draw(p1, 347, 333.5, d.provincia || 'Córdoba');
+    draw(p1, 103, 345.5, d.telefono);
+    draw(p1, 318, 345.5, d.celular);
+    draw(p1, 152, 357.5, d.email);
+    draw(p1, 121, 369.5, d.diagnostico);
+    draw(p1, 114, 381.5, d.n_ciclo || '1');
+    draw(p1, 91,  393.5, alturaCorregida ? `${alturaCorregida} cm` : '');
+    draw(p1, 191, 393.5, d.peso ? `${d.peso} kg` : '');
+    draw(p1, 362, 393.5, bsa ? `${bsa} m²` : '');
+
+    draw(p1, 253, 435.1, doctorData.nombre);
+    draw(p1, 124, 446.6, doctorData.especialidad || 'Oncología Clínica');
+    draw(p1, 100, 459.6, 'Oncología');
+    draw(p1, 226, 483.1, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+    draw(p1, 96,  495.1, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
+    draw(p1, 358, 495.6, doctorData.email);
+
+    draw(p1, 121, 539.1, d.diagnostico);
+    const [fdd, fdm, fda] = (cleanDate(d.fecha_diagnostico) || '').split('/');
+    draw(p1, 490, 539.1, fdd || '');
+    draw(p1, 512, 539.1, fdm || '');
+    draw(p1, 530, 539.1, fda || '');
+
+    drawLines(p1, 57, 589.0, d.resumen_hc, 6);
+    drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
+
+    // ─── PÁGINA 2 ───
+    drawLines(p2, 57, 89.6, d.estado_general, 3);  
+    drawLines(p2, 57, 220.1, d.tratamientos_previos, 3);
+    drawLines(p2, 57, 293.3, d.tipo_terapia_previa, 4);
+    draw(p2, 173, 449.2, esquema.numero_ciclos);
+    draw(p2, 178, 461.2, esquema.frecuencia_ciclos);
+    draw(p2, 176, 475.2, esquema.tiempo_tratamiento);
+    
+    const [fid, fim, fia] = (cleanDate(esquema.fecha_inicio) || esquema.fecha_inicio || '').split('/');
+    draw(p2, 277, 487.2, fid || '');
+    draw(p2, 340, 487.2, fim || '');
+    draw(p2, 385, 487.2, fia || '');
+
+    drawLines(p2, 57, 510.5, esquema.medicamentos, 3);
+    draw(p2, 230, 534.2, esquema.dosis_total_ciclo);
+    draw(p2, 344, 534.2, esquema.dias_admin);
+    draw(p2, 447, 534.2, esquema.intervalo);
+
+    const fundTrunc = d.fundamentacion
+      ? d.fundamentacion.length > 220
+        ? d.fundamentacion.substring(0, d.fundamentacion.lastIndexOf(' ', 220)) + '.'
+        : d.fundamentacion
+      : '';
+    drawLines(p2, 57, 570.6, fundTrunc, 3);
+
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const filename = `DINADIC_${d.nombre_apellido || patient.name}_${today.replace(/\//g, '-')}.pdf`;
+    return { blob, filename };
   };
 
   const generateDinadicPDF = async (esquema?: typeof esquemaData) => {
@@ -1705,125 +1842,19 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
       const si = clean.indexOf('{'), ei = clean.lastIndexOf('}');
       if (si !== -1 && ei !== -1) clean = clean.substring(si, ei + 1);
       const d = JSON.parse(clean);
-      let alturaCorregida = d.altura ? String(d.altura).replace(',', '.') : '';
-      if (alturaCorregida && parseFloat(alturaCorregida) < 3) alturaCorregida = String(Math.round(parseFloat(alturaCorregida) * 100));
-      const bsa = calculateBSA(d.peso, alturaCorregida);
 
-      setStatus('Generando PDF...');
-
-      const formUrl = window.location.origin + '/forms/nuevo_dinadic.pdf';
-      const pdfRes = await fetch(formUrl);
-      if (!pdfRes.ok) throw new Error('No se encontró el formulario DINADIC.');
-      const pdfDoc = await PDFDocument.load(await pdfRes.arrayBuffer());
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-      const pages = pdfDoc.getPages();
-      const p1 = pages[0];
-      const p2 = pages[1];
-      const pH = 841.9;
-      const FS = 8;
-      const maxW = 480;
-      const lineSpacing = 12;
-
-      // offset corregido a +3 (encima de la línea de puntos)
-      const draw = (page: any, x: number, top: number, text: string, fs = FS, f = font) => {
-        if (!text?.trim()) return;
-        const str = String(text).trim();
-        page.drawText(str, { x, y: pH - top + 3, size: fs, font: f });
-      };
-
-      const drawLines = (page: any, x: number, firstTop: number, text: string, maxLines: number, fs = FS) => {
-        if (!text?.trim()) return;
-        const charPerLine = Math.floor(maxW / (0.52 * fs));
-        const words = String(text).trim().split(' ');
-        const lines: string[] = [];
-        let cur = '';
-        for (const w of words) {
-          if (lines.length >= maxLines) break;
-          const test = cur ? cur + ' ' + w : w;
-          if (test.length > charPerLine && cur) { lines.push(cur); cur = w; }
-          else { cur = test; }
-        }
-        if (cur && lines.length < maxLines) lines.push(cur);
-        lines.forEach((line, i) => {
-          page.drawText(line, { x, y: pH - firstTop + 3 - i * lineSpacing, size: fs, font });
-        });
-      };
-
-      // ─── PÁGINA 1 ───
-      draw(p1, 153, 285.5, d.nombre_apellido);
-      draw(p1, 276, 297.5, `${d.tipo_documento || 'DNI'} ${d.numero_documento}`);
-      draw(p1, 87,  309.5, d.edad);
-      draw(p1, 229, 309.5, d.sexo);
-      draw(p1, 115, 321.5, d.domicilio);
-      draw(p1, 110, 333.5, d.localidad);
-      draw(p1, 347, 333.5, d.provincia || 'Córdoba');
-      draw(p1, 103, 345.5, d.telefono);
-      draw(p1, 318, 345.5, d.celular);
-      draw(p1, 152, 357.5, d.email);
-      draw(p1, 121, 369.5, d.diagnostico);
-      draw(p1, 114, 381.5, d.n_ciclo || '1');
-      draw(p1, 91,  393.5, alturaCorregida ? `${alturaCorregida} cm` : '');
-      draw(p1, 191, 393.5, d.peso ? `${d.peso} kg` : '');
-      draw(p1, 362, 393.5, bsa ? `${bsa} m²` : '');
-
-      draw(p1, 253, 435.1, doctorData.nombre);
-      draw(p1, 124, 446.6, doctorData.especialidad || 'Oncología Clínica');
-      draw(p1, 100, 459.6, 'Oncología');
-      draw(p1, 226, 483.1, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
-      draw(p1, 96,  495.1, doctorData.cel_area && doctorData.cel_num ? `${doctorData.cel_area} ${doctorData.cel_num}` : '');
-      draw(p1, 358, 495.6, doctorData.email);
-
-      draw(p1, 121, 539.1, d.diagnostico);
-      const [fdd, fdm, fda] = (cleanDate(d.fecha_diagnostico) || '').split('/');
-      draw(p1, 490, 539.1, fdd || '');
-      draw(p1, 512, 539.1, fdm || '');
-      draw(p1, 530, 539.1, fda || '');
-
-      drawLines(p1, 57, 589.0, d.resumen_hc, 6);
-      drawLines(p1, 57, 697.0, d.metodos_complementarios, 5);
-
-      // ─── PÁGINA 2 ───
-      drawLines(p2, 57, 89.6, d.estado_general, 3);  
-      drawLines(p2, 57, 220.1, d.tratamientos_previos, 3);
-      drawLines(p2, 57, 293.3, d.tipo_terapia_previa, 4);
-      draw(p2, 173, 449.2, esquema.numero_ciclos);
-      draw(p2, 178, 461.2, esquema.frecuencia_ciclos);
-      draw(p2, 176, 475.2, esquema.tiempo_tratamiento);
-      
-      const [fid, fim, fia] = (cleanDate(esquema.fecha_inicio) || esquema.fecha_inicio || '').split('/');
-      draw(p2, 277, 487.2, fid || '');
-      draw(p2, 340, 487.2, fim || '');
-      draw(p2, 385, 487.2, fia || '');
-
-      drawLines(p2, 57, 510.5, esquema.medicamentos, 3);
-      draw(p2, 230, 534.2, esquema.dosis_total_ciclo);
-      draw(p2, 344, 534.2, esquema.dias_admin);
-      draw(p2, 447, 534.2, esquema.intervalo);
-
-      const fundTrunc = d.fundamentacion
-        ? d.fundamentacion.length > 220
-          ? d.fundamentacion.substring(0, d.fundamentacion.lastIndexOf(' ', 220)) + '.'
-          : d.fundamentacion
-        : '';
-      drawLines(p2, 57, 570.6, fundTrunc, 3);
-
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `DINADIC_${d.nombre_apellido || patient.name}_${today.replace(/\//g, '-')}.pdf`;
-      link.click();
-      setStatus('¡Listo!');
-      const prevDinadicCorrections = lastRegenParams['dinadic']?.accumulatedCorrections ?? '';
-      const newDinadicAccumulated = pendingDinadicCorrection
-        ? (prevDinadicCorrections ? `${prevDinadicCorrections}\n- ${pendingDinadicCorrection}` : `- ${pendingDinadicCorrection}`)
-        : prevDinadicCorrections;
-      setLastRegenParams(prev => ({ ...prev, dinadic: { drugName: drugName, accumulatedCorrections: newDinadicAccumulated } }));
-      setPendingDinadicCorrection('');
-      setFormGenerated(prev => ({ ...prev, dinadic: true }));
-      setFormCorrections(prev => ({ ...prev, dinadic: '' }));
+      setStatus('Preparando vista previa del formulario DINADIC...');
+      setDinadicData(d);
+      const { blob, filename } = await drawDinadicPdf(d, esquema);
+      setActivePreview({
+        formType: 'dinadic',
+        title: 'DINADIC (ex-DADSE) - Solicitud de Medicamentos',
+        code: 'DINADIC',
+        subtitle: `Paciente: ${d.nombre_apellido || patient.name}`,
+        blob,
+        filename,
+      });
+      setShowEsquemaModal(false);
     } catch (e: any) {
       alert("Error al generar DINADIC: " + e.message);
     } finally {
@@ -1846,6 +1877,714 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
       el.focus();
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+  };
+
+  // --- MANEJADORES DE VISTA PREVIA INTERACTIVA Y DESCARGA DEFINITIVA ---
+  const handleConfirmPreviewDownload = () => {
+    if (!activePreview || !activePreview.blob) return;
+
+    // Descarga definitiva del PDF únicamente tras confirmación del médico
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(activePreview.blob);
+    link.download = activePreview.filename;
+    link.click();
+
+    // Actualización de estado según el formulario confirmado
+    if (activePreview.formType === 'pami') {
+      const drugDesc = [pamiFormData.droga_1, pamiFormData.droga_2].filter(Boolean).join(' + ') || pamiFormData.esquema_tratamiento_solicitado;
+      setLastRegenParams(prev => ({ ...prev, pami: { drugName: drugDesc, accumulatedCorrections: '' } }));
+      setFormGenerated(prev => ({ ...prev, pami: true }));
+      setFormCorrections(prev => ({ ...prev, pami: '' }));
+    } else if (activePreview.formType === 'admision') {
+      setLastRegenParams(prev => ({ ...prev, admision: { drugName: bancoFormData.droga_1.trim(), accumulatedCorrections: '' } }));
+      setFormGenerated(prev => ({ ...prev, admision: true }));
+      setFormCorrections(prev => ({ ...prev, admision: '' }));
+    } else if (activePreview.formType === 'renovacion') {
+      setLastRegenParams(prev => ({ ...prev, renovacion: { drugName: bancoFormData.droga_1.trim(), accumulatedCorrections: '' } }));
+      setFormGenerated(prev => ({ ...prev, renovacion: true }));
+      setFormCorrections(prev => ({ ...prev, renovacion: '' }));
+    } else if (activePreview.formType === 'dinadic') {
+      const prevDinadicCorrections = lastRegenParams['dinadic']?.accumulatedCorrections ?? '';
+      const newDinadicAccumulated = pendingDinadicCorrection
+        ? (prevDinadicCorrections ? `${prevDinadicCorrections}\n- ${pendingDinadicCorrection}` : `- ${pendingDinadicCorrection}`)
+        : prevDinadicCorrections;
+      setLastRegenParams(prev => ({ ...prev, dinadic: { drugName: pendingDinadicDrug, accumulatedCorrections: newDinadicAccumulated } }));
+      setPendingDinadicCorrection('');
+      setFormGenerated(prev => ({ ...prev, dinadic: true }));
+      setFormCorrections(prev => ({ ...prev, dinadic: '' }));
+    } else if (activePreview.formType === 'summary') {
+      setLastRegenParams(prev => ({ ...prev, summary: { drugName: summaryData.drugName, accumulatedCorrections: '' } }));
+      setFormGenerated(prev => ({ ...prev, summary: true }));
+      setFormCorrections(prev => ({ ...prev, summary: '' }));
+    }
+
+    setActivePreview(null);
+  };
+
+  const handleUpdateActivePreview = async () => {
+    if (!activePreview) return;
+    setIsPreviewUpdating(true);
+    try {
+      if (activePreview.formType === 'pami') {
+        await fillPamiPDFFromData(pamiFormData);
+      } else if (activePreview.formType === 'admision') {
+        await fillAdmisionPDFFromData(bancoFormData);
+      } else if (activePreview.formType === 'renovacion') {
+        await fillRenovacionPDFFromData(bancoFormData);
+      } else if (activePreview.formType === 'dinadic') {
+        const dToUse = dinadicData || {};
+        const { blob, filename } = await drawDinadicPdf(dToUse, esquemaData);
+        setActivePreview(prev => prev ? { ...prev, blob, filename } : null);
+      } else if (activePreview.formType === 'summary') {
+        const { blob, filename } = await drawClinicalSummaryPdf(summaryData, summaryTextContent);
+        setActivePreview(prev => prev ? { ...prev, blob, filename } : null);
+      }
+    } catch (err: any) {
+      alert('Error al actualizar la vista previa: ' + err.message);
+    } finally {
+      setIsPreviewUpdating(false);
+    }
+  };
+
+  const renderSummaryFieldsContent = () => (
+    <div className="space-y-4">
+      <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+        <h4 className="text-xs font-bold text-slate-800 uppercase mb-2">Datos de Identificación del Paciente</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase">Contexto / Entidad</label>
+            <input
+              type="text"
+              value={summaryData.context}
+              onChange={e => setSummaryData(prev => ({ ...prev, context: e.target.value }))}
+              className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase">Nombre y Apellido</label>
+            <input
+              type="text"
+              value={summaryData.nombre}
+              onChange={e => setSummaryData(prev => ({ ...prev, nombre: e.target.value }))}
+              className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase">DNI</label>
+            <input
+              type="text"
+              value={summaryData.dni}
+              onChange={e => setSummaryData(prev => ({ ...prev, dni: e.target.value }))}
+              className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase">Fecha Nacimiento</label>
+            <input
+              type="text"
+              value={summaryData.fnac}
+              onChange={e => setSummaryData(prev => ({ ...prev, fnac: e.target.value }))}
+              className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase">Edad</label>
+            <input
+              type="text"
+              value={summaryData.edad}
+              onChange={e => setSummaryData(prev => ({ ...prev, edad: e.target.value }))}
+              className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase">Historia Clínica</label>
+            <input
+              type="text"
+              value={summaryData.hc}
+              onChange={e => setSummaryData(prev => ({ ...prev, hc: e.target.value }))}
+              className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold text-slate-800 uppercase mb-1">
+          Cuerpo del Resumen Clínico y Justificación
+        </label>
+        <p className="text-[11px] text-slate-500 mb-2">
+          Edite o ajuste el texto generado. Haga clic en "Actualizar vista previa" para refrescar el PDF diagramado con membrete y firma.
+        </p>
+        <textarea
+          rows={15}
+          value={summaryTextContent}
+          onChange={e => setSummaryTextContent(e.target.value)}
+          className="w-full p-3 border border-slate-300 rounded-xl bg-white text-xs font-mono leading-relaxed focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-inner"
+        />
+      </div>
+    </div>
+  );
+
+  const renderDinadicFieldsContent = () => {
+    if (!dinadicData) return null;
+    return (
+      <div className="space-y-4">
+        <div className="bg-blue-50/70 p-3.5 rounded-xl border border-blue-100 space-y-2.5">
+          <h4 className="text-xs font-bold text-blue-900 uppercase">Esquema Terapéutico Solicitado</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+            <div className="sm:col-span-2">
+              <label className="block text-[10px] font-bold text-blue-800 uppercase">Medicamentos / Drogas</label>
+              <input
+                type="text"
+                value={esquemaData.medicamentos}
+                onChange={e => setEsquemaData(prev => ({ ...prev, medicamentos: e.target.value }))}
+                className="w-full p-2 border border-blue-200 rounded-lg bg-white font-bold text-blue-950"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-blue-800 uppercase">Dosis Total Ciclo</label>
+              <input
+                type="text"
+                value={esquemaData.dosis_total_ciclo}
+                onChange={e => setEsquemaData(prev => ({ ...prev, dosis_total_ciclo: e.target.value }))}
+                className="w-full p-2 border border-blue-200 rounded-lg bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-blue-800 uppercase">Días Administración</label>
+              <input
+                type="text"
+                value={esquemaData.dias_admin}
+                onChange={e => setEsquemaData(prev => ({ ...prev, dias_admin: e.target.value }))}
+                className="w-full p-2 border border-blue-200 rounded-lg bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-blue-800 uppercase">Intervalo entre Ciclos</label>
+              <input
+                type="text"
+                value={esquemaData.intervalo}
+                onChange={e => setEsquemaData(prev => ({ ...prev, intervalo: e.target.value }))}
+                className="w-full p-2 border border-blue-200 rounded-lg bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-blue-800 uppercase">Fecha Inicio</label>
+              <input
+                type="text"
+                value={esquemaData.fecha_inicio}
+                onChange={e => setEsquemaData(prev => ({ ...prev, fecha_inicio: e.target.value }))}
+                className="w-full p-2 border border-blue-200 rounded-lg bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-blue-800 uppercase">N° de Ciclos</label>
+              <input
+                type="text"
+                value={esquemaData.numero_ciclos}
+                onChange={e => setEsquemaData(prev => ({ ...prev, numero_ciclos: e.target.value }))}
+                className="w-full p-2 border border-blue-200 rounded-lg bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-blue-800 uppercase">Frecuencia Ciclos</label>
+              <input
+                type="text"
+                value={esquemaData.frecuencia_ciclos}
+                onChange={e => setEsquemaData(prev => ({ ...prev, frecuencia_ciclos: e.target.value }))}
+                className="w-full p-2 border border-blue-200 rounded-lg bg-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+          <h4 className="text-xs font-bold text-slate-800 uppercase">Datos Clínicos y Antropométricos</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+            <div className="sm:col-span-2">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase">Diagnóstico</label>
+              <input
+                type="text"
+                value={dinadicData.diagnostico || ''}
+                onChange={e => setDinadicData(prev => ({ ...prev, diagnostico: e.target.value }))}
+                className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase">Fecha Diagnóstico</label>
+              <input
+                type="text"
+                value={dinadicData.fecha_diagnostico || ''}
+                onChange={e => setDinadicData(prev => ({ ...prev, fecha_diagnostico: e.target.value }))}
+                className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase">Peso (kg)</label>
+              <input
+                type="text"
+                value={dinadicData.peso || ''}
+                onChange={e => setDinadicData(prev => ({ ...prev, peso: e.target.value }))}
+                className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase">Altura / Talla (cm)</label>
+              <input
+                type="text"
+                value={dinadicData.altura || ''}
+                onChange={e => setDinadicData(prev => ({ ...prev, altura: e.target.value }))}
+                className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase">N° Ciclo Actual</label>
+              <input
+                type="text"
+                value={dinadicData.n_ciclo || '1'}
+                onChange={e => setDinadicData(prev => ({ ...prev, n_ciclo: e.target.value }))}
+                className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+              Resumen Historia Clínica (Página 1)
+            </label>
+            <textarea
+              rows={4}
+              value={dinadicData.resumen_hc || ''}
+              onChange={e => setDinadicData(prev => ({ ...prev, resumen_hc: e.target.value }))}
+              className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-xs leading-relaxed"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+              Métodos Complementarios (Página 1)
+            </label>
+            <textarea
+              rows={3}
+              value={dinadicData.metodos_complementarios || ''}
+              onChange={e => setDinadicData(prev => ({ ...prev, metodos_complementarios: e.target.value }))}
+              className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-xs leading-relaxed"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+              Estado General y Comorbilidades (Página 2)
+            </label>
+            <textarea
+              rows={2}
+              value={dinadicData.estado_general || ''}
+              onChange={e => setDinadicData(prev => ({ ...prev, estado_general: e.target.value }))}
+              className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-xs leading-relaxed"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+              Tratamientos Oncológicos Previos (Página 2)
+            </label>
+            <textarea
+              rows={2}
+              value={dinadicData.tratamientos_previos || ''}
+              onChange={e => setDinadicData(prev => ({ ...prev, tratamientos_previos: e.target.value }))}
+              className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-xs leading-relaxed"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+              Fundamentación Médica (Página 2)
+            </label>
+            <textarea
+              rows={2}
+              value={dinadicData.fundamentacion || ''}
+              onChange={e => setDinadicData(prev => ({ ...prev, fundamentacion: e.target.value }))}
+              className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-xs leading-relaxed"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPamiFieldsContent = (prefix = 'preview-pami') => {
+    const renderField = (
+      label: string,
+      fieldKey: keyof typeof pamiFormData,
+      isMandatory: boolean,
+      placeholder = '',
+      isSpan2 = false
+    ) => {
+      const val = pamiFormData[fieldKey] || '';
+      const isMissing = !String(val).trim();
+      const inputId = `${prefix}-${fieldKey}`;
+
+      return (
+        <div className={isSpan2 ? 'sm:col-span-2' : ''}>
+          <div className="flex justify-between items-center mb-1">
+            <label htmlFor={inputId} className="block text-[11px] font-semibold text-gray-700">
+              {label} {isMandatory && <span className="text-blue-600 font-bold">*</span>}
+            </label>
+          </div>
+          <input
+            id={inputId}
+            type="text"
+            placeholder={placeholder}
+            value={val}
+            onChange={e => setPamiFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+            className={`w-full px-3 py-2 text-xs rounded-lg border transition-all outline-none ${
+              isMandatory && isMissing
+                ? 'border-slate-300 bg-slate-50/50 text-gray-900 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-100'
+                : 'border-gray-200 bg-white text-gray-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-100'
+            }`}
+          />
+        </div>
+      );
+    };
+
+    const justificationLength = (pamiFormData.informe_clinico_detallado || '').length;
+
+    return (
+      <div className="space-y-4">
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200/80 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            1. Datos del Paciente
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {renderField('Apellido y Nombre', 'paciente_nombre_real', true, 'Nombre completo')}
+            {renderField('Fecha de Nacimiento', 'paciente_fnac', true, 'DD/MM/AAAA')}
+            {renderField('Teléfono / Celular', 'paciente_celular', false, 'Ej: 3511234567')}
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200/80 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            2. Datos Clínicos & Antropometría
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5">
+            <div className="md:col-span-2">
+              {renderField('Diagnóstico (CIE-10)', 'diagnostico_cie10', true, 'Ej: C50.9 Cáncer de mama')}
+            </div>
+            {renderField('Peso (kg)', 'peso', true, 'Ej: 70')}
+            {renderField('Talla (cm)', 'talla', true, 'Ej: 165')}
+            {renderField('ECOG (0 - 4)', 'ecog', true, 'Ej: 0, 1')}
+          </div>
+          <div className="pt-2 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+            <span className="font-semibold text-gray-700">
+              Superficie Corporal: {liveBSA ? `${liveBSA} m²` : 'Pendiente de peso y talla'}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200/80 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            3. Tratamiento & Cronología
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {renderField('Línea de Tratamiento', 'linea_tratamiento', false, 'Ej: 1ra línea / Adyuvancia')}
+            {renderField('N° Ciclos Planeados', 'ciclos_planeados', false, 'Ej: 6')}
+            {renderField('Frecuencia (Días)', 'frecuencia_dias', false, 'Ej: 21')}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-gray-100">
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Motivo de la Solicitud
+              </label>
+              <div className="grid grid-cols-2 gap-1">
+                {['Inicio', 'Renovación', 'Cambio de Toxicidad', 'Cambio por Progresión'].map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setPamiFormData(prev => ({ ...prev, motivo_solicitud: opt }))}
+                    className={`px-2 py-1 text-xs font-medium rounded-lg border text-left transition-all ${
+                      pamiFormData.motivo_solicitud === opt
+                        ? 'bg-blue-50 text-blue-700 border-blue-300 font-semibold'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Tipo de Tratamiento
+              </label>
+              <div className="grid grid-cols-3 gap-1">
+                {['Adyuvante', 'Neoadyuvante', 'Avanzado'].map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setPamiFormData(prev => ({ ...prev, tipo_tratamiento: opt }))}
+                    className={`px-2 py-1 text-xs font-medium rounded-lg border text-center transition-all ${
+                      pamiFormData.tipo_tratamiento === opt
+                        ? 'bg-blue-50 text-blue-700 border-blue-300 font-semibold'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200/80 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            4. Estadificación & Antecedentes
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {renderField('Estadio Inicial', 'estadio_inicial', false, 'Ej: Estadio IV')}
+            {renderField('Fecha Diagnóstico Inicial', 'fecha_diagnostico_inicial', false, 'DD/MM/AAAA')}
+            {renderField('Estadio Actual', 'estadio_actual', false, 'Ej: Progresión / Estable')}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-gray-100">
+            {renderField('Histopatológico / IHQ', 'histopatologico', false, 'Resumen patológico e IHQ')}
+            {renderField('Laboratorio Relevante', 'laboratorio_formateado', false, 'Hb 12g/dl, marcadores')}
+            {renderField('Antecedentes Quirúrgicos', 'antecedentes_qx', false, 'Cirugías y fechas')}
+            {renderField('Antecedentes Radioterapia', 'antecedentes_radio', false, 'RT, dosis y fechas')}
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200/80 shadow-2xs space-y-2">
+          <div className="flex justify-between items-center pb-1.5 border-b border-gray-100">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+              5. Informe Clínico & Justificación Médica <span className="text-blue-600">*</span>
+            </h4>
+            <span className="text-[11px] text-gray-500 font-medium">
+              {justificationLength} / ~1400 caracteres
+            </span>
+          </div>
+          <textarea
+            id={`${prefix}-informe_clinico_detallado`}
+            rows={5}
+            value={pamiFormData.informe_clinico_detallado}
+            onChange={e => setPamiFormData(prev => ({ ...prev, informe_clinico_detallado: e.target.value }))}
+            className="w-full p-2.5 text-xs rounded-xl border border-gray-200 bg-white text-gray-800 outline-none transition-all focus:border-blue-500 focus:ring-1 focus:ring-blue-100 leading-relaxed"
+          />
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200/80 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100 flex items-center gap-1.5">
+            <Pill size={14} className="text-blue-600"/>
+            <span>6. Drogas Oncológicas Solicitadas</span>
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+            {renderField('Droga #1 (Principal)', 'droga_1', true, 'Ej: Leuprolide')}
+            {renderField('Droga #2', 'droga_2', false, 'Ej: Darolutamida')}
+            {renderField('Droga #3', 'droga_3', false, 'Opcional')}
+            {renderField('Droga #4', 'droga_4', false, 'Opcional')}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderBancoFieldsContent = (isAdmision: boolean, prefix = 'preview-banco') => {
+    const renderBField = (
+      label: string,
+      fieldKey: keyof typeof bancoFormData,
+      isMandatory: boolean,
+      placeholder = '',
+      isSpan2 = false
+    ) => {
+      const val = String(bancoFormData[fieldKey] || '');
+      const isMissing = !val.trim();
+      const inputId = `${prefix}-${fieldKey}`;
+
+      return (
+        <div className={isSpan2 ? 'sm:col-span-2' : ''}>
+          <label htmlFor={inputId} className="block text-[11px] font-semibold text-gray-700 mb-1">
+            {label} {isMandatory && <span className="text-green-700 font-bold">*</span>}
+          </label>
+          <input
+            id={inputId}
+            type="text"
+            placeholder={placeholder}
+            value={val}
+            onChange={e => setBancoFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+            className={`w-full px-2.5 py-1.5 text-xs rounded-lg border transition-all outline-none ${
+              isMandatory && isMissing
+                ? 'border-slate-300 bg-slate-50 text-gray-900 focus:border-green-600 focus:bg-white'
+                : 'border-gray-200 bg-white text-gray-800 focus:border-green-600'
+            }`}
+          />
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-4">
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            1. Filiación del Paciente
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {renderBField('Apellido y Nombre', 'nombre_apellido', true, '', true)}
+            {renderBField('DNI', 'dni', true)}
+            {renderBField('Fecha de Nacimiento', 'fnac', true, 'DD/MM/AAAA')}
+            {renderBField('Edad', 'edad', true)}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">Sexo *</label>
+              <div className="flex gap-2">
+                {['M', 'F'].map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setBancoFormData(prev => ({ ...prev, sexo: s as any }))}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                      bancoFormData.sexo === s ? 'bg-green-700 text-white border-green-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {s === 'M' ? 'Masculino' : 'Femenino'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {renderBField('Domicilio', 'domicilio', true)}
+            {renderBField('Localidad', 'localidad', true)}
+            {renderBField('Teléfono', 'telefono', true)}
+          </div>
+        </div>
+
+        {!isAdmision && (
+          <div className="bg-green-50/70 p-3.5 rounded-xl border border-green-200 space-y-2.5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-green-900 pb-1.5 border-b border-green-200">
+              Evaluación para Renovación
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Motivo Renovación</label>
+                <div className="flex gap-2">
+                  {[
+                    { id: 'continua', label: 'Continúa' },
+                    { id: 'progresion', label: 'Progresión' }
+                  ].map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setBancoFormData(prev => ({ ...prev, motivo_renovacion: m.id as any }))}
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border ${
+                        bancoFormData.motivo_renovacion === m.id ? 'bg-green-700 text-white border-green-700' : 'bg-white border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {renderBField('Ciclos Realizados', 'ciclos_realizados', true, 'Ej: 3')}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Respuesta al Tratamiento</label>
+                <div className="flex gap-1.5">
+                  {[
+                    { id: 'completa', label: 'RC' },
+                    { id: 'parcial', label: 'RP' },
+                    { id: 'estable', label: 'EE' },
+                    { id: 'progresion', label: 'PROG' }
+                  ].map(r => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setBancoFormData(prev => ({ ...prev, respuesta: r.id as any }))}
+                      className={`flex-1 py-1 text-xs font-semibold rounded border ${
+                        bancoFormData.respuesta === r.id ? 'bg-green-700 text-white border-green-700' : 'bg-white border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {bancoFormData.motivo_renovacion === 'progresion' && renderBField('Sitio de Progresión', 'sitio_progresion', true, 'Especifique el sitio anatómico de progresión', true)}
+          </div>
+        )}
+
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            2. Diagnóstico & Estadificación
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {renderBField('Diagnóstico Primario', 'diagnostico', true, '', true)}
+            {renderBField('CIE-10', 'cie10', true)}
+            {renderBField('Fecha Diagnóstico', 'fecha_diagnostico', true, 'DD/MM/AAAA')}
+            {renderBField('TNM - T', 'tnm_t', false, 'T')}
+            {renderBField('TNM - N', 'tnm_n', false, 'N')}
+            {renderBField('TNM - M', 'tnm_m', false, 'M')}
+            {renderBField('Estadío', 'estadio', true, 'Ej: IV')}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-gray-100">
+            {renderBField('RE', 'receptor_RE', false, '+ / -')}
+            {renderBField('RP', 'receptor_RP', false, '+ / -')}
+            {renderBField('HER2', 'receptor_HER2', false, '+ / -')}
+            {renderBField('KRAS', 'receptor_KRAS', false, '+ / -')}
+            {renderBField('EGFR', 'receptor_EGER', false, '+ / -')}
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            3. Antropometría
+          </h4>
+          <div className="grid grid-cols-3 gap-2.5">
+            {renderBField('Peso (kg)', 'peso', true)}
+            {renderBField('Talla (cm)', 'talla', true)}
+            {renderBField('ECOG (0-4)', 'ecog', true)}
+          </div>
+          <div className="text-xs text-gray-700 font-semibold">
+            Superficie Corporal: {bancoLiveBSA ? `${bancoLiveBSA} m²` : 'Pendiente de peso y talla'}
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            4. Tratamiento a Realizar & Medicación
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">Tipo de Tratamiento *</label>
+              <div className="flex gap-1.5">
+                {['adyuvante', 'neoadyuvante', 'avanzado'].map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setBancoFormData(prev => ({ ...prev, tipo_tratamiento: t as any }))}
+                    className={`flex-1 py-1 text-[11px] font-bold rounded border capitalize ${
+                      bancoFormData.tipo_tratamiento === t ? 'bg-green-700 text-white border-green-700' : 'bg-white border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {renderBField('Línea', 'linea', true, '1, 2 o 3')}
+            {renderBField('Intervalo Ciclo (Días)', 'intervalo_ciclo', true, 'Ej: 21')}
+            {renderBField('Ciclos Programados', 'ciclos_programados', true, 'Ej: 6')}
+          </div>
+
+          <div className="pt-2 border-t border-gray-100 space-y-2">
+            <span className="text-[11px] font-bold text-gray-700 uppercase">Tabla de Medicamentos (Filas 1 a 3)</span>
+            {[1, 2, 3].map(rowNum => (
+              <div key={rowNum} className="grid grid-cols-1 sm:grid-cols-4 gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                {renderBField(`Droga #${rowNum}`, `droga_${rowNum}` as any, rowNum === 1, 'Ej: Leuprolide')}
+                {renderBField(`Dosis #${rowNum}`, `dosis_${rowNum}` as any, rowNum === 1, 'Ej: 3.75 mg')}
+                {renderBField(`Días #${rowNum}`, `dias_${rowNum}` as any, rowNum === 1, 'Ej: Día 1')}
+                {renderBField(`Total/Día #${rowNum}`, `total_dia_${rowNum}` as any, rowNum === 1, 'Ej: 1 amp')}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -3700,6 +4439,28 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
             doctorData
           }}
         />
+      )}
+
+      {/* MODAL DE VISTA PREVIA INTERACTIVA Y REVISIÓN PREVIA A LA DESCARGA DEFINITIVA */}
+      {activePreview && (
+        <FormPreviewModal
+          isOpen={activePreview !== null}
+          onClose={() => setActivePreview(null)}
+          title={activePreview.title}
+          code={activePreview.code}
+          subtitle={activePreview.subtitle}
+          pdfBlob={activePreview.blob}
+          filename={activePreview.filename}
+          onConfirmDownload={handleConfirmPreviewDownload}
+          onUpdatePreview={handleUpdateActivePreview}
+          isUpdating={isPreviewUpdating}
+        >
+          {activePreview.formType === 'pami' && renderPamiFieldsContent('preview-pami')}
+          {(activePreview.formType === 'admision' || activePreview.formType === 'renovacion') &&
+            renderBancoFieldsContent(activePreview.formType === 'admision', 'preview-banco')}
+          {activePreview.formType === 'dinadic' && renderDinadicFieldsContent()}
+          {activePreview.formType === 'summary' && renderSummaryFieldsContent()}
+        </FormPreviewModal>
       )}
 
     </div>

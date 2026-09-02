@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { 
   X, BarChart3, Users, Activity, Calendar, ShieldCheck, 
-  TrendingUp, Layers, Stethoscope, ChevronRight, Filter,
-  PieChart as PieIcon, CheckCircle2, FileText, AlertCircle
+  TrendingUp, Layers, Stethoscope,
+  PieChart as PieIcon, CheckCircle2
 } from 'lucide-react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, 
@@ -31,7 +31,7 @@ interface Patient {
   lastUpdated?: number;
   createdAt?: number;
   timeline?: ClinicalEvent[];
-  imagingStudies?: any[];
+  imagingStudies?: Array<{ treatment?: string | null; [key: string]: unknown }>;
 }
 
 interface Props {
@@ -66,7 +66,7 @@ const normalizeStr = (text?: string): string => {
 
 const parseDateToMs = (dateStr?: string): number | null => {
   if (!dateStr) return null;
-  const parts = dateStr.trim().split(/[\/\-.]/);
+  const parts = dateStr.trim().split(/[/.-]/);
   if (parts.length === 3) {
     if (parts[0].length === 4) {
       const y = parseInt(parts[0], 10);
@@ -859,7 +859,7 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
                         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#475569', fontWeight: 600 }} axisLine={false} tickLine={false} width={85} />
                         <Tooltip 
-                          formatter={(val: any) => [`${val} pacientes`, 'Frecuencia']}
+                          formatter={(val: unknown) => [`${val} pacientes`, 'Frecuencia']}
                           contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
                         />
                         <Bar dataKey="count" radius={[0, 6, 6, 0]}>
@@ -921,7 +921,7 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
                         <XAxis dataKey="name" tick={{ fontSize: 9.5, fill: '#475569', fontWeight: 600 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} />
                         <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
                         <Tooltip 
-                          formatter={(val: any) => [`${val} pacientes`, 'Pacientes']}
+                          formatter={(val: unknown) => [`${val} pacientes`, 'Pacientes']}
                           contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
                         />
                         <Bar dataKey="count" radius={[6, 6, 0, 0]}>
