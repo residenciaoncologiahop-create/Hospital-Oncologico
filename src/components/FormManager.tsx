@@ -1926,7 +1926,7 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
           rows={20}
           value={summaryTextContent}
           onChange={e => setSummaryTextContent(e.target.value)}
-          className="w-full p-3 border border-slate-300 rounded-xl bg-white text-xs font-mono leading-relaxed focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-inner"
+          className="w-full p-3.5 border border-slate-300 rounded-xl bg-white text-sm font-sans text-slate-800 leading-relaxed focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-inner"
           placeholder="Texto del Resumen de Historia Clínica..."
         />
       </div>
