@@ -1026,6 +1026,8 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
                         <Tooltip 
                           formatter={(val: unknown) => [`${val} pacientes`, 'Frecuencia']}
                           contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
+                          itemStyle={{ color: '#f1f5f9' }}
+                          labelStyle={{ color: '#ffffff', fontWeight: 600 }}
                         />
                         <Bar dataKey="count" radius={[0, 6, 6, 0]}>
                           {tumorLocationData.slice(0, 6).map((entry, index) => (
@@ -1088,6 +1090,8 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
                         <Tooltip 
                           formatter={(val: unknown) => [`${val} pacientes`, 'Pacientes']}
                           contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
+                          itemStyle={{ color: '#f1f5f9' }}
+                          labelStyle={{ color: '#ffffff', fontWeight: 600 }}
                         />
                         <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                           {stageData.map((entry, index) => {
