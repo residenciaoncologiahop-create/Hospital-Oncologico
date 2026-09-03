@@ -51,14 +51,24 @@ export const FormPreviewModal: React.FC<FormPreviewModalProps> = ({
   const hasEditPanel = Boolean(children);
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-hidden">
-      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-7xl w-full h-[95vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+    <div
+      className={`fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center z-50 overflow-hidden transition-all ${
+        isMaximizedPreview ? 'p-0' : 'p-2 sm:p-4'
+      }`}
+    >
+      <div
+        className={`bg-white flex flex-col shadow-2xl overflow-hidden border border-slate-200 transition-all ${
+          isMaximizedPreview
+            ? 'w-screen h-screen max-w-none rounded-none'
+            : 'max-w-7xl w-full h-[95vh] rounded-2xl sm:rounded-3xl'
+        }`}
+      >
         
         {/* Header Modal */}
-        <div className="px-5 py-3.5 border-b border-slate-200 bg-white flex items-center justify-between shrink-0 gap-3">
+        <div className="px-5 py-3 border-b border-slate-200 bg-white flex items-center justify-between shrink-0 gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2.5 bg-blue-50 text-blue-700 rounded-2xl border border-blue-100 shrink-0">
-              <FileText size={20} />
+            <div className="p-2 bg-blue-50 text-blue-700 rounded-2xl border border-blue-100 shrink-0">
+              <FileText size={18} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -72,18 +82,20 @@ export const FormPreviewModal: React.FC<FormPreviewModalProps> = ({
                 </h3>
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
                   <CheckCircle2 size={12} className="text-emerald-600" />
-                  <span>Vista Previa Activa</span>
+                  <span>{isMaximizedPreview ? 'Visor Maximizado' : 'Vista Previa Activa'}</span>
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium truncate mt-0.5">
-                {subtitle}
+                {isMaximizedPreview
+                  ? 'Modo maximizado: use los controles integrados del visor para zoom y navegación.'
+                  : subtitle}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Selector de pestañas para pantallas móviles / tablets */}
-            {hasEditPanel && (
+            {/* Selector de pestañas para pantallas móviles / tablets (solo si no está maximizado) */}
+            {hasEditPanel && !isMaximizedPreview && (
               <div className="flex lg:hidden bg-slate-100 p-1 rounded-xl border border-slate-200">
                 <button
                   type="button"
@@ -112,16 +124,20 @@ export const FormPreviewModal: React.FC<FormPreviewModalProps> = ({
               </div>
             )}
 
-            {/* Alternar pantalla completa de vista previa en escritorio */}
+            {/* Alternar maximizado de vista previa */}
             {hasEditPanel && (
               <button
                 type="button"
                 onClick={() => setIsMaximizedPreview(!isMaximizedPreview)}
-                title={isMaximizedPreview ? 'Ver panel de edición' : 'Maximizar vista previa del PDF'}
-                className="hidden lg:flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 font-semibold transition-all"
+                title={isMaximizedPreview ? 'Restaurar tamaño normal y mostrar editor' : 'Maximizar PDF ocupando toda la ventana'}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border font-bold transition-all ${
+                  isMaximizedPreview
+                    ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 shadow-sm'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                }`}
               >
                 {isMaximizedPreview ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                <span>{isMaximizedPreview ? 'Ver Campos' : 'Maximizar PDF'}</span>
+                <span>{isMaximizedPreview ? 'Restaurar tamaño' : 'Maximizar PDF'}</span>
               </button>
             )}
 
@@ -139,32 +155,32 @@ export const FormPreviewModal: React.FC<FormPreviewModalProps> = ({
         {/* Cuerpo Principal del Modal */}
         <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12 bg-slate-50 min-h-0">
           
-          {/* Panel Izquierdo: Visor de PDF */}
+          {/* Panel: Visor de PDF */}
           <div
-            className={`h-full flex flex-col bg-slate-100/80 p-3 sm:p-4 overflow-hidden border-r border-slate-200 relative ${
-              hasEditPanel
-                ? isMaximizedPreview
-                  ? 'lg:col-span-12'
-                  : 'lg:col-span-7'
-                : 'lg:col-span-12'
-            } ${hasEditPanel && activeTab !== 'preview' ? 'hidden lg:flex' : 'flex'}`}
+            className={`h-full flex flex-col bg-slate-100 overflow-hidden relative transition-all ${
+              isMaximizedPreview
+                ? 'p-1.5 sm:p-2 col-span-12'
+                : 'p-3 sm:p-4 lg:col-span-7 col-span-12 border-r border-slate-200'
+            } ${hasEditPanel && activeTab !== 'preview' && !isMaximizedPreview ? 'hidden lg:flex' : 'flex'}`}
           >
             {/* Barra informativa superior del visor */}
-            <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs text-[11px] text-slate-600 shrink-0">
+            <div className="flex items-center justify-between px-2.5 py-1 mb-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs text-[11px] text-slate-600 shrink-0">
               <span className="font-mono text-slate-700 truncate font-semibold">
                 📄 {filename}
               </span>
               <span className="text-[10px] text-slate-400 hidden sm:inline">
-                Use los controles del visor para hacer zoom y navegar páginas
+                {isMaximizedPreview
+                  ? 'Modo maximizado — Controles de zoom y páginas activos'
+                  : 'Use los controles del visor para hacer zoom y navegar páginas'}
               </span>
             </div>
 
             {/* Contenedor del Iframe con el PDF */}
-            <div className="flex-1 w-full h-full relative rounded-2xl overflow-hidden border border-slate-300 bg-white shadow-sm">
+            <div className="flex-1 w-full h-full relative rounded-xl overflow-hidden border border-slate-300 bg-white shadow-sm">
               {blobUrl ? (
                 <iframe
                   src={blobUrl}
-                  className="w-full h-full border-0 rounded-2xl"
+                  className="w-full h-full border-0 rounded-xl"
                   title={`Vista previa de ${title}`}
                 />
               ) : (
@@ -186,12 +202,12 @@ export const FormPreviewModal: React.FC<FormPreviewModalProps> = ({
             </div>
           </div>
 
-          {/* Panel Derecho: Edición de Campos */}
-          {hasEditPanel && (
+          {/* Panel Derecho: Edición de Campos (Oculto cuando está maximizado) */}
+          {hasEditPanel && !isMaximizedPreview && (
             <div
-              className={`h-full flex flex-col bg-white overflow-hidden ${
-                isMaximizedPreview ? 'hidden' : 'lg:col-span-5'
-              } ${activeTab !== 'edit' ? 'hidden lg:flex' : 'flex'}`}
+              className={`h-full flex flex-col bg-white overflow-hidden lg:col-span-5 ${
+                activeTab !== 'edit' ? 'hidden lg:flex' : 'flex'
+              }`}
             >
               {/* Header del panel de edición */}
               <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
