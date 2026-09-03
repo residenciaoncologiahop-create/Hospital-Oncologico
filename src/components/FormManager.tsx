@@ -665,25 +665,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     setShowSummaryModal(true);
   };
 
-  // --- DIBUJADOR DEL PDF DE RESUMEN CLÍNICO (FORMATO Y LÓGICA ORIGINAL) ---
+  // --- DIBUJADOR DEL PDF DE RESUMEN CLÍNICO (FORMATO Y LÓGICA DE 854001a) ---
   const drawClinicalSummaryPdf = async (
     data: typeof summaryData,
     summaryText: string
   ): Promise<{ blob: Blob; filename: string }> => {
     const today = new Date().toLocaleDateString('es-AR');
-    const entityLabel = data.context === 'ADMISIÓN' || data.context === 'BANCO DE DROGAS'
-        ? "ADMISIÓN BANCO DE DROGAS"
-        : data.context === 'RENOVACIÓN'
-        ? "RENOVACIÓN BANCO DE DROGAS"
-        : data.context === 'SOLICITUD'
+    const entityLabel = data.context === 'SOLICITUD'
         ? "DINADIC - Dir. de Asistencia Directa por Situaciones Especiales"
-        : data.context === 'PAMI'
-        ? "PROGRAMA DE ATENCIÓN MÉDICA INTEGRAL — PAMI"
-        : data.context === 'PROFE'
-        ? "PROGRAMA FEDERAL DE SALUD — PROFE / INCLUIR SALUD"
-        : data.context
-        ? `${data.context} - BANCO DE DROGAS`
-        : "ADMISIÓN BANCO DE DROGAS";
+        : data.context === 'ADMISIÓN' || data.context === 'BANCO DE DROGAS'
+        ? "ADMISIÓN BANCO DE DROGAS"
+        : `${data.context} - BANCO DE DROGAS`;
 
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -692,9 +684,9 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     let page = pdfDoc.addPage();
     const { width, height } = page.getSize();
     
-    const marginX = 50; 
-    const marginTop = 35;
-    const marginBottom = 65; 
+    const marginX = 54; 
+    const marginTop = 36;
+    const marginBottom = 54; 
     let y = height - marginTop;
 
     let logoLoaded = false;
@@ -704,60 +696,80 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         if (logoRes.ok) {
             const logoBytes = await logoRes.arrayBuffer();
             const pngImage = await pdfDoc.embedPng(logoBytes);
-            const pngDims = pngImage.scale(0.35);
+            const pngDims = pngImage.scale(0.38);
             page.drawImage(pngImage, {
                 x: (width - pngDims.width) / 2,
                 y: y - pngDims.height,
                 width: pngDims.width,
                 height: pngDims.height,
             });
-            y -= (pngDims.height + 15); 
+            y -= (pngDims.height + 24); 
             logoLoaded = true;
         }
-    } catch { /* logo load failed, use text fallback */ }
+    } catch { /* logo load failed */ }
 
     if (!logoLoaded) {
-        const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL - CÓRDOBA";
+        const headerText = "HOSPITAL ONCOLÓGICO PROVINCIAL";
         const headerWidth = fontBold.widthOfTextAtSize(headerText, 13);
         page.drawText(headerText, { x: (width - headerWidth) / 2, y, size: 13, font: fontBold });
-        y -= 20;
+        y -= 24;
     }
-
-    // Línea divisoria bajo el encabezado institucional
-    page.drawLine({
-        start: { x: marginX, y },
-        end: { x: width - marginX, y },
-        thickness: 1.2,
-        color: rgb(0.15, 0.25, 0.45)
-    });
-    y -= 22;
 
     // Título del documento
     const docTitle = "RESUMEN DE HISTORIA CLÍNICA";
-    const titleWidth = fontBold.widthOfTextAtSize(docTitle, 13.5);
-    page.drawText(docTitle, { x: (width - titleWidth) / 2, y, size: 13.5, font: fontBold });
+    const titleWidth = fontBold.widthOfTextAtSize(docTitle, 13);
+    page.drawText(docTitle, { x: (width - titleWidth) / 2, y, size: 13, font: fontBold });
     y -= 16;
 
-    // Subtítulo institucional
-    const subTitleWidth = fontBold.widthOfTextAtSize(entityLabel, 10);
-    page.drawText(entityLabel, { x: (width - subTitleWidth) / 2, y, size: 10, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+    // Subtítulo
+    const subTitleWidth = fontBold.widthOfTextAtSize(entityLabel, 10.5);
+    page.drawText(entityLabel, { x: (width - subTitleWidth) / 2, y, size: 10.5, font: fontBold });
     y -= 18;
 
     // Lugar y Fecha
     const dateText = `Córdoba Capital, ${today}`;
-    const dateWidth = font.widthOfTextAtSize(dateText, 9);
-    page.drawText(dateText, { x: width - marginX - dateWidth, y, size: 9, font });
-    y -= 14;
+    const dateWidth = font.widthOfTextAtSize(dateText, 9.5);
+    page.drawText(dateText, { x: width - marginX - dateWidth, y, size: 9.5, font });
+    y -= 10;
 
-    // Línea divisoria bajo título y fecha
+    // Línea divisoria superior
     page.drawLine({
         start: { x: marginX, y },
         end: { x: width - marginX, y },
-        thickness: 0.6,
-        color: rgb(0.65, 0.65, 0.65)
+        thickness: 0.8,
+        color: rgb(0, 0, 0)
     });
     y -= 22;
 
+    // 1. IDENTIFICACIÓN
+    page.drawText("IDENTIFICACION", { x: marginX, y, size: 10.5, font: fontBold });
+    y -= 4;
+    page.drawLine({
+        start: { x: marginX, y },
+        end: { x: width - marginX, y },
+        thickness: 0.8,
+        color: rgb(0, 0, 0)
+    });
+    y -= 16;
+
+    const drawIdentLine = (label: string, value: string) => {
+        const labelText = `${label}: `;
+        page.drawText(labelText, { x: marginX, y, size: 9.5, font });
+        const lw = font.widthOfTextAtSize(labelText, 9.5);
+        page.drawText(value || '---', { x: marginX + lw, y, size: 9.5, font });
+        y -= 14;
+    };
+
+    drawIdentLine("Nombre", (data.nombre || patient?.name || '').toUpperCase());
+    drawIdentLine("Fecha de nacimiento", data.fnac || patient?.birthDate || '');
+    drawIdentLine("Edad", data.edad ? `${data.edad} años` : (patient?.age ? `${patient.age} años` : ''));
+    drawIdentLine("Sexo", data.sexo || patient?.gender || 'Masculino');
+    drawIdentLine("DNI", data.dni || patient?.dni || '');
+    drawIdentLine("Historia Clínica", data.hc || patient?.hcNumber || patient?.id || '');
+
+    y -= 10;
+
+    // Limpieza y partición del texto generado
     const cleanSummary = summaryText
         .replace(/(\r\n|\n|\r)/gm, "\n")
         .replace(/\*\*/g, "")
@@ -765,13 +777,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         .replace(/##/g, "")
         .replace(/#/g, "");
 
-    const paragraphs = cleanSummary.split('\n');
+    const rawParagraphs = cleanSummary.split('\n');
     const contentWidth = width - (marginX * 2);
     const fontSizeBody = 9.5;
     const fontSizeHeader = 10.5;
     const lineHeight = 13.5;
-    
-    for (const p of paragraphs) {
+
+    for (const p of rawParagraphs) {
         const trimmed = p.trim();
         if (!trimmed) {
             y -= 6;
@@ -779,30 +791,38 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         }
 
         const upper = trimmed.toUpperCase();
-        const isHeader = (
-            upper === 'IDENTIFICACIÓN' || upper === 'IDENTIFICACION' ||
-            upper.startsWith('1. IDENTIFICACIÓN') || upper.startsWith('1. IDENTIFICACION') ||
-            upper === 'RESUMEN CLÍNICO' || upper === 'RESUMEN CLINICO' ||
-            upper.startsWith('2. RESUMEN CLÍNICO') || upper.startsWith('2. RESUMEN CLINICO') ||
-            upper === 'JUSTIFICACIÓN' || upper === 'JUSTIFICACION' ||
-            upper.startsWith('3. JUSTIFICACIÓN') || upper.startsWith('3. JUSTIFICACION')
-        ) && trimmed.length < 45;
+        
+        // Omitir si la IA repite el bloque de IDENTIFICACIÓN
+        if (upper.includes("IDENTIFICACION") || upper.includes("IDENTIFICACIÓN")) {
+            continue;
+        }
+        if (upper.startsWith("NOMBRE:") || upper.startsWith("FECHA DE NACIMIENTO:") || upper.startsWith("EDAD:") || upper.startsWith("SEXO:") || upper.startsWith("DNI:") || upper.startsWith("HISTORIA CLÍNICA:") || upper.startsWith("HISTORIA CLINICA:")) {
+            continue;
+        }
 
-        if (isHeader) {
-            y -= 12;
-            if (y < marginBottom + 50) {
+        const isSectionHeader = (
+            upper === 'RESUMEN CLINICO' || upper === 'RESUMEN CLÍNICO' ||
+            upper.startsWith('RESUMEN CLINICO') || upper.startsWith('RESUMEN CLÍNICO') ||
+            upper === 'JUSTIFICACION' || upper === 'JUSTIFICACIÓN' ||
+            upper.startsWith('JUSTIFICACION') || upper.startsWith('JUSTIFICACIÓN')
+        ) && trimmed.length < 40;
+
+        if (isSectionHeader) {
+            const headerText = upper.includes('JUSTIFICAC') ? 'JUSTIFICACION' : 'RESUMEN CLINICO';
+            y -= 14;
+            if (y < marginBottom + 60) {
                 page = pdfDoc.addPage();
                 y = height - marginTop - 20;
             }
-            page.drawText(trimmed, { x: marginX, y, size: fontSizeHeader, font: fontBold, color: rgb(0.1, 0.2, 0.4) });
+            page.drawText(headerText, { x: marginX, y, size: fontSizeHeader, font: fontBold });
             y -= 4;
             page.drawLine({
                 start: { x: marginX, y },
                 end: { x: width - marginX, y },
-                thickness: 0.5,
-                color: rgb(0.2, 0.3, 0.5)
+                thickness: 0.8,
+                color: rgb(0, 0, 0)
             });
-            y -= 14;
+            y -= 16;
             continue;
         }
 
@@ -814,7 +834,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
             const testWidth = font.widthOfTextAtSize(testLine, fontSizeBody);
 
             if (testWidth > contentWidth) {
-                if (y < marginBottom + 40) {
+                if (y < marginBottom + 30) {
                     page = pdfDoc.addPage();
                     y = height - marginTop - 20;
                 }
@@ -827,7 +847,7 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
         }
 
         if (currentLine) {
-            if (y < marginBottom + 40) {
+            if (y < marginBottom + 30) {
                 page = pdfDoc.addPage();
                 y = height - marginTop - 20;
             }
@@ -886,42 +906,51 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
             strategyPrompt = `ESTRATEGIA: ADMISIÓN / SOLICITUD DE ${drugName.toUpperCase()}. Objetivo: Justificar indicación inicial (ignorar continuidad si ya la tomó).`;
         }
 
-        const entityLabel = data.context === 'ADMISIÓN' || data.context === 'BANCO DE DROGAS'
-          ? 'ADMISIÓN BANCO DE DROGAS'
-          : data.context === 'RENOVACIÓN'
-          ? 'RENOVACIÓN BANCO DE DROGAS'
-          : data.context === 'SOLICITUD'
+        const entityLabel = data.context === 'SOLICITUD'
           ? 'DINADIC - Dir. de Asistencia Directa por Situaciones Especiales'
+          : data.context === 'ADMISIÓN' || data.context === 'BANCO DE DROGAS'
+          ? 'ADMISIÓN BANCO DE DROGAS'
           : `${data.context} - BANCO DE DROGAS`;
 
         const prompt = `
         Actúa como un Oncólogo Experto del Hospital Oncológico Provincial de Córdoba.
         Hoy es ${today}.
-        Redacta un RESUMEN DE HISTORIA CLÍNICA oficial e institucional para: ${entityLabel}.
+        Redacta el texto para el documento institucional "RESUMEN DE HISTORIA CLÍNICA" correspondiente a: ${entityLabel}.
         
         ${strategyPrompt}
         
-        ESTRUCTURA OBLIGATORIA (3 SECCIONES):
-        1. IDENTIFICACIÓN
-           - Nombre y Apellido: ${data.nombre || patient?.name || ''}
-           - DNI: ${data.dni || patient?.dni || ''}
-           - Fecha de Nacimiento / Edad: ${data.fnac || patient?.birthDate || ''} ${(data.edad || patient?.age) ? `(${data.edad || patient?.age} años)` : ''}
-           - N° Historia Clínica: ${data.hc || patient?.hcNumber || patient?.id || ''}
-           - Diagnóstico Oncológico Principal
+        FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}
         
-        2. RESUMEN CLÍNICO
-           Narrativa cronológica detallada y fluida integrando antecedentes, biopsias, anatomía patológica, inmunohistoquímica/biomarcadores, cirugías con fechas exactas, estudios complementarios (imágenes/laboratorio con fechas) y estado clínico actual.
-           Si el ECOG no está explícitamente documentado en la historia clínica, NO estimarlo ni inferirlo; consignar "no documentado".
+        DATOS DE IDENTIFICACIÓN DEL PACIENTE:
+        - Nombre: ${data.nombre || patient?.name || ''}
+        - Fecha de Nacimiento: ${data.fnac || patient?.birthDate || ''}
+        - Edad: ${data.edad || patient?.age || ''}
+        - Sexo: ${data.sexo || patient?.gender || ''}
+        - DNI: ${data.dni || patient?.dni || ''}
+        - Historia Clínica: ${data.hc || patient?.hcNumber || patient?.id || ''}
         
-        3. JUSTIFICACIÓN
-           Fundamentación oncológica clara y concisa de la indicación del esquema/fármaco (${drugName}).
+        ESTRUCTURA DE RESPUESTA REQUERIDA (TEXTO PLANO, SIN MARKDOWN NI ASTERISCOS):
         
-        REGLAS DE FORMATO (ESTRICTAS):
-        - ❌ SIN ASTERISCOS ni MARKDOWN. Texto plano limpio.
-        - Fechas en formato DD/MM/AAAA.
-        - NO incluyas firmas ni datos de contacto al final (el pie institucional se agrega automáticamente).
+        RESUMEN CLINICO
+        Redacta una narrativa cronológica exhaustiva y detallada:
+        1. Motivo de consulta inicial, fecha de primera consulta, antecedentes patológicos y quirúrgicos relevantes.
+        2. Biopsias y confirmación diagnóstica con fechas exactas, informe anatomopatológico, inmunohistoquímica (receptores, HER2, BRAF, Ki-67, etc.).
+        3. Estudios de estadificación por imágenes cronológicos (RMN, PET-TC, TAC, centellograma) con fechas exactas, medidas milimétricas, SUV max y órganos comprometidos.
+        4. Tratamientos oncológicos previos recibidos con fechas de inicio/fin, ciclos administrados, toxicidades o causas de cambio/suspensión.
+        5. Estado clínico actual del paciente, síntomas, laboratorio reciente y ECOG.
         
-        CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO (incorporar todas):\n${regenParams.accumulatedCorrections}` : ''}
+        JUSTIFICACION
+        Redacta una justificación oncológica sólida y fundamentada para la solicitud de ${drugName}:
+        - Justificación de la terapia en base a la histología, mutaciones (ej. BRAF V600E), estadio de la enfermedad y líneas previas.
+        - Beneficio esperado (tasas de respuesta, sobrevida libre de progresión).
+        - Detalle de la dosis y posología prescripta para el tratamiento específico.
+        
+        REGLAS OBLIGATORIAS:
+        - ❌ SIN ASTERISCOS ni MARKDOWN. Texto limpio.
+        - Todas las fechas en formato DD/MM/AAAA.
+        - NO incluyas encabezados institucionales ni firmas finales (se colocan automáticamente).
+        
+        CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO:\n${regenParams.accumulatedCorrections}` : ''}
         `;
 
         const parts: any[] = [{ text: prompt }];
