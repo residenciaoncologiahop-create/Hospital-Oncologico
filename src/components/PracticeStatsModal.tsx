@@ -26,12 +26,32 @@ interface Patient {
   age?: number;
   ageRange?: string;
   diagnosis?: string;
+  primaryDiagnosis?: string;
   historyText?: string;
   clinicalContext?: string;
+  resumen_hc?: string;
+  resumen?: string;
+  antecedentes?: string;
+  antecedentesOncologicos?: string;
+  evolucion?: string;
+  stage?: string;
+  estadio?: string;
+  estadio_inicial?: string;
+  estadio_actual?: string;
+  clinicalStage?: string;
+  staging?: string;
+  etapa?: string;
+  ec?: string;
+  figo?: string;
+  initialStage?: string;
+  currentStage?: string;
+  clinicalNotes?: Array<{ text?: string; [key: string]: unknown } | string>;
+  evoluciones?: Array<{ text?: string; nota?: string; [key: string]: unknown } | string>;
   lastUpdated?: number;
   createdAt?: number;
   timeline?: ClinicalEvent[];
-  imagingStudies?: Array<{ treatment?: string | null; [key: string]: unknown }>;
+  imagingStudies?: Array<{ treatment?: string | null; relevantFindings?: string; bodyRegion?: string; [key: string]: unknown }>;
+  [key: string]: unknown;
 }
 
 interface Props {
@@ -155,61 +175,206 @@ export const detectTumorLocation = (p: Patient): string => {
 };
 
 // 2. CLASIFICACIÓN DE ESTADIO
-export const detectStage = (p: Patient): 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | 'No consignado' => {
-  const dx = normalizeStr(p.diagnosis);
-  const text = normalizeStr(p.historyText) + ' ' + normalizeStr(p.clinicalContext);
 
-  if (!dx && !text) return 'No consignado';
-
-  const extractStageFromStr = (str: string): 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | null => {
-    // 1. Estadio IV / Metastásico explícito
-    if (
-      /\b(?:estadio|stage)\s*(?:iv|4)[a-c]?\b/.test(str) ||
-      /\biv\s*[a-c]\b/.test(str) ||
-      /\bm1[a-c]?\b/.test(str) ||
-      /\b(?:metastasico|metastasica|metastasis|carcinomatosis|diseminad[ao])\b/.test(str)
-    ) {
-      return 'Estadio IV';
-    }
-
-    // 2. Estadio III
-    if (
-      /\b(?:estadio|stage)\s*(?:iii|3)[a-c]?\b/.test(str) ||
-      /\biii\s*[a-c]\b/.test(str) ||
-      /\biiia\b/.test(str) || /\biiib\b/.test(str) || /\biiic\b/.test(str)
-    ) {
-      return 'Estadio III';
-    }
-
-    // 3. Estadio II
-    if (
-      /\b(?:estadio|stage)\s*(?:ii|2)[a-c]?\b/.test(str) ||
-      /\bii\s*[a-c]\b/.test(str) ||
-      /\biia\b/.test(str) || /\biib\b/.test(str) || /\biic\b/.test(str)
-    ) {
-      return 'Estadio II';
-    }
-
-    // 4. Estadio I
-    if (
-      /\b(?:estadio|stage)\s*(?:i|1)[a-c]?\b/.test(str) ||
-      /\bi\s*[a-c]\b/.test(str) ||
-      /\bia\b/.test(str) || /\bib\b/.test(str) || /\bic\b/.test(str) ||
-      /\bpt1[a-c]?\b/.test(str)
-    ) {
-      return 'Estadio I';
-    }
-
+// Parser determinístico para campos estructurados existentes
+export const parseStructuredStageValue = (valRaw: unknown): 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | null => {
+  if (valRaw === undefined || valRaw === null) return null;
+  const val = normalizeStr(String(valRaw));
+  if (!val) return null;
+  if (
+    val === 'no consignado' || val === 'no consignada' || 
+    val === 'n/a' || val === 's/d' || val === 's/n' || 
+    val === 'pendiente' || val === 'desconocido' || val === '-' || val === 'nd' || val === 'null'
+  ) {
     return null;
-  };
+  }
 
-  // Prioridad absoluta al diagnóstico principal del caso
-  const fromDx = extractStageFromStr(dx);
+  // 1. Check IV / 4 / Metastásico en campo estructurado
+  if (
+    /^(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)?\s*[:=-]?\s*(?:iv|4)[a-c]?$/i.test(val) ||
+    /^(?:iv|4)[a-c]?$/i.test(val) ||
+    /\b(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)\s*[:=-]?\s*(?:iv|4)[a-c]?\b/i.test(val) ||
+    /\b(?:metastasico|metastasica|metastasis|m1[a-c]?)\b/i.test(val)
+  ) {
+    return 'Estadio IV';
+  }
+
+  // 2. Check III / 3 en campo estructurado
+  if (
+    /^(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)?\s*[:=-]?\s*(?:iii|3)[a-c]?$/i.test(val) ||
+    /^(?:iii|3)[a-c]?$/i.test(val) ||
+    /\b(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)\s*[:=-]?\s*(?:iii|3)[a-c]?\b/i.test(val)
+  ) {
+    return 'Estadio III';
+  }
+
+  // 3. Check II / 2 en campo estructurado
+  if (
+    /^(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)?\s*[:=-]?\s*(?:ii|2)[a-c]?$/i.test(val) ||
+    /^(?:ii|2)[a-c]?$/i.test(val) ||
+    /\b(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)\s*[:=-]?\s*(?:ii|2)[a-c]?\b/i.test(val)
+  ) {
+    return 'Estadio II';
+  }
+
+  // 4. Check I / 1 en campo estructurado
+  if (
+    /^(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)?\s*[:=-]?\s*(?:i|1)[a-c]?$/i.test(val) ||
+    /^(?:i|1)[a-c]?$/i.test(val) ||
+    /\b(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)\s*[:=-]?\s*(?:i|1)[a-c]?\b/i.test(val)
+  ) {
+    return 'Estadio I';
+  }
+
+  return null;
+};
+
+// Parser determinístico para textos clínicos (diagnóstico, historia, evoluciones, etc.)
+export const extractExplicitStage = (textRaw?: unknown): 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | null => {
+  if (!textRaw) return null;
+  const str = normalizeStr(String(textRaw));
+  if (!str) return null;
+
+  // 1. ESTADIO IV / 4 / METASTÁSICO INEQUÍVOCO
+  // Menciones con prefijo explícito (Estadio, Etapa, EC, FIGO, etc.):
+  const prefixIV = /\b(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)(?:\s+(?:clinico|patologico|quirurgico|tnm))?\s*[:=-]?\s*(?:iv|4)[a-c]?\b/i;
+  const diseaseIV = /\benfermedad\s+(?:en\s+)?(?:estadio|etapa|ec)\s*[:=-]?\s*(?:iv|4)[a-c]?\b/i;
+
+  if (prefixIV.test(str) || diseaseIV.test(str)) {
+    return 'Estadio IV';
+  }
+
+  // Inequívocamente metastásico (verificando ausencia de negación clínica):
+  const strCleaned = str
+    .replace(/(?:sin|no|ausencia de|niega|descarte?|descarta(?:n)?|libre de)\s+(?:evidencia de\s+)?(?:signos de\s+)?(?:lesiones\s+)?(?:secundarismo[a-z]*|metastasis|diseminacion)[a-z]*/g, ' ')
+    .replace(/no\s+(?:se\s+)?(?:observan|evidencian|aprecian)\s+(?:lesiones\s+)?(?:metastasis|secundarismo)[a-z]*/g, ' ')
+    .replace(/sin\s+(?:lesiones|compromiso)\s+(?:secundarias|metastasicas|a distancia)/g, ' ');
+
+  const isM1 = /\b(?:[cp]?m1[a-c]?)\b/i.test(strCleaned);
+  const isMetastaticWord = /\b(?:metastasico|metastasica|metastasicos|metastasicas|oligometastasico|oligometastasica)\b/i.test(strCleaned);
+  const isEnfermedadMetastasica = /\benfermedad\s+metastasica\b/i.test(strCleaned);
+  const isMetastases = /\bmetastasis\b/i.test(strCleaned) && 
+                       !/\b(?:sin|ausencia|descarta|libre)\b/.test(strCleaned);
+  const isCarcinomatosis = /\bcarcinomatosis\b/i.test(strCleaned);
+
+  if (isM1 || isMetastaticWord || isEnfermedadMetastasica || isMetastases || isCarcinomatosis) {
+    return 'Estadio IV';
+  }
+
+  // 2. ESTADIO III / 3
+  const prefixIII = /\b(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)(?:\s+(?:clinico|patologico|quirurgico|tnm))?\s*[:=-]?\s*(?:iii|3)[a-c]?\b/i;
+  const diseaseIII = /\benfermedad\s+(?:en\s+)?(?:estadio|etapa|ec)\s*[:=-]?\s*(?:iii|3)[a-c]?\b/i;
+
+  if (prefixIII.test(str) || diseaseIII.test(str)) {
+    return 'Estadio III';
+  }
+
+  // 3. ESTADIO II / 2
+  const prefixII = /\b(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)(?:\s+(?:clinico|patologico|quirurgico|tnm))?\s*[:=-]?\s*(?:ii|2)[a-c]?\b/i;
+  const diseaseII = /\benfermedad\s+(?:en\s+)?(?:estadio|etapa|ec)\s*[:=-]?\s*(?:ii|2)[a-c]?\b/i;
+
+  if (prefixII.test(str) || diseaseII.test(str)) {
+    return 'Estadio II';
+  }
+
+  // 4. ESTADIO I / 1
+  const prefixI = /\b(?:(?:yp|[cyp])?estadio|(?:yp|[cyp])?estad[ií]o|stage|etapa|ec|e\.c\.|figo|st\.?)(?:\s+(?:clinico|patologico|quirurgico|tnm))?\s*[:=-]?\s*(?:i|1)[a-c]?\b/i;
+  const diseaseI = /\benfermedad\s+(?:en\s+)?(?:estadio|etapa|ec)\s*[:=-]?\s*(?:i|1)[a-c]?\b/i;
+
+  if (prefixI.test(str) || diseaseI.test(str)) {
+    return 'Estadio I';
+  }
+
+  return null;
+};
+
+export const detectStage = (p: Patient): 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | 'No consignado' => {
+  // ORDEN DE PRIORIDAD 1: Campos estructurados existentes en el paciente
+  const structuredFields = [
+    p.estadio_actual,
+    p.estadio,
+    p.stage,
+    p.clinicalStage,
+    p.estadio_inicial,
+    p.staging,
+    p.etapa,
+    p.ec,
+    p.figo,
+    p.initialStage,
+    p.currentStage
+  ];
+
+  for (const candidate of structuredFields) {
+    const fromStructured = parseStructuredStageValue(candidate);
+    if (fromStructured) return fromStructured;
+  }
+
+  // ORDEN DE PRIORIDAD 2: Diagnóstico principal del paciente
+  const fromDx = extractExplicitStage(p.diagnosis || p.primaryDiagnosis);
   if (fromDx) return fromDx;
 
-  const fromText = extractStageFromStr(text);
-  if (fromText) return fromText;
+  // ORDEN DE PRIORIDAD 3: Historia clínica y contexto clínico
+  const fromHistory = extractExplicitStage(p.historyText);
+  if (fromHistory) return fromHistory;
 
+  const fromContext = extractExplicitStage(p.clinicalContext);
+  if (fromContext) return fromContext;
+
+  // ORDEN DE PRIORIDAD 4: Resumen de HC y Antecedentes
+  const fromSummary = extractExplicitStage(p.resumen_hc || p.resumen || p.antecedentes || p.antecedentesOncologicos);
+  if (fromSummary) return fromSummary;
+
+  // ORDEN DE PRIORIDAD 5: Evolución médica (clinicalNotes o evoluciones)
+  if (Array.isArray(p.clinicalNotes)) {
+    for (const note of p.clinicalNotes) {
+      const noteText = typeof note === 'string' ? note : note?.text;
+      const fromNote = extractExplicitStage(noteText);
+      if (fromNote) return fromNote;
+    }
+  }
+
+  if (Array.isArray(p.evoluciones)) {
+    for (const ev of p.evoluciones) {
+      const evText = typeof ev === 'string' ? ev : (ev?.text || ev?.nota);
+      const fromEv = extractExplicitStage(evText);
+      if (fromEv) return fromEv;
+    }
+  }
+
+  if (typeof p.evolucion === 'string') {
+    const fromEv = extractExplicitStage(p.evolucion);
+    if (fromEv) return fromEv;
+  }
+
+  // ORDEN DE PRIORIDAD 6: Línea de tiempo (eventos clínicos)
+  if (Array.isArray(p.timeline)) {
+    for (const event of p.timeline) {
+      const eventText = `${event.note || ''} ${event.detail || ''} ${event.category || ''}`;
+      const fromEvent = extractExplicitStage(eventText);
+      if (fromEvent) return fromEvent;
+    }
+  }
+
+  // ORDEN DE PRIORIDAD 7: Estudios por imágenes
+  if (Array.isArray(p.imagingStudies)) {
+    for (const study of p.imagingStudies) {
+      const studyText = `${study.relevantFindings || ''} ${study.bodyRegion || ''}`;
+      const fromStudy = extractExplicitStage(studyText);
+      if (fromStudy) return fromStudy;
+    }
+  }
+
+  // ORDEN DE PRIORIDAD 8: Cualquier otro campo de texto en el registro del paciente
+  for (const key of Object.keys(p)) {
+    if (['id', 'name', 'doctorId', 'hcNumber', 'fileUrls', 'lastUpdated', 'createdAt'].includes(key)) continue;
+    const val = p[key];
+    if (typeof val === 'string' && val.length > 3) {
+      const fromKey = extractExplicitStage(val);
+      if (fromKey) return fromKey;
+    }
+  }
+
+  // Si no está explícitamente documentado ni puede determinarse con seguridad
   return 'No consignado';
 };
 
