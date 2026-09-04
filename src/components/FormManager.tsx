@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, CheckCircle2, RefreshCcw, Pill, AlertCircle, Check
+  FileText, Loader2, Wand2, UserCog, Save, X, Download, FilePlus, ExternalLink, CheckCircle2, RefreshCcw, RefreshCw, Pill, AlertCircle, Check
 } from 'lucide-react';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { callGemini } from '../utils/aiProxy';
@@ -41,24 +41,25 @@ const BANCO_MANDATORY_FIELDS: Array<{ key: string; label: string; id: string }> 
 
 const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, timeline }) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [status, setStatus] = useState('');
-  const [formGenerated, setFormGenerated] = useState<Record<string, boolean>>({});
+  const [status, setStatus] = useState<string>('');
+  
+  // Tab/Filtro activo para la visualización de formularios
+  const [activeCategory, setActiveCategory] = useState<'todos' | 'coberturas' | 'institucionales' | 'practicas'>('todos');
+
+  // Estados para parámetros de re-generación con corrección acumulativa
+  const [lastRegenParams, setLastRegenParams] = useState<Record<string, { drugName: string; formId?: string; accumulatedCorrections: string }>>({});
   const [formCorrections, setFormCorrections] = useState<Record<string, string>>({});
-  const [lastRegenParams, setLastRegenParams] = useState<Record<string, {
-    drugName?: string;
-    context?: string;
-    servicioDestino?: string;
-    motivoSolicitud?: string;
-    accumulatedCorrections: string;
-  }>>({});
+  const [formGenerated, setFormGenerated] = useState<Record<string, boolean>>({});
+
+  // Drogas activas detectadas por la IA para DINADIC
+  const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
+  const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
   const [showEsquemaModal, setShowEsquemaModal] = useState(false);
   const [esquemaData, setEsquemaData] = useState({
     numero_ciclos: '', frecuencia_ciclos: '', tiempo_tratamiento: '',
     fecha_inicio: '', medicamentos: '', dosis_m2: '',
     dosis_total_ciclo: '', dias_admin: '', intervalo: ''
   });
-  const [pendingDinadicDrug, setPendingDinadicDrug] = useState('');
-  const [pendingDinadicCorrection, setPendingDinadicCorrection] = useState('');
 
   // Estados para Vista Previa interactiva de Formularios PDF antes de su descarga definitiva
   const [activePreview, setActivePreview] = useState<{
@@ -72,6 +73,14 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   const [isPreviewUpdating, setIsPreviewUpdating] = useState(false);
   const [dinadicData, setDinadicData] = useState<any>(null);
   const [summaryTextContent, setSummaryTextContent] = useState<string>('');
+
+  // Estado exclusivo e independiente para la Vista Previa de DINADIC
+  const [dinadicPreview, setDinadicPreview] = useState<{
+    blob: Blob;
+    filename: string;
+    url: string;
+  } | null>(null);
+  const [isDinadicUpdating, setIsDinadicUpdating] = useState(false);
 
   // Estados y flujo para Nuevos Formularios Administrativos Modulares
   const [selectedAdminForm, setSelectedAdminForm] = useState<AdminFormDefinition | null>(null);
@@ -1843,13 +1852,11 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
       if (si !== -1 && ei !== -1) clean = clean.substring(si, ei + 1);
       const d = JSON.parse(clean);
 
-      setStatus('Generando PDF...');
+      setStatus('Preparando vista previa de DINADIC...');
       const { blob, filename } = await drawDinadicPdf(d, esquema);
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = filename;
-      link.click();
-      setStatus('¡Listo!');
+      const url = URL.createObjectURL(blob);
+      setDinadicPreview({ blob, filename, url });
+      setStatus('¡Vista previa lista!');
       const prevDinadicCorrections = lastRegenParams['dinadic']?.accumulatedCorrections ?? '';
       const newDinadicAccumulated = pendingDinadicCorrection
         ? (prevDinadicCorrections ? `${prevDinadicCorrections}\n- ${pendingDinadicCorrection}` : `- ${pendingDinadicCorrection}`)
@@ -1864,6 +1871,30 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
     } finally {
       setProcessingId(null);
       setStatus('');
+    }
+  };
+
+  // --- MANEJADORES DE VISTA PREVIA EXCLUSIVA E INDEPENDIENTE PARA DINADIC ---
+  const handleConfirmDinadicDownload = () => {
+    if (!dinadicPreview) return;
+    const link = document.createElement('a');
+    link.href = dinadicPreview.url;
+    link.download = dinadicPreview.filename;
+    link.click();
+    setDinadicPreview(null);
+  };
+
+  const handleBackToDinadicEdit = () => {
+    setDinadicPreview(null);
+    setShowEsquemaModal(true);
+  };
+
+  const handleRefreshDinadicPreview = async () => {
+    setIsDinadicUpdating(true);
+    try {
+      await generateDinadicPDF(esquemaData);
+    } finally {
+      setIsDinadicUpdating(false);
     }
   };
 
@@ -3808,6 +3839,99 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
         >
           {renderSummaryFieldsContent()}
         </FormPreviewModal>
+      )}
+
+      {/* MODAL DE VISTA PREVIA EXCLUSIVO E INDEPENDIENTE PARA DINADIC */}
+      {dinadicPreview && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-6xl h-[94vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            
+            {/* Header del Visor DINADIC */}
+            <div className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-50 text-blue-700 rounded-2xl border border-blue-100">
+                  <FileText size={22} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded uppercase tracking-wider">
+                      DINADIC
+                    </span>
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Vista Previa Activa
+                    </span>
+                  </div>
+                  <h3 className="text-base font-black text-slate-900 tracking-tight mt-0.5">
+                    Solicitud de Medicamentos Oncológicos (DADSE)
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Fármaco solicitado: <strong className="text-slate-700">{pendingDinadicDrug || esquemaData.medicamentos || 'Tratamiento indicado'}</strong>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setDinadicPreview(null)}
+                className="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition-all"
+                title="Cerrar vista previa"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            {/* Visor del PDF Real de DINADIC */}
+            <div className="flex-1 bg-slate-100 p-2 sm:p-4 overflow-hidden">
+              <iframe
+                src={`${dinadicPreview.url}#toolbar=1&navpanes=0`}
+                title="Vista previa del Formulario DINADIC"
+                className="w-full h-full rounded-2xl border border-slate-300 shadow-inner bg-white"
+              />
+            </div>
+
+            {/* Footer con los 3 botones requeridos */}
+            <div className="px-6 py-3.5 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+              <div className="text-xs text-slate-500 font-medium">
+                Revise visualmente el documento antes de confirmar la descarga definitiva.
+              </div>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={handleBackToDinadicEdit}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+                >
+                  Cerrar / Volver
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleRefreshDinadicPreview}
+                  disabled={isDinadicUpdating || processingId !== null}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-4 py-2 rounded-xl transition-all disabled:opacity-50"
+                >
+                  {isDinadicUpdating ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <RefreshCw size={14} />
+                  )}
+                  <span>Actualizar vista previa</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmDinadicDownload}
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl text-xs font-black shadow-md shadow-emerald-200 hover:shadow-lg transition-all"
+                >
+                  <Download size={14} />
+                  <span>Confirmar y descargar PDF</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
       )}
 
     </div>
