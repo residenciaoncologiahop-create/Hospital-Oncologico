@@ -31,7 +31,20 @@ import ClinicalEvolutionModal from './components/ClinicalEvolutionModal';
 
 import { User } from 'firebase/auth';
 import AuthWrapper, { logout } from './components/AuthWrapper';
-import { getChatResponseSecure, extractTimelineSecure, extractLabsSecure, generateClinicalAuditSecure, normalizeLabTestName, isPlausibleLabResult, consolidateTimelineEvents } from './utils/aiProxy';
+import { 
+    getChatResponseSecure, 
+    extractTimelineSecure, 
+    extractLabsSecure, 
+    generateClinicalAuditSecure, 
+    normalizeLabTestName, 
+    isPlausibleLabResult, 
+    consolidateTimelineEvents,
+    splitFilesIntoProcessableChunks,
+    filterProcessableChunks,
+    computeContentHash,
+    ProcessedChunkRecord,
+    DocumentChunk
+} from './utils/aiProxy';
 import { saveClinicalContext, clearClinicalContext } from './services/patientService';
 import { demoPatients, ClinicalValidationChecklist } from './mocks/demoCases';
 
@@ -81,6 +94,9 @@ interface Patient {
     labResults?: LabResult[];
     imagingStudies?: ImagingStudy[];
     validationCriteria?: ClinicalValidationChecklist;
+    processedChunks?: ProcessedChunkRecord[];
+    clinicalContext?: string;
+    clinicalContextUpdatedAt?: number | null;
 }
 
 interface FileData { name: string; type: string; data: string; }
@@ -195,6 +211,7 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
 
     const [historyText, setHistoryText] = useState('');
     const [historyFiles, setHistoryFiles] = useState<FileData[]>([]);
+    const [incrementalNotice, setIncrementalNotice] = useState<string | null>(null);
     const [timeline, setTimeline] = useState<ClinicalEvent[]>([]);
     const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
     const [clinicalContextUpdatedAt, setClinicalContextUpdatedAt] = useState<number | null>(null);
@@ -327,6 +344,7 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
         setChatMessages(p.chatHistory || []);
         setHistoryFiles([]); setGuidelineFiles([]);
         setLastError(null);
+        setIncrementalNotice(null);
         setActiveTab('docs');
         setManualDate(new Date().toISOString().split('T')[0]);
         setManualDoctor(doctorName || '');
@@ -451,15 +469,63 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         isProcessingRef.current = true;
         setIsProcessingDocs(true);
         setLastError(null);
+        setIncrementalNotice(null);
         const extractionWarnings: string[] = [];
         try {
-            // Las 3 extracciones corren en paralelo
+            const selPatient = patients.find(p => p.id === selectedPatientId);
+            const existingRecords = selPatient?.processedChunks || [];
+
+            // 1. Particionar archivos mediante el mecanismo existente
+            let allChunks: DocumentChunk[] = [];
+            if (historyFiles && historyFiles.length > 0) {
+                allChunks = await splitFilesIntoProcessableChunks(historyFiles);
+            }
+
+            // 2. Filtrar bloques determinísticamente por huella (hash) de contenido
+            const { newChunks, skippedChunks, newRecords } = await filterProcessableChunks(
+                allChunks,
+                existingRecords
+            );
+
+            // 3. Evaluar determinísticamente si las notas de texto son nuevas
+            const trimmedText = (historyText || '').trim();
+            const savedText = (selPatient?.clinicalContext || selPatient?.historyText || '').trim();
+            let isTextNew = false;
+            if (trimmedText.length > 0) {
+                const textHash = await computeContentHash(trimmedText);
+                const existingHashes = new Set<string>(existingRecords.map(r => r.hash));
+                const isFirstProcessing = existingRecords.length === 0;
+                if (isFirstProcessing || (!existingHashes.has(textHash) && trimmedText !== savedText)) {
+                    isTextNew = true;
+                    newRecords.push({
+                        hash: textHash,
+                        sourceFileName: '__clinical_text__',
+                        processedAt: Date.now(),
+                    });
+                }
+            }
+
+            const textToProcess = isTextNew ? historyText : '';
+            const newFiles = newChunks.map(c => c.file);
+            const hasNewContent = newChunks.length > 0 || (isTextNew && trimmedText.length > 0);
+
+            // 4. Si toda la historia cargada ya fue procesada:
+            //    - NO realizar llamadas a Gemini para Timeline/Labs/Imaging;
+            //    - informar visualmente de forma discreta: "No se detectó contenido nuevo para procesar";
+            //    - conservar intactos los eventos, laboratorios e imágenes existentes.
+            if (!hasNewContent) {
+                setIncrementalNotice("No se detectó contenido nuevo para procesar");
+                return;
+            }
+
+            // 5. Las extracciones se ejecutan EXCLUSIVAMENTE sobre el contenido nuevo
             const [rawEvents, extractedLabs, extractedImaging] = await Promise.all([
-                extractTimelineSecure(historyText, historyFiles, undefined, (w) => extractionWarnings.push(w)),
-                extractLabsSecure(historyText, historyFiles),
-                extractImagingFromHistorySecure(historyText, historyFiles),
+                extractTimelineSecure(textToProcess, newFiles, undefined, (w) => extractionWarnings.push(w), newChunks),
+                extractLabsSecure(textToProcess, newFiles),
+                extractImagingFromHistorySecure(textToProcess, newFiles),
             ]);
 
+            // 6. Consolidar nuevos eventos en la cronología clínica existente
             const combinedTimeline = consolidateTimelineEvents(timeline || [], rawEvents);
             setTimeline(combinedTimeline);
 
@@ -472,12 +538,23 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 (l: any) => `${l.date}|${normalizeLabTestName(l.test)}`
             );
 
+            // 7. Consolidar registros técnicos de bloques procesados
+            const recordsMap = new Map<string, ProcessedChunkRecord>();
+            for (const r of existingRecords) {
+                recordsMap.set(r.hash, r);
+            }
+            for (const r of newRecords) {
+                recordsMap.set(r.hash, r);
+            }
+            const updatedProcessedChunks = Array.from(recordsMap.values());
+
             if (selectedPatientId) {
                 const updateData: any = {
                     timeline: combinedTimeline,
                     labResults: combinedLabs,
                     historyText,
-                    lastUpdated: Date.now()
+                    lastUpdated: Date.now(),
+                    processedChunks: updatedProcessedChunks,
                 };
 
                 let updatedStudies: ImagingStudy[] | null = null;
@@ -515,7 +592,8 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                             labResults: combinedLabs,
                             historyText,
                             imagingStudies: updatedStudies || p.imagingStudies,
-                            lastUpdated: Date.now()
+                            lastUpdated: Date.now(),
+                            processedChunks: updatedProcessedChunks,
                         };
                     }));
                 } else {
@@ -529,8 +607,10 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 }
             }
 
+            const skippedCount = skippedChunks.length;
+            const skippedMsg = skippedCount > 0 ? ` (${skippedCount} bloque(s) previos ya analizados fueron omitidos)` : '';
             const warningMsg = extractionWarnings.length > 0 ? `\n\nAvisos en procesamiento:\n• ${extractionWarnings.join('\n• ')}` : '';
-            alert(`Procesado: ${rawEvents.length} eventos extraídos (${combinedTimeline.length} totales en cronología) y ${validExtractedLabs.length} laboratorios.${warningMsg}`);
+            alert(`Procesado: ${rawEvents.length} eventos extraídos (${combinedTimeline.length} totales en cronología) y ${validExtractedLabs.length} laboratorios.${skippedMsg}${warningMsg}`);
         } catch (e: any) {
             setLastError(e.message);
         } finally {
@@ -614,7 +694,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                     logAction("ADD_STUDIES_FROM_EVOLUTION_TO_TIMELINE", selectedPatientId, doctorName);
                 }
             }
-            return events.length;
+            return rawEvents.length;
         } catch (err) {
             console.error("Error al extraer y guardar estudios en timeline:", err);
             return 0;
@@ -1342,6 +1422,12 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                                 >
                                                     {isProcessingDocs ? <><Loader2 className="animate-spin mr-2" size={16}/>Analizando...</> : (timeline.length > 0 ? '↻ Reprocesar historia' : 'Procesar historia')}
                                                 </button>
+                                                {incrementalNotice && (
+                                                    <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm">
+                                                        <Info size={16} className="text-blue-500 shrink-0" />
+                                                        <span>{incrementalNotice}</span>
+                                                    </div>
+                                                )}
                                             </section>
 
                                             <section className="space-y-4 pt-4 border-t border-gray-100">

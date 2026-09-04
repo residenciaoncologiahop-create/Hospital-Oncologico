@@ -2,6 +2,7 @@ import { db, storage } from '../lib/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { ImagingStudy } from '../components/ImagingPanel'; // Asegúrate de importar la interfaz
+import { ProcessedChunkRecord } from '../utils/chunkHasher';
 
 export interface Patient {
     id?: string;
@@ -17,6 +18,7 @@ export interface Patient {
     imagingStudies?: ImagingStudy[];
     clinicalContext?: string;
     clinicalContextUpdatedAt?: number;
+    processedChunks?: ProcessedChunkRecord[];
 }
 
 // Definición de una Evolución Médica

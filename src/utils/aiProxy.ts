@@ -229,6 +229,8 @@ export { consolidateTimelineEvents, normalizeEventCategory, normalizeEventDate }
 export { splitPdfIntoChunks, splitFilesIntoProcessableChunks } from './pdfChunker';
 export type { ClinicalEvent } from './timelineConsolidator';
 export type { DocumentChunk } from './pdfChunker';
+export { computeChunkHash, filterProcessableChunks, computeContentHash } from './chunkHasher';
+export type { ProcessedChunkRecord, ChunkFilterResult } from './chunkHasher';
 
 export interface TimelineProgressCallback {
   (progress: { current: number; total: number; message: string; stage?: string }): void;
@@ -241,9 +243,10 @@ export const extractTimelineSecure = async (
   text: string,
   files: FileData[],
   onProgress?: TimelineProgressCallback,
-  onWarning?: (msg: string) => void
+  onWarning?: (msg: string) => void,
+  precomputedChunks?: DocumentChunk[]
 ): Promise<ClinicalEvent[]> => {
-  if (!text && (!files || files.length === 0)) return [];
+  if (!text && (!files || files.length === 0) && (!precomputedChunks || precomputedChunks.length === 0)) return [];
 
   const instructionText = `
     Eres un asistente médico experto en oncología. Analiza toda la documentación y extrae la cronología clínica completa del paciente.
@@ -293,8 +296,10 @@ export const extractTimelineSecure = async (
   const failedChunks: string[] = [];
 
   try {
-    // 1. Particionar archivos PDF en bloques de páginas manejables
-    const chunks = await splitFilesIntoProcessableChunks(files || []);
+    // 1. Particionar archivos PDF en bloques de páginas manejables (o usar bloques precalculados)
+    const chunks = precomputedChunks && precomputedChunks.length > 0
+      ? precomputedChunks
+      : await splitFilesIntoProcessableChunks(files || []);
 
     if (chunks.length > 0) {
       for (let i = 0; i < chunks.length; i++) {
