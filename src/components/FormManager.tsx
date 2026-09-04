@@ -1925,8 +1925,12 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
         <textarea
           rows={20}
           value={summaryTextContent}
-          onChange={e => setSummaryTextContent(e.target.value)}
-          className="w-full p-3.5 border border-slate-300 rounded-xl bg-white text-sm font-sans text-slate-800 leading-relaxed focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-inner"
+          style={{
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+            fontSize: '13.5px',
+            lineHeight: '1.65'
+          }}
+          className="w-full p-4 border border-slate-300 rounded-xl bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-inner"
           placeholder="Texto del Resumen de Historia Clínica..."
         />
       </div>
