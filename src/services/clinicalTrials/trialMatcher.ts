@@ -278,6 +278,70 @@ export function evaluateTrialMatch(
 }
 
 /**
+ * Evalúa los ensayos clínicos para un único paciente de forma determinística y conservadora.
+ * Solo lectura: NO modifica ni crea datos de pacientes.
+ * NO envía datos del paciente a fuentes externas.
+ */
+export function evaluateSinglePatientTrials(
+  patient: any,
+  trials: ClinicalTrial[]
+): PatientMatchingEvaluation {
+  const profile = extractPatientClinicalProfile(patient);
+  const trialResults: TrialMatchResult[] = [];
+
+  for (const trial of trials) {
+    const result = evaluateTrialMatch(profile, trial);
+    if (result.category !== 'not_compatible') {
+      trialResults.push(result);
+    }
+  }
+
+  // Ordenar resultados según FASE 7:
+  // 1. Recruiting
+  // 2. Centro en Córdoba
+  // 3. Coincidencia clínica / Score
+  // 4. Menor cantidad de datos faltantes
+  trialResults.sort((a, b) => {
+    // 1. Recruiting
+    const aRecruiting = a.trial.status === 'RECRUITING' ? 1 : 0;
+    const bRecruiting = b.trial.status === 'RECRUITING' ? 1 : 0;
+    if (aRecruiting !== bRecruiting) return bRecruiting - aRecruiting;
+
+    // 2. Centro en Córdoba
+    const aCordoba = a.trial.hasCordobaCenter ? 1 : 0;
+    const bCordoba = b.trial.hasCordobaCenter ? 1 : 0;
+    if (aCordoba !== bCordoba) return bCordoba - aCordoba;
+
+    // 3. Coincidencia clínica (Score)
+    if (a.score !== b.score) return b.score - a.score;
+
+    // 4. Menor cantidad de datos faltantes
+    return a.missingData.length - b.missingData.length;
+  });
+
+  const potentialCandidateCount = trialResults.filter(r => r.category === 'potential_candidate').length;
+  const potentialMissingDataCount = trialResults.filter(r => r.category === 'potential_missing_data').length;
+
+  let bestCategory: MatchCategory = 'not_compatible';
+  if (potentialCandidateCount > 0) bestCategory = 'potential_candidate';
+  else if (potentialMissingDataCount > 0) bestCategory = 'potential_missing_data';
+
+  return {
+    patientId: profile.patientId,
+    hcNumber: profile.hcNumber,
+    patientName: profile.name,
+    diagnosis: profile.diagnosisRaw,
+    stageDocumented: profile.stageDocumented,
+    profile,
+    matches: trialResults,
+    potentialCandidateCount,
+    potentialMissingDataCount,
+    bestCategory,
+    lastEvaluatedAt: Date.now()
+  };
+}
+
+/**
  * Ejecuta el análisis de matching para todos los pacientes del médico
  * Solo lectura: NO modifica ni crea datos de pacientes.
  * NO envía datos del paciente a fuentes externas.
@@ -291,64 +355,12 @@ export function analyzeDoctorPatients(
   let totalMatchesCount = 0;
 
   for (const patient of patients) {
-    const profile = extractPatientClinicalProfile(patient);
-    const trialResults: TrialMatchResult[] = [];
-
-    for (const trial of trials) {
-      const result = evaluateTrialMatch(profile, trial);
-      if (result.category !== 'not_compatible') {
-        trialResults.push(result);
-      }
-    }
-
-    // Ordenar resultados según FASE 7:
-    // 1. Recruiting
-    // 2. Centro en Córdoba
-    // 3. Coincidencia clínica / Score
-    // 4. Menor cantidad de datos faltantes
-    trialResults.sort((a, b) => {
-      // 1. Recruiting
-      const aRecruiting = a.trial.status === 'RECRUITING' ? 1 : 0;
-      const bRecruiting = b.trial.status === 'RECRUITING' ? 1 : 0;
-      if (aRecruiting !== bRecruiting) return bRecruiting - aRecruiting;
-
-      // 2. Centro en Córdoba
-      const aCordoba = a.trial.hasCordobaCenter ? 1 : 0;
-      const bCordoba = b.trial.hasCordobaCenter ? 1 : 0;
-      if (aCordoba !== bCordoba) return bCordoba - aCordoba;
-
-      // 3. Coincidencia clínica (Score)
-      if (a.score !== b.score) return b.score - a.score;
-
-      // 4. Menor cantidad de datos faltantes
-      return a.missingData.length - b.missingData.length;
-    });
-
-    const potentialCandidateCount = trialResults.filter(r => r.category === 'potential_candidate').length;
-    const potentialMissingDataCount = trialResults.filter(r => r.category === 'potential_missing_data').length;
-
-    let bestCategory: MatchCategory = 'not_compatible';
-    if (potentialCandidateCount > 0) bestCategory = 'potential_candidate';
-    else if (potentialMissingDataCount > 0) bestCategory = 'potential_missing_data';
-
-    if (trialResults.length > 0) {
+    const evalResult = evaluateSinglePatientTrials(patient, trials);
+    if (evalResult.matches.length > 0) {
       patientsWithMatchesCount++;
-      totalMatchesCount += trialResults.length;
+      totalMatchesCount += evalResult.matches.length;
     }
-
-    evaluations.push({
-      patientId: profile.patientId,
-      hcNumber: profile.hcNumber,
-      patientName: profile.name,
-      diagnosis: profile.diagnosisRaw,
-      stageDocumented: profile.stageDocumented,
-      profile,
-      matches: trialResults,
-      potentialCandidateCount,
-      potentialMissingDataCount,
-      bestCategory,
-      lastEvaluatedAt: Date.now()
-    });
+    evaluations.push(evalResult);
   }
 
   // Ordenar pacientes: primero los que tienen candidatos potenciales, luego faltan datos
@@ -367,3 +379,4 @@ export function analyzeDoctorPatients(
     analyzedAt: Date.now()
   };
 }
+

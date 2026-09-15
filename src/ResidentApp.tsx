@@ -3,7 +3,7 @@ import {
   Activity, Plus, Search, Trash2, LogOut, Menu, X, 
   FileText, Clock, GraduationCap, Calculator, Pill, 
   MessageSquare, Loader2, AlertCircle, ClipboardList, CalendarHeart, Info, Maximize2, Minimize2, Sparkles,
-  ChevronDown
+  ChevronDown, Microscope
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -14,6 +14,10 @@ import ResidentLearningModule from './components/ResidentLearningModule';
 import ClinicalAuditModal from './components/ClinicalAuditModal';
 import ClinicalReportModal from './components/ClinicalReportModal';
 import ClinicalEvolutionModal from './components/ClinicalEvolutionModal';
+import { PatientTrialDetailModal } from './components/clinicalTrials/PatientTrialDetailModal';
+import { evaluateSinglePatientTrials } from './services/clinicalTrials/trialMatcher';
+import { getStoredClinicalTrials, syncAndStoreTrials } from './services/clinicalTrials/clinicalTrialStorage';
+import { PatientMatchingEvaluation } from './types/clinicalTrials';
 
 import { 
   getResidentChatResponse, 
@@ -50,9 +54,30 @@ const ResidentApp = () => {
   const [timelineCategoryFilter, setTimelineCategoryFilter] = useState('Todas');
 
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
+  const [selectedPatientTrialEvaluation, setSelectedPatientTrialEvaluation] = useState<PatientMatchingEvaluation | null>(null);
+  const [isEvaluatingPatientTrials, setIsEvaluatingPatientTrials] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [auditContent, setAuditContent] = useState<string | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
+
+  const handleCheckPatientTrials = async (patient: ResidentPatient) => {
+    if (!patient || isEvaluatingPatientTrials) return;
+    setIsEvaluatingPatientTrials(true);
+    try {
+      const { trials: loaded } = await getStoredClinicalTrials();
+      let trialsList = loaded;
+      if (!trialsList || trialsList.length === 0) {
+        const res = await syncAndStoreTrials();
+        trialsList = res.trials;
+      }
+      const evaluation = evaluateSinglePatientTrials(patient, trialsList || []);
+      setSelectedPatientTrialEvaluation(evaluation);
+    } catch (err) {
+      console.error('Error evaluando ensayos para el paciente:', err);
+    } finally {
+      setIsEvaluatingPatientTrials(false);
+    }
+  };
 
   const [reportModal, setReportModal] = useState({ isOpen: false, title: '', content: '' as string | null, isLoading: false });
   const [guidelineFiles, setGuidelineFiles] = useState<{ name: string; type: string; data: string }[]>([]);
@@ -409,6 +434,21 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {selectedPatient && (
+              <button
+                onClick={() => handleCheckPatientTrials(selectedPatient)}
+                disabled={isEvaluatingPatientTrials}
+                className="px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm active:scale-95 disabled:opacity-50"
+                title="Detectar si el paciente es candidato a ensayos clínicos disponibles"
+              >
+                {isEvaluatingPatientTrials ? (
+                  <Loader2 size={13} className="animate-spin text-emerald-600" />
+                ) : (
+                  <Microscope size={13} className="text-emerald-600" />
+                )}
+                <span>Ensayos Clínicos</span>
+              </button>
+            )}
             {selectedPatient && (
               <button
                 onClick={() => setShowEvolutionModal(true)}
@@ -822,6 +862,12 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
 
       {showCalc && <OncoCalculator onClose={() => setShowCalc(false)} />}
       {showDrugs && <DrugReference onClose={() => setShowDrugs(false)} />}
+      {selectedPatientTrialEvaluation && (
+        <PatientTrialDetailModal
+          evaluation={selectedPatientTrialEvaluation}
+          onClose={() => setSelectedPatientTrialEvaluation(null)}
+        />
+      )}
       
       <ClinicalAuditModal isOpen={showAuditModal} onClose={() => setShowAuditModal(false)} content={auditContent} isLoading={isAuditing} />
       

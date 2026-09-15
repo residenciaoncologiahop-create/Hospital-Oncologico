@@ -12,6 +12,10 @@ import OncoCalculator from './components/OncoCalculator';
 import DrugReference from './components/DrugReference';
 import PracticeStatsModal from './components/PracticeStatsModal';
 import { ClinicalTrialsModal } from './components/clinicalTrials/ClinicalTrialsModal';
+import { PatientTrialDetailModal } from './components/clinicalTrials/PatientTrialDetailModal';
+import { evaluateSinglePatientTrials } from './services/clinicalTrials/trialMatcher';
+import { getStoredClinicalTrials, syncAndStoreTrials } from './services/clinicalTrials/clinicalTrialStorage';
+import { PatientMatchingEvaluation } from './types/clinicalTrials';
 
 // --- FIREBASE IMPORTS ---
 import { db } from './lib/firebase';
@@ -245,10 +249,31 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
     const [showDrugsModal, setShowDrugsModal] = useState(false);
     const [showStatsModal, setShowStatsModal] = useState(false);
     const [showClinicalTrialsModal, setShowClinicalTrialsModal] = useState(false);
+    const [selectedPatientTrialEvaluation, setSelectedPatientTrialEvaluation] = useState<PatientMatchingEvaluation | null>(null);
+    const [isEvaluatingPatientTrials, setIsEvaluatingPatientTrials] = useState(false);
     const [showValidationModal, setShowValidationModal] = useState(false);
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
+
+    const handleCheckPatientTrials = async (patient: Patient) => {
+        if (!patient || isEvaluatingPatientTrials) return;
+        setIsEvaluatingPatientTrials(true);
+        try {
+            const { trials: loaded } = await getStoredClinicalTrials();
+            let trialsList = loaded;
+            if (!trialsList || trialsList.length === 0) {
+                const res = await syncAndStoreTrials();
+                trialsList = res.trials;
+            }
+            const evaluation = evaluateSinglePatientTrials(patient, trialsList || []);
+            setSelectedPatientTrialEvaluation(evaluation);
+        } catch (err) {
+            console.error('Error evaluando ensayos para el paciente:', err);
+        } finally {
+            setIsEvaluatingPatientTrials(false);
+        }
+    };
 
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const isAtBottomRef = useRef(true);
@@ -1193,6 +1218,22 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
 
                             {selP && (
                                 <button
+                                    onClick={() => handleCheckPatientTrials(selP)}
+                                    disabled={isEvaluatingPatientTrials}
+                                    className="px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm active:scale-95 disabled:opacity-50"
+                                    title="Detectar si el paciente es candidato a ensayos clínicos disponibles"
+                                >
+                                    {isEvaluatingPatientTrials ? (
+                                        <Loader2 size={13} className="animate-spin text-emerald-600" />
+                                    ) : (
+                                        <Microscope size={13} className="text-emerald-600" />
+                                    )}
+                                    <span>Ensayos Clínicos</span>
+                                </button>
+                            )}
+
+                            {selP && (
+                                <button
                                     onClick={() => setShowEvolutionModal(true)}
                                     className="px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-100 active:scale-95"
                                     title="Generar evolución médica para Historia Clínica Digital"
@@ -1998,6 +2039,16 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 {showDrugsModal && <DrugReference onClose={() => setShowDrugsModal(false)} />}
                 {showStatsModal && <PracticeStatsModal patients={patients} onClose={() => setShowStatsModal(false)} />}
                 {showClinicalTrialsModal && <ClinicalTrialsModal patients={patients} onClose={() => setShowClinicalTrialsModal(false)} />}
+                {selectedPatientTrialEvaluation && (
+                    <PatientTrialDetailModal
+                        evaluation={selectedPatientTrialEvaluation}
+                        onClose={() => setSelectedPatientTrialEvaluation(null)}
+                        onOpenFullSearch={() => {
+                            setSelectedPatientTrialEvaluation(null);
+                            setShowClinicalTrialsModal(true);
+                        }}
+                    />
+                )}
 
                 {/* ── MODAL CRITERIOS DE VALIDACIÓN CLÍNICA (MODO DEMO) ── */}
                 {showValidationModal && selP?.validationCriteria && (

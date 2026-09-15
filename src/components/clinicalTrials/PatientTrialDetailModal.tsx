@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { X, ExternalLink, MapPin, CheckCircle2, AlertTriangle, AlertCircle, ShieldAlert, Eye } from 'lucide-react';
+import { X, ExternalLink, MapPin, CheckCircle2, AlertTriangle, AlertCircle, ShieldAlert, Eye, Microscope } from 'lucide-react';
 import { PatientMatchingEvaluation, ClinicalTrial } from '../../types/clinicalTrials';
 import { TrialDetailModal } from './TrialDetailModal';
 
 interface Props {
   evaluation: PatientMatchingEvaluation;
   onClose: () => void;
+  onOpenFullSearch?: () => void;
 }
 
-export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose }) => {
+export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, onOpenFullSearch }) => {
   const [selectedTrial, setSelectedTrial] = useState<ClinicalTrial | null>(null);
 
   return (
@@ -50,12 +51,24 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose }
               </div>
             </div>
 
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-700 p-2 rounded-xl hover:bg-gray-100 transition-colors"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              {onOpenFullSearch && (
+                <button
+                  onClick={onOpenFullSearch}
+                  className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-white hover:bg-emerald-50 text-xs font-bold text-emerald-800 flex items-center gap-1.5 transition-colors shadow-xs"
+                  title="Abrir el catálogo y buscador general de ensayos oncológicos"
+                >
+                  <Microscope size={14} className="text-emerald-600" />
+                  <span className="hidden sm:inline">Todos los Ensayos</span>
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-700 p-2 rounded-xl hover:bg-gray-100 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           {/* OBLIGATORY LEGAL & MEDICAL NOTICE */}
