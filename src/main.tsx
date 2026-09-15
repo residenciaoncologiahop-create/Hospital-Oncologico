@@ -11,6 +11,7 @@ import { requestNotificationPermission } from './utils/notificationService';
 import OncoCalculator from './components/OncoCalculator';
 import DrugReference from './components/DrugReference';
 import PracticeStatsModal from './components/PracticeStatsModal';
+import { ClinicalTrialsModal } from './components/clinicalTrials/ClinicalTrialsModal';
 
 // --- FIREBASE IMPORTS ---
 import { db } from './lib/firebase';
@@ -22,7 +23,7 @@ import {
     Loader2, AlertCircle, Info, Terminal, ChevronDown,
     Calendar, PenTool, ClipboardCheck, Wrench, Calculator, Pill, BarChart3,
     PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2, Filter, Sparkles,
-    ShieldCheck, CheckCircle2
+    ShieldCheck, CheckCircle2, Microscope
 } from 'lucide-react';
 
 import FormManager from './components/FormManager';
@@ -243,6 +244,7 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
     const [showCalculatorModal, setShowCalculatorModal] = useState(false);
     const [showDrugsModal, setShowDrugsModal] = useState(false);
     const [showStatsModal, setShowStatsModal] = useState(false);
+    const [showClinicalTrialsModal, setShowClinicalTrialsModal] = useState(false);
     const [showValidationModal, setShowValidationModal] = useState(false);
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
@@ -1312,6 +1314,22 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                                     <div className="text-[10px] text-gray-400 font-medium leading-tight">Métricas y perfil clínico</div>
                                                 </div>
                                             </button>
+
+                                            <button
+                                                onClick={() => {
+                                                    setShowToolsMenu(false);
+                                                    setShowClinicalTrialsModal(true);
+                                                }}
+                                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-cyan-50 group transition-colors"
+                                            >
+                                                <div className="w-8 h-8 rounded-lg bg-cyan-50 text-cyan-600 group-hover:bg-cyan-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+                                                    <Microscope size={16} />
+                                                </div>
+                                                <div>
+                                                    <div className="text-xs font-black text-gray-800 group-hover:text-cyan-700">🔬 Ensayos clínicos</div>
+                                                    <div className="text-[10px] text-gray-400 font-medium leading-tight">Buscador y matching de pacientes</div>
+                                                </div>
+                                            </button>
                                         </div>
                                     </>
                                 )}
@@ -1979,6 +1997,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 {showCalculatorModal && <OncoCalculator onClose={() => setShowCalculatorModal(false)} />}
                 {showDrugsModal && <DrugReference onClose={() => setShowDrugsModal(false)} />}
                 {showStatsModal && <PracticeStatsModal patients={patients} onClose={() => setShowStatsModal(false)} />}
+                {showClinicalTrialsModal && <ClinicalTrialsModal patients={patients} onClose={() => setShowClinicalTrialsModal(false)} />}
 
                 {/* ── MODAL CRITERIOS DE VALIDACIÓN CLÍNICA (MODO DEMO) ── */}
                 {showValidationModal && selP?.validationCriteria && (
