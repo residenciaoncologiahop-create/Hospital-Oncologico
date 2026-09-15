@@ -4,8 +4,8 @@ import { ClinicalTrial } from '../../types/clinicalTrials';
 import { syncAllTrialSources, SyncResult } from './sourcesRegistry';
 
 const COLLECTION_NAME = 'clinical_trials';
-const LOCAL_STORAGE_KEY = 'clinical_trials_cached_v1';
-const LAST_SYNC_KEY = 'clinical_trials_last_sync_v1';
+const LOCAL_STORAGE_KEY = 'clinical_trials_cached_v2';
+const LAST_SYNC_KEY = 'clinical_trials_last_sync_v2';
 
 /**
  * Obtiene los ensayos almacenados (primero desde Firestore, o desde caché local como fallback ultrarrápido)

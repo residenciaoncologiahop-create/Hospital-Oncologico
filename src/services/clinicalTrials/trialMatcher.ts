@@ -8,6 +8,26 @@ import {
 } from '../../types/clinicalTrials';
 import { extractPatientClinicalProfile } from './patientProfileExtractor';
 
+export const ORGAN_LABELS: Record<string, string> = {
+  mama: 'Cáncer de Mama',
+  pulmon: 'Cáncer de Pulmón (NSCLC / SCLC)',
+  colorrectal: 'Cáncer Colorrectal',
+  melanoma: 'Melanoma',
+  prostata: 'Cáncer de Próstata',
+  pancreas: 'Cáncer de Páncreas',
+  ovario: 'Cáncer de Ovario',
+  gastrico: 'Cáncer Gástrico / Esofágico',
+  rinon: 'Cáncer Renal',
+  vejiga: 'Cáncer de Vejiga / Urotelial',
+  cervicouterino: 'Cáncer Cervicouterino / Endometrio',
+  cabeza_cuello: 'Cáncer de Cabeza y Cuello',
+  hematologia: 'Neoplasia Hematológica',
+  snc: 'Tumor de Sistema Nervioso Central',
+  biliar: 'Cáncer de Vía Biliar / Colangiocarcinoma',
+  sarcoma: 'Sarcoma / GIST',
+  solido_agnostico: 'Tumores Sólidos Avanzados'
+};
+
 const REQUIRED_NOTICE = 'Paciente potencialmente elegible. Requiere verificación de criterios por el equipo investigador.';
 
 /**
@@ -21,48 +41,9 @@ export function evaluateTrialMatch(
   const missingData: string[] = [];
   const incompatibilities: string[] = [];
 
-  // 1. EVALUACIÓN DE TUMOR / SITIO
-  let tumorMatches = false;
-  if (patient.organOrSite) {
-    if (trial.tumorTypes.includes(patient.organOrSite)) {
-      tumorMatches = true;
-    }
-  }
-
-  // Búsqueda de respaldo en título y condiciones
-  if (!tumorMatches && patient.diagnosisRaw) {
-    const rawLower = patient.diagnosisRaw.toLowerCase();
-    const condJoined = trial.conditions.join(' ').toLowerCase();
-    const titleLower = trial.title.toLowerCase();
-
-    if (
-      (rawLower.includes('colon') || rawLower.includes('rect')) && 
-      (condJoined.includes('colon') || condJoined.includes('rect') || condJoined.includes('colorectal'))
-    ) tumorMatches = true;
-    else if (
-      rawLower.includes('pulmon') && 
-      (condJoined.includes('lung') || condJoined.includes('nsclc') || titleLower.includes('lung'))
-    ) tumorMatches = true;
-    else if (
-      rawLower.includes('mama') && 
-      (condJoined.includes('breast') || titleLower.includes('breast'))
-    ) tumorMatches = true;
-    else if (
-      rawLower.includes('melanoma') && 
-      (condJoined.includes('melanoma') || titleLower.includes('melanoma'))
-    ) tumorMatches = true;
-    else if (
-      rawLower.includes('pancreas') && 
-      (condJoined.includes('pancrea') || titleLower.includes('pancrea'))
-    ) tumorMatches = true;
-    else if (
-      rawLower.includes('prostata') && 
-      (condJoined.includes('prostate') || titleLower.includes('prostate'))
-    ) tumorMatches = true;
-  }
-
-  if (!tumorMatches) {
-    incompatibilities.push('Sitio tumoral / patología no concordante con las indicaciones del estudio.');
+  // 1. EVALUACIÓN ESTRICTA DE TUMOR PRIMARIO / SITIO
+  if (!patient.organOrSite) {
+    incompatibilities.push('No se pudo identificar con certeza el tumor primario del paciente a partir de la información documentada.');
     return {
       trial,
       category: 'not_compatible',
@@ -76,8 +57,31 @@ export function evaluateTrialMatch(
     };
   }
 
-  // Coincidencia de diagnóstico
-  matches.push(`Diagnóstico y localización tumoral concordante (${patient.organOrSite || 'Oncología'}) ✓`);
+  const patientOrganLabel = ORGAN_LABELS[patient.organOrSite] || patient.organOrSite;
+  const trialHasPatientOrgan = trial.tumorTypes.includes(patient.organOrSite);
+  const trialIsSolidTumorBasket = trial.tumorTypes.includes('solido_agnostico');
+
+  // Si el ensayo no incluye el órgano del paciente ni es una canasta agnóstica de tumores sólidos: INCOMPATIBLE
+  if (!trialHasPatientOrgan && !trialIsSolidTumorBasket) {
+    const trialOrgansLabels = trial.tumorTypes.map(t => ORGAN_LABELS[t] || t).join(', ') || 'otra patología específica';
+    incompatibilities.push(
+      `Sitio tumoral primario no concordante: el paciente presenta diagnóstico de ${patientOrganLabel}, mientras que el ensayo evalúa ${trialOrgansLabels}.`
+    );
+    return {
+      trial,
+      category: 'not_compatible',
+      categoryLabel: 'Probablemente no compatible',
+      categoryBadge: '🔴 Probablemente no compatible',
+      score: -100,
+      matches,
+      missingData,
+      incompatibilities,
+      requiredVerificationNotice: REQUIRED_NOTICE
+    };
+  }
+
+  // Coincidencia estricta de diagnóstico primario
+  matches.push(`Diagnóstico y localización tumoral concordante (${patientOrganLabel}) ✓`);
 
   // 2. EDAD
   if (typeof patient.age === 'number') {

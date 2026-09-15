@@ -3,34 +3,45 @@ import { ClinicalTrial, TrialLocation, TrialStatusType } from '../../../types/cl
 const CT_GOV_API_BASE = 'https://clinicaltrials.gov/api/v2/studies';
 
 /**
- * Normaliza y extrae tipos de tumores principales para búsqueda rápida
+ * Normaliza y extrae tipos de tumores principales para búsqueda y matching estricto.
+ * IMPORTANTE:
+ * Se basa EXCLUSIVAMENTE en las condiciones clínicas oficiales (conditions) y los títulos del estudio (title/officialTitle).
+ * NUNCA se debe usar briefSummary, ya que contiene menciones de exclusión y antecedentes de otros tumores
+ * que generan falsos positivos en el matching.
  */
-function extractTumorTypes(conditions: string[], title: string, summary: string): string[] {
-  const combined = `${conditions.join(' ')} ${title} ${summary}`.toLowerCase();
+function extractTumorTypes(conditions: string[], title: string, officialTitle: string = ''): string[] {
+  const combined = `${conditions.join(' ')} | ${title} | ${officialTitle}`.toLowerCase();
   const found = new Set<string>();
 
-  const mapping: Record<string, string[]> = {
-    colorrectal: ['colon', 'rectal', 'colorectal', 'colorrectal', 'rectum'],
-    pulmon: ['lung', 'pulmon', 'nsclc', 'sclc', 'bronchial'],
-    mama: ['breast', 'mama', 'mamario'],
-    melanoma: ['melanoma', 'cutaneous melanoma'],
-    prostata: ['prostate', 'prostata'],
-    pancreas: ['pancrea', 'pancreatic', 'ductal adenocarcinoma of the pancreas'],
-    ovario: ['ovarian', 'ovario', 'fallopian'],
-    gastrico: ['gastric', 'gástrico', 'estómago', 'stomach', 'esophag', 'gastroesophageal'],
-    rinon: ['renal', 'kidney', 'riñón', 'rcc'],
-    vejiga: ['bladder', 'urothelial', 'vejiga'],
-    cervicouterino: ['cervix', 'cervical', 'uter', 'endometrial'],
-    cabeza_cuello: ['head and neck', 'cabeza y cuello', 'laryngeal', 'oral cavity', 'pharynx'],
-    hematologia: ['leukemia', 'leucemia', 'lymphoma', 'linfoma', 'myeloma', 'mieloma'],
-    snc: ['glioma', 'glioblastoma', 'brain', 'cerebr', 'cns'],
-    sarcoma: ['sarcoma', 'gastrointestinal stromal', 'gist'],
-    biliar: ['biliary', 'cholangiocarcinoma', 'colangiocarcinoma', 'gallbladder', 'vesícula']
+  const mapping: Record<string, RegExp[]> = {
+    colorrectal: [/\b(colorectal|colon|rectal|rectum)\b/i],
+    pulmon: [/\b(lung|nsclc|sclc|bronchial|non-small cell|small cell lung|pulmonary)\b/i],
+    mama: [/\b(breast|mama|mamari[ao]|triple-negative breast|her2-positive breast)\b/i],
+    melanoma: [/\b(melanoma)\b/i],
+    prostata: [/\b(prostate|prostatic)\b/i],
+    pancreas: [/\b(pancrea|pancreatic)\b/i],
+    ovario: [/\b(ovarian|fallopian|primary peritoneal|ovario)\b/i],
+    gastrico: [/\b(gastric|gastroesophageal|esophageal|stomach cancer)\b/i],
+    rinon: [/\b(renal cell|kidney cancer|renal carcinoma|clear cell renal)\b/i],
+    vejiga: [/\b(urothelial|bladder cancer|bladder carcinoma|urothelium)\b/i],
+    cervicouterino: [/\b(cervical cancer|cervix|endometrial|uterine cancer)\b/i],
+    cabeza_cuello: [/\b(head and neck|laryngeal|pharyngeal|oral cavity|hypopharynx|oropharynx)\b/i],
+    hematologia: [/\b(leukemia|lymphoma|myeloma|hematologic|hodgkin)\b/i],
+    snc: [/\b(glioblastoma|glioma|astrocytoma|brain tumor|cns)\b/i],
+    sarcoma: [/\b(sarcoma|gist|gastrointestinal stromal)\b/i],
+    biliar: [/\b(biliary|cholangiocarcinoma|gallbladder)\b/i]
   };
 
-  for (const [key, keywords] of Object.entries(mapping)) {
-    if (keywords.some(k => combined.includes(k))) {
+  for (const [key, patterns] of Object.entries(mapping)) {
+    if (patterns.some(p => p.test(combined))) {
       found.add(key);
+    }
+  }
+
+  // Detectar si es un ensayo cesta/canasta agnóstico para tumores sólidos avanzados
+  if (found.size === 0) {
+    if (/\b(solid tumor|solid tumors|tumores s[oó]lidos|advanced solid malignancies|advanced solid tumors)\b/i.test(combined)) {
+      found.add('solido_agnostico');
     }
   }
 
@@ -258,7 +269,7 @@ export function mapStudyToClinicalTrial(study: any): ClinicalTrial {
   const url = `https://clinicaltrials.gov/study/${nctId}`;
 
   // Normalizaciones clínicas
-  const tumorTypes = extractTumorTypes(conditions, title, briefSummary);
+  const tumorTypes = extractTumorTypes(conditions, title, officialTitle);
   const biomarkers = extractBiomarkers(`${title} ${conditions.join(' ')} ${interventions.join(' ')} ${eligibilityCriteria}`);
 
   const combinedSearch = `${title} ${conditions.join(' ')} ${eligibilityCriteria}`.toLowerCase();

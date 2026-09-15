@@ -12,6 +12,169 @@ function normalize(str: string = ''): string {
 }
 
 /**
+ * Detecta el tumor primario del paciente con máxima rigurosidad oncológica.
+ * REGLAS CLÍNICAS FUNDAMENTALES:
+ * 1. El tumor primario se extrae PRIMERO del diagnóstico explícito (patient.diagnosis).
+ * 2. Si el diagnóstico contiene secundarismo (ej. "Cáncer de Colon con metástasis pulmonares"),
+ *    el órgano primario es COLON, NUNCA pulmón ni hígado.
+ * 3. NUNCA se debe barrer el cuerpo completo de la historia clínica (estudios de imágenes, antecedentes)
+ *    para definir el tumor primario si el diagnóstico ya identifica el órgano.
+ */
+export function detectPrimaryTumorOrgan(diagnosisRaw: string = '', historyText: string = ''): string | undefined {
+  const diagNorm = normalize(diagnosisRaw);
+
+  // 1. EVALUAR DIAGNÓSTICO EXPLÍCITO (PRIORIDAD ABSOLUTA)
+  if (diagNorm) {
+    // MAMA (ej. "CA MAMA", "Cáncer de mama", "Carcinoma ductal invasor de mama")
+    if (
+      /\b(mama|mamari[ao]|seno)\b/i.test(diagNorm) ||
+      /\bca\s+mama\b/i.test(diagNorm) ||
+      /\b(cdi|cli)\s+mama\b/i.test(diagNorm)
+    ) {
+      return 'mama';
+    }
+
+    // COLORRECTAL (ej. "Adenocarcinoma de Colon Sigmoides", "Cáncer de recto")
+    if (
+      /\b(colon|recto|rectal|colorrectal|sigmoides|ciego)\b/i.test(diagNorm) ||
+      /\bca\s+(?:de\s+)?colon\b/i.test(diagNorm) ||
+      /\bccr\b/i.test(diagNorm)
+    ) {
+      return 'colorrectal';
+    }
+
+    // MELANOMA (ej. "Melanoma cutáneo metastásico")
+    if (/\b(melanoma)\b/i.test(diagNorm)) {
+      return 'melanoma';
+    }
+
+    // PÁNCREAS (ej. "Adenocarcinoma Ductal de Cabeza de Páncreas")
+    if (
+      /\b(pancreas|pancreatico|cefalopancreatico|cabeza.*pancreas)\b/i.test(diagNorm) ||
+      /\bca\s+(?:de\s+)?pancreas\b/i.test(diagNorm)
+    ) {
+      return 'pancreas';
+    }
+
+    // PRÓSTATA (ej. "Adenocarcinoma de próstata")
+    if (
+      /\b(prostata|prostatico)\b/i.test(diagNorm) ||
+      /\bca\s+(?:de\s+)?prostata\b/i.test(diagNorm)
+    ) {
+      return 'prostata';
+    }
+
+    // PULMÓN (ej. "Adenocarcinoma de pulmón", "NSCLC", "CPCNP", "SCLC")
+    if (
+      /\b(nsclc|cpcnp|sclc|cpcp|carcinoma\s+pulmonar|ca\s+(?:de\s+)?pulmon|cancer\s+(?:de\s+)?pulmon)\b/i.test(diagNorm)
+    ) {
+      return 'pulmon';
+    }
+    // Si contiene "pulmon" o "pulmonar", verificar rigurosamente que NO sea secundarismo/metástasis
+    if (/\b(pulmon|pulmonar|bronquial)\b/i.test(diagNorm)) {
+      if (!/met[aá]stasis.*pulmon|secundarismo.*pulmon|mtsx.*pulmon|compromiso.*pulmon|n[oó]dulo.*pulmon/i.test(diagNorm)) {
+        return 'pulmon';
+      }
+    }
+
+    // OVARIO
+    if (
+      /\b(ovario|ovarico|trompa\s+de\s+falopio)\b/i.test(diagNorm) ||
+      /\bca\s+(?:de\s+)?ovario\b/i.test(diagNorm)
+    ) {
+      return 'ovario';
+    }
+
+    // GÁSTRICO / ESÓFAGO
+    if (
+      /\b(gastrico|estomago|esofago|esofagico|union\s+esofagogastrica)\b/i.test(diagNorm) ||
+      /\bca\s+(?:de\s+)?(?:gastrico|estomago|esofago)\b/i.test(diagNorm)
+    ) {
+      return 'gastrico';
+    }
+
+    // RIÑÓN
+    if (
+      /\b(rinon|renal|ccr\s+renal|rcc|celulas\s+claras)\b/i.test(diagNorm) ||
+      /\bca\s+(?:de\s+)?(?:rinon|renal)\b/i.test(diagNorm)
+    ) {
+      return 'rinon';
+    }
+
+    // VEJIGA / UROTELIAL
+    if (
+      /\b(vejiga|urotelial|urotelio)\b/i.test(diagNorm) ||
+      /\bca\s+(?:de\s+)?vejiga\b/i.test(diagNorm)
+    ) {
+      return 'vejiga';
+    }
+
+    // CÉRVIX / ENDOMETRIO / ÚTERO
+    if (
+      /\b(cervix|cuello\s+uterino|cervicouterino|endometrio|uterino)\b/i.test(diagNorm) ||
+      /\bca\s+(?:de\s+)?cervix\b/i.test(diagNorm)
+    ) {
+      return 'cervicouterino';
+    }
+
+    // CABEZA Y CUELLO
+    if (
+      /\b(cabeza\s+y\s+cuello|laringe|faringe|orofaringe|cavidad\s+oral|lengua)\b/i.test(diagNorm)
+    ) {
+      return 'cabeza_cuello';
+    }
+
+    // HEMATOLOGÍA
+    if (
+      /\b(leucemia|linfoma|mieloma|hodgkin)\b/i.test(diagNorm)
+    ) {
+      return 'hematologia';
+    }
+
+    // SNC
+    if (
+      /\b(glioblastoma|astrocitoma|glioma|tumor\s+cerebral\s+primario)\b/i.test(diagNorm)
+    ) {
+      return 'snc';
+    }
+
+    // VÍA BILIAR
+    if (
+      /\b(colangiocarcinoma|via\s+biliar|vesicula\s+biliar)\b/i.test(diagNorm)
+    ) {
+      return 'biliar';
+    }
+
+    // SARCOMA
+    if (
+      /\b(sarcoma|gist|liposarcoma|leiomiosarcoma)\b/i.test(diagNorm)
+    ) {
+      return 'sarcoma';
+    }
+  }
+
+  // 2. SI Y SOLO SI EL DIAGNÓSTICO NO INDICA EL ÓRGANO, BUSCAR LÍNEA ESPECÍFICA EN HISTORIA
+  const histNorm = normalize(historyText);
+  const diagLine = histNorm.match(/(?:diagnostico|tumor\s+primario|motivo\s+de\s+consulta)[:\s]+([^\n.]+)/i);
+  if (diagLine) {
+    const sec = diagLine[1];
+    if (/\b(mama|mamari[ao]|seno)\b/i.test(sec)) return 'mama';
+    if (/\b(colon|recto|rectal|colorrectal|sigmoides)\b/i.test(sec)) return 'colorrectal';
+    if (/\b(melanoma)\b/i.test(sec)) return 'melanoma';
+    if (/\b(pancreas|pancreatico)\b/i.test(sec)) return 'pancreas';
+    if (/\b(prostata|prostatico)\b/i.test(sec)) return 'prostata';
+    if (/\b(pulmon|pulmonar|nsclc|cpcnp)\b/i.test(sec) && !/met[aá]stasis/i.test(sec)) return 'pulmon';
+    if (/\b(ovario|ovarico)\b/i.test(sec)) return 'ovario';
+    if (/\b(gastrico|estomago|esofago)\b/i.test(sec)) return 'gastrico';
+    if (/\b(rinon|renal)\b/i.test(sec)) return 'rinon';
+    if (/\b(vejiga|urotelial)\b/i.test(sec)) return 'vejiga';
+    if (/\b(cervix|endometrio)\b/i.test(sec)) return 'cervicouterino';
+  }
+
+  return undefined;
+}
+
+/**
  * Extrae el perfil clínico de matching de un paciente existente de forma estrictamente conservadora.
  * REGLAS DE ORO:
  * - NO infiere datos faltantes.
@@ -50,33 +213,8 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     sex = 'FEMALE';
   }
 
-  // 3. ÓRGANO O SITIO TUMORAL
-  let organOrSite: string | undefined = undefined;
-  const organMap: Record<string, string[]> = {
-    colorrectal: ['colon', 'recto', 'sigmoides', 'colorrectal', 'ciego'],
-    pulmon: ['pulmon', 'pulmonar', 'nsclc', 'cpcnp', 'bronquial', 'microcitico'],
-    mama: ['mama', 'mamario', 'mamaria', 'ductal de mama'],
-    melanoma: ['melanoma'],
-    prostata: ['prostata', 'prostatico'],
-    pancreas: ['pancreas', 'pancreatico', 'cefalopancreatico'],
-    ovario: ['ovario', 'ovarico', 'trompa de falopio'],
-    gastrico: ['gastrico', 'estomago', 'esofagico', 'union esofagogastrica'],
-    rinon: ['rinon', 'renal'],
-    vejiga: ['vejiga', 'urotelial'],
-    cervicouterino: ['cervix', 'cuello uterino', 'endometrio', 'uterino'],
-    cabeza_cuello: ['laringe', 'faringe', 'orofaringe', 'lengua', 'cabeza y cuello'],
-    hematologia: ['leucemia', 'linfoma', 'mieloma'],
-    snc: ['glioblastoma', 'glioma', 'astrocitoma', 'cerebral'],
-    sarcoma: ['sarcoma', 'gist'],
-    biliar: ['biliar', 'colangiocarcinoma', 'vesicula']
-  };
-
-  for (const [organ, keywords] of Object.entries(organMap)) {
-    if (keywords.some(k => fullTextNorm.includes(k))) {
-      organOrSite = organ;
-      break;
-    }
-  }
+  // 3. ÓRGANO O SITIO TUMORAL PRIMARIO (Extracción médica estricta y rigurosa)
+  const organOrSite = detectPrimaryTumorOrgan(diagnosisRaw, historyText);
 
   // 4. HISTOLOGÍA
   let histology: string | undefined = undefined;
