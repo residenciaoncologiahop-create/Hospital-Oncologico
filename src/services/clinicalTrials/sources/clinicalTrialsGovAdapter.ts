@@ -67,9 +67,6 @@ function extractBiomarkers(text: string): string[] {
 function parseEligibilityCriteria(rawCriteria: string): { inclusion: string[]; exclusion: string[] } {
   if (!rawCriteria) return { inclusion: [], exclusion: [] };
 
-  const inclusion: string[] = [];
-  const exclusion: string[] = [];
-
   const lower = rawCriteria.toLowerCase();
   const incIdx = lower.indexOf('inclusion criteria');
   const excIdx = lower.indexOf('exclusion criteria');

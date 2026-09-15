@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  X, Search, RefreshCw, Filter, MapPin, ExternalLink, Eye, 
-  ShieldAlert, Users, Microscope, CheckCircle2, AlertTriangle, 
-  Building, Calendar, Clock, ChevronRight, Dna, FileSpreadsheet
+  X, Search, RefreshCw, MapPin, ExternalLink, Eye, 
+  ShieldAlert, Users, Microscope, Clock, ChevronRight
 } from 'lucide-react';
 import { ClinicalTrial, DoctorMatchingSummary, PatientMatchingEvaluation } from '../../types/clinicalTrials';
 import { getStoredClinicalTrials, syncAndStoreTrials } from '../../services/clinicalTrials/clinicalTrialStorage';

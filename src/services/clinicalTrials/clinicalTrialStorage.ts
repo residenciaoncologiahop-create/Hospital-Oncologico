@@ -1,5 +1,5 @@
 import { db } from '../../lib/firebase';
-import { collection, getDocs, doc, setDoc, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, query, limit } from 'firebase/firestore';
 import { ClinicalTrial } from '../../types/clinicalTrials';
 import { syncAllTrialSources, SyncResult } from './sourcesRegistry';
 

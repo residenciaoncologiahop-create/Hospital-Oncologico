@@ -48,8 +48,8 @@ export async function computeContentHash(content: string): Promise<string> {
 
   // 2. Node.js crypto si está disponible (entornos de pruebas / SSR)
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const nodeCrypto = require('crypto');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeCrypto = typeof require !== 'undefined' ? require('crypto') : null;
     if (nodeCrypto && typeof nodeCrypto.createHash === 'function') {
       return nodeCrypto.createHash('sha256').update(clean).digest('hex');
     }

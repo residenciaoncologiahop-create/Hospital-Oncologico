@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, ExternalLink, MapPin, CheckCircle2, AlertTriangle, AlertCircle, ShieldAlert, Eye, User, FileText } from 'lucide-react';
-import { PatientMatchingEvaluation, TrialMatchResult, ClinicalTrial } from '../../types/clinicalTrials';
+import { X, ExternalLink, MapPin, CheckCircle2, AlertTriangle, AlertCircle, ShieldAlert, Eye } from 'lucide-react';
+import { PatientMatchingEvaluation, ClinicalTrial } from '../../types/clinicalTrials';
 import { TrialDetailModal } from './TrialDetailModal';
 
 interface Props {
@@ -81,7 +81,7 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose }
                 </p>
               </div>
             ) : (
-              evaluation.matches.map((m, idx) => (
+              evaluation.matches.map((m) => (
                 <div 
                   key={m.trial.id} 
                   className="bg-white border border-gray-200/80 hover:border-indigo-200 rounded-2xl p-5 shadow-sm space-y-4 transition-all"

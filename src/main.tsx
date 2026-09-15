@@ -22,7 +22,7 @@ import {
     Upload, Activity, Trash2, Pencil, Menu, X, Clock,
     Loader2, AlertCircle, Info, Terminal, ChevronDown,
     Calendar, PenTool, ClipboardCheck, Wrench, Calculator, Pill, BarChart3,
-    PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2, Filter, Sparkles,
+    PanelLeftClose, PanelLeftOpen, Image, Maximize2, Minimize2, Sparkles,
     ShieldCheck, CheckCircle2, Microscope
 } from 'lucide-react';
 
