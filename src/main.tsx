@@ -1058,7 +1058,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
 
                 {/* ── SIDEBAR ─────────────────────────────────── */}
                 <aside className={`fixed inset-y-0 left-0 z-40 bg-gray-50 border-r lg:static flex flex-col transition-all duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} ${sidebarOpen ? 'w-72 lg:translate-x-0' : 'w-0 lg:translate-x-0 overflow-hidden'}`}>
-                    <div className="px-5 py-4 border-b flex items-center justify-between bg-[#f8f9fa]">
+                    <div className="px-5 h-14 border-b flex items-center justify-between bg-[#f8f9fa] shrink-0">
                         <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-500 rounded-xl flex items-center justify-center shadow-md shadow-blue-100">
                                 <Activity size={16} className="text-white"/>
@@ -1115,7 +1115,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                     >
                                         <div className="flex flex-col pr-2 flex-1 min-w-0">
                                             <div className="flex items-center gap-1.5">
-                                                <span className="font-bold text-xs">HC-{p.hcNumber}</span>
+                                                <span className="font-bold text-xs">{(p.hcNumber || '').replace(/^HC-?/i, '')}</span>
                                                 {p.validationCriteria && (
                                                     <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded truncate max-w-[130px] ${selectedPatientId === p.id ? 'bg-blue-700 text-blue-100' : 'bg-amber-100 text-amber-800'}`}>
                                                         {p.validationCriteria.scenarioTitle.split('(')[0].trim()}
