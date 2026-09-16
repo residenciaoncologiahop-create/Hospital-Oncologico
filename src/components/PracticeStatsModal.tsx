@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { 
   X, BarChart3, Users, Activity, Calendar, ShieldCheck, 
   TrendingUp, Layers, Stethoscope,
-  PieChart as PieIcon, CheckCircle2
+  PieChart as PieIcon, CheckCircle2, AlertCircle, Info,
+  Eye
 } from 'lucide-react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, 
@@ -45,6 +46,30 @@ interface Patient {
   figo?: string;
   initialStage?: string;
   currentStage?: string;
+  tumorLocation?: string;
+  tumorSite?: string;
+  localizacion?: string;
+  organo?: string;
+  primarySite?: string;
+  topografia?: string;
+  histology?: string;
+  histologia?: string;
+  anatomiaPatologica?: string;
+  pathology?: string;
+  biomarkers?: string | string[];
+  biomarcadores?: string | string[];
+  molecularProfile?: string;
+  perfilMolecular?: string;
+  linea_tratamiento?: string | number;
+  lineaTratamiento?: string | number;
+  treatmentLine?: string | number;
+  linea?: string | number;
+  line?: string | number;
+  receptor_RE?: string;
+  receptor_RP?: string;
+  receptor_HER2?: string;
+  receptor_KRAS?: string;
+  receptor_EGFR?: string;
   clinicalNotes?: Array<{ text?: string; [key: string]: unknown } | string>;
   evoluciones?: Array<{ text?: string; nota?: string; [key: string]: unknown } | string>;
   lastUpdated?: number;
@@ -60,6 +85,67 @@ interface Props {
 }
 
 type TimeRange = '30d' | '6m' | '1y' | 'all';
+
+// --- TIPOS DE TRAZABILIDAD Y CALIDAD CLÍNICA ---
+export type StageCategory = 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | 'No consignado';
+export type DataSourceOrigin = 'structured' | 'text' | 'missing';
+
+export type UnassignedStageReason = 
+  | 'no_mention'                   // Sin mención explícita de estadio
+  | 'insufficient_data'            // Información clínica insuficiente
+  | 'related_but_undetermined'     // Tiene información relacionada pero no permite determinar estadio
+  | 'not_evaluable';               // No evaluable
+
+export interface StageDetectionResult {
+  stage: StageCategory;
+  origin: DataSourceOrigin;
+  unassignedReason?: UnassignedStageReason;
+}
+
+export interface TumorLocationResult {
+  site: string;
+  origin: DataSourceOrigin;
+}
+
+export interface HistologyResult {
+  histology: string;
+  origin: DataSourceOrigin;
+}
+
+export interface BiomarkersResult {
+  hasBiomarkers: boolean;
+  biomarkers: string[];
+  origin: DataSourceOrigin;
+}
+
+export interface TreatmentLineResult {
+  hasTreatmentLine: boolean;
+  line: string;
+  origin: DataSourceOrigin;
+}
+
+export const UNASSIGNED_REASON_LABELS: Record<UnassignedStageReason, { title: string; badge: string; desc: string }> = {
+  'no_mention': {
+    title: 'Sin mención explícita de estadio',
+    badge: 'bg-amber-50 text-amber-800 border-amber-200',
+    desc: 'El paciente cuenta con diagnóstico o historia clínica, pero no se documentó explícitamente el estadio ni metástasis inequívoca.'
+  },
+  'insufficient_data': {
+    title: 'Información clínica insuficiente',
+    badge: 'bg-rose-50 text-rose-800 border-rose-200',
+    desc: 'Registros clínicos mínimos o incompletos que no aportan contexto oncológico suficiente.'
+  },
+  'related_but_undetermined': {
+    title: 'Tiene información relacionada pero no permite determinar estadio',
+    badge: 'bg-blue-50 text-blue-800 border-blue-200',
+    desc: 'Presenta datos aislados (TNM parcial, nódulo en estudio, sospecha diagnóstica) que no permiten inferir estadio de forma segura.'
+  },
+  'not_evaluable': {
+    title: 'No evaluable',
+    badge: 'bg-gray-100 text-gray-800 border-gray-200',
+    desc: 'Casos no neoplásicos, descartes de malignidad o condiciones clínicas no estadiables.'
+  }
+};
 
 // --- PALETA VISUAL CLÍNICA ---
 const CHART_COLORS = [
@@ -123,14 +209,45 @@ const getPatientAnchorDate = (p: Patient): number => {
 };
 
 // 1. CLASIFICACIÓN DE LOCALIZACIÓN TUMORAL
-export const detectTumorLocation = (p: Patient): string => {
-  const rawDx = normalizeStr(p.diagnosis);
+export const matchTumorSiteStr = (str: string): string | null => {
+  if (str.includes('melanoma')) return 'Melanoma';
+  if (str.includes('mama') || str.includes('breast')) return 'Mama';
+  if (str.includes('colon') || str.includes('recto') || str.includes('rectal') || str.includes('colorrectal') || str.includes('sigmoide') || str.includes('ciego')) return 'Colon/recto';
+  if (str.includes('prostata') || str.includes('prostatic')) return 'Próstata';
+  if (str.includes('pancrea')) return 'Páncreas';
+  if (str.includes('pulmon') || str.includes('pulmonar') || str.includes('bronqu')) return 'Pulmón';
+  if (str.includes('estomago') || str.includes('gastric')) return 'Estómago';
+  if (str.includes('vejiga') || str.includes('urotelial')) return 'Vejiga';
+  if (str.includes('renal') || str.includes('riñon') || str.includes('rinon')) return 'Riñón';
+  if (str.includes('ovario') || str.includes('ovaric')) return 'Ovario';
+  if (str.includes('cervix') || str.includes('cervic') || str.includes('cuello uterino')) return 'Cuello uterino';
+  if (str.includes('endometri') || str.includes('uterin') || str.includes('utero')) return 'Endometrio/Útero';
+  if (str.includes('esofago') || str.includes('esofagic')) return 'Esófago';
+  if (str.includes('vias biliares') || str.includes('vesicula biliar') || str.includes('colangiocarcinoma')) return 'Vías biliares/Vesícula';
+  if (str.includes('testiculo') || str.includes('testicular') || str.includes('seminoma')) return 'Testículo';
+  if (str.includes('tiroides') || str.includes('laringe') || str.includes('faringe') || str.includes('cabeza y cuello')) return 'Cabeza y cuello';
+  if (str.includes('linfoma') || str.includes('mieloma') || str.includes('leucemia')) return 'Hematológico';
+  return null;
+};
+
+export const detectTumorLocationWithOrigin = (p: Patient): TumorLocationResult => {
+  // A. Primero buscar en campos estructurados de localización tumoral
+  const structuredFields = [
+    p.tumorLocation, p.tumorSite, p.localizacion, p.organo, p.primarySite, p.topografia
+  ];
+  for (const s of structuredFields) {
+    if (typeof s === 'string' && s.trim().length > 2) {
+      const match = matchTumorSiteStr(normalizeStr(s));
+      if (match) return { site: match, origin: 'structured' };
+    }
+  }
+
+  // B. Recuperar de texto clínico explícito
+  const rawDx = normalizeStr(p.diagnosis || p.primaryDiagnosis);
   const rawText = normalizeStr(p.historyText) + ' ' + normalizeStr(p.clinicalContext);
 
-  if (!rawDx && !rawText) return 'No consignado';
+  if (!rawDx && !rawText) return { site: 'No consignado', origin: 'missing' };
 
-  // Limpiar menciones de metástasis secundarias que contengan órganos
-  // para evitar confundir una metástasis pulmonar/hepática con el tumor primario
   const cleanMetastases = (str: string) => str
     .replace(/metastasis\s+(?:a\s+distancia|pulmonar[a-z]*|hepatica[a-z]*|osea[a-z]*|cerebral[a-z]*|subcutanea[a-z]*|ganglionar[a-z]*)/g, ' ')
     .replace(/compromiso\s+(?:pulmonar|hepatico|oseo|cerebral|ganglionar)/g, ' ');
@@ -138,46 +255,35 @@ export const detectTumorLocation = (p: Patient): string => {
   const dx = cleanMetastases(rawDx);
   const text = cleanMetastases(rawText);
 
-  const matchSite = (str: string): string | null => {
-    // Melanoma siempre refiere a primario
-    if (str.includes('melanoma')) return 'Melanoma';
-    if (str.includes('mama') || str.includes('breast')) return 'Mama';
-    if (str.includes('colon') || str.includes('recto') || str.includes('rectal') || str.includes('colorrectal') || str.includes('sigmoide') || str.includes('ciego')) return 'Colon/recto';
-    if (str.includes('prostata') || str.includes('prostatic')) return 'Próstata';
-    if (str.includes('pancrea')) return 'Páncreas';
-    if (str.includes('pulmon') || str.includes('pulmonar') || str.includes('bronqu')) return 'Pulmón';
-    if (str.includes('estomago') || str.includes('gastric')) return 'Estómago';
-    if (str.includes('vejiga') || str.includes('urotelial')) return 'Vejiga';
-    if (str.includes('renal') || str.includes('riñon') || str.includes('rinon')) return 'Riñón';
-    if (str.includes('ovario') || str.includes('ovaric')) return 'Ovario';
-    if (str.includes('cervix') || str.includes('cervic') || str.includes('cuello uterino')) return 'Cuello uterino';
-    if (str.includes('endometri') || str.includes('uterin') || str.includes('utero')) return 'Endometrio/Útero';
-    if (str.includes('esofago') || str.includes('esofagic')) return 'Esófago';
-    if (str.includes('vias biliares') || str.includes('vesicula biliar') || str.includes('colangiocarcinoma')) return 'Vías biliares/Vesícula';
-    if (str.includes('testiculo') || str.includes('testicular') || str.includes('seminoma')) return 'Testículo';
-    if (str.includes('tiroides') || str.includes('laringe') || str.includes('faringe') || str.includes('cabeza y cuello')) return 'Cabeza y cuello';
-    if (str.includes('linfoma') || str.includes('mieloma') || str.includes('leucemia')) return 'Hematológico';
-    return null;
-  };
-
   // Buscar con máxima prioridad en el diagnóstico explícito
-  const fromDx = matchSite(dx);
-  if (fromDx) return fromDx;
+  const fromDx = matchTumorSiteStr(dx);
+  if (fromDx) return { site: fromDx, origin: 'text' };
 
-  // Si no se encontró en el diagnóstico estructurado, buscar en el texto clínico
-  const fromText = matchSite(text);
-  if (fromText) return fromText;
+  // Buscar en el texto clínico y antecedentes
+  const fromText = matchTumorSiteStr(text);
+  if (fromText) return { site: fromText, origin: 'text' };
 
-  // Si tiene diagnóstico escrito pero no encaja en las anteriores
-  if (rawDx.length > 3) return 'Otras';
+  const otherClinicalText = [
+    p.resumen_hc, p.resumen, p.antecedentes, p.antecedentesOncologicos,
+    Array.isArray(p.clinicalNotes) ? p.clinicalNotes.map(n => typeof n === 'string' ? n : n?.text).join(' ') : ''
+  ].filter(Boolean).join(' ');
 
-  return 'No consignado';
+  const fromOther = matchTumorSiteStr(cleanMetastases(normalizeStr(otherClinicalText)));
+  if (fromOther) return { site: fromOther, origin: 'text' };
+
+  if (rawDx.length > 3) return { site: 'Otras', origin: 'text' };
+
+  return { site: 'No consignado', origin: 'missing' };
+};
+
+export const detectTumorLocation = (p: Patient): string => {
+  return detectTumorLocationWithOrigin(p).site;
 };
 
 // 2. CLASIFICACIÓN DE ESTADIO
 
 // Parser determinístico para campos estructurados existentes
-export const parseStructuredStageValue = (valRaw: unknown): 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | null => {
+export const parseStructuredStageValue = (valRaw: unknown): StageCategory | null => {
   if (valRaw === undefined || valRaw === null) return null;
   const val = normalizeStr(String(valRaw));
   if (!val) return null;
@@ -230,7 +336,7 @@ export const parseStructuredStageValue = (valRaw: unknown): 'Estadio I' | 'Estad
 };
 
 // Parser determinístico para textos clínicos (diagnóstico, historia, evoluciones, etc.)
-export const extractExplicitStage = (textRaw?: unknown): 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | null => {
+export const extractExplicitStage = (textRaw?: unknown): StageCategory | null => {
   if (!textRaw) return null;
   const str = normalizeStr(String(textRaw));
   if (!str) return null;
@@ -288,7 +394,58 @@ export const extractExplicitStage = (textRaw?: unknown): 'Estadio I' | 'Estadio 
   return null;
 };
 
-export const detectStage = (p: Patient): 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | 'No consignado' => {
+// Clasificador determinístico del motivo por el cual un paciente no tiene estadio documentado
+export const classifyUnassignedReason = (p: Patient): UnassignedStageReason => {
+  const combinedRaw = [
+    p.diagnosis,
+    p.primaryDiagnosis,
+    p.historyText,
+    p.clinicalContext,
+    p.resumen_hc,
+    p.resumen,
+    p.antecedentes,
+    p.antecedentesOncologicos,
+    p.evolucion,
+    Array.isArray(p.clinicalNotes) ? p.clinicalNotes.map(n => typeof n === 'string' ? n : n?.text).join(' ') : '',
+    Array.isArray(p.evoluciones) ? p.evoluciones.map(e => typeof e === 'string' ? e : (e?.text || e?.nota)).join(' ') : '',
+    Array.isArray(p.timeline) ? p.timeline.map(e => `${e.note || ''} ${e.detail || ''}`).join(' ') : ''
+  ].filter(Boolean).join(' ');
+
+  const text = normalizeStr(combinedRaw);
+
+  // 1. Información clínica insuficiente: ficha vacía o casi vacía (< 35 caracteres)
+  if (text.length < 35) {
+    return 'insufficient_data';
+  }
+
+  // 2. No evaluable: patología benigna documentada, descarte de neoplasia, o no oncológico
+  if (
+    text.includes('benigno') || text.includes('benigna') || 
+    text.includes('descarta neoplasia') || text.includes('descarta malignidad') ||
+    text.includes('sin malignidad') || text.includes('no oncologico')
+  ) {
+    return 'not_evaluable';
+  }
+
+  // 3. Tiene información relacionada pero no permite determinar estadio:
+  // TNM aislado sin estadio agrupado, nódulo en estudio, sospecha diagnóstica, biopsia pendiente
+  const hasRelatedFindings = 
+    /\b(?:t[0-4]|n[0-3]|mx|nx|tx|tis)\b/i.test(text) ||
+    text.includes('en estudio') || text.includes('biopsia pendiente') ||
+    text.includes('nodulo') || text.includes('adenopatia') || text.includes('masa') ||
+    text.includes('sospecha') || text.includes('tnm') || text.includes('postoperatorio');
+
+  if (hasRelatedFindings) {
+    return 'related_but_undetermined';
+  }
+
+  // 4. Sin mención explícita de estadio:
+  // Tiene contexto clínico y diagnóstico pero el profesional no consignó el estadio
+  return 'no_mention';
+};
+
+// Detección de estadio con trazabilidad de origen (Estructurado vs Recuperado de texto vs Realmente ausente)
+export const detectStageWithOrigin = (p: Patient): StageDetectionResult => {
   // ORDEN DE PRIORIDAD 1: Campos estructurados existentes en el paciente
   const structuredFields = [
     p.estadio_actual,
@@ -306,30 +463,32 @@ export const detectStage = (p: Patient): 'Estadio I' | 'Estadio II' | 'Estadio I
 
   for (const candidate of structuredFields) {
     const fromStructured = parseStructuredStageValue(candidate);
-    if (fromStructured) return fromStructured;
+    if (fromStructured) {
+      return { stage: fromStructured, origin: 'structured' };
+    }
   }
 
   // ORDEN DE PRIORIDAD 2: Diagnóstico principal del paciente
   const fromDx = extractExplicitStage(p.diagnosis || p.primaryDiagnosis);
-  if (fromDx) return fromDx;
+  if (fromDx) return { stage: fromDx, origin: 'text' };
 
   // ORDEN DE PRIORIDAD 3: Historia clínica y contexto clínico
   const fromHistory = extractExplicitStage(p.historyText);
-  if (fromHistory) return fromHistory;
+  if (fromHistory) return { stage: fromHistory, origin: 'text' };
 
   const fromContext = extractExplicitStage(p.clinicalContext);
-  if (fromContext) return fromContext;
+  if (fromContext) return { stage: fromContext, origin: 'text' };
 
   // ORDEN DE PRIORIDAD 4: Resumen de HC y Antecedentes
   const fromSummary = extractExplicitStage(p.resumen_hc || p.resumen || p.antecedentes || p.antecedentesOncologicos);
-  if (fromSummary) return fromSummary;
+  if (fromSummary) return { stage: fromSummary, origin: 'text' };
 
   // ORDEN DE PRIORIDAD 5: Evolución médica (clinicalNotes o evoluciones)
   if (Array.isArray(p.clinicalNotes)) {
     for (const note of p.clinicalNotes) {
       const noteText = typeof note === 'string' ? note : note?.text;
       const fromNote = extractExplicitStage(noteText);
-      if (fromNote) return fromNote;
+      if (fromNote) return { stage: fromNote, origin: 'text' };
     }
   }
 
@@ -337,13 +496,13 @@ export const detectStage = (p: Patient): 'Estadio I' | 'Estadio II' | 'Estadio I
     for (const ev of p.evoluciones) {
       const evText = typeof ev === 'string' ? ev : (ev?.text || ev?.nota);
       const fromEv = extractExplicitStage(evText);
-      if (fromEv) return fromEv;
+      if (fromEv) return { stage: fromEv, origin: 'text' };
     }
   }
 
   if (typeof p.evolucion === 'string') {
     const fromEv = extractExplicitStage(p.evolucion);
-    if (fromEv) return fromEv;
+    if (fromEv) return { stage: fromEv, origin: 'text' };
   }
 
   // ORDEN DE PRIORIDAD 6: Línea de tiempo (eventos clínicos)
@@ -351,7 +510,7 @@ export const detectStage = (p: Patient): 'Estadio I' | 'Estadio II' | 'Estadio I
     for (const event of p.timeline) {
       const eventText = `${event.note || ''} ${event.detail || ''} ${event.category || ''}`;
       const fromEvent = extractExplicitStage(eventText);
-      if (fromEvent) return fromEvent;
+      if (fromEvent) return { stage: fromEvent, origin: 'text' };
     }
   }
 
@@ -360,7 +519,7 @@ export const detectStage = (p: Patient): 'Estadio I' | 'Estadio II' | 'Estadio I
     for (const study of p.imagingStudies) {
       const studyText = `${study.relevantFindings || ''} ${study.bodyRegion || ''}`;
       const fromStudy = extractExplicitStage(studyText);
-      if (fromStudy) return fromStudy;
+      if (fromStudy) return { stage: fromStudy, origin: 'text' };
     }
   }
 
@@ -370,12 +529,164 @@ export const detectStage = (p: Patient): 'Estadio I' | 'Estadio II' | 'Estadio I
     const val = p[key];
     if (typeof val === 'string' && val.length > 3) {
       const fromKey = extractExplicitStage(val);
-      if (fromKey) return fromKey;
+      if (fromKey) return { stage: fromKey, origin: 'text' };
     }
   }
 
   // Si no está explícitamente documentado ni puede determinarse con seguridad
-  return 'No consignado';
+  return {
+    stage: 'No consignado',
+    origin: 'missing',
+    unassignedReason: classifyUnassignedReason(p)
+  };
+};
+
+export const detectStage = (p: Patient): StageCategory => {
+  return detectStageWithOrigin(p).stage;
+};
+
+// 3. RECUPERACIÓN DETERMINÍSTICA DE HISTOLOGÍA
+export const matchHistologyStr = (str: string): string | null => {
+  if (str.includes('adenocarcinoma')) return 'Adenocarcinoma';
+  if (str.includes('ductal') || /\bcdi\b/.test(str)) return 'Carcinoma ductal';
+  if (str.includes('lobulillar') || /\bcli\b/.test(str)) return 'Carcinoma lobulillar';
+  if (str.includes('epidermoide') || str.includes('escamoso')) return 'Carcinoma epidermoide/escamoso';
+  if (str.includes('urotelial') || str.includes('celulas transicionales')) return 'Carcinoma urotelial';
+  if (str.includes('melanoma')) return 'Melanoma';
+  if (str.includes('microcitico') || str.includes('celulas pequenas')) return 'Carcinoma de células pequeñas';
+  if (str.includes('no microcitico') || str.includes('celulas no pequenas') || /\bnsclc\b/.test(str)) return 'Carcinoma no microcítico';
+  if (str.includes('celulas claras')) return 'Carcinoma de células claras';
+  if (str.includes('linfoma')) return 'Linfoma';
+  if (str.includes('sarcoma') || str.includes('gist')) return 'Sarcoma/GIST';
+  if (str.includes('neuroendocrino')) return 'Tumor neuroendocrino';
+  if (str.includes('papilar')) return 'Carcinoma papilar';
+  if (str.includes('basocelular')) return 'Carcinoma basocelular';
+  return null;
+};
+
+export const detectHistology = (p: Patient): HistologyResult => {
+  // A. Estructurado
+  const structured = [p.histology, p.histologia, p.anatomiaPatologica, p.pathology];
+  for (const s of structured) {
+    if (typeof s === 'string' && s.trim().length > 3) {
+      const norm = normalizeStr(s);
+      if (norm !== 'no consignada' && norm !== 'no consignado' && norm !== 'pendiente') {
+        const matched = matchHistologyStr(norm);
+        if (matched) return { histology: matched, origin: 'structured' };
+      }
+    }
+  }
+
+  // B. Texto clínico
+  const allTexts = [
+    p.diagnosis, p.primaryDiagnosis, p.historyText, p.clinicalContext,
+    p.resumen_hc, p.resumen, p.antecedentes
+  ].filter(Boolean).map(t => normalizeStr(String(t))).join(' ');
+
+  if (!allTexts) return { histology: 'No consignada', origin: 'missing' };
+
+  const fromText = matchHistologyStr(allTexts);
+  if (fromText) return { histology: fromText, origin: 'text' };
+
+  return { histology: 'No consignada', origin: 'missing' };
+};
+
+// 4. RECUPERACIÓN DETERMINÍSTICA DE BIOMARCADORES
+export const detectBiomarkers = (p: Patient): BiomarkersResult => {
+  const foundMarkers: string[] = [];
+
+  // A. Estructurado
+  const structuredBio = [
+    p.biomarkers, p.biomarcadores, p.molecularProfile, p.perfilMolecular,
+    p.receptor_RE, p.receptor_RP, p.receptor_HER2, p.receptor_KRAS, p.receptor_EGFR
+  ];
+  const hasStructured = structuredBio.some(b => {
+    if (b === undefined || b === null || b === '') return false;
+    const s = normalizeStr(String(b));
+    return s !== 'no consignado' && s !== 'pendiente' && s !== 'no evaluado' && s !== 's/d';
+  });
+
+  // B. Texto clínico
+  const allTexts = [
+    p.diagnosis, p.primaryDiagnosis, p.historyText, p.clinicalContext,
+    p.resumen_hc, p.antecedentes,
+    Array.isArray(p.clinicalNotes) ? p.clinicalNotes.map(n => typeof n === 'string' ? n : n?.text).join(' ') : ''
+  ].filter(Boolean).map(t => normalizeStr(String(t))).join(' ');
+
+  if (/\b(?:re\+|re-|re\s*positivo|re\s*negativo|receptor(?:es)?\s+estrogenicos?|er\+|er-)\b/.test(allTexts)) foundMarkers.push('RE');
+  if (/\b(?:rp\+|rp-|rp\s*positivo|rp\s*negativo|receptor(?:es)?\s+progesterona|pr\+|pr-)\b/.test(allTexts)) foundMarkers.push('RP');
+  if (/\b(?:her2|her-2|cerbb2|her2\s*3\+|her2\s*positivo|her2\s*negativo|triple\s*negativo)\b/.test(allTexts)) foundMarkers.push('HER2');
+  if (/\b(?:ki-?67)\b/.test(allTexts)) foundMarkers.push('Ki-67');
+  if (/\b(?:kras|nras|braf|egfr|alk|ros1|ret|met|ntrk)\b/.test(allTexts)) foundMarkers.push('Panel Molecular');
+  if (/\b(?:pdl1|pd-l1|tps|cps)\b/.test(allTexts)) foundMarkers.push('PD-L1');
+  if (/\b(?:msi|msi-h|mss|dmmr|pmmr|microsatelit)\b/.test(allTexts)) foundMarkers.push('MSI/MMR');
+  if (/\b(?:brca1|brca2|brca)\b/.test(allTexts)) foundMarkers.push('BRCA');
+  if (/\b(?:psa|antigeno prostatico)\b/.test(allTexts)) foundMarkers.push('PSA');
+
+  if (hasStructured) {
+    return {
+      hasBiomarkers: true,
+      biomarkers: foundMarkers.length > 0 ? foundMarkers : ['Biomarcadores estructurados'],
+      origin: 'structured'
+    };
+  }
+
+  if (foundMarkers.length > 0) {
+    return {
+      hasBiomarkers: true,
+      biomarkers: foundMarkers,
+      origin: 'text'
+    };
+  }
+
+  return {
+    hasBiomarkers: false,
+    biomarkers: [],
+    origin: 'missing'
+  };
+};
+
+// 5. RECUPERACIÓN DETERMINÍSTICA DE LÍNEA DE TRATAMIENTO
+export const detectTreatmentLine = (p: Patient): TreatmentLineResult => {
+  // A. Estructurado
+  const structuredLine = p.linea_tratamiento || p.lineaTratamiento || p.treatmentLine || p.linea || p.line;
+  if (structuredLine !== undefined && structuredLine !== null && String(structuredLine).trim() !== '') {
+    const s = normalizeStr(String(structuredLine));
+    if (s !== 'no consignado' && s !== 's/d' && s !== 'pendiente') {
+      return { hasTreatmentLine: true, line: String(structuredLine), origin: 'structured' };
+    }
+  }
+
+  // B. Texto clínico
+  const allTexts = [
+    p.diagnosis, p.primaryDiagnosis, p.historyText, p.clinicalContext,
+    p.resumen_hc, p.antecedentes, p.evolucion,
+    Array.isArray(p.clinicalNotes) ? p.clinicalNotes.map(n => typeof n === 'string' ? n : n?.text).join(' ') : ''
+  ].filter(Boolean).map(t => normalizeStr(String(t))).join(' ');
+
+  if (/\b(?:1(?:ra|era)?\s*linea|primera\s*linea|1l|l1)\b/.test(allTexts)) {
+    return { hasTreatmentLine: true, line: '1ra Línea', origin: 'text' };
+  }
+  if (/\b(?:2(?:da|nda)?\s*linea|segunda\s*linea|2l|l2)\b/.test(allTexts)) {
+    return { hasTreatmentLine: true, line: '2da Línea', origin: 'text' };
+  }
+  if (/\b(?:3(?:ra|era)?\s*linea|tercera\s*linea|3l|l3)\b/.test(allTexts)) {
+    return { hasTreatmentLine: true, line: '3ra Línea', origin: 'text' };
+  }
+  if (/\b(?:adyuvante|adyuvancia)\b/.test(allTexts)) {
+    return { hasTreatmentLine: true, line: 'Adyuvancia', origin: 'text' };
+  }
+  if (/\b(?:neoadyuvante|neoadyuvancia)\b/.test(allTexts)) {
+    return { hasTreatmentLine: true, line: 'Neoadyuvancia', origin: 'text' };
+  }
+  if (/\b(?:mantenimiento)\b/.test(allTexts)) {
+    return { hasTreatmentLine: true, line: 'Mantenimiento', origin: 'text' };
+  }
+  if (/\b(?:paliativo\s+exclusivo|tratamiento\s+paliativo)\b/.test(allTexts)) {
+    return { hasTreatmentLine: true, line: 'Paliativo', origin: 'text' };
+  }
+
+  return { hasTreatmentLine: false, line: 'No consignada', origin: 'missing' };
 };
 
 // 3. CLASIFICACIÓN DE SITUACIÓN DE LA ENFERMEDAD
@@ -508,6 +819,8 @@ export const detectTreatmentsForPatient = (p: Patient) => {
 
 export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
+  const [showUnassignedStageModal, setShowUnassignedStageModal] = useState(false);
+  const [unassignedFilter, setUnassignedFilter] = useState<'all' | UnassignedStageReason>('all');
 
   // --- DEDUPLICAR PACIENTES ESTRICTAMENTE POR ID ---
   const uniquePatients = useMemo(() => {
@@ -584,30 +897,129 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
       .sort((a, b) => b.count - a.count);
   }, [uniquePatients, totalPatients]);
 
-  // --- DISTRIBUCIÓN POR ESTADIO ---
-  const stageData = useMemo(() => {
-    const stages: ('Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | 'No consignado')[] = [
-      'Estadio I', 'Estadio II', 'Estadio III', 'Estadio IV', 'No consignado'
-    ];
-    const counts: Record<string, number> = {
+  // --- ANÁLISIS INTEGRAL DE ESTADIO CON TRAZABILIDAD ---
+  const stageAnalysis = useMemo(() => {
+    const map = new Map<string, StageDetectionResult>();
+    const counts: Record<StageCategory, number> = {
       'Estadio I': 0,
       'Estadio II': 0,
       'Estadio III': 0,
       'Estadio IV': 0,
       'No consignado': 0,
     };
+    const originCounts: Record<DataSourceOrigin, number> = {
+      'structured': 0,
+      'text': 0,
+      'missing': 0,
+    };
+    const unassignedReasonCounts: Record<UnassignedStageReason, number> = {
+      'no_mention': 0,
+      'insufficient_data': 0,
+      'related_but_undetermined': 0,
+      'not_evaluable': 0,
+    };
+    const unassignedPatientsList: Array<{ patient: Patient; reason: UnassignedStageReason }> = [];
 
     uniquePatients.forEach(p => {
-      const st = detectStage(p);
-      counts[st] = (counts[st] || 0) + 1;
+      const res = detectStageWithOrigin(p);
+      map.set(p.id, res);
+      counts[res.stage] = (counts[res.stage] || 0) + 1;
+      originCounts[res.origin] = (originCounts[res.origin] || 0) + 1;
+      if (res.stage === 'No consignado' && res.unassignedReason) {
+        unassignedReasonCounts[res.unassignedReason] = (unassignedReasonCounts[res.unassignedReason] || 0) + 1;
+        unassignedPatientsList.push({ patient: p, reason: res.unassignedReason });
+      }
     });
 
-    return stages.map(name => ({
+    const stages: StageCategory[] = ['Estadio I', 'Estadio II', 'Estadio III', 'Estadio IV', 'No consignado'];
+    const stageChartData = stages.map(name => ({
       name,
       count: counts[name] || 0,
       percentage: totalPatients > 0 ? Math.round(((counts[name] || 0) / totalPatients) * 100) : 0
     }));
+
+    return {
+      patientMap: map,
+      counts,
+      originCounts,
+      unassignedReasonCounts,
+      unassignedPatientsList,
+      stageChartData
+    };
   }, [uniquePatients, totalPatients]);
+
+  const stageData = stageAnalysis.stageChartData;
+
+  // --- INDICADOR DETERMINÍSTICO DE CALIDAD DE DATOS ---
+  const dataQuality = useMemo(() => {
+    let sufficient = 0;
+    let insufficient = 0;
+    let missingStage = 0;
+    let missingBiomarkers = 0;
+    let missingHistology = 0;
+    let missingTreatmentLine = 0;
+
+    uniquePatients.forEach(p => {
+      const stageRes = stageAnalysis.patientMap.get(p.id) || detectStageWithOrigin(p);
+      const tumorRes = detectTumorLocationWithOrigin(p);
+      const histRes = detectHistology(p);
+      const bioRes = detectBiomarkers(p);
+      const lineRes = detectTreatmentLine(p);
+      const txRes = detectTreatmentsForPatient(p);
+
+      if (stageRes.stage === 'No consignado') missingStage++;
+      if (!bioRes.hasBiomarkers) missingBiomarkers++;
+      if (histRes.histology === 'No consignada') missingHistology++;
+      if (!lineRes.hasTreatmentLine) missingTreatmentLine++;
+
+      // Criterio de suficiencia clínica:
+      // Pacientes con localización confirmada, estadio documentado (I-IV) y al menos un tratamiento o histología
+      const isSufficient = 
+        tumorRes.site !== 'No consignado' && 
+        tumorRes.site !== 'Otras' &&
+        stageRes.stage !== 'No consignado' && 
+        (txRes.hasAny || histRes.histology !== 'No consignada');
+
+      // Información insuficiente: ficha mínima o clasificada como 'insufficient_data'
+      const isInsufficient = 
+        stageRes.unassignedReason === 'insufficient_data' ||
+        ((!p.diagnosis || p.diagnosis.trim().length < 5) && 
+         (!p.historyText || p.historyText.trim().length < 20) && 
+         stageRes.stage === 'No consignado' && 
+         !txRes.hasAny);
+
+      if (isSufficient) {
+        sufficient++;
+      } else if (isInsufficient) {
+        insufficient++;
+      }
+    });
+
+    // Parcialmente documentados: el resto exacto (garantizando suma == totalPatients)
+    const partial = Math.max(0, totalPatients - sufficient - insufficient);
+
+    return {
+      sufficient,
+      sufficientPct: totalPatients > 0 ? Math.round((sufficient / totalPatients) * 100) : 0,
+      partial,
+      partialPct: totalPatients > 0 ? Math.round((partial / totalPatients) * 100) : 0,
+      insufficient,
+      insufficientPct: totalPatients > 0 ? Math.round((insufficient / totalPatients) * 100) : 0,
+      missingStage,
+      missingStagePct: totalPatients > 0 ? Math.round((missingStage / totalPatients) * 100) : 0,
+      missingBiomarkers,
+      missingBiomarkersPct: totalPatients > 0 ? Math.round((missingBiomarkers / totalPatients) * 100) : 0,
+      missingHistology,
+      missingHistologyPct: totalPatients > 0 ? Math.round((missingHistology / totalPatients) * 100) : 0,
+      missingTreatmentLine,
+      missingTreatmentLinePct: totalPatients > 0 ? Math.round((missingTreatmentLine / totalPatients) * 100) : 0,
+    };
+  }, [uniquePatients, totalPatients, stageAnalysis]);
+
+  const filteredUnassignedPatients = useMemo(() => {
+    if (unassignedFilter === 'all') return stageAnalysis.unassignedPatientsList;
+    return stageAnalysis.unassignedPatientsList.filter(item => item.reason === unassignedFilter);
+  }, [stageAnalysis.unassignedPatientsList, unassignedFilter]);
 
   // --- DISTRIBUCIÓN POR SITUACIÓN DE ENFERMEDAD (PARA GRÁFICO) ---
   const situationData = useMemo(() => {
@@ -901,6 +1313,102 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
             </div>
           </section>
 
+          {/* SECCIÓN: CALIDAD DE DATOS CLÍNICOS */}
+          <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-widest text-gray-700 flex items-center gap-2">
+                  <ShieldCheck size={15} className="text-indigo-600" />
+                  Calidad de Datos Clínicos
+                </h3>
+                <p className="text-[11px] text-gray-400 font-medium">
+                  Nivel de completitud y exhaustividad documental en historias clínicas
+                </p>
+              </div>
+              <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+                {totalPatients} pacientes analizados (100%)
+              </span>
+            </div>
+
+            {/* 3 niveles de completitud */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100 flex flex-col justify-between">
+                <div className="flex items-center justify-between text-emerald-800 mb-1">
+                  <span className="text-[11px] font-black uppercase tracking-tight">Datos Clínicos Suficientes</span>
+                  <CheckCircle2 size={14} className="text-emerald-600" />
+                </div>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-black text-emerald-950">{dataQuality.sufficient}</span>
+                  <span className="text-xs font-bold text-emerald-700">({dataQuality.sufficientPct}%)</span>
+                </div>
+                <span className="text-[10px] text-emerald-700/80 font-medium mt-1">
+                  Estadio, localización e histología o tratamiento documentados
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-100 flex flex-col justify-between">
+                <div className="flex items-center justify-between text-amber-800 mb-1">
+                  <span className="text-[11px] font-black uppercase tracking-tight">Parcialmente Documentados</span>
+                  <Info size={14} className="text-amber-600" />
+                </div>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-black text-amber-950">{dataQuality.partial}</span>
+                  <span className="text-xs font-bold text-amber-700">({dataQuality.partialPct}%)</span>
+                </div>
+                <span className="text-[10px] text-amber-700/80 font-medium mt-1">
+                  Datos básicos presentes, faltan variables clave
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-rose-50/60 border border-rose-100 flex flex-col justify-between">
+                <div className="flex items-center justify-between text-rose-800 mb-1">
+                  <span className="text-[11px] font-black uppercase tracking-tight">Información Insuficiente</span>
+                  <AlertCircle size={14} className="text-rose-600" />
+                </div>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-black text-rose-950">{dataQuality.insufficient}</span>
+                  <span className="text-xs font-bold text-rose-700">({dataQuality.insufficientPct}%)</span>
+                </div>
+                <span className="text-[10px] text-rose-700/80 font-medium mt-1">
+                  Ficha mínima o sin elementos estadificables
+                </span>
+              </div>
+            </div>
+
+            {/* Principales datos faltantes */}
+            <div className="pt-2 border-t border-gray-100">
+              <div className="text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                <span>Principales datos faltantes:</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                <div className="p-2 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-between">
+                  <span className="text-gray-600 font-medium">Estadio</span>
+                  <span className="font-bold text-gray-800">
+                    {dataQuality.missingStage} <span className="text-[10px] text-gray-400 font-normal">({dataQuality.missingStagePct}%)</span>
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-between">
+                  <span className="text-gray-600 font-medium">Biomarcadores</span>
+                  <span className="font-bold text-gray-800">
+                    {dataQuality.missingBiomarkers} <span className="text-[10px] text-gray-400 font-normal">({dataQuality.missingBiomarkersPct}%)</span>
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-between">
+                  <span className="text-gray-600 font-medium">Histología</span>
+                  <span className="font-bold text-gray-800">
+                    {dataQuality.missingHistology} <span className="text-[10px] text-gray-400 font-normal">({dataQuality.missingHistologyPct}%)</span>
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-between">
+                  <span className="text-gray-600 font-medium">Línea de tratam.</span>
+                  <span className="font-bold text-gray-800">
+                    {dataQuality.missingTreatmentLine} <span className="text-[10px] text-gray-400 font-normal">({dataQuality.missingTreatmentLinePct}%)</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* 7. SECCIÓN: "PERFIL DE MI PRÁCTICA" (SÍNTESIS NARRATIVA AUTOMÁTICA) */}
           <section className="bg-gradient-to-r from-blue-900 to-indigo-900 rounded-2xl p-5 text-white shadow-lg shadow-indigo-950/20">
             <div className="flex items-center gap-2 mb-2">
@@ -1074,7 +1582,7 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
                     <Layers size={15} className="text-blue-600" />
                     Distribución por Estadio
                   </h3>
-                  <p className="text-[11px] text-gray-400 font-medium">Estadificación oncológica documentada</p>
+                  <p className="text-[11px] text-gray-400 font-medium">Distribución por estadio documentado</p>
                 </div>
               </div>
 
@@ -1105,15 +1613,34 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
 
                   {/* Lista con porcentajes */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {stageData.map((st, idx) => (
-                      <div key={idx} className="bg-gray-50 p-2.5 rounded-xl border border-gray-100 flex flex-col">
-                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-tight">{st.name}</span>
-                        <div className="flex items-baseline justify-between mt-1">
-                          <span className="text-base font-black text-gray-800">{st.count}</span>
-                          <span className="text-xs font-bold text-blue-600">{st.percentage}%</span>
+                    {stageData.map((st, idx) => {
+                      const isUnassigned = st.name === 'No consignado';
+                      return (
+                        <div 
+                          key={idx} 
+                          onClick={isUnassigned ? () => { setUnassignedFilter('all'); setShowUnassignedStageModal(true); } : undefined}
+                          className={`p-2.5 rounded-xl border transition-all ${
+                            isUnassigned 
+                              ? 'bg-amber-50/60 border-amber-200/80 hover:bg-amber-100/70 hover:border-amber-300 cursor-pointer shadow-xs group' 
+                              : 'bg-gray-50 border-gray-100'
+                          } flex flex-col justify-between`}
+                          title={isUnassigned ? 'Haga clic para ver el desglose determinístico de estadios no consignados' : undefined}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-tight">{st.name}</span>
+                            {isUnassigned && (
+                              <span className="text-[9px] font-bold text-amber-700 bg-amber-100/90 group-hover:bg-amber-200 px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors">
+                                <Eye size={10} /> Detalle
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-baseline justify-between mt-1">
+                            <span className="text-base font-black text-gray-800">{st.count}</span>
+                            <span className="text-xs font-bold text-blue-600">{st.percentage}%</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -1242,6 +1769,148 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
         </footer>
 
       </div>
+
+      {/* ── MODAL DETALLE: PACIENTES CON ESTADIO NO CONSIGNADO ────────────── */}
+      {showUnassignedStageModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shadow-xs">
+                  <Layers size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900 flex items-center gap-2">
+                    Detalle de Pacientes con Estadio No Consignado
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                      N = {stageAnalysis.counts['No consignado']}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-500 font-medium">
+                    Clasificación determinística según causa de no estadificación
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowUnassignedStageModal(false)}
+                className="p-2 hover:bg-gray-200/60 rounded-xl text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Selector de categorías */}
+            <div className="p-4 bg-gray-50/80 border-b border-gray-100 shrink-0 space-y-3">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <button
+                  onClick={() => setUnassignedFilter('all')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                    unassignedFilter === 'all'
+                      ? 'bg-gray-900 text-white shadow-sm'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                  }`}
+                >
+                  <span>Todos</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${unassignedFilter === 'all' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                    {stageAnalysis.counts['No consignado']}
+                  </span>
+                </button>
+
+                {(['no_mention', 'insufficient_data', 'related_but_undetermined', 'not_evaluable'] as UnassignedStageReason[]).map(catKey => {
+                  const info = UNASSIGNED_REASON_LABELS[catKey];
+                  const count = stageAnalysis.unassignedReasonCounts[catKey];
+                  const isActive = unassignedFilter === catKey;
+                  return (
+                    <button
+                      key={catKey}
+                      onClick={() => setUnassignedFilter(catKey)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                      }`}
+                    >
+                      <span>{info.title}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Explicación de la categoría seleccionada */}
+              <div className="p-2.5 rounded-xl bg-white border border-gray-200/70 text-xs text-gray-600 flex items-start gap-2">
+                <Info size={15} className="text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  {unassignedFilter === 'all' ? (
+                    <span>
+                      Mostrando el universo total de pacientes en los que la historia clínica no reporta un estadio I-IV determinístico ni metástasis inequívoca.
+                    </span>
+                  ) : (
+                    <span>
+                      <strong className="text-gray-800">{UNASSIGNED_REASON_LABELS[unassignedFilter].title}: </strong>
+                      {UNASSIGNED_REASON_LABELS[unassignedFilter].desc}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Listado de Pacientes */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5 divide-y divide-gray-100">
+              {filteredUnassignedPatients.length > 0 ? (
+                filteredUnassignedPatients.map(({ patient: p, reason }, idx) => {
+                  const labelInfo = UNASSIGNED_REASON_LABELS[reason];
+                  const patientIdentifier = p.name || (p.hcNumber ? `HC: ${p.hcNumber}` : `ID: ${p.id.slice(0, 8)}`);
+                  const diagText = p.diagnosis || p.primaryDiagnosis || p.resumen_hc || p.historyText || p.antecedentes || 'Sin registro diagnóstico cargado';
+                  const snippet = diagText.length > 200 ? `${diagText.substring(0, 200)}...` : diagText;
+
+                  return (
+                    <div key={p.id || idx} className="pt-2.5 first:pt-0">
+                      <div className="p-3.5 rounded-xl bg-gray-50/70 hover:bg-gray-100/70 border border-gray-100 transition-colors space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-xs text-gray-800">{patientIdentifier}</span>
+                            {p.hcNumber && p.name && (
+                              <span className="text-[10px] text-gray-400 font-semibold">HC: {p.hcNumber}</span>
+                            )}
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${labelInfo.badge}`}>
+                            {labelInfo.title}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 bg-white p-2.5 rounded-lg border border-gray-100/90 leading-relaxed font-mono text-[11px]">
+                          "{snippet}"
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-12 text-center text-gray-400 text-xs font-medium">
+                  No hay pacientes en este criterio de clasificación
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center justify-between shrink-0">
+              <span className="text-xs text-gray-500 font-medium">
+                {filteredUnassignedPatients.length} pacientes listados
+              </span>
+              <button
+                onClick={() => setShowUnassignedStageModal(false)}
+                className="px-4 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
