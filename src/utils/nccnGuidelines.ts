@@ -825,6 +825,212 @@ function detectCandidateOrgans(rawOrNormStr: string, isExplicitContext: boolean 
 }
 
 /**
+ * Comprueba si una mención de progresión o recidiva está negada o en contexto de vigilancia/control/evaluación de riesgo.
+ */
+function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
+  const norm = normalizeStr(clause);
+
+  // 1. Negaciones clínicas amplias (soporta modificadores intermediarios como "signos tomográficos de", etc.)
+  const negPatterns = [
+    /\bsin\b(?:[\s\w]*)\b(recidiva|progresion|recaida|lesion\w*|metastasis)\b/,
+    /\bno\b(?:[\s\w]*)\b(se observa\w*|se evidencia\w*|se aprecia\w*|se identifica\w*|presenta|hay)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|lesion\w*|metastasis)\b/,
+    /\b(?:libre\s+de|ausencia\s+de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|enfermedad)\b/,
+    /\bnegativ[ao]s?\s+(?:para|de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
+    /\b(?:se\s+descarta|descartar|descartando|descartad[ao]s?)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/
+  ];
+
+  for (const p of negPatterns) {
+    if (p.test(norm)) return true;
+  }
+
+  // 2. Contextos de control, seguimiento, vigilancia o evaluación de riesgo (NO progresión confirmada)
+  const surveillancePatterns = [
+    /\b(?:control|seguimiento|vigilancia|deteccion|prevencion|profilaxis)\b(?:[\s\w]*)\b(?:de|para)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
+    /\b(?:para|a\s+fin\s+de)\s+descartar\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
+    /\briesgo\b(?:[\s\w]*)\b(?:de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
+    /\bscore\s+de\s+(?:recidiva|recaida)\b/,
+    /\bevaluar\b(?:[\s\w]*)\b(?:posible|sospecha\s+de)?\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/
+  ];
+
+  for (const p of surveillancePatterns) {
+    if (p.test(norm)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Detecta si el texto documenta una progresión o recidiva real confirmada (excluyendo negaciones y controles de rutina)
+ */
+export function detectConfirmedProgression(text: string): boolean {
+  const norm = normalizeStr(text);
+  const keywords = ['recidiva', 'progresion', 'recaida', 'enfermedad progresiva', 'crecimiento tumoral'];
+
+  const hasAnyKeyword = keywords.some(k => norm.includes(k));
+  if (!hasAnyKeyword) return false;
+
+  const clauses = text.split(/[\n.;]+/).map(c => c.trim()).filter(Boolean);
+  let confirmedCount = 0;
+
+  for (const clause of clauses) {
+    const normClause = normalizeStr(clause);
+    const mentionsProgression = keywords.some(k => normClause.includes(k));
+    if (!mentionsProgression) continue;
+
+    if (isProgressionMentionNegatedOrSurveillance(clause)) {
+      continue;
+    }
+
+    const affirmativePatterns = [
+      /\b(?:recidiva|progresion|recaida)\s+(?:confirmada|documentada|evidente|tumoral|locorregional|local|a\s+distancia|ganglionar|hepatica|peritoneal|anastomotica|en\s+lecho|clinica|radiologica|bioquimica)\b/,
+      /\b(?:se\s+constata|se\s+confirma|se\s+documenta|se\s+aprecia|presenta|evidencia|muestra)\s+(?:franca\s+|nueva\s+)?(?:recidiva|progresion|recaida)\b/,
+      /\benfermedad\s+(?:en\s+progresion|progresiva)\b/,
+      /\bprogresion\s+(?:de\s+enfermedad|por\s+recist|segun\s+recist|objetiva)\b/,
+      /\b(?:aparicion\s+de|nuevas?)\s+(?:lesion\w*|metastasis|implantes?)\b/
+    ];
+
+    const isExplicitlyAffirmative = affirmativePatterns.some(p => p.test(normClause));
+    if (isExplicitlyAffirmative) {
+      confirmedCount++;
+    } else if (/\b(recidiva|progresion|recaida)\b/.test(normClause)) {
+      confirmedCount++;
+    }
+  }
+
+  return confirmedCount > 0;
+}
+
+/**
+ * Análisis robusto de Tratamiento Sistémico Activo vs Pasado / Adyuvancia Completada / En Seguimiento
+ */
+export function detectTreatmentStatus(text: string): {
+  detectedRegimen: string;
+  isTreatmentCompletedOrPast: boolean;
+  hasActiveOngoingTreatment: boolean;
+  hasActiveSystemicTreatment: boolean;
+  activeTreatment: string;
+} {
+  const norm = normalizeStr(text);
+
+  const activeRegimens = [
+    'folfirinox', 'nab paclitaxel', 'panitumumab', 'pembrolizumab', 'ipilimumab',
+    'folfox', 'folfiri', 'capox', 'xelox', 'bevacizumab', 'cetuximab',
+    'nivolumab', 'gemcitabina', 'cisplatino', 'carboplatino',
+    'pemetrexed', 'osimertinib', 'alectinib', 'trastuzumab', 'pertuzumab', 't dxd', 't dm1', 'tamoxifeno',
+    'anastrozol', 'letrozol', 'fulvestrant', 'ribociclib', 'palbociclib', 'abemaciclib', 'enzalutamida',
+    'abiraterona', 'docetaxel', 'cabazitaxel', 'irinotecan', 'oxaliplatino', 'capecitabina', '5 fu'
+  ];
+
+  let detectedRegimen = '';
+  for (const reg of activeRegimens) {
+    if (norm.includes(reg)) {
+      detectedRegimen = reg.toUpperCase();
+      break;
+    }
+  }
+
+  const isTreatmentCompletedOrPast = [
+    /adyuvancia\s+(?:finalizada|completada|cumplida|realizada)/,
+    /quimioterapia\s+(?:adyuvante\s+)?(?:finalizada|completada|cumplida|realizada)/,
+    /tratamiento\s+(?:adyuvante\s+)?(?:finalizado|completado|cumplido|realizado)/,
+    /completo\s+(?:adyuvancia|quimioterapia|tratamiento|esquema|ciclos?)/,
+    /cumplio\s+(?:adyuvancia|quimioterapia|tratamiento|esquema|ciclos?)/,
+    /finalizo\s+(?:adyuvancia|quimioterapia|tratamiento|esquema|ciclos?)/,
+    /realizo\s+(?:adyuvancia|quimioterapia|tratamiento|esquema|ciclos?)/,
+    /recibio\s+(?:adyuvancia|quimioterapia|tratamiento|esquema|ciclos?)/,
+    /hizo\s+(?:adyuvancia|quimioterapia|tratamiento|esquema|ciclos?)/,
+    /post\s+(?:adyuvancia|quimioterapia|folfox|folfirinox|tratamiento)/,
+    /antecedente\s+de\s+(?:quimioterapia|adyuvancia|folfox|folfirinox|tratamiento)/,
+    /en\s+seguimiento(?:\s+oncol[oó]gico|\s+postoperatorio|\s+postquir[uú]rgico|\s+post)?/,
+    /en\s+vigilancia(?:\s+oncol[oó]gico)?/,
+    /en\s+controles?(?:\s+oncol[oó]gicos?)?/,
+    /actualmente\s+en\s+seguimiento/,
+    /sin\s+tratamiento(?:\s+activo|\s+oncologico\s+activo|\s+actual)?/,
+    /no\s+recibe\s+tratamiento/
+  ].some(p => p.test(norm));
+
+  const hasActiveOngoingTreatment = [
+    /en\s+tratamiento\s+(?:activo|actual|con)/,
+    /recibe\s+actualmente/,
+    /actualmente\s+recibe/,
+    /esquema\s+actual/,
+    /quimioterapia\s+activa/,
+    /en\s+curso/,
+    /inicia\s+(?:primera\s+|segunda\s+|linea|ciclo|tratamiento)/,
+    /mantenimiento\s+con/
+  ].some(p => p.test(norm));
+
+  const hasActiveSystemicTreatment = !isTreatmentCompletedOrPast && (hasActiveOngoingTreatment || (detectedRegimen !== ''));
+
+  let activeTreatment = 'Sin tratamiento sistémico activo';
+  if (hasActiveSystemicTreatment) {
+    activeTreatment = detectedRegimen ? `Tratamiento sistémico activo (${detectedRegimen})` : 'Tratamiento sistémico activo';
+  } else if (isTreatmentCompletedOrPast) {
+    activeTreatment = detectedRegimen
+      ? `Tratamiento adyuvante completado (${detectedRegimen}) — En seguimiento`
+      : 'Tratamiento completado / Sin tratamiento activo (En seguimiento)';
+  }
+
+  return {
+    detectedRegimen,
+    isTreatmentCompletedOrPast,
+    hasActiveOngoingTreatment,
+    hasActiveSystemicTreatment,
+    activeTreatment
+  };
+}
+
+/**
+ * Detección robusta de Estadio IV / Enfermedad Metastásica
+ * Protege contra negaciones habituales en informes de seguimiento (ej: "sin metástasis hepáticas", "M0").
+ */
+export function detectStageIV(clinicalText: string, explicitDiagnosis: string = ''): boolean {
+  const normDx = normalizeStr(explicitDiagnosis || '');
+
+  // 1. Diagnóstico explícito de Estadio IV
+  const isDxStageIV =
+    /\b(?:estadio\s+(?:iv|4)|stage\s+(?:iv|4)|m1[a-c]?)\b/.test(normDx) ||
+    normDx.includes('metastasico') || normDx.includes('metastasis');
+  if (isDxStageIV) return true;
+
+  // 2. Si el diagnóstico explícitamente es M0 o estadios localizados (I, II, III)
+  const isExplicitNonMetastaticDx =
+    /\b(?:m0|estadio\s+(?:i|ii|iii|1|2|3)|stage\s+(?:i|ii|iii|1|2|3))\b/.test(normDx);
+
+  // 3. Revisión en el texto clínico evaluando cláusulas y negaciones
+  const clauses = clinicalText.split(/[\n.;]+/).map(c => c.trim()).filter(Boolean);
+  for (const clause of clauses) {
+    const normClause = normalizeStr(clause);
+
+    // Si la cláusula es de negación de metástasis, descartarla
+    const isNegated =
+      /\bsin\b(?:[\s\w]*)\b(?:metastasis|diseminacion|implantes?|carcinomatosis)\b/.test(normClause) ||
+      /\bno\b(?:[\s\w]*)\b(?:se observa\w*|se evidencia\w*|se aprecia\w*|se identifica\w*|presenta|hay)\b(?:[\s\w]*)\b(?:metastasis|diseminacion|implantes?|carcinomatosis)\b/.test(normClause) ||
+      /\b(?:ausencia\s+de|libre\s+de|descartar|descartando|se\s+descarta|negativ[ao]s?\s+para)\b(?:[\s\w]*)\b(?:metastasis|diseminacion|implantes?|carcinomatosis)\b/.test(normClause);
+    if (isNegated) continue;
+
+    // Patrones de estadio IV en la cláusula afirmativa
+    const matchesMetastaticClause =
+      /\b(?:estadio\s+(?:iv|4)|stage\s+(?:iv|4)|m1[a-c]?)\b/.test(normClause) ||
+      normClause.includes('carcinomatosis') ||
+      normClause.includes('implantes peritoneales') ||
+      normClause.includes('diseminacion a distancia') ||
+      normClause.includes('enfermedad metastasica') ||
+      normClause.includes('metastasis hepaticas') ||
+      normClause.includes('metastasis pulmonares') ||
+      normClause.includes('metastasico');
+
+    if (matchesMetastaticClause) {
+      if (!isExplicitNonMetastaticDx || normClause.includes('carcinomatosis') || normClause.includes('enfermedad metastasica') || /\bm1[a-c]?\b/.test(normClause)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Extrae el perfil tumoral ancla del paciente a partir de su diagnóstico explícito
  * y/o de la historia clínica patológica, anclando al diagnóstico principal y
  * filtrando menciones incidentales o hallazgos normales de otros órganos.
@@ -1007,23 +1213,43 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
 
   // 5. Situación clínica
   let clinicalStatus = 'En evaluación';
-  if (normText.includes('libre de enfermedad') || normText.includes('ned') || normText.includes('sin evidencia de enfermedad') || normText.includes('remision completa')) {
+  const hasConfirmedProg = detectConfirmedProgression(clinicalText);
+  if (
+    normText.includes('libre de enfermedad') ||
+    normText.includes('ned') ||
+    normText.includes('sin evidencia de enfermedad') ||
+    normText.includes('remision completa') ||
+    normText.includes('sin signos tomograficos de recidiva') ||
+    normText.includes('sin signos de recidiva') ||
+    normText.includes('sin recidiva')
+  ) {
     clinicalStatus = 'Sin evidencia de enfermedad (NED / Remisión Completa)';
-  } else if (normText.includes('progresion') || normText.includes('recidiva') || normText.includes('recaida')) {
+  } else if (hasConfirmedProg) {
     clinicalStatus = 'Progresión / Recidiva';
   } else if (normText.includes('respuesta parcial')) {
     clinicalStatus = 'Respuesta Parcial';
   } else if (normText.includes('enfermedad estable')) {
     clinicalStatus = 'Enfermedad Estable';
-  } else if (normText.includes('postquirurgico') || normText.includes('postoperatorio') || normText.includes('resecado') || normText.includes('postquirurgica')) {
+  } else if (
+    normText.includes('postquirurgico') ||
+    normText.includes('postoperatorio') ||
+    normText.includes('resecado') ||
+    normText.includes('postquirurgica') ||
+    normText.includes('operada') ||
+    normText.includes('operado') ||
+    normText.includes('whipple') ||
+    normText.includes('duodenopancreatectomia') ||
+    normText.includes('colectomia')
+  ) {
     clinicalStatus = 'Postquirúrgico / Postoperatorio';
   }
 
   // 6. Tratamiento
   let treatment = 'No documentado';
-  if (normText.includes('adyuvancia finalizada') || normText.includes('quimioterapia adyuvante finalizada') || normText.includes('completo adyuvancia')) {
-    treatment = 'Quimioterapia adyuvante finalizada';
-  } else if (normText.includes('adyuvancia') || normText.includes('quimioterapia adyuvante')) {
+  const txProfile = detectTreatmentStatus(normText);
+  if (txProfile.isTreatmentCompletedOrPast) {
+    treatment = txProfile.detectedRegimen ? `Quimioterapia adyuvante finalizada (${txProfile.detectedRegimen})` : 'Quimioterapia adyuvante finalizada';
+  } else if (txProfile.hasActiveOngoingTreatment || (normText.includes('adyuvancia') && !txProfile.isTreatmentCompletedOrPast)) {
     treatment = 'En tratamiento adyuvante';
   } else if (normText.includes('neoadyuvancia')) {
     treatment = 'Neoadyuvancia';
@@ -1068,59 +1294,17 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
   const baseProfile = extractPatientTumorProfile(clinicalText, explicitDiagnosis);
 
   // 2. Detección de Estadio IV / Enfermedad Metastásica
-  const isStageIV = 
-    normDx.includes('estadio iv') || normDx.includes('estadio 4') || normDx.includes('stage iv') || normDx.includes('stage 4') ||
-    normDx.includes('m1') || normDx.includes('metastasis') || normDx.includes('metastasico') ||
-    normText.includes('estadio iv') || normText.includes('estadio 4') || normText.includes('stage iv') || normText.includes('stage 4') ||
-    normText.includes('m1a') || normText.includes('m1b') || normText.includes('m1c') || normText.includes('iv a') || normText.includes('iv b') || normText.includes('iv c') ||
-    normText.includes('metastasis hepaticas') || normText.includes('metastasis pulmonares') || normText.includes('carcinomatosis') ||
-    normText.includes('implantes peritoneales') || normText.includes('diseminacion a distancia') || normText.includes('enfermedad metastasica');
+  const isStageIV = detectStageIV(clinicalText, explicitDiagnosis);
 
   // 3. Análisis de Tratamiento Sistémico Activo vs Finalizado
-  const activeRegimens = [
-    'folfox', 'folfiri', 'folfirinox', 'capox', 'xelox', 'bevacizumab', 'cetuximab', 'panitumumab',
-    'pembrolizumab', 'nivolumab', 'ipilimumab', 'gemcitabina', 'nab paclitaxel', 'cisplatino', 'carboplatino',
-    'pemetrexed', 'osimertinib', 'alectinib', 'trastuzumab', 'pertuzumab', 't dxd', 't dm1', 'tamoxifeno',
-    'anastrozol', 'letrozol', 'fulvestrant', 'ribociclib', 'palbociclib', 'abemaciclib', 'enzalutamida',
-    'abiraterona', 'docetaxel', 'cabazitaxel', 'irinotecan', 'oxaliplatino', 'capecitabina', '5 fu'
-  ];
-
-  let detectedRegimen = '';
-  for (const reg of activeRegimens) {
-    if (combined.includes(reg)) {
-      detectedRegimen = reg.toUpperCase();
-      break;
-    }
-  }
-
-  const isTreatmentCompletedOrNone = 
-    combined.includes('adyuvancia finalizada') || combined.includes('quimioterapia adyuvante finalizada') ||
-    combined.includes('completo adyuvancia') || combined.includes('completo quimioterapia') ||
-    combined.includes('finalizo tratamiento') || combined.includes('finalizo quimioterapia') ||
-    combined.includes('tratamiento completado') || combined.includes('sin tratamiento activo') ||
-    combined.includes('no recibe tratamiento activo') || combined.includes('actualmente sin tratamiento');
-
-  const hasActiveTreatmentMention = 
-    combined.includes('en tratamiento con') || combined.includes('recibe actualmente') ||
-    combined.includes('esquema actual') || combined.includes('ciclo') || combined.includes('inicia linea') ||
-    combined.includes('primera linea') || combined.includes('segunda linea') || combined.includes('mantenimiento con') ||
-    combined.includes('en curso') || combined.includes('quimioterapia activa');
-
-  const hasActiveSystemicTreatment = !isTreatmentCompletedOrNone && ((detectedRegimen !== '') || hasActiveTreatmentMention);
-  const activeTreatment = hasActiveSystemicTreatment 
-    ? (detectedRegimen ? `Tratamiento sistémico activo (${detectedRegimen})` : 'Tratamiento sistémico activo')
-    : (isTreatmentCompletedOrNone ? 'Tratamiento completado / Sin tratamiento activo (En seguimiento)' : 'Sin tratamiento sistémico activo');
+  const tx = detectTreatmentStatus(combined);
+  const detectedRegimen = tx.detectedRegimen;
+  const isTreatmentCompletedOrNone = tx.isTreatmentCompletedOrPast;
+  const hasActiveSystemicTreatment = tx.hasActiveSystemicTreatment;
+  const activeTreatment = tx.activeTreatment;
 
   // 4. Estado de Enfermedad, Metástasis y Negaciones Clínicas
-  const cleanedForProgression = combined
-    .replace(/sin (?:evidencia de |signos de )?(?:recidiva|progresion|recaida|lesiones)/g, ' ')
-    .replace(/no (?:presenta|se observan|se evidencian) (?:recidiva|progresion|recaida|lesiones)/g, ' ')
-    .replace(/libre de (?:recidiva|progresion|recaida|enfermedad)/g, ' ');
-
-  const hasProgression = 
-    cleanedForProgression.includes('progresion') || cleanedForProgression.includes('enfermedad progresiva') ||
-    cleanedForProgression.includes('recidiva') || cleanedForProgression.includes('progresion tumoral') ||
-    cleanedForProgression.includes('crecimiento tumoral') || cleanedForProgression.includes('recaida');
+  const hasProgression = detectConfirmedProgression(combined);
 
   const cleanedForActive = combined
     .replace(/sin (?:evidencia de |signos de )?(?:lesiones|metastasis|enfermedad activa)/g, ' ')
@@ -1141,7 +1325,10 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
 
   const hasNED = 
     combined.includes('ned') || combined.includes('libre de enfermedad') || combined.includes('sin evidencia de enfermedad') ||
-    combined.includes('remision completa') || combined.includes('sin lesiones activas') || combined.includes('sin recidiva');
+    combined.includes('remision completa') || combined.includes('sin lesiones activas') || combined.includes('sin recidiva') ||
+    combined.includes('sin signos de recidiva') || combined.includes('sin signos tomograficos de recidiva') ||
+    combined.includes('asintomatica') || combined.includes('asintomatico') ||
+    (!hasProgression && (tx.isTreatmentCompletedOrPast || combined.includes('en seguimiento')));
 
   const hasPartialResponse = combined.includes('respuesta parcial') || combined.includes('reduccion tumoral');
   const hasStableDisease = combined.includes('enfermedad estable') || combined.includes('estabilidad lesional');
@@ -1205,7 +1392,7 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
       modeLabel = 'Modo B — Recidiva activa / Re-estadificación y evaluación terapéutica';
       treatmentIntent = 'Reevaluación diagnóstica y terapéutica';
     } else {
-      const isResectedOrNED = hasNED || isTreatmentCompletedOrNone || combined.includes('postquirurgico') || combined.includes('resecado') || combined.includes('postoperatorio') || combined.includes('hemicolectomia') || combined.includes('colectomia');
+      const isResectedOrNED = hasNED || isTreatmentCompletedOrNone || combined.includes('postquirurgico') || combined.includes('resecado') || combined.includes('postoperatorio') || combined.includes('operada') || combined.includes('operado') || combined.includes('hemicolectomia') || combined.includes('colectomia') || combined.includes('duodenopancreatectomia') || combined.includes('dpc') || combined.includes('whipple');
       diseaseStatus = 'NED';
       diseaseStatusDescription = isResectedOrNED
         ? 'Enfermedad localizada resecada con intención curativa, actualmente sin evidencia de enfermedad (NED).'

@@ -5,6 +5,7 @@
 
 import {
   extractPatientTumorProfile,
+  extractClinicalScenarioProfile,
   validateCandidateSources,
   matchGuidelineByProfile,
 } from './nccnGuidelines.ts';
@@ -197,6 +198,132 @@ assert(
   matchConflict.status === 'NO_MATCHING_GUIDELINE',
   'Caso Extra E2 - "Adenocarcinoma de colon" es rechazado por la guía de Páncreas por conflicto de órgano',
   `Status: ${matchConflict.status}`
+);
+
+// ------------------------------------------------------------------------------------------------
+// CASO F: Caso reportado por el usuario (Páncreas pT2 pN0 M0 operada, adyuvancia FOLFOX, en seguimiento)
+// ------------------------------------------------------------------------------------------------
+const clinicalTextCaseF = `
+Paciente femenina de 61 años con diagnóstico de Adenocarcinoma de páncreas pT2 pN0 M0 (Estadio IB).
+Antecedente de duodenopancreatectomía cefálica (DPC) con márgenes R0.
+Realizó quimioterapia adyuvante con esquema FOLFOX y actualmente se encuentra en seguimiento oncológico.
+TAC de tórax, abdomen y pelvis con contraste: sin signos tomográficos de recidiva locorregional ni a distancia.
+Marcador tumoral CA 19-9 dentro de límites normales.
+`;
+
+const scenarioProfileCaseF = extractClinicalScenarioProfile(clinicalTextCaseF, 'Adenocarcinoma de páncreas pT2 pN0 M0');
+assert(
+  scenarioProfileCaseF.organ === 'Páncreas',
+  'Caso F - Órgano correctamente detectado como Páncreas',
+  `Órgano: ${scenarioProfileCaseF.organ}`
+);
+assert(
+  scenarioProfileCaseF.isStageIV === false,
+  'Caso F - No es Estadio IV (isStageIV === false)',
+  `isStageIV: ${scenarioProfileCaseF.isStageIV}`
+);
+assert(
+  scenarioProfileCaseF.diseaseStatus === 'NED',
+  'Caso F - Estado de enfermedad es NED (sin evidencia de recidiva)',
+  `diseaseStatus: ${scenarioProfileCaseF.diseaseStatus}`
+);
+assert(
+  scenarioProfileCaseF.followUpMode === 'CURATIVE_SURVEILLANCE',
+  'Caso F - Escenario clínico es CURATIVE_SURVEILLANCE (Modo A)',
+  `followUpMode: ${scenarioProfileCaseF.followUpMode}`
+);
+assert(
+  scenarioProfileCaseF.modeLabel.includes('Modo A'),
+  'Caso F - modeLabel asigna Modo A — Vigilancia post-tratamiento curativo',
+  `modeLabel: ${scenarioProfileCaseF.modeLabel}`
+);
+assert(
+  scenarioProfileCaseF.hasActiveSystemicTreatment === false,
+  'Caso F - hasActiveSystemicTreatment es false (adyuvancia ya completada)',
+  `hasActiveSystemicTreatment: ${scenarioProfileCaseF.hasActiveSystemicTreatment}`
+);
+assert(
+  scenarioProfileCaseF.activeTreatment.includes('completado') || scenarioProfileCaseF.activeTreatment.includes('seguimiento'),
+  'Caso F - activeTreatment refleja tratamiento completado / en seguimiento',
+  `activeTreatment: ${scenarioProfileCaseF.activeTreatment}`
+);
+
+const validationCaseF = validateCandidateSources(clinicalTextCaseF, [], 'Adenocarcinoma de páncreas pT2 pN0 M0');
+assert(
+  validationCaseF.canProceed === true,
+  'Caso F - validateCandidateSources permite proceder (canProceed === true)',
+  `canProceed: ${validationCaseF.canProceed}`
+);
+assert(
+  validationCaseF.validSystemGuideline?.id === 'pancreatic-adenocarcinoma',
+  'Caso F - Guía seleccionada es pancreatic-adenocarcinoma',
+  `Guideline: ${validationCaseF.validSystemGuideline?.id}`
+);
+assert(
+  validationCaseF.activeScenarioRecommendations !== null &&
+  validationCaseF.activeScenarioRecommendations !== undefined &&
+  (validationCaseF.activeScenarioRecommendations.scenarioTitle.includes('Modo A') ||
+   validationCaseF.activeScenarioRecommendations.scenarioTitle.includes('Vigilancia post-resección')),
+  'Caso F - activeScenarioRecommendations corresponde a Vigilancia Localizada (Modo A)',
+  `Escenario: ${validationCaseF.activeScenarioRecommendations?.scenarioTitle}`
+);
+assert(
+  !validationCaseF.activeScenarioRecommendations?.scenarioTitle.includes('Modo B') &&
+  !validationCaseF.activeScenarioRecommendations?.scenarioTitle.includes('Recidiva activa'),
+  'Caso F - NO se asignó erróneamente Modo B (Recidiva activa)',
+  `Escenario: ${validationCaseF.activeScenarioRecommendations?.scenarioTitle}`
+);
+
+// ------------------------------------------------------------------------------------------------
+// CASO G: Paciente con recidiva confirmada documentada (debe asignar Modo B - Recidiva activa)
+// ------------------------------------------------------------------------------------------------
+const clinicalTextCaseG = `
+Paciente operada de DPC hace 14 meses por adenocarcinoma de páncreas.
+TAC de control actual: se constata recidiva tumoral locorregional en lecho quirúrgico de 28 mm.
+Se planifica reevaluación oncológica.
+`;
+
+const scenarioProfileCaseG = extractClinicalScenarioProfile(clinicalTextCaseG, 'Adenocarcinoma de páncreas');
+assert(
+  scenarioProfileCaseG.diseaseStatus === 'PROGRESSION',
+  'Caso G - Recidiva real confirmada detecta diseaseStatus === "PROGRESSION"',
+  `diseaseStatus: ${scenarioProfileCaseG.diseaseStatus}`
+);
+assert(
+  scenarioProfileCaseG.followUpMode === 'ACTIVE_METASTATIC_MONITORING',
+  'Caso G - Recidiva real confirmada asigna ACTIVE_METASTATIC_MONITORING',
+  `followUpMode: ${scenarioProfileCaseG.followUpMode}`
+);
+assert(
+  scenarioProfileCaseG.modeLabel.includes('Modo B'),
+  'Caso G - modeLabel asigna Modo B — Recidiva activa',
+  `modeLabel: ${scenarioProfileCaseG.modeLabel}`
+);
+
+// ------------------------------------------------------------------------------------------------
+// CASO H: Paciente en seguimiento con informe que niega metástasis ("sin metástasis hepáticas")
+// ------------------------------------------------------------------------------------------------
+const clinicalTextCaseH = `
+Paciente de 55 años, antecedente de hemicolectomía por adenocarcinoma de colon pT3 pN0 M0.
+Realizó adyuvancia con capecitabina completada.
+TAC de control: sin metástasis hepáticas ni pulmonares. Sin signos de recidiva anastomótica.
+`;
+
+const scenarioProfileCaseH = extractClinicalScenarioProfile(clinicalTextCaseH, 'Adenocarcinoma de colon pT3 pN0 M0');
+assert(
+  scenarioProfileCaseH.isStageIV === false,
+  'Caso H - "sin metástasis hepáticas" no activa falsamente isStageIV',
+  `isStageIV: ${scenarioProfileCaseH.isStageIV}`
+);
+assert(
+  scenarioProfileCaseH.diseaseStatus === 'NED',
+  'Caso H - diseaseStatus es NED',
+  `diseaseStatus: ${scenarioProfileCaseH.diseaseStatus}`
+);
+assert(
+  scenarioProfileCaseH.followUpMode === 'CURATIVE_SURVEILLANCE',
+  'Caso H - followUpMode es CURATIVE_SURVEILLANCE (Modo A)',
+  `followUpMode: ${scenarioProfileCaseH.followUpMode}`
 );
 
 console.log(`\n=== RESUMEN DE PRUEBAS: ${passed} PASARON, ${failed} FALLARON ===`);
