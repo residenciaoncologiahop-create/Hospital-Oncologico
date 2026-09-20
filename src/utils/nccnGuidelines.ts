@@ -653,67 +653,264 @@ function normalizeStr(str: string): string {
     .trim();
 }
 
+interface OrganDefinition {
+  organ: string;
+  regex?: RegExp;
+  check?: (str: string) => boolean;
+  terms: string[];
+}
+
+const ORGAN_DEFINITIONS: OrganDefinition[] = [
+  {
+    organ: 'Páncreas',
+    regex: /\b(pancrea\w*|wirsung|duodenopancreatectom\w*|pancreatectom\w*)\b/,
+    terms: ['pancreas', 'pancreatico', 'pancreatica', 'pancreaticos', 'pancreaticas', 'wirsung']
+  },
+  {
+    organ: 'Cuello uterino (Cérvix)',
+    regex: /\b(cervic\w*|cervix|cuello uterino|cuello de utero)\b/,
+    terms: ['cervix', 'cervical', 'cervicouterino', 'cervicouterina', 'cuello uterino', 'cuello de utero']
+  },
+  {
+    organ: 'Endometrio / Útero',
+    check: (str: string) => {
+      const withoutCuello = str.replace(/cuello (?:uterino|de utero)/g, ' ');
+      return /\b(endometri\w*)\b/.test(str) || /\b(uterin\w*|utero)\b/.test(withoutCuello);
+    },
+    terms: ['endometrio', 'endometrial', 'endometrioide', 'utero', 'uterino', 'uterina']
+  },
+  {
+    organ: 'Mama',
+    regex: /\b(mama|mamas|mamari\w*|breast|mastectom\w*)\b/,
+    terms: ['mama', 'mamas', 'mamario', 'mamaria', 'mamarios', 'mamarias', 'breast']
+  },
+  {
+    organ: 'Colon',
+    regex: /\b(colon|ciego|sigmoide\w*|colectom\w*|hemicolectom\w*|colorrectal\w*|colorectal\w*)\b/,
+    terms: ['colon', 'ciego', 'sigmoide', 'sigmoides', 'colorrectal', 'colorectal']
+  },
+  {
+    organ: 'Recto',
+    check: (str: string) => {
+      const withoutColorrectal = str.replace(/colo[r]?rectal\w*/g, ' ');
+      return /\b(recto|rectal\w*|proctectom\w*|proctosigmoid\w*)\b/.test(withoutColorrectal);
+    },
+    terms: ['recto', 'rectal', 'rectales']
+  },
+  {
+    organ: 'Próstata',
+    regex: /\b(prostata|prostatic\w*|prostatectom\w*)\b/,
+    terms: ['prostata', 'prostatico', 'prostatica', 'prostaticos', 'prostaticas']
+  },
+  {
+    organ: 'Ovario',
+    regex: /\b(ovari\w*|trompa\w*|peritoneal primario)\b/,
+    terms: ['ovario', 'ovarios', 'ovarico', 'ovarica', 'trompa', 'trompas', 'peritoneal primario']
+  },
+  {
+    organ: 'Pulmón',
+    regex: /\b(pulmon\w*|bronqu\w*|lobectom\w* pulmonar)\b/,
+    terms: ['pulmon', 'pulmones', 'pulmonar', 'pulmonares', 'bronquio', 'bronquial']
+  },
+  {
+    organ: 'Estómago',
+    regex: /\b(estomago|gastric\w*|gastrectom\w*|gastroesofagic\w*)\b/,
+    terms: ['estomago', 'gastrico', 'gastrica', 'gastricos', 'gastricas', 'gastroesofagico', 'gastroesofagica']
+  },
+  {
+    organ: 'Testículo',
+    regex: /\b(testiculo\w*|testicular\w*|orquiectom\w*)\b/,
+    terms: ['testiculo', 'testiculos', 'testicular', 'testiculares']
+  },
+  {
+    organ: 'Vejiga',
+    regex: /\b(vejiga|urotelial\w*|vesical\w*|cistectom\w*)\b/,
+    terms: ['vejiga', 'urotelio', 'urotelial', 'uroteliales', 'vesical']
+  },
+  {
+    organ: 'Piel',
+    check: (str: string) => /\bmelanoma\b/.test(str) || (/\b(piel|cutane\w*)\b/.test(str) && /\b(basocelular|espinocelular|escam\w*|epidermoide)\b/.test(str)),
+    terms: ['melanoma', 'piel', 'cutaneo', 'cutanea']
+  },
+  {
+    organ: 'Vías biliares / Vesícula',
+    regex: /\b(vias? biliar\w*|vesicula biliar|colangiocarcinoma|coledoco)\b/,
+    terms: ['vias biliares', 'via biliar', 'vesicula biliar', 'colangiocarcinoma', 'coledoco']
+  },
+  {
+    organ: 'Riñón',
+    regex: /\b(ri[nñ]on\w*|renal\w*|nefrectom\w*)\b/,
+    terms: ['rinon', 'riñon', 'rinones', 'riñones', 'renal', 'renales']
+  }
+];
+
+/**
+ * Verifica si una mención de un órgano está en contexto incidental, de normalidad, de exclusión o antecedente.
+ */
+function isOrganMentionIncidental(text: string, organTermRegex: RegExp): boolean {
+  const norm = normalizeStr(text);
+
+  // 1. Órgano seguido de normalidad / sin alteraciones (hasta 6 palabras intermedias)
+  // Ej: "páncreas sin alteraciones", "páncreas normal", "páncreas de morfología y tamaño normal", "páncreas conservado"
+  const postPattern = new RegExp(
+    organTermRegex.source +
+    '(?:\\s+[a-z]+){0,6}\\s+' +
+    '(sin\\s+alteracion\\w*|sin\\s+lesion\\w*|libre\\s+de\\s+lesion\\w*|sin\\s+hallazgos|sin\\s+particularidades|s\\s+p|sin\\s+compromiso|normal\\w*|conservad\\w*|no\\s+muestra\\w*|no\\s+presenta\\w*|no\\s+visible|no\\s+evidencia\\w*)',
+    'i'
+  );
+  if (postPattern.test(norm)) return true;
+
+  // 2. Normalidad / sin alteraciones antes del órgano (hasta 6 palabras intermedias)
+  // Ej: "sin alteraciones en páncreas", "no se observan lesiones en páncreas", "aspecto normal del páncreas"
+  const prePattern = new RegExp(
+    '(sin\\s+alteracion\\w*|sin\\s+lesion\\w*|sin\\s+hallazgos|sin\\s+particularidades|aspecto\\s+normal|normalidad|conservad\\w*|no\\s+se\\s+observa\\w*|no\\s+se\\s+evidencia\\w*|no\\s+se\\s+aprecia\\w*)' +
+    '(?:\\s+[a-z]+){0,6}\\s+' +
+    organTermRegex.source,
+    'i'
+  );
+  if (prePattern.test(norm)) return true;
+
+  // 3. Exclusiones clínicas, descarte o antecedentes familiares
+  // Ej: "se descarta tumor de páncreas", "antecedente familiar de cáncer de páncreas", "guía nccn de páncreas"
+  const exclPattern = new RegExp(
+    '(se\\s+descarta|descartar|descartad\\w*|diagnostico\\s+diferencial|ddx|antecedente\\w*\\s+(?:familiar\\w*|gineco\\w*|de)|guia\\w*\\s+(?:nccn|esmo|ascol)?)' +
+    '(?:\\s+[a-z]+){0,6}\\s+' +
+    organTermRegex.source,
+    'i'
+  );
+  if (exclPattern.test(norm)) return true;
+
+  // 4. Mención exclusiva como sitio secundario metastásico (no primario)
+  // Ej: "metástasis pulmonares", "secundarismo pulmonar", "implantes pulmonares", "metástasis en pulmón"
+  const metPattern = new RegExp(
+    '(?:metastasis|secundarismo\\w*|implante\\w*|nodulo\\w*\\s+metastasico\\w*|compromiso\\s+metastasico)' +
+    '(?:\\s+[a-z]+){0,4}\\s+' +
+    organTermRegex.source,
+    'i'
+  );
+  if (metPattern.test(norm)) return true;
+
+  const postMetPattern = new RegExp(
+    organTermRegex.source + '(?:\\s+[a-z]+){0,3}\\s+(?:metastasico\\w*|secundari\\w*)',
+    'i'
+  );
+  if (postMetPattern.test(norm)) return true;
+
+  return false;
+}
+
+/**
+ * Extrae todos los órganos candidatos presentes en una cadena, descartando menciones secundarias o descartadas.
+ */
+function detectCandidateOrgans(rawOrNormStr: string, isExplicitContext: boolean = false): string[] {
+  const str = normalizeStr(rawOrNormStr);
+  const found: string[] = [];
+
+  for (const def of ORGAN_DEFINITIONS) {
+    let matches = false;
+    if (def.check) {
+      matches = def.check(str);
+    } else if (def.regex) {
+      matches = def.regex.test(str);
+    }
+
+    if (matches) {
+      if (def.regex && isOrganMentionIncidental(str, def.regex)) {
+        continue;
+      }
+      found.push(def.organ);
+    }
+  }
+  return found;
+}
+
 /**
  * Extrae el perfil tumoral ancla del paciente a partir de su diagnóstico explícito
- * y/o de la historia clínica patológica, filtrando menciones secundarias.
+ * y/o de la historia clínica patológica, anclando al diagnóstico principal y
+ * filtrando menciones incidentales o hallazgos normales de otros órganos.
  */
 export function extractPatientTumorProfile(clinicalText: string, explicitDiagnosis: string = ''): PatientTumorProfile {
   const normDx = normalizeStr(explicitDiagnosis || '');
   const normText = normalizeStr(clinicalText || '');
 
-  // 1. Detección prioritaria de órgano a partir del diagnóstico explícito
+  // 1. Detección prioritaria de órgano anclada al diagnóstico principal
   let organ = 'Desconocido / No identificado';
+  let isHistologyIncomplete = false;
 
+  // Helper de compatibilidad interna
   const detectOrganFromStr = (str: string): string => {
-    if (str.includes('pancrea')) return 'Páncreas';
-    if (str.includes('endometri') || str.includes('uterin') || str.includes('utero')) return 'Endometrio / Útero';
-    if (str.includes('cervic') || str.includes('cervix') || str.includes('cuello uterino')) return 'Cuello uterino (Cérvix)';
-    if (str.includes('mama') || str.includes('breast')) return 'Mama';
-    if (str.includes('colon') || str.includes('ciego') || str.includes('sigmoide')) return 'Colon';
-    if (str.includes('recto') || str.includes('rectal')) return 'Recto';
-    if (str.includes('prostata') || str.includes('prostatic')) return 'Próstata';
-    if (str.includes('ovario') || str.includes('trompa') || str.includes('peritoneal primario')) return 'Ovario';
-    if (str.includes('pulmon') || str.includes('bronqu')) return 'Pulmón';
-    if (str.includes('estomago') || str.includes('gastric')) return 'Estómago';
-    if (str.includes('testiculo') || str.includes('testicular')) return 'Testículo';
-    if (str.includes('vejiga') || str.includes('urotelial')) return 'Vejiga';
-    if (str.includes('melanoma') || (str.includes('piel') && (str.includes('basocelular') || str.includes('espinocelular')))) return 'Piel';
-    if (str.includes('vias biliares') || str.includes('vesicula biliar') || str.includes('colangiocarcinoma')) return 'Vías biliares / Vesícula';
-    if (str.includes('renal') || str.includes('riñon') || str.includes('rinon')) return 'Riñón';
+    const detected = detectCandidateOrgans(str);
+    if (detected.length === 1) return detected[0];
+    if (detected.length > 1) return `Órgano ambiguo / No concluyente (${detected.join(', ')})`;
     return '';
   };
 
-  // Intentar primero con el campo de diagnóstico estructurado
+  // Nivel 1: Diagnóstico estructurado explícito (prioridad absoluta)
   if (normDx) {
-    const detected = detectOrganFromStr(normDx);
-    if (detected) organ = detected;
+    const dxOrgans = detectCandidateOrgans(normDx, true);
+    if (dxOrgans.length === 1) {
+      organ = dxOrgans[0];
+    } else if (dxOrgans.length > 1) {
+      organ = `Órgano ambiguo / No concluyente (${dxOrgans.join(', ')})`;
+      isHistologyIncomplete = true;
+    }
   }
 
-  // Si no se encontró en el diagnóstico estructurado, buscar en la historia omitiendo frases secundarias
+  // Nivel 2: Encabezados diagnósticos explícitos en el texto clínico
   if (organ === 'Desconocido / No identificado') {
-    // Filtrar frases secundarias que puedan confundir el órgano primario
-    const cleanedText = normText
-      .replace(/guia (?:nccn|esmo|ascol)? (?:de|para)? [a-z\s]+/g, ' ')
-      .replace(/antecedente[s]? (?:gineco|familiar|de) [a-z\s]+/g, ' ')
-      .replace(/diagnostico diferencial [a-z\s]+/g, ' ')
-      .replace(/se descarta [a-z\s]+/g, ' ');
-
-    // Buscar encabezados de diagnóstico directo
-    const dxMatch = clinicalText.match(/(?:diagn[oó]stico|anatom[ií]a patol[oó]gica|biopsia|ap|tumor primario)[\s:]+([^\n.;]+)/i);
-    if (dxMatch && dxMatch[1]) {
-      const detected = detectOrganFromStr(normalizeStr(dxMatch[1]));
-      if (detected) organ = detected;
+    const dxHeaderRegex = /(?:diagn[oó]stico(?:[\s\w]*)|anatom[ií]a patol[oó]gica|informe anatomopatol[oó]gico|biopsia(?:[\s\w]*)|ap|tumor primario|juicio cl[ií]nico|impresi[oó]n diagn[oó]stica)[\s:]+([^\n.;]+)/gi;
+    const headerOrgans = new Set<string>();
+    let match: RegExpExecArray | null;
+    while ((match = dxHeaderRegex.exec(clinicalText)) !== null) {
+      const snippet = match[1];
+      const detected = detectCandidateOrgans(snippet, true);
+      detected.forEach(o => headerOrgans.add(o));
     }
 
-    if (organ === 'Desconocido / No identificado') {
-      const detected = detectOrganFromStr(cleanedText);
-      if (detected) organ = detected;
+    const headerOrgansArr = Array.from(headerOrgans);
+    if (headerOrgansArr.length === 1) {
+      organ = headerOrgansArr[0];
+    } else if (headerOrgansArr.length > 1) {
+      organ = `Órgano ambiguo / No concluyente (${headerOrgansArr.join(', ')})`;
+      isHistologyIncomplete = true;
+    }
+  }
+
+  // Nivel 3: Filtrado en texto completo (omitiendo menciones de normalidad, incidentales o exclusiones)
+  if (organ === 'Desconocido / No identificado') {
+    const clauses = clinicalText.split(/[\n.;]+/).map(c => c.trim()).filter(Boolean);
+    const activeOrgans = new Set<string>();
+
+    for (const def of ORGAN_DEFINITIONS) {
+      for (const clause of clauses) {
+        const normClause = normalizeStr(clause);
+        let clauseMatches = false;
+        if (def.check) {
+          clauseMatches = def.check(normClause);
+        } else if (def.regex) {
+          clauseMatches = def.regex.test(normClause);
+        }
+
+        if (clauseMatches) {
+          if (def.regex && isOrganMentionIncidental(clause, def.regex)) {
+            continue;
+          }
+          activeOrgans.add(def.organ);
+        }
+      }
+    }
+
+    const activeArr = Array.from(activeOrgans);
+    if (activeArr.length === 1) {
+      organ = activeArr[0];
+    } else if (activeArr.length > 1) {
+      organ = `Órgano ambiguo / No concluyente (${activeArr.join(', ')})`;
+      isHistologyIncomplete = true;
     }
   }
 
   // 2. Detección de estirpe histológica
   let histology = 'No especificada / Pendiente de confirmación';
-  let isHistologyIncomplete = false;
 
   const targetSearchStr = `${normDx} ${normText}`;
   const hasNeuroendocrine =
@@ -722,11 +919,36 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
   if (hasNeuroendocrine) {
     histology = 'Tumor neuroendocrino (TNE / NET)';
   } else if (targetSearchStr.includes('adenocarcinoma ductal') || (targetSearchStr.includes('adenocarcinoma') && targetSearchStr.includes('ductal'))) {
-    histology = 'Adenocarcinoma ductal';
+    histology = organ === 'Páncreas' ? 'Adenocarcinoma ductal de páncreas' : 'Adenocarcinoma ductal';
   } else if (targetSearchStr.includes('adenocarcinoma')) {
-    histology = 'Adenocarcinoma';
+    if (organ === 'Colon') {
+      if (targetSearchStr.includes('mucinoso')) histology = 'Adenocarcinoma mucinoso de colon';
+      else if (targetSearchStr.includes('colorrectal') || targetSearchStr.includes('colorectal')) histology = 'Adenocarcinoma colorrectal';
+      else histology = 'Adenocarcinoma de colon';
+    } else if (organ === 'Páncreas') {
+      histology = 'Adenocarcinoma de páncreas';
+    } else if (organ === 'Recto') {
+      histology = 'Adenocarcinoma de recto';
+    } else if (organ === 'Próstata') {
+      histology = 'Adenocarcinoma de próstata';
+    } else if (organ === 'Estómago') {
+      histology = 'Adenocarcinoma gástrico';
+    } else if (organ === 'Endometrio / Útero') {
+      histology = 'Adenocarcinoma endometrioide';
+    } else if (organ === 'Cuello uterino (Cérvix)') {
+      histology = 'Adenocarcinoma de cérvix';
+    } else if (organ === 'Ovario') {
+      histology = 'Adenocarcinoma de ovario';
+    } else if (organ === 'Pulmón') {
+      histology = 'Adenocarcinoma de pulmón';
+    } else {
+      histology = 'Adenocarcinoma';
+    }
   } else if (targetSearchStr.includes('carcinoma epidermoide') || targetSearchStr.includes('carcinoma escamoso') || targetSearchStr.includes('escamocelular')) {
-    histology = 'Carcinoma epidermoide / escamoso';
+    if (organ === 'Cuello uterino (Cérvix)') histology = 'Carcinoma epidermoide de cérvix';
+    else if (organ === 'Piel') histology = 'Carcinoma espinocelular cutáneo';
+    else if (organ === 'Pulmón') histology = 'Carcinoma epidermoide de pulmón (NSCLC)';
+    else histology = 'Carcinoma epidermoide / escamoso';
   } else if (targetSearchStr.includes('microcitico') || targetSearchStr.includes('celulas pequenas') || targetSearchStr.includes('sclc')) {
     histology = 'Carcinoma microcítico (SCLC)';
   } else if (targetSearchStr.includes('celulas no pequenas') || targetSearchStr.includes('nsclc')) {
@@ -740,10 +962,10 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
   } else if (targetSearchStr.includes('urotelial') || targetSearchStr.includes('transicional')) {
     histology = 'Carcinoma urotelial';
   } else if (targetSearchStr.includes('celulas claras')) {
-    histology = 'Carcinoma de células claras';
+    histology = organ === 'Riñón' ? 'Carcinoma de células claras de riñon' : 'Carcinoma de células claras';
   } else if (targetSearchStr.includes('seroso')) {
-    histology = 'Carcinoma seroso';
-  } else if (organ !== 'Desconocido / No identificado') {
+    histology = organ === 'Ovario' ? 'Carcinoma seroso de alto grado' : 'Carcinoma seroso';
+  } else if (organ !== 'Desconocido / No identificado' && !organ.toLowerCase().includes('ambiguo')) {
     // Si el órgano es conocido, asignar la estirpe estándar predominante según NCCN
     if (organ === 'Páncreas') histology = 'Adenocarcinoma de páncreas';
     else if (organ === 'Mama') histology = 'Carcinoma invasor de mama';
@@ -762,11 +984,12 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
     else if (organ === 'Piel') histology = 'Carcinoma basocelular';
   }
 
-  // Detección de diagnóstico incompleto (neoplasia sin histología y sin órgano identificable)
+  // Detección de diagnóstico incompleto o ambiguo
   if (
-    organ === 'Desconocido / No identificado' &&
-    (targetSearchStr.includes('neoplasia') || targetSearchStr.includes('tumor') || targetSearchStr.includes('lesion') || targetSearchStr.includes('masa')) &&
-    histology === 'No especificada / Pendiente de confirmación'
+    organ.toLowerCase().includes('ambiguo') ||
+    (organ === 'Desconocido / No identificado' &&
+      (targetSearchStr.includes('neoplasia') || targetSearchStr.includes('tumor') || targetSearchStr.includes('lesion') || targetSearchStr.includes('masa')) &&
+      histology === 'No especificada / Pendiente de confirmación')
   ) {
     isHistologyIncomplete = true;
   }
@@ -1090,8 +1313,9 @@ export function validateCandidateSources(
 ): CandidateValidationResult {
   const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
 
-  // 1. Si el diagnóstico histológico es incompleto
+  // 1. Si el diagnóstico histológico es incompleto o ambiguo
   if (profile.isHistologyIncomplete) {
+    const isAmbiguous = profile.organ.toLowerCase().includes('ambiguo');
     return {
       canProceed: false,
       profile,
@@ -1100,8 +1324,10 @@ export function validateCandidateSources(
       validSystemGuideline: null,
       excludedSources: [],
       stopReason: 'HISTOLOGY_INCOMPLETE',
-      stopTitle: 'Diagnóstico Histológico Incompleto',
-      stopMessage: 'El texto clínico documenta una lesión o neoplasia sin confirmación de estirpe histológica. El sistema tiene prohibido asumir una estirpe por defecto o emitir un plan de seguimiento específico sin histología demostrada.',
+      stopTitle: isAmbiguous ? 'Ambigüedad Diagnóstica / Órgano No Concluyente' : 'Diagnóstico Histológico Incompleto',
+      stopMessage: isAmbiguous
+        ? `El texto clínico documenta múltiples órganos candidatos sin un diagnóstico primario definido (${profile.organ}). Por seguridad oncológica, el sistema tiene prohibido asumir un órgano primario por defecto o emitir un plan sin certeza del tumor primario.`
+        : 'El texto clínico documenta una lesión o neoplasia sin confirmación de estirpe histológica. El sistema tiene prohibido asumir una estirpe por defecto o emitir un plan de seguimiento específico sin histología demostrada.',
     };
   }
 
@@ -1250,6 +1476,14 @@ export function matchGuidelineByProfile(profile: PatientTumorProfile): Guideline
     };
   }
 
+  if (profile.organ.toLowerCase().includes('ambiguo')) {
+    return {
+      status: 'HISTOLOGY_INCOMPLETE',
+      guideline: null,
+      message: `El diagnóstico presenta ambigüedad clínica (${profile.organ}). Se requiere definir el tumor primario con certeza antes de seleccionar una guía de seguimiento.`,
+    };
+  }
+
   if (profile.isHistologyIncomplete) {
     return {
       status: 'HISTOLOGY_INCOMPLETE',
@@ -1277,14 +1511,63 @@ export function matchGuidelineByProfile(profile: PatientTumorProfile): Guideline
 
   // Entre los candidatos del mismo órgano, verificar compatibilidad histológica y exclusiones
   for (const g of organCandidates) {
-    // Verificar si la histología del paciente está excluida por esta guía
+    // 1. Verificar si la histología del paciente está excluida por esta guía
     const isExcluded = g.excludedHistologies.some(excl => normPatientHist.includes(normalizeStr(excl)));
     if (isExcluded) continue;
 
-    // Verificar si la histología del paciente coincide con las histologías de la guía
+    // 2. Verificar si la histología del paciente coincide con las histologías de la guía
     const isHistMatch = g.histologies.some(h => {
       const normH = normalizeStr(h);
-      return normPatientHist.includes(normH) || normH.includes(normPatientHist);
+
+      // Coincidencia exacta
+      if (normPatientHist === normH) return true;
+
+      // La histología del paciente contiene la de la guía
+      // Ej: paciente = "adenocarcinoma ductal pancreatico invasor", guía = "adenocarcinoma ductal pancreatico"
+      if (normPatientHist.includes(normH)) return true;
+
+      // La histología de la guía contiene la del paciente (normH.includes(normPatientHist)):
+      // RED DE SEGURIDAD ESTRICTA:
+      if (normH.includes(normPatientHist)) {
+        // ¿Es un término histológico genérico sin órgano calificado?
+        const isGenericHist = /^(adenocarcinoma|carcinoma|carcinoma epidermoide|carcinoma escamoso|neoplasia|tumor maligno)$/.test(normPatientHist.trim());
+
+        if (isGenericHist) {
+          // Si el término es genérico (ej. "adenocarcinoma"), NO debe validar contra guías
+          // cuya entrada de histología especifica un órgano distinto al ya detectado en el perfil.
+          const isOrganValid = profile.organ !== 'Desconocido / No identificado' && !profile.organ.toLowerCase().includes('ambiguo');
+          if (!isOrganValid) return false;
+
+          const normGuideOrgan = normalizeStr(g.organ);
+          const organMatches = normPatientOrgan.includes(normGuideOrgan) || normGuideOrgan.includes(normPatientOrgan);
+          if (!organMatches) return false;
+
+          // Si normH menciona un órgano, debe coincidir con el órgano del paciente
+          const organsInH = detectCandidateOrgans(normH);
+          if (organsInH.length > 0 && !organsInH.some(o => {
+            const no = normalizeStr(o);
+            return normPatientOrgan.includes(no) || no.includes(normPatientOrgan);
+          })) {
+            return false;
+          }
+
+          return true;
+        }
+
+        // Si no es un término genérico, verificar que no mencione un órgano contradictorio con la guía
+        const organsInPatientHist = detectCandidateOrgans(normPatientHist);
+        const normGuideOrgan = normalizeStr(g.organ);
+        if (organsInPatientHist.length > 0 && !organsInPatientHist.some(o => {
+          const no = normalizeStr(o);
+          return normGuideOrgan.includes(no) || no.includes(normGuideOrgan);
+        })) {
+          return false;
+        }
+
+        return true;
+      }
+
+      return false;
     });
 
     if (isHistMatch) {

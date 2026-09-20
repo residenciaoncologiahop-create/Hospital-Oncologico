@@ -1,0 +1,25 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isDoctorOfPatient(patientId) {
+      return isAuthenticated() &&
+        firestore.exists(/databases/(default)/documents/patients/$(patientId)) &&
+        firestore.get(/databases/(default)/documents/patients/$(patientId)).data.doctorId == request.auth.uid;
+    }
+
+    // Ruta de archivos clinicos organizados por expediente de paciente
+    match /patients/{patientId}/{allPaths=**} {
+      allow read, write: if isDoctorOfPatient(patientId);
+    }
+
+    // Denegacion por defecto para cualquier otra ruta no declarada
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
