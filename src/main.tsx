@@ -1918,7 +1918,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                 </div>
                                 <div className="flex space-x-4">
                                     <div className="w-1/2 space-y-2">
-                                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Rango Etario</label>
+                                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1 whitespace-nowrap block">Rango Etario</label>
                                         <select
                                             className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all"
                                             value={newPatientAgeRange}
@@ -1928,7 +1928,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                         </select>
                                     </div>
                                     <div className="w-1/2 space-y-2">
-                                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1">Diagnóstico Base</label>
+                                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] px-1 whitespace-nowrap block">Diagnóstico</label>
                                         <input
                                             type="text" required
                                             className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent rounded-xl text-sm font-bold focus:bg-white focus:border-blue-100 outline-none transition-all"
