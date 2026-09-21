@@ -69,26 +69,48 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles: FileData[] = [];
-      for (let i = 0; i < e.target.files.length; i++) {
-        const file = e.target.files[i];
-        const reader = new FileReader();
-        await new Promise<void>((resolve) => {
-          reader.onload = (evt) => {
-            if (evt.target?.result) {
-              const base64 = (evt.target.result as string).split(',')[1];
-              newFiles.push({ name: file.name, type: file.type, data: base64 });
-            }
-            resolve();
-          };
-          reader.readAsDataURL(file);
-        });
-      }
+  const processFiles = async (fileList: FileList | File[]) => {
+    const newFiles: FileData[] = [];
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      const reader = new FileReader();
+      await new Promise<void>((resolve) => {
+        reader.onload = (evt) => {
+          if (evt.target?.result) {
+            const raw = evt.target.result as string;
+            const base64 = raw.includes(',') ? raw.split(',')[1] : raw;
+            const resolvedType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : (file.name.toLowerCase().match(/\.(jpe?g|png|webp)$/i) ? `image/${RegExp.$1.toLowerCase() === 'jpg' ? 'jpeg' : RegExp.$1.toLowerCase()}` : 'application/octet-stream'));
+            newFiles.push({ name: file.name, type: resolvedType, data: base64 });
+          }
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    if (newFiles.length > 0) {
       setAttachedFiles(prev => [...prev, ...newFiles]);
       if (noNewStudies) setNoNewStudies(false);
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await processFiles(e.target.files);
+      e.target.value = '';
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   const removeFile = (index: number) => {
@@ -280,7 +302,11 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
                       </div>
                     )}
 
-                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-gray-200 border-dashed rounded-2xl cursor-pointer bg-white hover:bg-blue-50/40 hover:border-blue-300 transition-all group p-3 text-center">
+                    <label
+                      onDrop={handleDrop}
+                      onDragOver={handleDragOver}
+                      className="flex flex-col items-center justify-center w-full h-24 border-2 border-gray-200 border-dashed rounded-2xl cursor-pointer bg-white hover:bg-blue-50/40 hover:border-blue-300 transition-all group p-3 text-center"
+                    >
                       <Upload className="w-6 h-6 text-gray-400 group-hover:text-blue-500 mb-1 transition-colors" />
                       <span className="text-xs font-bold text-gray-700 group-hover:text-blue-600">
                         Cargar archivos de estudios (PDF, JPG, PNG)
@@ -292,7 +318,7 @@ const ClinicalEvolutionModal: React.FC<Props> = ({
                         type="file" 
                         className="hidden" 
                         multiple 
-                        accept="application/pdf,image/*" 
+                        accept="application/pdf,.pdf,image/*" 
                         onChange={handleFileChange} 
                       />
                     </label>

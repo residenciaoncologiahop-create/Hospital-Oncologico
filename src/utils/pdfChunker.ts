@@ -72,8 +72,9 @@ export async function splitPdfIntoChunks(
   customOverlap?: number
 ): Promise<DocumentChunk[]> {
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const normalizedFile = isPdf && file.type !== 'application/pdf' ? { ...file, type: 'application/pdf' } : file;
 
-  if (!isPdf || !file.data) {
+  if (!isPdf || !normalizedFile.data) {
     return [
       {
         chunkIndex: 0,
@@ -81,15 +82,15 @@ export async function splitPdfIntoChunks(
         startPage: 1,
         endPage: 1,
         totalPages: 1,
-        label: file.name || 'Documento',
-        sourceFileName: file.name,
-        file,
+        label: normalizedFile.name || 'Documento',
+        sourceFileName: normalizedFile.name,
+        file: normalizedFile,
       },
     ];
   }
 
   try {
-    const bytes = base64ToUint8Array(file.data);
+    const bytes = base64ToUint8Array(normalizedFile.data);
     const srcDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
     const totalPages = srcDoc.getPageCount();
 
@@ -101,9 +102,9 @@ export async function splitPdfIntoChunks(
           startPage: 1,
           endPage: 1,
           totalPages: 1,
-          label: file.name,
-          sourceFileName: file.name,
-          file,
+          label: normalizedFile.name,
+          sourceFileName: normalizedFile.name,
+          file: normalizedFile,
         },
       ];
     }
@@ -121,9 +122,9 @@ export async function splitPdfIntoChunks(
           startPage: 1,
           endPage: totalPages,
           totalPages,
-          label: `${file.name} (Págs. 1-${totalPages})`,
-          sourceFileName: file.name,
-          file,
+          label: `${normalizedFile.name} (Págs. 1-${totalPages})`,
+          sourceFileName: normalizedFile.name,
+          file: normalizedFile,
         },
       ];
     }
@@ -186,9 +187,9 @@ export async function splitPdfIntoChunks(
         startPage: 1,
         endPage: 1,
         totalPages: 1,
-        label: file.name,
-        sourceFileName: file.name,
-        file,
+        label: normalizedFile.name,
+        sourceFileName: normalizedFile.name,
+        file: normalizedFile,
       },
     ];
   }

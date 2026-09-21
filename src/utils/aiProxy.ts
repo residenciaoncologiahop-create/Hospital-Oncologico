@@ -90,8 +90,9 @@ export const buildParts = (text: string | undefined, files: FileData[]): GeminiP
   const parts: GeminiPart[] = [];
   if (text) parts.push({ text });
   files.slice(0, 5).forEach(f => {
-    if (f.data && f.type) {
-      parts.push({ inlineData: { mimeType: f.type, data: f.data } });
+    const mime = f.type || (f.name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : (f.name?.toLowerCase().match(/\.(jpe?g|png|webp)$/i) ? `image/${RegExp.$1.toLowerCase() === 'jpg' ? 'jpeg' : RegExp.$1.toLowerCase()}` : ''));
+    if (f.data && mime) {
+      parts.push({ inlineData: { mimeType: mime, data: f.data } });
     }
   });
   return parts;

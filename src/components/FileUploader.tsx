@@ -20,29 +20,51 @@ const FileUploader: React.FC<FileUploaderProps> = ({
   label,
   files,
   setFiles,
-  accept = "application/pdf,image/*",
+  accept = "application/pdf,.pdf,image/*",
   onClearAll,
   clearAllLabel = "Limpiar todos",
 }) => {
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles: FileData[] = [];
-      for (let i = 0; i < e.target.files.length; i++) {
-        const file = e.target.files[i];
-        const reader = new FileReader();
-        await new Promise<void>((resolve) => {
-          reader.onload = (evt) => {
-            if (evt.target?.result) {
-              const base64 = (evt.target.result as string).split(',')[1];
-              newFiles.push({ name: file.name, type: file.type, data: base64 });
-            }
-            resolve();
-          };
-          reader.readAsDataURL(file);
-        });
-      }
+  const processFiles = async (fileList: FileList | File[]) => {
+    const newFiles: FileData[] = [];
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      const reader = new FileReader();
+      await new Promise<void>((resolve) => {
+        reader.onload = (evt) => {
+          if (evt.target?.result) {
+            const raw = evt.target.result as string;
+            const base64 = raw.includes(',') ? raw.split(',')[1] : raw;
+            const resolvedType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : (file.name.toLowerCase().match(/\.(jpe?g|png|webp)$/i) ? `image/${RegExp.$1.toLowerCase() === 'jpg' ? 'jpeg' : RegExp.$1.toLowerCase()}` : 'application/octet-stream'));
+            newFiles.push({ name: file.name, type: resolvedType, data: base64 });
+          }
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    if (newFiles.length > 0) {
       setFiles([...files, ...newFiles]);
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await processFiles(e.target.files);
+      e.target.value = '';
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   return (
@@ -74,7 +96,11 @@ const FileUploader: React.FC<FileUploaderProps> = ({
           ))}
         </div>
       )}
-      <label className="flex flex-col items-center justify-center w-full h-20 border-2 border-gray-100 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-white hover:border-indigo-300 transition-all group">
+      <label
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        className="flex flex-col items-center justify-center w-full h-20 border-2 border-gray-100 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-white hover:border-indigo-300 transition-all group"
+      >
         <Upload className="w-5 h-5 text-gray-300 group-hover:text-indigo-400 mb-1" />
         <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
           {files.length > 0 ? `${files.length} cargado${files.length > 1 ? 's' : ''} · Agregar más` : 'Seleccionar Archivos'}

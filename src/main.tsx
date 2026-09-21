@@ -116,26 +116,48 @@ const parseDate = (dateStr: string) => {
 const sortTimeline = (events: ClinicalEvent[]) => events.sort((a, b) => parseDate(a.date) - parseDate(b.date));
 
 // --- COMPONENTS ---
-const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/*", onClearAll, clearAllLabel }: { label: string, files: FileData[], setFiles: (f: FileData[]) => void, accept?: string, onClearAll?: () => void, clearAllLabel?: string }) => {
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const newFiles: FileData[] = [];
-            for (let i = 0; i < e.target.files.length; i++) {
-                const file = e.target.files[i];
-                const reader = new FileReader();
-                await new Promise<void>((resolve) => {
-                    reader.onload = (evt) => {
-                        if (evt.target?.result) {
-                            const base64 = (evt.target.result as string).split(',')[1];
-                            newFiles.push({ name: file.name, type: file.type, data: base64 });
-                        }
-                        resolve();
-                    };
-                    reader.readAsDataURL(file);
-                });
-            }
+const FileUploader = ({ label, files, setFiles, accept = "application/pdf,.pdf,image/*", onClearAll, clearAllLabel }: { label: string, files: FileData[], setFiles: (f: FileData[]) => void, accept?: string, onClearAll?: () => void, clearAllLabel?: string }) => {
+    const processFiles = async (fileList: FileList | File[]) => {
+        const newFiles: FileData[] = [];
+        for (let i = 0; i < fileList.length; i++) {
+            const file = fileList[i];
+            const reader = new FileReader();
+            await new Promise<void>((resolve) => {
+                reader.onload = (evt) => {
+                    if (evt.target?.result) {
+                        const raw = evt.target.result as string;
+                        const base64 = raw.includes(',') ? raw.split(',')[1] : raw;
+                        const resolvedType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : (file.name.toLowerCase().match(/\.(jpe?g|png|webp)$/i) ? `image/${RegExp.$1.toLowerCase() === 'jpg' ? 'jpeg' : RegExp.$1.toLowerCase()}` : 'application/octet-stream'));
+                        newFiles.push({ name: file.name, type: resolvedType, data: base64 });
+                    }
+                    resolve();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        if (newFiles.length > 0) {
             setFiles([...files, ...newFiles]);
         }
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            await processFiles(e.target.files);
+            e.target.value = '';
+        }
+    };
+
+    const handleDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            await processFiles(e.dataTransfer.files);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
     };
 
     return (
@@ -148,17 +170,25 @@ const FileUploader = ({ label, files, setFiles, accept = "application/pdf,image/
                     </button>
                 )}
             </div>
-            <div className="flex flex-wrap gap-2 mb-2">
-                {files.map((f, i) => (
-                    <div key={i} className="flex items-center bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg text-[10px] border border-blue-100 font-bold">
-                        <span className="truncate max-w-[100px]">{f.name}</span>
-                        <button onClick={() => setFiles(files.filter((_, idx) => idx !== i))} className="ml-1 text-blue-300 hover:text-blue-600"><X size={12} /></button>
-                    </div>
-                ))}
-            </div>
-            <label className="flex flex-col items-center justify-center w-full h-20 border-2 border-gray-100 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-white hover:border-blue-300 transition-all group">
+            {files.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                    {files.map((f, i) => (
+                        <div key={i} className="flex items-center bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg text-[10px] border border-blue-100 font-bold">
+                            <span className="truncate max-w-[100px]">{f.name}</span>
+                            <button onClick={() => setFiles(files.filter((_, idx) => idx !== i))} className="ml-1 text-blue-300 hover:text-blue-600"><X size={12} /></button>
+                        </div>
+                    ))}
+                </div>
+            )}
+            <label
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                className="flex flex-col items-center justify-center w-full h-20 border-2 border-gray-100 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-white hover:border-blue-300 transition-all group"
+            >
                 <Upload className="w-5 h-5 text-gray-300 group-hover:text-blue-400 mb-1" />
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Seleccionar Archivos</span>
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
+                    {files.length > 0 ? `${files.length} archivo${files.length > 1 ? 's' : ''} cargado${files.length > 1 ? 's' : ''} · Agregar más` : 'Seleccionar Archivos'}
+                </span>
                 <input type="file" className="hidden" multiple accept={accept} onChange={handleFileChange} />
             </label>
         </div>
@@ -281,6 +311,7 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
     const [streamingMsg, setStreamingMsg] = useState<{ role: 'model'; text: string; timestamp: number } | null>(null);
     const streamingTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isProcessingRef = useRef(false);
+    const prevPatientIdRef = useRef<string | null>(null);
 
     const handleChatScroll = () => {
         if (!chatContainerRef.current) return;
@@ -361,6 +392,9 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
         const p = patients.find(pat => pat.id === selectedPatientId);
         if (!p) return;
 
+        const isDifferentPatient = prevPatientIdRef.current !== selectedPatientId;
+        prevPatientIdRef.current = selectedPatientId;
+
         if (streamingTimerRef.current) {
             clearInterval(streamingTimerRef.current);
             streamingTimerRef.current = null;
@@ -369,14 +403,17 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
 
         setTimeline(p.timeline || []);
         setChatMessages(p.chatHistory || []);
-        setHistoryFiles([]); setGuidelineFiles([]);
+        if (isDifferentPatient) {
+            setHistoryFiles([]); 
+            setGuidelineFiles([]);
+            setIncrementalNotice(null);
+            setActiveTab('docs');
+            setExpandedEvents(new Set());
+        }
         setLastError(null);
-        setIncrementalNotice(null);
-        setActiveTab('docs');
         setManualDate(new Date().toISOString().split('T')[0]);
         setManualDoctor(doctorName || '');
         setImagingStudies(p.imagingStudies || []);
-        setExpandedEvents(new Set());
 
         // Use clinicalContext from snapshot (already in memory — no extra Firestore call needed).
         // Fall back to legacy historyText field for cases processed before this feature.
