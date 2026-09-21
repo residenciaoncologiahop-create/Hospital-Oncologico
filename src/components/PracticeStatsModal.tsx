@@ -82,6 +82,8 @@ interface Patient {
 interface Props {
   patients: Patient[];
   onClose: () => void;
+  doctorId?: string;
+  onMigrateProfiles?: () => Promise<void>;
 }
 
 type TimeRange = '30d' | '6m' | '1y' | 'all';
@@ -817,10 +819,26 @@ export const detectTreatmentsForPatient = (p: Patient) => {
   };
 };
 
-export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
+export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose, onMigrateProfiles }) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [showUnassignedStageModal, setShowUnassignedStageModal] = useState(false);
   const [unassignedFilter, setUnassignedFilter] = useState<'all' | UnassignedStageReason>('all');
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<string | null>(null);
+
+  const handleMigrateProfiles = async () => {
+    if (!onMigrateProfiles || isMigrating) return;
+    setIsMigrating(true);
+    setMigrationResult(null);
+    try {
+      await onMigrateProfiles();
+      setMigrationResult('✓ Estadios actualizados correctamente. Los cambios se reflejarán al reabrir las estadísticas.');
+    } catch (err: any) {
+      setMigrationResult('Error durante la actualización: ' + (err?.message || err));
+    } finally {
+      setIsMigrating(false);
+    }
+  };
 
   // --- DEDUPLICAR PACIENTES ESTRICTAMENTE POR ID ---
   const uniquePatients = useMemo(() => {
@@ -1223,6 +1241,25 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
               })}
             </div>
 
+            {onMigrateProfiles && (
+              <button
+                onClick={handleMigrateProfiles}
+                disabled={isMigrating}
+                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-xl transition-colors"
+                title="Calcular estadios para todos los pacientes existentes"
+              >
+                {isMigrating ? (
+                  <>
+                    <span className="animate-spin inline-block">⟳</span>
+                    Actualizando...
+                  </>
+                ) : (
+                  <>
+                    ⟳ Actualizar estadios
+                  </>
+                )}
+              </button>
+            )}
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 p-2 rounded-xl hover:bg-gray-100 transition-colors"
@@ -1231,6 +1268,11 @@ export const PracticeStatsModal: React.FC<Props> = ({ patients, onClose }) => {
               <X size={20} />
             </button>
           </div>
+          {migrationResult && (
+            <div className={`px-6 py-2 text-[10px] font-bold text-center ${migrationResult.startsWith('✓') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {migrationResult}
+            </div>
+          )}
         </header>
 
         {/* SELECTOR MÓVIL DE PERÍODO */}

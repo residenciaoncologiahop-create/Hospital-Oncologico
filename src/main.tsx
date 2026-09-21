@@ -51,6 +51,8 @@ import {
     DocumentChunk
 } from './utils/aiProxy';
 import { saveClinicalContext, clearClinicalContext } from './services/patientService';
+import { computePatientOncologicalProfile } from './utils/computePatientProfile';
+import { migratePatientProfiles } from './utils/migratePatientProfiles';
 import { demoPatients, ClinicalValidationChecklist } from './mocks/demoCases';
 
 // --- RANGOS ETARIOS ---
@@ -102,6 +104,12 @@ interface Patient {
     processedChunks?: ProcessedChunkRecord[];
     clinicalContext?: string;
     clinicalContextUpdatedAt?: number | null;
+    // ── Perfil oncológico estructurado (auto-calculado, confirmable manualmente) ──
+    stage?: 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | 'No consignado';
+    stageConfidence?: 'confirmed' | 'auto' | 'pending';
+    organOrSite?: string;
+    isMetastatic?: boolean;
+    biomarkersStructured?: Array<{ name: string; status: string; rawText: string }>;
 }
 
 interface FileData { name: string; type: string; data: string; }
@@ -285,6 +293,9 @@ const App = ({ user, isDemoMode = false, onExitDemo }: AppProps) => {
     const [auditContent, setAuditContent] = useState<string | null>(null);
     const [isAuditing, setIsAuditing] = useState(false);
     const [lastError, setLastError] = useState<string | null>(null);
+    // Estado para confirmación manual de estadio en modal de edición
+    const [manualStageOverride, setManualStageOverride] = useState<string>('');
+    const [isSavingStage, setIsSavingStage] = useState(false);
 
     const handleCheckPatientTrials = async (patient: Patient) => {
         if (!patient || isEvaluatingPatientTrials) return;
@@ -621,6 +632,21 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                     processedChunks: updatedProcessedChunks,
                 };
 
+                // Recalcular perfil oncológico si el estadio no fue confirmado manualmente
+                const currentPatient = patients.find(p => p.id === selectedPatientId);
+                if (currentPatient?.stageConfidence !== 'confirmed') {
+                    const computed = computePatientOncologicalProfile(
+                        currentPatient?.diagnosis || '',
+                        historyText,
+                        currentPatient?.clinicalContext || ''
+                    );
+                    updateData.stage = computed.stage;
+                    updateData.stageConfidence = computed.stageConfidence;
+                    updateData.organOrSite = computed.organOrSite ?? null;
+                    updateData.isMetastatic = computed.isMetastatic;
+                    updateData.biomarkersStructured = computed.biomarkersStructured;
+                }
+
                 let updatedStudies: ImagingStudy[] | null = null;
                 if (extractedImaging.length > 0) {
                     const currentImaging = patients.find(p => p.id === selectedPatientId)?.imagingStudies || [];
@@ -864,6 +890,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         }
         if (!newPatientHC.trim()) return;
         try {
+            const computedProfile = computePatientOncologicalProfile(newPatientDiagnosis, '');
             const docRef = await addDoc(collection(db, "patients"), {
                 doctorId: user.uid,
                 hcNumber: newPatientHC.trim(),
@@ -871,7 +898,13 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 diagnosis: newPatientDiagnosis,
                 historyText: '',
                 lastUpdated: Date.now(),
-                chatHistory: [], timeline: [], labResults: []
+                chatHistory: [], timeline: [], labResults: [],
+                // Perfil oncológico estructurado (calculado desde el diagnóstico inicial)
+                stage: computedProfile.stage,
+                stageConfidence: computedProfile.stageConfidence,
+                organOrSite: computedProfile.organOrSite ?? null,
+                isMetastatic: computedProfile.isMetastatic,
+                biomarkersStructured: computedProfile.biomarkersStructured,
             });
             setSelectedPatientId(docRef.id);
             setShowNewPatientModal(false);
@@ -903,6 +936,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         setEditPatientHC(p.hcNumber || '');
         setEditPatientAgeRange(p.ageRange || '41-50');
         setEditPatientDiagnosis(p.diagnosis || '');
+        setManualStageOverride(p.stage || '');
         setShowEditPatientModal(true);
     };
 
@@ -930,12 +964,28 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         }
 
         try {
+            // Recalcular perfil oncológico solo si el estadio no fue confirmado manualmente
+            const existingPatient = patients.find(p => p.id === editingPatient.id);
+            const isConfirmed = existingPatient?.stageConfidence === 'confirmed';
+
+            const profileUpdate: Partial<Patient> = {};
+            if (!isConfirmed) {
+                const existingHistory = existingPatient?.clinicalContext || existingPatient?.historyText || '';
+                const computed = computePatientOncologicalProfile(updatedDiagnosis, existingHistory);
+                profileUpdate.stage = computed.stage;
+                profileUpdate.stageConfidence = computed.stageConfidence;
+                profileUpdate.organOrSite = computed.organOrSite;
+                profileUpdate.isMetastatic = computed.isMetastatic;
+                profileUpdate.biomarkersStructured = computed.biomarkersStructured;
+            }
+
             await updateDoc(doc(db, "patients", editingPatient.id), {
                 hcNumber: updatedHC,
                 name: `HC-${updatedHC}`,
                 ageRange: updatedAgeRange,
                 diagnosis: updatedDiagnosis,
-                lastUpdated: Date.now()
+                lastUpdated: Date.now(),
+                ...profileUpdate,
             });
             setPatients(prev => prev.map(p => p.id === editingPatient.id ? {
                 ...p,
@@ -943,13 +993,51 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 name: `HC-${updatedHC}`,
                 ageRange: updatedAgeRange,
                 diagnosis: updatedDiagnosis,
-                lastUpdated: Date.now()
+                lastUpdated: Date.now(),
+                ...profileUpdate,
             } : p));
             logAction("EDIT_PATIENT", editingPatient.id, doctorName);
             setShowEditPatientModal(false);
             setEditingPatient(null);
         } catch (error: any) {
             setLastError("Error al actualizar caso: " + error.message);
+        }
+    };
+
+    /**
+     * Confirma o corrige manualmente el estadio de un paciente.
+     * Una vez confirmado (stageConfidence: 'confirmed'), el campo no se sobreescribe
+     * en actualizaciones automáticas futuras.
+     */
+    const handleConfirmStage = async (
+        patientId: string,
+        selectedStage: string
+    ) => {
+        if (!patientId || !selectedStage || isDemoMode) return;
+        setIsSavingStage(true);
+        try {
+            const stageValue = selectedStage as Patient['stage'];
+            await updateDoc(doc(db, 'patients', patientId), {
+                stage: stageValue,
+                stageConfidence: 'confirmed',
+                isMetastatic: stageValue === 'Estadio IV',
+                lastUpdated: Date.now(),
+            });
+            setPatients(prev => prev.map(p => p.id === patientId ? {
+                ...p,
+                stage: stageValue,
+                stageConfidence: 'confirmed',
+                isMetastatic: stageValue === 'Estadio IV',
+                lastUpdated: Date.now(),
+            } : p));
+            if (editingPatient?.id === patientId) {
+                setEditingPatient(prev => prev ? { ...prev, stage: stageValue, stageConfidence: 'confirmed' } : prev);
+                setManualStageOverride(stageValue || '');
+            }
+        } catch (err: any) {
+            setLastError('Error al confirmar estadio: ' + err.message);
+        } finally {
+            setIsSavingStage(false);
         }
     };
 
@@ -2027,6 +2115,57 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                     </div>
                                 </div>
                                 <p className="text-[9px] text-gray-300 text-center leading-relaxed">Los datos se almacenan sin nombre ni DNI del paciente, en cumplimiento con la Ley 25.326.</p>
+
+                                {/* ── BLOQUE DE ESTADIO ONCOLÓGICO ────── */}
+                                <div className={`rounded-2xl p-4 space-y-3 border-2 ${
+                                    editingPatient.stageConfidence === 'confirmed'
+                                        ? 'bg-green-50 border-green-100'
+                                        : editingPatient.stage && editingPatient.stage !== 'No consignado'
+                                            ? 'bg-blue-50 border-blue-100'
+                                            : 'bg-orange-50 border-orange-100'
+                                }`}>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estadio oncológico</span>
+                                        {editingPatient.stageConfidence === 'confirmed' ? (
+                                            <span className="text-[9px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">✓ Confirmado</span>
+                                        ) : editingPatient.stage && editingPatient.stage !== 'No consignado' ? (
+                                            <span className="text-[9px] font-bold text-blue-500 bg-blue-100 px-2 py-0.5 rounded-full">🤖 Auto-detectado</span>
+                                        ) : (
+                                            <span className="text-[9px] font-bold text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full">⚠ Sin estadio</span>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-2 items-center">
+                                        <select
+                                            value={manualStageOverride}
+                                            onChange={e => setManualStageOverride(e.target.value)}
+                                            disabled={isSavingStage}
+                                            className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold focus:border-blue-200 outline-none transition-all"
+                                        >
+                                            <option value="">— Sin especificar —</option>
+                                            <option value="Estadio I">Estadio I</option>
+                                            <option value="Estadio II">Estadio II</option>
+                                            <option value="Estadio III">Estadio III</option>
+                                            <option value="Estadio IV">Estadio IV (Metastásico)</option>
+                                            <option value="No consignado">No consignado</option>
+                                        </select>
+                                        <button
+                                            type="button"
+                                            disabled={!manualStageOverride || isSavingStage}
+                                            onClick={() => handleConfirmStage(editingPatient.id, manualStageOverride)}
+                                            className="px-3 py-2 bg-green-500 text-white rounded-xl text-[10px] font-black hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+                                        >
+                                            {isSavingStage ? '...' : '✓ Confirmar'}
+                                        </button>
+                                    </div>
+                                    {editingPatient.organOrSite && (
+                                        <p className="text-[9px] text-gray-400">
+                                            Tumor detectado: <span className="font-bold text-gray-600 capitalize">{editingPatient.organOrSite}</span>
+                                            {editingPatient.isMetastatic ? ' · Metastásico' : ''}
+                                        </p>
+                                    )}
+                                </div>
+
                                 <div className="flex gap-3">
                                     <button 
                                         type="button" 
@@ -2074,7 +2213,16 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 />
                 {showCalculatorModal && <OncoCalculator onClose={() => setShowCalculatorModal(false)} />}
                 {showDrugsModal && <DrugReference onClose={() => setShowDrugsModal(false)} />}
-                {showStatsModal && <PracticeStatsModal patients={patients} onClose={() => setShowStatsModal(false)} />}
+                {showStatsModal && (
+                    <PracticeStatsModal
+                        patients={patients}
+                        onClose={() => setShowStatsModal(false)}
+                        doctorId={user?.uid}
+                        onMigrateProfiles={user?.uid ? async () => {
+                            await migratePatientProfiles(user.uid);
+                        } : undefined}
+                    />
+                )}
                 {showClinicalTrialsModal && <ClinicalTrialsModal patients={patients} onClose={() => setShowClinicalTrialsModal(false)} />}
                 {selectedPatientTrialEvaluation && (
                     <PatientTrialDetailModal

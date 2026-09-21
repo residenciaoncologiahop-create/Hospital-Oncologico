@@ -1,4 +1,5 @@
 import { PatientClinicalProfile } from '../../types/clinicalTrials';
+import type { StageCategory, BiomarkerEntry } from '../../utils/computePatientProfile';
 
 /**
  * Normaliza cadenas removiendo tildes y caracteres especiales para búsqueda segura
@@ -213,8 +214,11 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     sex = 'FEMALE';
   }
 
-  // 3. ÓRGANO O SITIO TUMORAL PRIMARIO (Extracción médica estricta y rigurosa)
-  const organOrSite = detectPrimaryTumorOrgan(diagnosisRaw, historyText);
+  // 3. ÓRGANO O SITIO TUMORAL PRIMARIO
+  // Prefer structured field persisted at save time; fallback to text extraction.
+  const organOrSite: string | undefined =
+    (patient.organOrSite as string | undefined) ||
+    detectPrimaryTumorOrgan(diagnosisRaw, historyText);
 
   // 4. HISTOLOGÍA
   let histology: string | undefined = undefined;
@@ -232,17 +236,27 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     histology = 'Carcinoma Urotelial';
   }
 
-  // 5. ESTADIO EXPLÍCITAMENTE DOCUMENTADO (Sin inferir ni convertir TNM)
+  // 5. ESTADIO EXPLÍCITAMENTE DOCUMENTADO
+  // Prefer structured stage computed at save time (most reliable).
   let stageDocumented: string | undefined = undefined;
-  const stageRegex = /\b(estadio\s+[IVXABCD1-4]+[ABCD]*|stage\s+[IVXABCD1-4]+[ABCD]*|ec\s+[IVXABCD1-4]+[ABCD]*)\b/i;
-  const stageMatch = fullText.match(stageRegex);
-  if (stageMatch) {
-    stageDocumented = stageMatch[1].trim();
+  const structuredStage = patient.stage as StageCategory | undefined;
+  if (structuredStage && structuredStage !== 'No consignado') {
+    stageDocumented = structuredStage;
+  } else {
+    // Fallback: regex on free text (legacy path for patients without structured fields)
+    const stageRegex = /\b(estadio\s+[IVXABCD1-4]+[ABCD]*|stage\s+[IVXABCD1-4]+[ABCD]*|ec\s+[IVXABCD1-4]+[ABCD]*)\b/i;
+    const stageMatch = fullText.match(stageRegex);
+    if (stageMatch) {
+      stageDocumented = stageMatch[1].trim();
+    }
   }
 
   // 6. ENFERMEDAD METASTÁSICA EXPLÍCITAMENTE DOCUMENTADA
+  // Prefer structured field when available.
   let isMetastaticDocumented = false;
-  if (
+  if (typeof patient.isMetastatic === 'boolean') {
+    isMetastaticDocumented = patient.isMetastatic;
+  } else if (
     fullTextNorm.includes('metastasis') ||
     fullTextNorm.includes('metastasico') ||
     fullTextNorm.includes('metastasica') ||
@@ -254,7 +268,14 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
   }
 
   // 7. BIOMARCADORES EXPLÍCITAMENTE DOCUMENTADOS
+  // Prefer structured field computed at save time when available.
   const biomarkersDocumented: Array<{ name: string; status: string; rawText: string }> = [];
+
+  if (patient.biomarkersStructured && Array.isArray(patient.biomarkersStructured) && patient.biomarkersStructured.length > 0) {
+    // Fast path: use pre-computed structured biomarkers, skip regex
+    biomarkersDocumented.push(...(patient.biomarkersStructured as BiomarkerEntry[]));
+  } else {
+  // Slow path: extract from free text
 
   // KRAS
   const krasMatch = fullText.match(/KRAS\s*([A-Za-z0-9_> -]+|\bmutado\b|\bwild-type\b|\bwt\b|\bno mutado\b)/i);
@@ -329,6 +350,8 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
       rawText: 'RH+ / Luminal'
     });
   }
+
+  } // end else (slow path biomarker extraction)
 
   // 8. LÍNEAS Y TRATAMIENTOS PREVIOS DOCUMENTADOS
   const linesDocumented: string[] = [];
