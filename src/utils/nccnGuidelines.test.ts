@@ -326,6 +326,154 @@ assert(
   `followUpMode: ${scenarioProfileCaseH.followUpMode}`
 );
 
+// ------------------------------------------------------------------------------------------------
+// CASO I: Mola hidatiforme con mención de "legrado uterino" (Bug A)
+// Debe bloquear con mensaje de "no hay guía disponible", NO devolver Endometrio.
+// ------------------------------------------------------------------------------------------------
+const clinicalTextCaseI = `
+Paciente femenina de 26 años con diagnóstico confirmado de mola hidatiforme.
+Se realizó legrado uterino evacuador sin complicaciones.
+Ecografía ginecológica post-evacuación: cavidad uterina limpia, sin restos ovulares ni signos de invasión miometrial.
+Control periódico de subunidad beta-hCG en curso con valores en descenso logarítmico.
+`;
+
+const profileCaseI = extractPatientTumorProfile(clinicalTextCaseI, 'Mola hidatiforme');
+assert(
+  profileCaseI.organ !== 'Endometrio / Útero',
+  'Caso I - Mola hidatiforme NO se clasifica erróneamente como "Endometrio / Útero"',
+  `Órgano detectado: ${profileCaseI.organ}`
+);
+assert(
+  profileCaseI.organ.includes('No cubierto') || profileCaseI.organ.includes('trofoblastica'),
+  'Caso I - Órgano clasificado como no cubierto / trofoblástico',
+  `Órgano detectado: ${profileCaseI.organ}`
+);
+
+const validationCaseI = validateCandidateSources(clinicalTextCaseI, [], 'Mola hidatiforme');
+assert(
+  validationCaseI.canProceed === false,
+  'Caso I - validateCandidateSources bloquea ejecución (canProceed === false)',
+  `canProceed: ${validationCaseI.canProceed}`
+);
+assert(
+  validationCaseI.stopReason === 'NO_MATCHING_SYSTEM_GUIDELINE',
+  'Caso I - stopReason es NO_MATCHING_SYSTEM_GUIDELINE',
+  `stopReason: ${validationCaseI.stopReason}`
+);
+assert(
+  Boolean(validationCaseI.stopMessage && (validationCaseI.stopMessage.toLowerCase().includes('no se encontr') || validationCaseI.stopMessage.toLowerCase().includes('no se dispone'))),
+  'Caso I - stopMessage informa que no hay guía disponible en el sistema',
+  `stopMessage: ${validationCaseI.stopMessage}`
+);
+assert(
+  validationCaseI.validSystemGuideline === null,
+  'Caso I - validSystemGuideline es null (no se asignó guía uterina)',
+  `Guideline: ${validationCaseI.validSystemGuideline}`
+);
+
+// ------------------------------------------------------------------------------------------------
+// CASO J: Carcinoma de Sitio Primario Desconocido (CSPD / CUP) con marcadores IHQ (Bug A)
+// Debe bloquear, NO adivinar un órgano de la lista cerrada.
+// ------------------------------------------------------------------------------------------------
+const clinicalTextCaseJ = `
+Paciente masculino de 67 años en estudio por adenopatía cervical supraclavicular derecha.
+Biopsia ganglionar: metástasis de adenocarcinoma pobremente diferenciado de sitio primario desconocido (CSPD).
+Perfil de inmunohistoquímica: CK7 positivo, CK20 negativo, CDX2 negativo (descarta primario en colon), TTF1 negativo (descarta pulmón), PSA negativo (descarta próstata), mamaglobina negativa (descarta mama).
+Tomografía computada de tórax, abdomen y pelvis: sin evidencia de tumor primario definido.
+`;
+
+const profileCaseJ = extractPatientTumorProfile(clinicalTextCaseJ, 'Carcinoma de sitio primario desconocido (CSPD)');
+assert(
+  profileCaseJ.organ !== 'Colon' && profileCaseJ.organ !== 'Pulmón' && profileCaseJ.organ !== 'Próstata' && profileCaseJ.organ !== 'Mama',
+  'Caso J - CSPD con marcadores IHQ no adivina ningún órgano de la lista cerrada',
+  `Órgano detectado: ${profileCaseJ.organ}`
+);
+assert(
+  profileCaseJ.organ.includes('No cubierto') || profileCaseJ.organ.includes('desconocido'),
+  'Caso J - Órgano clasificado como sitio primario desconocido / no cubierto',
+  `Órgano detectado: ${profileCaseJ.organ}`
+);
+
+const validationCaseJ = validateCandidateSources(clinicalTextCaseJ, [], 'Carcinoma de sitio primario desconocido (CSPD)');
+assert(
+  validationCaseJ.canProceed === false,
+  'Caso J - validateCandidateSources bloquea ejecución (canProceed === false)',
+  `canProceed: ${validationCaseJ.canProceed}`
+);
+assert(
+  validationCaseJ.stopReason === 'NO_MATCHING_SYSTEM_GUIDELINE',
+  'Caso J - stopReason es NO_MATCHING_SYSTEM_GUIDELINE',
+  `stopReason: ${validationCaseJ.stopReason}`
+);
+assert(
+  validationCaseJ.validSystemGuideline === null,
+  'Caso J - validSystemGuideline es null',
+  `Guideline: ${validationCaseJ.validSystemGuideline}`
+);
+
+// ------------------------------------------------------------------------------------------------
+// CASO K: Páncreas resecado, adyuvancia finalizada, motivo de estudio "descartar recidiva" (Bug B)
+// "se solicita TAC para descartar recidiva, sin hallazgos patológicos" -> Modo A, NO Modo B
+// ------------------------------------------------------------------------------------------------
+const clinicalTextCaseK = `
+Paciente de 59 años operado de duodenopancreatectomía cefálica (DPC) por adenocarcinoma de páncreas pT2 pN0 M0.
+Adyuvancia finalizada hace 6 meses. Actualmente asintomático.
+Nota de consulta: Paciente en seguimiento ambulatorio. Se solicita TAC para descartar recidiva, sin hallazgos patológicos.
+CA 19-9 normal.
+`;
+
+const profileScenarioCaseK = extractClinicalScenarioProfile(clinicalTextCaseK, 'Adenocarcinoma de páncreas pT2 pN0 M0');
+assert(
+  profileScenarioCaseK.diseaseStatus === 'NED',
+  'Caso K - "se solicita TAC para descartar recidiva, sin hallazgos patológicos" asigna NED y no PROGRESSION',
+  `diseaseStatus: ${profileScenarioCaseK.diseaseStatus}`
+);
+assert(
+  profileScenarioCaseK.followUpMode === 'CURATIVE_SURVEILLANCE',
+  'Caso K - followUpMode es CURATIVE_SURVEILLANCE (Modo A)',
+  `followUpMode: ${profileScenarioCaseK.followUpMode}`
+);
+assert(
+  profileScenarioCaseK.modeLabel.includes('Modo A'),
+  'Caso K - modeLabel asigna Modo A — Vigilancia post-tratamiento curativo',
+  `modeLabel: ${profileScenarioCaseK.modeLabel}`
+);
+
+const validationCaseK = validateCandidateSources(clinicalTextCaseK, [], 'Adenocarcinoma de páncreas pT2 pN0 M0');
+assert(
+  validationCaseK.canProceed === true,
+  'Caso K - validateCandidateSources permite proceder (canProceed === true)',
+  `canProceed: ${validationCaseK.canProceed}`
+);
+assert(
+  validationCaseK.activeScenarioRecommendations !== null &&
+  validationCaseK.activeScenarioRecommendations !== undefined &&
+  (validationCaseK.activeScenarioRecommendations.scenarioTitle.includes('Modo A') ||
+   validationCaseK.activeScenarioRecommendations.scenarioTitle.includes('Vigilancia post-resección')),
+  'Caso K - activeScenarioRecommendations corresponde a Vigilancia Curativa (Modo A)',
+  `Escenario: ${validationCaseK.activeScenarioRecommendations?.scenarioTitle}`
+);
+assert(
+  !validationCaseK.activeScenarioRecommendations?.scenarioTitle.includes('Modo B'),
+  'Caso K - NO se asignó Modo B',
+  `Escenario: ${validationCaseK.activeScenarioRecommendations?.scenarioTitle}`
+);
+
+// ------------------------------------------------------------------------------------------------
+// CASO L: Frases de motivo de control, sospecha no confirmada y screening (Bug B)
+// ------------------------------------------------------------------------------------------------
+const clinicalTextCaseL1 = `Paciente operado de colectomía, adyuvancia completada. Se descarta recidiva tras informe tomográfico.`;
+const profileL1 = extractClinicalScenarioProfile(clinicalTextCaseL1, 'Adenocarcinoma de colon pT2 pN0 M0');
+assert(profileL1.diseaseStatus === 'NED' && profileL1.followUpMode === 'CURATIVE_SURVEILLANCE', 'Caso L1 - "se descarta recidiva" da Modo A / NED');
+
+const clinicalTextCaseL2 = `Paciente en control oncológico post-quirúrgico. Consulta por sospecha de recidiva a confirmar con nuevo laboratorio.`;
+const profileL2 = extractClinicalScenarioProfile(clinicalTextCaseL2, 'Adenocarcinoma de colon pT2 pN0 M0');
+assert(profileL2.diseaseStatus === 'NED' && profileL2.followUpMode === 'CURATIVE_SURVEILLANCE', 'Caso L2 - "sospecha de recidiva a confirmar" da Modo A / NED');
+
+const clinicalTextCaseL3 = `Paciente operada en control. Screening de recidiva sin hallazgos patológicos.`;
+const profileL3 = extractClinicalScenarioProfile(clinicalTextCaseL3, 'Adenocarcinoma de páncreas pT1b pN0 M0');
+assert(profileL3.diseaseStatus === 'NED' && profileL3.followUpMode === 'CURATIVE_SURVEILLANCE', 'Caso L3 - "Screening de recidiva sin hallazgos" da Modo A / NED');
+
 console.log(`\n=== RESUMEN DE PRUEBAS: ${passed} PASARON, ${failed} FALLARON ===`);
 if (failed > 0) {
   process.exit(1);

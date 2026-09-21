@@ -771,9 +771,9 @@ function isOrganMentionIncidental(text: string, organTermRegex: RegExp): boolean
   if (prePattern.test(norm)) return true;
 
   // 3. Exclusiones clínicas, descarte o antecedentes familiares
-  // Ej: "se descarta tumor de páncreas", "antecedente familiar de cáncer de páncreas", "guía nccn de páncreas"
+  // Ej: "se descarta tumor de páncreas", "descarta colon", "legrado uterino", "antecedente familiar de cáncer de páncreas"
   const exclPattern = new RegExp(
-    '(se\\s+descarta|descartar|descartad\\w*|diagnostico\\s+diferencial|ddx|antecedente\\w*\\s+(?:familiar\\w*|gineco\\w*|de)|guia\\w*\\s+(?:nccn|esmo|ascol)?)' +
+    '(se\\s+descarta|descartar|descartad\\w*|descarta|descartan|diagnostico\\s+diferencial|ddx|antecedente\\w*\\s+(?:familiar\\w*|gineco\\w*|de)|guia\\w*\\s+(?:nccn|esmo|ascol)?|legrado\\w*)' +
     '(?:\\s+[a-z]+){0,6}\\s+' +
     organTermRegex.source,
     'i'
@@ -825,6 +825,88 @@ function detectCandidateOrgans(rawOrNormStr: string, isExplicitContext: boolean 
 }
 
 /**
+ * Detecta diagnósticos oncológicos que se encuentran fuera de la cobertura de guías clínicas del sistema:
+ * - Enfermedad trofoblástica gestacional / Mola hidatiforme / Coriocarcinoma
+ * - Cáncer / Carcinoma de Sitio Primario Desconocido (CSPD / CUP / Origen desconocido)
+ */
+export function detectUnsupportedDiagnosis(clinicalText: string, explicitDiagnosis: string = ''): {
+  isUnsupported: boolean;
+  organLabel: string;
+  histologyLabel: string;
+} | null {
+  const normDx = normalizeStr(explicitDiagnosis || '');
+  const normText = normalizeStr(clinicalText || '');
+  const combined = `${normDx} ${normText}`;
+
+  // 1. Enfermedad Trofoblástica Gestacional / Mola Hidatiforme / Coriocarcinoma
+  const isTrophoblastic =
+    /\b(?:mola\s+hidat(?:id)?iforme|mola\s+completa|mola\s+parcial|mola\s+invasora|mola|embarazo\s+molar)\b/.test(combined) ||
+    /\b(?:enfermedad|neoplasia)\s+trofoblastica(?:\s+gestacional)?\b/.test(combined) ||
+    /\bcoriocarcinoma(?:\s+gestacional)?\b/.test(combined) ||
+    /\btumor\s+(?:del\s+sitio\s+placentario|trofoblastico)\b/.test(combined) ||
+    /\b(?:gestational\s+trophoblastic|hydatidiform\s+mole|choriocarcinoma)\b/.test(combined);
+
+  if (isTrophoblastic) {
+    let hist = 'Enfermedad trofoblástica gestacional';
+    if (combined.includes('coriocarcinoma')) hist = 'Coriocarcinoma gestacional';
+    else if (combined.includes('mola')) hist = 'Mola hidatiforme';
+    return {
+      isUnsupported: true,
+      organLabel: 'No cubierto (Enfermedad trofoblástica gestacional)',
+      histologyLabel: hist,
+    };
+  }
+
+  // 2. Sitio Primario Desconocido / CUP / CSPD / Origen Desconocido
+  const isUnknownPrimary =
+    /\b(?:sitio\s+primario\s+desconocido|primario\s+desconocido|origen\s+desconocido)\b/.test(combined) ||
+    /\b(?:cspd|cup)\b/.test(combined) ||
+    /\b(?:cancer|carcinoma|neoplasia|tumor|adenocarcinoma)\s+de\s+(?:sitio\s+)?(?:primario|origen)\s+desconocido\b/.test(combined) ||
+    /\bcancer\s+of\s+unknown\s+primary\b/.test(combined) ||
+    /\bunknown\s+primary\b/.test(combined);
+
+  if (isUnknownPrimary) {
+    return {
+      isUnsupported: true,
+      organLabel: 'No cubierto (Sitio primario desconocido / CUP)',
+      histologyLabel: 'Carcinoma de sitio primario desconocido (CSPD / CUP)',
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Neutraliza menciones de recidiva/progresión/recaída que corresponden a:
+ * - Descarte explícito ("se descarta recidiva", "para descartar recaída")
+ * - Solicitudes de estudio ("se solicita TAC para descartar recidiva")
+ * - Sospechas no confirmadas ("sospecha de recidiva a confirmar/descartar/evaluar")
+ * - Control por/de sospecha ("control por sospecha de recidiva")
+ * - Screening/pesquisa/tamizaje con hallazgos negativos o sin hallazgos
+ * - Negaciones clínicas tradicionales ("sin signos tomográficos de recidiva", "no se observa recidiva")
+ */
+export function cleanTextForProgression(text: string): string {
+  return text
+    // 1. Descarte explícito y motivos de estudio para descartar
+    .replace(/(?:se\s+solicita|solicita|pedido\s+de|solicitud\s+de|control\s+con|estudio\s+para|tac\s+para|tc\s+para|pet\s+para|rm\s+para|eco\s+para)?\s*(?:para|a\s+fin\s+de|con\s+el\s+fin\s+de|con\s+el\s+objeto\s+de)?\s*(?:se\s+)?descart[aoó]\w*\s+(?:de\s+)?(?:posible\s+)?(?:recidiva|progresion|recaida)\b/gi, ' ')
+    .replace(/\b(?:recidiva|progresion|recaida)\s+(?:descartad[ao]s?|se\s+descarta|qued[aoó]\s+descartad[ao]s?)\b/gi, ' ')
+    // 2. Sospecha a confirmar, descartar, evaluar o en estudio
+    .replace(/\bsospecha\s+de\s+(?:posible\s+)?(?:recidiva|progresion|recaida)\s+(?:a\s+(?:confirmar|descartar|evaluar|estudiar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio|no\s+confirmada?|a\s+determinar)\b/gi, ' ')
+    .replace(/\b(?:a\s+(?:confirmar|descartar|evaluar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio)\s+(?:de\s+)?(?:sospecha\s+de\s+)?(?:recidiva|progresion|recaida)\b/gi, ' ')
+    // 3. Control por / de sospecha de recidiva/progresión
+    .replace(/\b(?:control|seguimiento|vigilancia|evaluaci[oó]n)\s+(?:por|de|ante)\s+(?:sospecha\s+de\s+)?(?:recidiva|progresion|recaida)\b/gi, ' ')
+    .replace(/\b(?:control|seguimiento|vigilancia|detecci[oó]n|prevenci[oó]n|profilaxis)\s+(?:de|para|por)\s+(?:recidiva|progresion|recaida)\b/gi, ' ')
+    // 4. Screening / tamizaje / vigilancia combinada con sin hallazgos / normal / negativo
+    .replace(/\b(?:screening|tamizaje|pesquisa)\s+(?:de|para)?\s*(?:recidiva|progresion|recaida)(?:[^\n.;]*)(?:sin\s+hallazgos|negativ[ao]|normal|sin\s+particularidades)\b/gi, ' ')
+    // 5. Negaciones estándar y con modificadores intermedios
+    .replace(/\bsin\s+(?:evidencia\s+de|signos\s+de|datos\s+de|imagenes\s+de|signos\s+tomogr[aá]ficos\s+de|hallazgos\s+de)?\s*(?:recidiva|progresion|recaida|lesiones)\b/gi, ' ')
+    .replace(/\bno\s+(?:presenta|se\s+observan?|se\s+evidencian?|se\s+aprecian?|se\s+identifican?|hay|muestra|constata)\s+(?:signos\s+de|evidencia\s+de)?\s*(?:recidiva|progresion|recaida|lesiones)\b/gi, ' ')
+    .replace(/\b(?:libre\s+de|ausencia\s+de)\s+(?:recidiva|progresion|recaida|enfermedad)\b/gi, ' ')
+    .replace(/\bnegativ[ao]s?\s+(?:para|de)\s+(?:recidiva|progresion|recaida)\b/gi, ' ')
+    .replace(/\b(?:score|riesgo)\s+de\s+(?:recidiva|recaida|progresion)\b/gi, ' ');
+}
+
+/**
  * Comprueba si una mención de progresión o recidiva está negada o en contexto de vigilancia/control/evaluación de riesgo.
  */
 function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
@@ -833,20 +915,41 @@ function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
   // 1. Negaciones clínicas amplias (soporta modificadores intermediarios como "signos tomográficos de", etc.)
   const negPatterns = [
     /\bsin\b(?:[\s\w]*)\b(recidiva|progresion|recaida|lesion\w*|metastasis)\b/,
-    /\bno\b(?:[\s\w]*)\b(se observa\w*|se evidencia\w*|se aprecia\w*|se identifica\w*|presenta|hay)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|lesion\w*|metastasis)\b/,
+    /\bno\b(?:[\s\w]*)\b(se observa\w*|se evidencia\w*|se aprecia\w*|se identifica\w*|presenta|hay|muestra|constata)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|lesion\w*|metastasis)\b/,
     /\b(?:libre\s+de|ausencia\s+de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|enfermedad)\b/,
     /\bnegativ[ao]s?\s+(?:para|de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
-    /\b(?:se\s+descarta|descartar|descartando|descartad[ao]s?)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/
+    /\b(?:se\s+descarta|descartar|descartando|descartad[ao]s?|qued[aoó]\s+descartad[ao]s?)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
+    /\b(recidiva|progresion|recaida)\b(?:[\s\w]*)\b(?:descartad[ao]s?|se\s+descarta|qued[aoó]\s+descartad[ao]s?)\b/
   ];
 
   for (const p of negPatterns) {
     if (p.test(norm)) return true;
   }
 
-  // 2. Contextos de control, seguimiento, vigilancia o evaluación de riesgo (NO progresión confirmada)
+  // 2. Solicitudes de estudio / motivos de control para descartar ("se solicita TAC para descartar recidiva")
+  const studyMotivePatterns = [
+    /\b(?:para|a\s+fin\s+de|con\s+el\s+fin\s+de|con\s+el\s+objeto\s+de)?\s*descartar\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
+    /\b(?:se\s+solicita|solicito|solicita|pedido\s+de|solicitud\s+de|control\s+con|estudio\s+para|tac\s+para|tc\s+para|pet\s+para|rm\s+para|eco\s+para|ecografia\s+para|laboratorio\s+para)\b(?:[\s\w]*)\b(?:descartar|evaluar|controlar)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/
+  ];
+
+  for (const p of studyMotivePatterns) {
+    if (p.test(norm)) return true;
+  }
+
+  // 3. Sospecha a confirmar / descartar / evaluar / no confirmada
+  const unconfirmedSuspicionPatterns = [
+    /\bsospecha\s+de\s+(?:posible\s+)?(recidiva|progresion|recaida)\b(?:[\s\w]*)\b(?:a\s+(?:confirmar|descartar|evaluar|estudiar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio|no\s+confirmada?|a\s+determinar)\b/,
+    /\b(?:a\s+(?:confirmar|descartar|evaluar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio)\b(?:[\s\w]*)\b(?:sospecha\s+de\s+)?(recidiva|progresion|recaida)\b/
+  ];
+
+  for (const p of unconfirmedSuspicionPatterns) {
+    if (p.test(norm)) return true;
+  }
+
+  // 4. Contextos de control por / de sospecha, seguimiento, vigilancia o evaluación de riesgo
   const surveillancePatterns = [
-    /\b(?:control|seguimiento|vigilancia|deteccion|prevencion|profilaxis)\b(?:[\s\w]*)\b(?:de|para)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
-    /\b(?:para|a\s+fin\s+de)\s+descartar\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
+    /\b(?:control|seguimiento|vigilancia|evaluacion)\b(?:[\s\w]*)\b(?:por|de|ante)\b(?:[\s\w]*)\b(?:sospecha\s+de\s+)?(recidiva|progresion|recaida)\b/,
+    /\b(?:control|seguimiento|vigilancia|deteccion|prevencion|profilaxis)\b(?:[\s\w]*)\b(?:de|para|por)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
     /\briesgo\b(?:[\s\w]*)\b(?:de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
     /\bscore\s+de\s+(?:recidiva|recaida)\b/,
     /\bevaluar\b(?:[\s\w]*)\b(?:posible|sospecha\s+de)?\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/
@@ -854,6 +957,18 @@ function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
 
   for (const p of surveillancePatterns) {
     if (p.test(norm)) return true;
+  }
+
+  // 5. Screening / pesquisa / tamizaje combinado con normalidad o sin hallazgos
+  const isScreening = /\b(?:screening|tamizaje|pesquisa)\b(?:[\s\w]*)\b(?:de|para)?\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/.test(norm);
+  const hasNegativeFindings = /\b(?:sin\s+hallazgos|sin\s+particularidades|sin\s+lesion\w*|negativ[ao]|normal\w*|conservad\w*|s\s+p)\b/.test(norm);
+  if (isScreening && hasNegativeFindings) {
+    return true;
+  }
+
+  // Cláusula donde se menciona recidiva pero concluye sin hallazgos patológicos o negativos
+  if (/\b(recidiva|progresion|recaida)\b/.test(norm) && hasNegativeFindings) {
+    return true;
   }
 
   return false;
@@ -1039,12 +1154,43 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
   const normDx = normalizeStr(explicitDiagnosis || '');
   const normText = normalizeStr(clinicalText || '');
 
+  // 0. PRIORIDAD ABSOLUTA: Diagnósticos fuera de la cobertura del sistema (Mola hidatiforme, Trofoblástica, CSPD/CUP)
+  const unsupported = detectUnsupportedDiagnosis(clinicalText, explicitDiagnosis);
+  if (unsupported) {
+    const organ = unsupported.organLabel;
+    const histology = unsupported.histologyLabel;
+    return {
+      organ,
+      histology,
+      subtype: histology,
+      stage: 'No documentado',
+      margin: 'No especificado',
+      clinicalStatus: 'En evaluación',
+      treatment: 'No documentado',
+      surgeryDate: 'No documentada',
+      isHistologyIncomplete: false,
+      summary: `${organ} — ${histology}`,
+      isStageIV: false,
+      diseaseStatus: 'INDETERMINATE',
+      diseaseStatusDescription: 'Diagnóstico fuera de la cobertura de guías NCCN cargadas en el sistema.',
+      followUpMode: 'INDETERMINATE_STATUS',
+      modeLabel: 'Sin escenario aplicable / Diagnóstico no soportado',
+      activeTreatment: 'No documentado',
+      hasActiveSystemicTreatment: false,
+      treatmentIntent: 'No determinado',
+      lastImagingDate: 'No documentada',
+      lastTreatmentDate: 'No documentada'
+    };
+  }
+
   // 1. Detección prioritaria de órgano anclada al diagnóstico principal
   let organ = 'Desconocido / No identificado';
   let isHistologyIncomplete = false;
 
   // Helper de compatibilidad interna
   const detectOrganFromStr = (str: string): string => {
+    const unsup = detectUnsupportedDiagnosis(str);
+    if (unsup) return unsup.organLabel;
     const detected = detectCandidateOrgans(str);
     if (detected.length === 1) return detected[0];
     if (detected.length > 1) return `Órgano ambiguo / No concluyente (${detected.join(', ')})`;
@@ -1293,6 +1439,16 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
   // 1. Perfil tumoral base
   const baseProfile = extractPatientTumorProfile(clinicalText, explicitDiagnosis);
 
+  // Si el tumor está fuera de la cobertura de guías o no identificado, devolver perfil base bloqueado
+  if (baseProfile.organ.includes('No cubierto') || baseProfile.organ === 'Desconocido / No identificado') {
+    return {
+      ...baseProfile,
+      followUpMode: 'INDETERMINATE_STATUS',
+      modeLabel: 'Sin guía disponible para este diagnóstico',
+      summary: `${baseProfile.organ} — ${baseProfile.histology} | Sin guía en el sistema`,
+    };
+  }
+
   // 2. Detección de Estadio IV / Enfermedad Metastásica
   const isStageIV = detectStageIV(clinicalText, explicitDiagnosis);
 
@@ -1304,6 +1460,7 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
   const activeTreatment = tx.activeTreatment;
 
   // 4. Estado de Enfermedad, Metástasis y Negaciones Clínicas
+  const cleanedForProgression = cleanTextForProgression(combined);
   const hasProgression = detectConfirmedProgression(combined);
 
   const cleanedForActive = combined
@@ -1327,6 +1484,7 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
     combined.includes('ned') || combined.includes('libre de enfermedad') || combined.includes('sin evidencia de enfermedad') ||
     combined.includes('remision completa') || combined.includes('sin lesiones activas') || combined.includes('sin recidiva') ||
     combined.includes('sin signos de recidiva') || combined.includes('sin signos tomograficos de recidiva') ||
+    combined.includes('se descarta recidiva') || combined.includes('sin hallazgos patologicos') || combined.includes('sin hallazgos') ||
     combined.includes('asintomatica') || combined.includes('asintomatico') ||
     (!hasProgression && (tx.isTreatmentCompletedOrPast || combined.includes('en seguimiento')));
 
@@ -1500,6 +1658,21 @@ export function validateCandidateSources(
 ): CandidateValidationResult {
   const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
 
+  // 0. Si el diagnóstico está fuera de la cobertura de guías del sistema o no identificado
+  if (profile.organ.includes('No cubierto') || profile.organ === 'Desconocido / No identificado') {
+    return {
+      canProceed: false,
+      profile,
+      sourceMode: 'NONE',
+      validAttachedGuidelines: [],
+      validSystemGuideline: null,
+      excludedSources: [],
+      stopReason: 'NO_MATCHING_SYSTEM_GUIDELINE',
+      stopTitle: 'Sin guía disponible en el sistema',
+      stopMessage: `No se encontró una guía clínica de seguimiento en el sistema para este diagnóstico (${profile.organ} / ${profile.histology}). Para garantizar la seguridad del paciente, el sistema tiene prohibido asumir una localización anatómica por inferencia de palabras sueltas o generar recomendaciones sin una guía de práctica clínica específica de referencia.`,
+    };
+  }
+
   // 1. Si el diagnóstico histológico es incompleto o ambiguo
   if (profile.isHistologyIncomplete) {
     const isAmbiguous = profile.organ.toLowerCase().includes('ambiguo');
@@ -1655,11 +1828,11 @@ export function validateCandidateSources(
  * NUNCA busca palabras arbitrarias en toda la historia clínica.
  */
 export function matchGuidelineByProfile(profile: PatientTumorProfile): GuidelineMatchResult {
-  if (!profile.organ || profile.organ === 'Desconocido / No identificado') {
+  if (!profile.organ || profile.organ === 'Desconocido / No identificado' || profile.organ.includes('No cubierto')) {
     return {
       status: 'NO_MATCHING_GUIDELINE',
       guideline: null,
-      message: 'No se pudo identificar el órgano primario del paciente.',
+      message: 'No se dispone de una guía clínica en el sistema para este diagnóstico.',
     };
   }
 
