@@ -609,6 +609,70 @@ export const nccnGuidelines: NCCNGuideline[] = [
     source: 'NCCN Kidney Cancer v2.2024',
     version: 'v2.2024',
     organization: 'NCCN',
+  },
+
+  // ─────────────────────────────────────────────
+  // 19. ENFERMEDAD TROFOBLÁSTICA GESTACIONAL (GTN) — NCCN Gestational Trophoblastic Neoplasia v2.2026
+  // ─────────────────────────────────────────────
+  {
+    id: 'gestational-trophoblastic-neoplasia',
+    pathology: 'Enfermedad trofoblástica gestacional / Neoplasia trofoblástica gestacional (GTN)',
+    organ: 'Trofoblasto gestacional (Útero)',
+    histologies: [
+      'mola hidatiforme completa',
+      'mola hidatiforme parcial',
+      'mola hidatiforme',
+      'mola invasora',
+      'coriocarcinoma gestacional',
+      'tumor trofoblastico del sitio placentario',
+      'tumor trofoblastico epitelioide'
+    ],
+    excludedHistologies: [
+      'endometrioide',
+      'seroso',
+      'celulas claras',
+      'sarcoma uterino'
+    ],
+    keywords: [
+      'mola hidatiforme', 'mola completa', 'mola parcial', 'mola invasora',
+      'coriocarcinoma gestacional', 'coriocarcinoma', 'tumor trofoblastico del sitio placentario',
+      'tumor trofoblastico epitelioide', 'enfermedad trofoblastica gestacional',
+      'neoplasia trofoblastica gestacional', 'gtn', 'beta-hcg', 'subunidad beta hcg',
+      'evacuacion uterina', 'legrado uterino', 'embarazo molar'
+    ],
+    intention:
+      'Monitorización cuantitativa seriada de hCG para confirmar remisión completa tras evacuación molar o detectar oportunamente neoplasia trofoblástica gestacional (GTN) persistente o metastásica; control de consolidación y remisión post-quimioterapia.',
+    schedule:
+      'Post-evacuación molar: hCG cada 1–2 semanas hasta 3 valores normales consecutivos; luego según mola completa (hCG mensual por 3–6 meses) o mola parcial (1 valor normal mensual adicional). GTN activa: hCG cada 1–2 semanas al inicio de cada ciclo durante quimioterapia y mensual tras remisión durante 12–24 meses.',
+    imaging:
+      'El eje de seguimiento es hCG cuantitativa seriada, NO imágenes de rutina. Radiografía de tórax basal. Imágenes dirigidas (TAC o RM) solo si hay metástasis documentadas al diagnóstico (pulmón, hígado, SNC) o meseta/re-elevación de hCG.',
+    labs:
+      'Determinación cuantitativa seriada de subunidad beta-hCG sérica con técnica estandarizada de alta sensibilidad. Hemograma y función hepática/renal durante quimioterapia sistémica.',
+    alarmSigns:
+      'Meseta o re-elevación de hCG en determinaciones seriadas, sangrado vaginal anormal, síntomas respiratorios o neurológicos nuevos.',
+    specialConsiderations:
+      'Anticoncepción efectiva obligatoria (ACO preferido) durante todo el seguimiento para no confundir un embarazo nuevo con recaída. En GTN de alto riesgo/estadio IV, monitoreo extendido hasta 24 meses post-remisión.',
+    source: 'NCCN Gestational Trophoblastic Neoplasia v2.2026',
+    version: 'v2.2026',
+    organization: 'NCCN',
+    scenarios: {
+      localizedSurveillance: {
+        scenarioTitle: 'Vigilancia post-evacuación de mola (sin GTN)',
+        intention: 'Monitorización seriada de hCG para confirmar remisión espontánea y detectar precozmente persistencia o progresión a GTN.',
+        schedule: 'hCG cada 1-2 semanas hasta 3 valores normales consecutivos; luego, si fue mola completa, hCG mensual por 3-6 meses adicionales (o 2 determinaciones en intervalos de 3 meses); si fue mola parcial, alcanza con 1 valor normal adicional al mes. Anticoncepción efectiva obligatoria (ACO preferido) durante todo el seguimiento para no confundir un embarazo nuevo con recaída.',
+        imaging: 'El eje de seguimiento es hCG cuantitativa seriada, NO imágenes de rutina.',
+        labs: 'Determinación cuantitativa seriada de subunidad beta-hCG sérica hasta completar el período de vigilancia protocolizado.',
+        specialRules: 'Anticoncepción efectiva obligatoria (ACO preferido) durante todo el seguimiento para no confundir un embarazo nuevo con recaída.'
+      },
+      activeMetastatic: {
+        scenarioTitle: 'Neoplasia trofoblástica gestacional (GTN de bajo o alto riesgo en quimioterapia)',
+        intention: 'Control estricto de respuesta tumoral a quimioterapia, consolidación y vigilancia prolongada de recaída.',
+        schedule: 'hCG cada 1-2 semanas al inicio de cada ciclo durante tratamiento; continuar quimioterapia 2-3 ciclos adicionales tras normalización de hCG; luego hCG mensual durante 12 meses. En estadio IV/alto riesgo, monitoreo mensual extendido hasta 24 meses tras la remisión. Imágenes dirigidas solo si hay metástasis documentadas al diagnóstico (pulmón, hígado, SNC).',
+        imaging: 'Imágenes dirigidas solo si hay metástasis documentadas al diagnóstico (pulmón, hígado, SNC).',
+        labs: 'hCG cuantitativa sérica cada 1-2 semanas al inicio de cada ciclo durante tratamiento y mensual post-remisión.',
+        specialRules: 'Continuar quimioterapia 2-3 ciclos adicionales tras normalización de hCG; luego hCG mensual durante 12 meses (24 meses en estadio IV / alto riesgo).'
+      }
+    }
   }
 ];
 
@@ -672,8 +736,22 @@ const ORGAN_DEFINITIONS: OrganDefinition[] = [
     terms: ['cervix', 'cervical', 'cervicouterino', 'cervicouterina', 'cuello uterino', 'cuello de utero']
   },
   {
+    organ: 'Trofoblasto gestacional (Útero)',
+    check: (str: string) =>
+      /\b(mola\s+hidat(?:id)?iforme|mola\s+completa|mola\s+parcial|mola\s+invasora|mola|embarazo\s+molar|trofoblast\w*|coriocarcinoma\s+gestacional)\b/.test(str) ||
+      (/\bcoriocarcinoma\b/.test(str) && !/\b(testic\w*|orquiectom\w*)\b/.test(str)),
+    terms: ['mola', 'trofoblasto', 'trofoblastica', 'trofoblastico', 'coriocarcinoma']
+  },
+  {
     organ: 'Endometrio / Útero',
     check: (str: string) => {
+      // Excluir patología trofoblástica gestacional para que evacuación/legrado uterino en mola no active Endometrio
+      if (
+        /\b(?:mola\s+hidat(?:id)?iforme|mola\s+completa|mola\s+parcial|mola\s+invasora|mola|embarazo\s+molar|trofoblast\w*|coriocarcinoma\s+gestacional)\b/.test(str) ||
+        (/\bcoriocarcinoma\b/.test(str) && !/\b(?:testic\w*|orquiectom\w*)\b/.test(str))
+      ) {
+        return false;
+      }
       const withoutCuello = str.replace(/cuello (?:uterino|de utero)/g, ' ');
       return /\b(endometri\w*)\b/.test(str) || /\b(uterin\w*|utero)\b/.test(withoutCuello);
     },
@@ -821,12 +899,17 @@ function detectCandidateOrgans(rawOrNormStr: string, isExplicitContext: boolean 
       found.push(def.organ);
     }
   }
+
+  // Si coexisten Trofoblasto gestacional y Endometrio / Útero, prevalece Trofoblasto
+  if (found.includes('Trofoblasto gestacional (Útero)') && found.includes('Endometrio / Útero')) {
+    return found.filter(o => o !== 'Endometrio / Útero');
+  }
+
   return found;
 }
 
 /**
  * Detecta diagnósticos oncológicos que se encuentran fuera de la cobertura de guías clínicas del sistema:
- * - Enfermedad trofoblástica gestacional / Mola hidatiforme / Coriocarcinoma
  * - Cáncer / Carcinoma de Sitio Primario Desconocido (CSPD / CUP / Origen desconocido)
  */
 export function detectUnsupportedDiagnosis(clinicalText: string, explicitDiagnosis: string = ''): {
@@ -838,26 +921,7 @@ export function detectUnsupportedDiagnosis(clinicalText: string, explicitDiagnos
   const normText = normalizeStr(clinicalText || '');
   const combined = `${normDx} ${normText}`;
 
-  // 1. Enfermedad Trofoblástica Gestacional / Mola Hidatiforme / Coriocarcinoma
-  const isTrophoblastic =
-    /\b(?:mola\s+hidat(?:id)?iforme|mola\s+completa|mola\s+parcial|mola\s+invasora|mola|embarazo\s+molar)\b/.test(combined) ||
-    /\b(?:enfermedad|neoplasia)\s+trofoblastica(?:\s+gestacional)?\b/.test(combined) ||
-    /\bcoriocarcinoma(?:\s+gestacional)?\b/.test(combined) ||
-    /\btumor\s+(?:del\s+sitio\s+placentario|trofoblastico)\b/.test(combined) ||
-    /\b(?:gestational\s+trophoblastic|hydatidiform\s+mole|choriocarcinoma)\b/.test(combined);
-
-  if (isTrophoblastic) {
-    let hist = 'Enfermedad trofoblástica gestacional';
-    if (combined.includes('coriocarcinoma')) hist = 'Coriocarcinoma gestacional';
-    else if (combined.includes('mola')) hist = 'Mola hidatiforme';
-    return {
-      isUnsupported: true,
-      organLabel: 'No cubierto (Enfermedad trofoblástica gestacional)',
-      histologyLabel: hist,
-    };
-  }
-
-  // 2. Sitio Primario Desconocido / CUP / CSPD / Origen Desconocido
+  // Sitio Primario Desconocido / CUP / CSPD / Origen Desconocido
   const isUnknownPrimary =
     /\b(?:sitio\s+primario\s+desconocido|primario\s+desconocido|origen\s+desconocido)\b/.test(combined) ||
     /\b(?:cspd|cup)\b/.test(combined) ||
@@ -1154,7 +1218,7 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
   const normDx = normalizeStr(explicitDiagnosis || '');
   const normText = normalizeStr(clinicalText || '');
 
-  // 0. PRIORIDAD ABSOLUTA: Diagnósticos fuera de la cobertura del sistema (Mola hidatiforme, Trofoblástica, CSPD/CUP)
+  // 0. PRIORIDAD ABSOLUTA: Diagnósticos fuera de la cobertura del sistema (CSPD/CUP)
   const unsupported = detectUnsupportedDiagnosis(clinicalText, explicitDiagnosis);
   if (unsupported) {
     const organ = unsupported.organLabel;
@@ -1219,6 +1283,10 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
       detected.forEach(o => headerOrgans.add(o));
     }
 
+    if (headerOrgans.has('Trofoblasto gestacional (Útero)') && headerOrgans.has('Endometrio / Útero')) {
+      headerOrgans.delete('Endometrio / Útero');
+    }
+
     const headerOrgansArr = Array.from(headerOrgans);
     if (headerOrgansArr.length === 1) {
       organ = headerOrgansArr[0];
@@ -1252,6 +1320,10 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
       }
     }
 
+    if (activeOrgans.has('Trofoblasto gestacional (Útero)') && activeOrgans.has('Endometrio / Útero')) {
+      activeOrgans.delete('Endometrio / Útero');
+    }
+
     const activeArr = Array.from(activeOrgans);
     if (activeArr.length === 1) {
       organ = activeArr[0];
@@ -1270,6 +1342,33 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
 
   if (hasNeuroendocrine) {
     histology = 'Tumor neuroendocrino (TNE / NET)';
+  } else if (targetSearchStr.includes('coriocarcinoma')) {
+    histology = 'Coriocarcinoma gestacional';
+  } else if (
+    targetSearchStr.includes('mola hidatiforme completa') ||
+    targetSearchStr.includes('mola completa') ||
+    (targetSearchStr.includes('mola') && targetSearchStr.includes('completa'))
+  ) {
+    histology = 'Mola hidatiforme completa';
+  } else if (
+    targetSearchStr.includes('mola hidatiforme parcial') ||
+    targetSearchStr.includes('mola parcial') ||
+    (targetSearchStr.includes('mola') && targetSearchStr.includes('parcial'))
+  ) {
+    histology = 'Mola hidatiforme parcial';
+  } else if (
+    targetSearchStr.includes('mola invasora') ||
+    (targetSearchStr.includes('mola') && targetSearchStr.includes('invasora'))
+  ) {
+    histology = 'Mola invasora';
+  } else if (targetSearchStr.includes('mola hidatiforme') || targetSearchStr.includes('mola')) {
+    histology = 'Mola hidatiforme';
+  } else if (targetSearchStr.includes('sitio placentario')) {
+    histology = 'Tumor trofoblástico del sitio placentario';
+  } else if (targetSearchStr.includes('trofoblastico epitelioide') || targetSearchStr.includes('trofoblastica epitelioide')) {
+    histology = 'Tumor trofoblástico epitelioide';
+  } else if (targetSearchStr.includes('trofoblast')) {
+    histology = 'Neoplasia trofoblástica gestacional';
   } else if (targetSearchStr.includes('adenocarcinoma ductal') || (targetSearchStr.includes('adenocarcinoma') && targetSearchStr.includes('ductal'))) {
     histology = organ === 'Páncreas' ? 'Adenocarcinoma ductal de páncreas' : 'Adenocarcinoma ductal';
   } else if (targetSearchStr.includes('adenocarcinoma')) {
@@ -1334,6 +1433,7 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
     else if (organ === 'Pulmón') histology = 'Carcinoma de células no pequeñas (NSCLC)';
     else if (organ === 'Vías biliares / Vesícula') histology = 'Colangiocarcinoma / Adenocarcinoma biliar';
     else if (organ === 'Piel') histology = 'Carcinoma basocelular';
+    else if (organ === 'Trofoblasto gestacional (Útero)') histology = 'Mola hidatiforme / Neoplasia trofoblástica gestacional';
   }
 
   // Detección de diagnóstico incompleto o ambiguo
@@ -1596,6 +1696,9 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
 export function classifyGuidelineSource(sourceName: string): { organ: string; pathology: string; isKnown: boolean } {
   const norm = normalizeStr(sourceName || '');
   
+  if (norm.includes('trophoblast') || norm.includes('trofoblast') || norm.includes('gestational') || norm.includes('mola') || (norm.includes('coriocarcinoma') && !norm.includes('testic'))) {
+    return { organ: 'Trofoblasto gestacional (Útero)', pathology: 'Enfermedad trofoblástica gestacional / GTN (NCCN Gestational Trophoblastic Neoplasia)', isKnown: true };
+  }
   if (norm.includes('uterine') || norm.includes('endometri') || norm.includes('uterus') || norm.includes('utero')) {
     return { organ: 'Endometrio / Útero', pathology: 'Cáncer de endometrio / Neoplasias uterinas (NCCN Uterine Neoplasms)', isKnown: true };
   }

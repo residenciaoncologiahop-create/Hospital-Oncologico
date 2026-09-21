@@ -327,8 +327,8 @@ assert(
 );
 
 // ------------------------------------------------------------------------------------------------
-// CASO I: Mola hidatiforme con mención de "legrado uterino" (Bug A)
-// Debe bloquear con mensaje de "no hay guía disponible", NO devolver Endometrio.
+// CASO I: Mola hidatiforme con mención de "legrado uterino" / evacuación uterina
+// Debe emparejar con NCCN Gestational Trophoblastic Neoplasia, NO bloquear y NO devolver Endometrio
 // ------------------------------------------------------------------------------------------------
 const clinicalTextCaseI = `
 Paciente femenina de 26 años con diagnóstico confirmado de mola hidatiforme.
@@ -344,31 +344,74 @@ assert(
   `Órgano detectado: ${profileCaseI.organ}`
 );
 assert(
-  profileCaseI.organ.includes('No cubierto') || profileCaseI.organ.includes('trofoblastica'),
-  'Caso I - Órgano clasificado como no cubierto / trofoblástico',
+  profileCaseI.organ === 'Trofoblasto gestacional (Útero)',
+  'Caso I - Órgano clasificado exactamente como "Trofoblasto gestacional (Útero)"',
   `Órgano detectado: ${profileCaseI.organ}`
+);
+assert(
+  profileCaseI.histology === 'Mola hidatiforme',
+  'Caso I - Histología clasificada como Mola hidatiforme',
+  `Histología: ${profileCaseI.histology}`
 );
 
 const validationCaseI = validateCandidateSources(clinicalTextCaseI, [], 'Mola hidatiforme');
 assert(
-  validationCaseI.canProceed === false,
-  'Caso I - validateCandidateSources bloquea ejecución (canProceed === false)',
-  `canProceed: ${validationCaseI.canProceed}`
+  validationCaseI.canProceed === true,
+  'Caso I - validateCandidateSources permite proceder (canProceed === true)',
+  `canProceed: ${validationCaseI.canProceed}, stopReason: ${validationCaseI.stopReason}`
 );
 assert(
-  validationCaseI.stopReason === 'NO_MATCHING_SYSTEM_GUIDELINE',
-  'Caso I - stopReason es NO_MATCHING_SYSTEM_GUIDELINE',
-  `stopReason: ${validationCaseI.stopReason}`
+  validationCaseI.validSystemGuideline !== null && validationCaseI.validSystemGuideline.id === 'gestational-trophoblastic-neoplasia',
+  'Caso I - Guía asignada es gestational-trophoblastic-neoplasia',
+  `Guideline ID: ${validationCaseI.validSystemGuideline?.id}`
 );
 assert(
-  Boolean(validationCaseI.stopMessage && (validationCaseI.stopMessage.toLowerCase().includes('no se encontr') || validationCaseI.stopMessage.toLowerCase().includes('no se dispone'))),
-  'Caso I - stopMessage informa que no hay guía disponible en el sistema',
-  `stopMessage: ${validationCaseI.stopMessage}`
+  validationCaseI.validSystemGuideline?.organ === 'Trofoblasto gestacional (Útero)',
+  'Caso I - El órgano de la guía es "Trofoblasto gestacional (Útero)" y no Endometrio',
+  `Guía Organ: ${validationCaseI.validSystemGuideline?.organ}`
 );
 assert(
-  validationCaseI.validSystemGuideline === null,
-  'Caso I - validSystemGuideline es null (no se asignó guía uterina)',
-  `Guideline: ${validationCaseI.validSystemGuideline}`
+  validationCaseI.activeScenarioRecommendations !== null &&
+  validationCaseI.activeScenarioRecommendations !== undefined &&
+  validationCaseI.activeScenarioRecommendations.scenarioTitle.includes('post-evacuación'),
+  'Caso I - Escenario asignado corresponde a Vigilancia post-evacuación de mola (sin GTN)',
+  `Escenario: ${validationCaseI.activeScenarioRecommendations?.scenarioTitle}`
+);
+assert(
+  Boolean(validationCaseI.activeScenarioRecommendations?.schedule.includes('hCG') && validationCaseI.activeScenarioRecommendations?.schedule.includes('Anticoncepción')),
+  'Caso I - Recomendaciones de schedule incluyen monitoreo seriado de hCG y anticoncepción obligatoria',
+  `Schedule: ${validationCaseI.activeScenarioRecommendations?.schedule}`
+);
+
+// Verificación caso exacto pedido por el usuario: "mola hidatiforme completa, evacuación uterina, hCG en descenso" sin dx explícito
+const userExactMolaText = 'mola hidatiforme completa, evacuación uterina, hCG en descenso';
+const profileUserMola = extractPatientTumorProfile(userExactMolaText, '');
+assert(
+  profileUserMola.organ === 'Trofoblasto gestacional (Útero)',
+  'Caso I.2 - Caso exacto usuario detecta "Trofoblasto gestacional (Útero)"',
+  `Órgano: ${profileUserMola.organ}`
+);
+assert(
+  profileUserMola.histology === 'Mola hidatiforme completa',
+  'Caso I.2 - Caso exacto usuario detecta histología "Mola hidatiforme completa"',
+  `Histología: ${profileUserMola.histology}`
+);
+
+const validationUserMola = validateCandidateSources(userExactMolaText, [], '');
+assert(
+  validationUserMola.canProceed === true,
+  'Caso I.2 - Caso exacto usuario procede (canProceed === true)',
+  `canProceed: ${validationUserMola.canProceed}`
+);
+assert(
+  validationUserMola.validSystemGuideline?.id === 'gestational-trophoblastic-neoplasia',
+  'Caso I.2 - Caso exacto usuario asigna guía gestational-trophoblastic-neoplasia',
+  `Guideline: ${validationUserMola.validSystemGuideline?.id}`
+);
+assert(
+  validationUserMola.validSystemGuideline?.organ !== 'Endometrio / Útero',
+  'Caso I.2 - Caso exacto usuario NO da Endometrio',
+  `Órgano: ${validationUserMola.validSystemGuideline?.organ}`
 );
 
 // ------------------------------------------------------------------------------------------------
