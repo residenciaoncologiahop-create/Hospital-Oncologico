@@ -144,7 +144,7 @@ function extractBiomarkers(fullText: string): BiomarkerEntry[] {
   }
 
   // HER2
-  const her2Match = fullText.match(/HER2\s*([+\-]|positivo|negativo|3\+|2\+|1\+|0|amplificado|no amplificado)/i);
+  const her2Match = fullText.match(/HER2\s*([+-]|positivo|negativo|3\+|2\+|1\+|0|amplificado|no amplificado)/i);
   if (her2Match) {
     const raw = her2Match[0];
     const rawN = normalize(raw);

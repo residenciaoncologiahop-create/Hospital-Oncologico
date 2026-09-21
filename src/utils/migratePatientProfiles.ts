@@ -17,7 +17,6 @@ import {
   where,
   getDocs,
   doc,
-  updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 import { computePatientOncologicalProfile } from './computePatientProfile';
