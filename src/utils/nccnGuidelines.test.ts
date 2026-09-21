@@ -517,6 +517,75 @@ const clinicalTextCaseL3 = `Paciente operada en control. Screening de recidiva s
 const profileL3 = extractClinicalScenarioProfile(clinicalTextCaseL3, 'Adenocarcinoma de páncreas pT1b pN0 M0');
 assert(profileL3.diseaseStatus === 'NED' && profileL3.followUpMode === 'CURATIVE_SURVEILLANCE', 'Caso L3 - "Screening de recidiva sin hallazgos" da Modo A / NED');
 
+// ------------------------------------------------------------------------------------------------
+// CASO M: Cáncer de ovario estadio IIIC con recurrencia platino-sensible y tratamiento activo
+// Debe asignar Modo B (enfermedad activa), NO caer erróneamente en Modo A (NED / vigilancia)
+// ------------------------------------------------------------------------------------------------
+const clinicalTextCaseM = `Cáncer de ovario estadio IIIC, citorreducción primaria + adyuvancia hace 2 años, actualmente recurrencia platino-sensible, en tratamiento con carboplatino-paclitaxel`;
+
+const profileCaseM = extractClinicalScenarioProfile(clinicalTextCaseM, 'Cáncer de ovario estadio IIIC');
+assert(
+  profileCaseM.organ === 'Ovario',
+  'Caso M - Órgano detectado como Ovario',
+  `Órgano: ${profileCaseM.organ}`
+);
+assert(
+  profileCaseM.isStageIV === false,
+  'Caso M - Estadio IIIC no dispara isStageIV (isStageIV === false)',
+  `isStageIV: ${profileCaseM.isStageIV}`
+);
+assert(
+  profileCaseM.hasActiveSystemicTreatment === true,
+  'Caso M - hasActiveSystemicTreatment es true por "en tratamiento con carboplatino-paclitaxel"',
+  `hasActiveSystemicTreatment: ${profileCaseM.hasActiveSystemicTreatment}`
+);
+assert(
+  profileCaseM.followUpMode === 'ACTIVE_METASTATIC_MONITORING',
+  'Caso M - followUpMode es ACTIVE_METASTATIC_MONITORING (Modo B) y NO CURATIVE_SURVEILLANCE',
+  `followUpMode: ${profileCaseM.followUpMode}`
+);
+assert(
+  profileCaseM.modeLabel.includes('Modo B'),
+  'Caso M - modeLabel asigna Modo B',
+  `modeLabel: ${profileCaseM.modeLabel}`
+);
+assert(
+  !profileCaseM.modeLabel.includes('Modo A'),
+  'Caso M - NO asignó erróneamente Modo A (vigilancia curativa / NED)',
+  `modeLabel: ${profileCaseM.modeLabel}`
+);
+
+const validationCaseM = validateCandidateSources(clinicalTextCaseM, [], 'Cáncer de ovario estadio IIIC');
+assert(
+  validationCaseM.canProceed === true,
+  'Caso M - validateCandidateSources permite proceder (canProceed === true)',
+  `canProceed: ${validationCaseM.canProceed}`
+);
+assert(
+  validationCaseM.profile.followUpMode === 'ACTIVE_METASTATIC_MONITORING',
+  'Caso M - Perfil validado tiene followUpMode ACTIVE_METASTATIC_MONITORING (Modo B)',
+  `followUpMode: ${validationCaseM.profile.followUpMode}`
+);
+
+// Control negativo Caso M.2: Paciente con citorreducción y adyuvancia previa, en control con "sin recurrencia" y "CA 125 normal"
+const clinicalTextCaseM2 = `Cáncer de ovario estadio IIIC, citorreducción primaria + adyuvancia completada hace 2 años. Actualmente en control oncológico, asintomática, sin recurrencia, CA 125 normal.`;
+const profileCaseM2 = extractClinicalScenarioProfile(clinicalTextCaseM2, 'Cáncer de ovario estadio IIIC');
+assert(
+  profileCaseM2.diseaseStatus === 'NED',
+  'Caso M.2 - "sin recurrencia" y "CA 125 normal" en seguimiento asigna NED',
+  `diseaseStatus: ${profileCaseM2.diseaseStatus}`
+);
+assert(
+  profileCaseM2.followUpMode === 'CURATIVE_SURVEILLANCE',
+  'Caso M.2 - followUpMode es CURATIVE_SURVEILLANCE (Modo A)',
+  `followUpMode: ${profileCaseM2.followUpMode}`
+);
+assert(
+  profileCaseM2.modeLabel.includes('Modo A'),
+  'Caso M.2 - modeLabel asigna Modo A',
+  `modeLabel: ${profileCaseM2.modeLabel}`
+);
+
 console.log(`\n=== RESUMEN DE PRUEBAS: ${passed} PASARON, ${failed} FALLARON ===`);
 if (failed > 0) {
   process.exit(1);

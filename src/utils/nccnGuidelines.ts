@@ -952,22 +952,26 @@ export function detectUnsupportedDiagnosis(clinicalText: string, explicitDiagnos
 export function cleanTextForProgression(text: string): string {
   return text
     // 1. Descarte explícito y motivos de estudio para descartar
-    .replace(/(?:se\s+solicita|solicita|pedido\s+de|solicitud\s+de|control\s+con|estudio\s+para|tac\s+para|tc\s+para|pet\s+para|rm\s+para|eco\s+para)?\s*(?:para|a\s+fin\s+de|con\s+el\s+fin\s+de|con\s+el\s+objeto\s+de)?\s*(?:se\s+)?descart[aoó]\w*\s+(?:de\s+)?(?:posible\s+)?(?:recidiva|progresion|recaida)\b/gi, ' ')
-    .replace(/\b(?:recidiva|progresion|recaida)\s+(?:descartad[ao]s?|se\s+descarta|qued[aoó]\s+descartad[ao]s?)\b/gi, ' ')
+    .replace(/(?:se\s+solicita|solicita|pedido\s+de|solicitud\s+de|control\s+con|estudio\s+para|tac\s+para|tc\s+para|pet\s+para|rm\s+para|eco\s+para)?\s*(?:para|a\s+fin\s+de|con\s+el\s+fin\s+de|con\s+el\s+objeto\s+de)?\s*(?:se\s+)?descart[aoó]\w*\s+(?:de\s+)?(?:posible\s+)?(?:recidiva|progresion|recaida|recurrencia|recurrente)\b/gi, ' ')
+    .replace(/\b(?:recidiva|progresion|recaida|recurrencia|recurrente)\s+(?:descartad[ao]s?|se\s+descarta|qued[aoó]\s+descartad[ao]s?)\b/gi, ' ')
     // 2. Sospecha a confirmar, descartar, evaluar o en estudio
-    .replace(/\bsospecha\s+de\s+(?:posible\s+)?(?:recidiva|progresion|recaida)\s+(?:a\s+(?:confirmar|descartar|evaluar|estudiar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio|no\s+confirmada?|a\s+determinar)\b/gi, ' ')
-    .replace(/\b(?:a\s+(?:confirmar|descartar|evaluar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio)\s+(?:de\s+)?(?:sospecha\s+de\s+)?(?:recidiva|progresion|recaida)\b/gi, ' ')
-    // 3. Control por / de sospecha de recidiva/progresión
-    .replace(/\b(?:control|seguimiento|vigilancia|evaluaci[oó]n)\s+(?:por|de|ante)\s+(?:sospecha\s+de\s+)?(?:recidiva|progresion|recaida)\b/gi, ' ')
-    .replace(/\b(?:control|seguimiento|vigilancia|detecci[oó]n|prevenci[oó]n|profilaxis)\s+(?:de|para|por)\s+(?:recidiva|progresion|recaida)\b/gi, ' ')
+    .replace(/\bsospecha\s+de\s+(?:posible\s+)?(?:recidiva|progresion|recaida|recurrencia|recurrente)\s+(?:a\s+(?:confirmar|descartar|evaluar|estudiar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio|no\s+confirmada?|a\s+determinar)\b/gi, ' ')
+    .replace(/\b(?:a\s+(?:confirmar|descartar|evaluar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio)\s+(?:de\s+)?(?:sospecha\s+de\s+)?(?:recidiva|progresion|recaida|recurrencia|recurrente)\b/gi, ' ')
+    // 3. Control por / de sospecha de recidiva/progresión/recurrencia
+    .replace(/\b(?:control|seguimiento|vigilancia|evaluaci[oó]n)\s+(?:por|de|ante)\s+(?:sospecha\s+de\s+)?(?:recidiva|progresion|recaida|recurrencia|recurrente)\b/gi, ' ')
+    .replace(/\b(?:control|seguimiento|vigilancia|detecci[oó]n|prevenci[oó]n|profilaxis)\s+(?:de|para|por)\s+(?:recidiva|progresion|recaida|recurrencia|recurrente)\b/gi, ' ')
     // 4. Screening / tamizaje / vigilancia combinada con sin hallazgos / normal / negativo
-    .replace(/\b(?:screening|tamizaje|pesquisa)\s+(?:de|para)?\s*(?:recidiva|progresion|recaida)(?:[^\n.;]*)(?:sin\s+hallazgos|negativ[ao]|normal|sin\s+particularidades)\b/gi, ' ')
+    .replace(/\b(?:screening|tamizaje|pesquisa)\s+(?:de|para)?\s*(?:recidiva|progresion|recaida|recurrencia|recurrente)(?:[^\n.;]*)(?:sin\s+hallazgos|negativ[ao]|normal|sin\s+particularidades)\b/gi, ' ')
     // 5. Negaciones estándar y con modificadores intermedios
-    .replace(/\bsin\s+(?:evidencia\s+de|signos\s+de|datos\s+de|imagenes\s+de|signos\s+tomogr[aá]ficos\s+de|hallazgos\s+de)?\s*(?:recidiva|progresion|recaida|lesiones)\b/gi, ' ')
-    .replace(/\bno\s+(?:presenta|se\s+observan?|se\s+evidencian?|se\s+aprecian?|se\s+identifican?|hay|muestra|constata)\s+(?:signos\s+de|evidencia\s+de)?\s*(?:recidiva|progresion|recaida|lesiones)\b/gi, ' ')
-    .replace(/\b(?:libre\s+de|ausencia\s+de)\s+(?:recidiva|progresion|recaida|enfermedad)\b/gi, ' ')
-    .replace(/\bnegativ[ao]s?\s+(?:para|de)\s+(?:recidiva|progresion|recaida)\b/gi, ' ')
-    .replace(/\b(?:score|riesgo)\s+de\s+(?:recidiva|recaida|progresion)\b/gi, ' ');
+    .replace(/\bsin\s+(?:evidencia\s+de|signos\s+de|datos\s+de|imagenes\s+de|signos\s+tomogr[aá]ficos\s+de|hallazgos\s+de)?\s*(?:recidiva|progresion|recaida|recurrencia|recurrente|lesiones)\b/gi, ' ')
+    .replace(/\bno\s+(?:presenta|se\s+observan?|se\s+evidencian?|se\s+aprecian?|se\s+identifican?|hay|muestra|constata)\s+(?:signos\s+de|evidencia\s+de)?\s*(?:recidiva|progresion|recaida|recurrencia|recurrente|lesiones)\b/gi, ' ')
+    .replace(/\b(?:libre\s+de|ausencia\s+de)\s+(?:recidiva|progresion|recaida|recurrencia|recurrente|enfermedad)\b/gi, ' ')
+    .replace(/\bnegativ[ao]s?\s+(?:para|de)\s+(?:recidiva|progresion|recaida|recurrencia|recurrente)\b/gi, ' ')
+    .replace(/\b(?:score|riesgo)\s+de\s+(?:recidiva|recaida|progresion|recurrencia)\b/gi, ' ')
+    // 6. Negación de elevación de marcador / CA-125
+    .replace(/\bsin\s+(?:elevaci[oó]n|ascenso|aumento)\s+de\s+(?:ca\s*125|marcador\w*)\b/gi, ' ')
+    .replace(/\bno\s+(?:presenta|muestra|hay|se observa)\s+(?:elevaci[oó]n|ascenso|aumento)\s+de\s+(?:ca\s*125|marcador\w*)\b/gi, ' ')
+    .replace(/\b(?:ca\s*125|marcador\w*)\s+(?:normal|en\s+rango\s+normal|estable|sin\s+variaciones|sin\s+ascenso|sin\s+elevacion)\b/gi, ' ');
 }
 
 /**
@@ -978,22 +982,24 @@ function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
 
   // 1. Negaciones clínicas amplias (soporta modificadores intermediarios como "signos tomográficos de", etc.)
   const negPatterns = [
-    /\bsin\b(?:[\s\w]*)\b(recidiva|progresion|recaida|lesion\w*|metastasis)\b/,
-    /\bno\b(?:[\s\w]*)\b(se observa\w*|se evidencia\w*|se aprecia\w*|se identifica\w*|presenta|hay|muestra|constata)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|lesion\w*|metastasis)\b/,
-    /\b(?:libre\s+de|ausencia\s+de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|enfermedad)\b/,
-    /\bnegativ[ao]s?\s+(?:para|de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
-    /\b(?:se\s+descarta|descartar|descartando|descartad[ao]s?|qued[aoó]\s+descartad[ao]s?)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
-    /\b(recidiva|progresion|recaida)\b(?:[\s\w]*)\b(?:descartad[ao]s?|se\s+descarta|qued[aoó]\s+descartad[ao]s?)\b/
+    /\bsin\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente|lesion\w*|metastasis)\b/,
+    /\bno\b(?:[\s\w]*)\b(se observa\w*|se evidencia\w*|se aprecia\w*|se identifica\w*|presenta|hay|muestra|constata)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente|lesion\w*|metastasis)\b/,
+    /\b(?:libre\s+de|ausencia\s+de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente|enfermedad)\b/,
+    /\bnegativ[ao]s?\s+(?:para|de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente)\b/,
+    /\b(?:se\s+descarta|descartar|descartando|descartad[ao]s?|qued[aoó]\s+descartad[ao]s?)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente)\b/,
+    /\b(recidiva|progresion|recaida|recurrencia|recurrente)\b(?:[\s\w]*)\b(?:descartad[ao]s?|se\s+descarta|qued[aoó]\s+descartad[ao]s?)\b/,
+    /\bsin\s+(?:elevacion|ascenso|aumento)\b(?:[\s\w]*)\bca\s*125\b/,
+    /\bca\s*125\b(?:[\s\w]*)\b(?:normal|estable|sin\s+cambios|sin\s+ascenso|sin\s+elevacion)\b/
   ];
 
   for (const p of negPatterns) {
     if (p.test(norm)) return true;
   }
 
-  // 2. Solicitudes de estudio / motivos de control para descartar ("se solicita TAC para descartar recidiva")
+  // 2. Solicitudes de estudio / motivos de control para descartar ("se solicita TAC para descartar recidiva/recurrencia")
   const studyMotivePatterns = [
-    /\b(?:para|a\s+fin\s+de|con\s+el\s+fin\s+de|con\s+el\s+objeto\s+de)?\s*descartar\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
-    /\b(?:se\s+solicita|solicito|solicita|pedido\s+de|solicitud\s+de|control\s+con|estudio\s+para|tac\s+para|tc\s+para|pet\s+para|rm\s+para|eco\s+para|ecografia\s+para|laboratorio\s+para)\b(?:[\s\w]*)\b(?:descartar|evaluar|controlar)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/
+    /\b(?:para|a\s+fin\s+de|con\s+el\s+fin\s+de|con\s+el\s+objeto\s+de)?\s*descartar\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente)\b/,
+    /\b(?:se\s+solicita|solicito|solicita|pedido\s+de|solicitud\s+de|control\s+con|estudio\s+para|tac\s+para|tc\s+para|pet\s+para|rm\s+para|eco\s+para|ecografia\s+para|laboratorio\s+para)\b(?:[\s\w]*)\b(?:descartar|evaluar|controlar)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente)\b/
   ];
 
   for (const p of studyMotivePatterns) {
@@ -1002,8 +1008,8 @@ function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
 
   // 3. Sospecha a confirmar / descartar / evaluar / no confirmada
   const unconfirmedSuspicionPatterns = [
-    /\bsospecha\s+de\s+(?:posible\s+)?(recidiva|progresion|recaida)\b(?:[\s\w]*)\b(?:a\s+(?:confirmar|descartar|evaluar|estudiar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio|no\s+confirmada?|a\s+determinar)\b/,
-    /\b(?:a\s+(?:confirmar|descartar|evaluar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio)\b(?:[\s\w]*)\b(?:sospecha\s+de\s+)?(recidiva|progresion|recaida)\b/
+    /\bsospecha\s+de\s+(?:posible\s+)?(recidiva|progresion|recaida|recurrencia|recurrente)\b(?:[\s\w]*)\b(?:a\s+(?:confirmar|descartar|evaluar|estudiar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio|no\s+confirmada?|a\s+determinar)\b/,
+    /\b(?:a\s+(?:confirmar|descartar|evaluar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio)\b(?:[\s\w]*)\b(?:sospecha\s+de\s+)?(recidiva|progresion|recaida|recurrencia|recurrente)\b/
   ];
 
   for (const p of unconfirmedSuspicionPatterns) {
@@ -1012,11 +1018,11 @@ function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
 
   // 4. Contextos de control por / de sospecha, seguimiento, vigilancia o evaluación de riesgo
   const surveillancePatterns = [
-    /\b(?:control|seguimiento|vigilancia|evaluacion)\b(?:[\s\w]*)\b(?:por|de|ante)\b(?:[\s\w]*)\b(?:sospecha\s+de\s+)?(recidiva|progresion|recaida)\b/,
-    /\b(?:control|seguimiento|vigilancia|deteccion|prevencion|profilaxis)\b(?:[\s\w]*)\b(?:de|para|por)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
-    /\briesgo\b(?:[\s\w]*)\b(?:de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/,
-    /\bscore\s+de\s+(?:recidiva|recaida)\b/,
-    /\bevaluar\b(?:[\s\w]*)\b(?:posible|sospecha\s+de)?\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/
+    /\b(?:control|seguimiento|vigilancia|evaluacion)\b(?:[\s\w]*)\b(?:por|de|ante)\b(?:[\s\w]*)\b(?:sospecha\s+de\s+)?(recidiva|progresion|recaida|recurrencia|recurrente)\b/,
+    /\b(?:control|seguimiento|vigilancia|deteccion|prevencion|profilaxis)\b(?:[\s\w]*)\b(?:de|para|por)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente)\b/,
+    /\briesgo\b(?:[\s\w]*)\b(?:de)\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente)\b/,
+    /\bscore\s+de\s+(?:recidiva|recaida|progresion|recurrencia)\b/,
+    /\bevaluar\b(?:[\s\w]*)\b(?:posible|sospecha\s+de)?\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente)\b/
   ];
 
   for (const p of surveillancePatterns) {
@@ -1024,14 +1030,14 @@ function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
   }
 
   // 5. Screening / pesquisa / tamizaje combinado con normalidad o sin hallazgos
-  const isScreening = /\b(?:screening|tamizaje|pesquisa)\b(?:[\s\w]*)\b(?:de|para)?\b(?:[\s\w]*)\b(recidiva|progresion|recaida)\b/.test(norm);
+  const isScreening = /\b(?:screening|tamizaje|pesquisa)\b(?:[\s\w]*)\b(?:de|para)?\b(?:[\s\w]*)\b(recidiva|progresion|recaida|recurrencia|recurrente)\b/.test(norm);
   const hasNegativeFindings = /\b(?:sin\s+hallazgos|sin\s+particularidades|sin\s+lesion\w*|negativ[ao]|normal\w*|conservad\w*|s\s+p)\b/.test(norm);
   if (isScreening && hasNegativeFindings) {
     return true;
   }
 
-  // Cláusula donde se menciona recidiva pero concluye sin hallazgos patológicos o negativos
-  if (/\b(recidiva|progresion|recaida)\b/.test(norm) && hasNegativeFindings) {
+  // Cláusula donde se menciona recidiva/recurrencia pero concluye sin hallazgos patológicos o negativos
+  if (/\b(recidiva|progresion|recaida|recurrencia|recurrente)\b/.test(norm) && hasNegativeFindings) {
     return true;
   }
 
@@ -1043,7 +1049,30 @@ function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
  */
 export function detectConfirmedProgression(text: string): boolean {
   const norm = normalizeStr(text);
-  const keywords = ['recidiva', 'progresion', 'recaida', 'enfermedad progresiva', 'crecimiento tumoral'];
+  const keywords = [
+    'recidiva',
+    'progresion',
+    'recaida',
+    'recurrencia',
+    'recurrente',
+    'enfermedad progresiva',
+    'crecimiento tumoral',
+    'progresion bioquimica',
+    'recidiva bioquimica',
+    'recurrencia bioquimica',
+    'ca 125 en ascenso',
+    'ascenso de ca 125',
+    'elevacion de ca 125',
+    'aumento de ca 125',
+    'ca 125 elevado',
+    'ca 125 en aumento',
+    'platino sensible',
+    'platino resistente',
+    'platino refractario',
+    'sensible al platino',
+    'resistente al platino',
+    'refractario al platino'
+  ];
 
   const hasAnyKeyword = keywords.some(k => norm.includes(k));
   if (!hasAnyKeyword) return false;
@@ -1061,17 +1090,20 @@ export function detectConfirmedProgression(text: string): boolean {
     }
 
     const affirmativePatterns = [
-      /\b(?:recidiva|progresion|recaida)\s+(?:confirmada|documentada|evidente|tumoral|locorregional|local|a\s+distancia|ganglionar|hepatica|peritoneal|anastomotica|en\s+lecho|clinica|radiologica|bioquimica)\b/,
-      /\b(?:se\s+constata|se\s+confirma|se\s+documenta|se\s+aprecia|presenta|evidencia|muestra)\s+(?:franca\s+|nueva\s+)?(?:recidiva|progresion|recaida)\b/,
-      /\benfermedad\s+(?:en\s+progresion|progresiva)\b/,
-      /\bprogresion\s+(?:de\s+enfermedad|por\s+recist|segun\s+recist|objetiva)\b/,
-      /\b(?:aparicion\s+de|nuevas?)\s+(?:lesion\w*|metastasis|implantes?)\b/
+      /\b(?:recidiva|progresion|recaida|recurrencia)\s+(?:confirmada|documentada|evidente|tumoral|locorregional|local|a\s+distancia|ganglionar|hepatica|peritoneal|anastomotica|en\s+lecho|clinica|radiologica|bioquimica|pelvica|platino\s+sensible|platino\s+resistente|platino\s+refractaria?)\b/,
+      /\b(?:se\s+constata|se\s+confirma|se\s+documenta|se\s+aprecia|presenta|evidencia|muestra)\s+(?:franca\s+|nueva\s+)?(?:recidiva|progresion|recaida|recurrencia)\b/,
+      /\benfermedad\s+(?:en\s+progresion|progresiva|recurrente)\b/,
+      /\b(?:progresion|recidiva|recurrencia)\s+(?:de\s+enfermedad|por\s+recist|segun\s+recist|objetiva|bioquimica|radiologica|tomografica)\b/,
+      /\b(?:aparicion\s+de|nuevas?)\s+(?:lesion\w*|metastasis|implantes?)\b/,
+      /\b(?:platino\s+sensible|platino\s+resistente|platino\s+refractari[ao]|sensible\s+al\s+platino|resistente\s+al\s+platino|refractari[ao]\s+al\s+platino)\b/,
+      /\b(?:ca\s*125\s+(?:en\s+ascenso|en\s+aumento|elevado)|ascenso\s+de\s+ca\s*125|elevaci[oó]n\s+de\s+ca\s*125|aumento\s+de\s+ca\s*125)\b/,
+      /\b(?:recurrencia\s+tumoral|tumor\s+recurrente)\b/
     ];
 
     const isExplicitlyAffirmative = affirmativePatterns.some(p => p.test(normClause));
     if (isExplicitlyAffirmative) {
       confirmedCount++;
-    } else if (/\b(recidiva|progresion|recaida)\b/.test(normClause)) {
+    } else if (/\b(recidiva|progresion|recaida|recurrencia|recurrente|platino\s+sensible|platino\s+resistente|platino\s+refractari[ao]|ca\s*125\s+en\s+ascenso|elevacion\s+de\s+ca\s*125|ascenso\s+de\s+ca\s*125)\b/.test(normClause)) {
       confirmedCount++;
     }
   }
@@ -1094,7 +1126,7 @@ export function detectTreatmentStatus(text: string): {
   const activeRegimens = [
     'folfirinox', 'nab paclitaxel', 'panitumumab', 'pembrolizumab', 'ipilimumab',
     'folfox', 'folfiri', 'capox', 'xelox', 'bevacizumab', 'cetuximab',
-    'nivolumab', 'gemcitabina', 'cisplatino', 'carboplatino',
+    'nivolumab', 'gemcitabina', 'cisplatino', 'carboplatino', 'paclitaxel',
     'pemetrexed', 'osimertinib', 'alectinib', 'trastuzumab', 'pertuzumab', 't dxd', 't dm1', 'tamoxifeno',
     'anastrozol', 'letrozol', 'fulvestrant', 'ribociclib', 'palbociclib', 'abemaciclib', 'enzalutamida',
     'abiraterona', 'docetaxel', 'cabazitaxel', 'irinotecan', 'oxaliplatino', 'capecitabina', '5 fu'
@@ -1108,7 +1140,19 @@ export function detectTreatmentStatus(text: string): {
     }
   }
 
-  const isTreatmentCompletedOrPast = [
+  const hasActiveOngoingTreatment = [
+    /en\s+tratamiento\s+(?:activo|actual|con|paliativo|sistemico)/,
+    /recibe\s+actualmente/,
+    /actualmente\s+recibe/,
+    /actualmente\s+(?:en\s+tratamiento|bajo\s+tratamiento)/,
+    /esquema\s+actual/,
+    /quimioterapia\s+activa/,
+    /(?:tratamiento|quimioterapia|esquema|ciclo|infusi[oó]n|terapia)\s+en\s+curso/,
+    /inicia\s+(?:primera\s+|segunda\s+|linea|ciclo|tratamiento)/,
+    /mantenimiento\s+con/
+  ].some(p => p.test(norm));
+
+  const isTreatmentCompletedOrPast = !hasActiveOngoingTreatment && [
     /adyuvancia\s+(?:finalizada|completada|cumplida|realizada)/,
     /quimioterapia\s+(?:adyuvante\s+)?(?:finalizada|completada|cumplida|realizada)/,
     /tratamiento\s+(?:adyuvante\s+)?(?:finalizado|completado|cumplido|realizado)/,
@@ -1128,18 +1172,7 @@ export function detectTreatmentStatus(text: string): {
     /no\s+recibe\s+tratamiento/
   ].some(p => p.test(norm));
 
-  const hasActiveOngoingTreatment = [
-    /en\s+tratamiento\s+(?:activo|actual|con)/,
-    /recibe\s+actualmente/,
-    /actualmente\s+recibe/,
-    /esquema\s+actual/,
-    /quimioterapia\s+activa/,
-    /en\s+curso/,
-    /inicia\s+(?:primera\s+|segunda\s+|linea|ciclo|tratamiento)/,
-    /mantenimiento\s+con/
-  ].some(p => p.test(norm));
-
-  const hasActiveSystemicTreatment = !isTreatmentCompletedOrPast && (hasActiveOngoingTreatment || (detectedRegimen !== ''));
+  const hasActiveSystemicTreatment = hasActiveOngoingTreatment || (!isTreatmentCompletedOrPast && (detectedRegimen !== ''));
 
   let activeTreatment = 'Sin tratamiento sistémico activo';
   if (hasActiveSystemicTreatment) {
@@ -1585,6 +1618,7 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
     combined.includes('remision completa') || combined.includes('sin lesiones activas') || combined.includes('sin recidiva') ||
     combined.includes('sin signos de recidiva') || combined.includes('sin signos tomograficos de recidiva') ||
     combined.includes('se descarta recidiva') || combined.includes('sin hallazgos patologicos') || combined.includes('sin hallazgos') ||
+    combined.includes('sin recurrencia') || combined.includes('sin signos de recurrencia') || combined.includes('se descarta recurrencia') ||
     combined.includes('asintomatica') || combined.includes('asintomatico') ||
     (!hasProgression && (tx.isTreatmentCompletedOrPast || combined.includes('en seguimiento')));
 
@@ -1642,15 +1676,43 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
       treatmentIntent = 'Control tumoral y evaluación de respuesta a tratamiento sistémico';
     }
   } else {
-    // Estadios I, II, III o enfermedad localizada / no metastásica
+    // Estadios I, II, III o enfermedad localizada / no clasificada como estadio IV
     if (hasProgression) {
       diseaseStatus = 'PROGRESSION';
-      diseaseStatusDescription = 'Recidiva o progresión de enfermedad documentada.';
+      diseaseStatusDescription = hasActiveSystemicTreatment
+        ? `Recidiva o progresión de enfermedad en tratamiento sistémico activo${detectedRegimen ? ` (${detectedRegimen})` : ''}.`
+        : 'Recidiva o progresión de enfermedad documentada.';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
-      modeLabel = 'Modo B — Recidiva activa / Re-estadificación y evaluación terapéutica';
-      treatmentIntent = 'Reevaluación diagnóstica y terapéutica';
+      modeLabel = hasActiveSystemicTreatment
+        ? `Modo B — Recidiva activa / En tratamiento sistémico${detectedRegimen ? ` (${detectedRegimen})` : ''}`
+        : 'Modo B — Recidiva activa / Re-estadificación y evaluación terapéutica';
+      treatmentIntent = hasActiveSystemicTreatment
+        ? 'Control de enfermedad y monitoreo de respuesta terapéutica a línea de recaída'
+        : 'Reevaluación diagnóstica y terapéutica';
+    } else if (hasPartialResponse) {
+      diseaseStatus = 'PARTIAL_RESPONSE';
+      diseaseStatusDescription = 'Enfermedad activa con respuesta parcial objetiva a tratamiento sistémico.';
+      followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      modeLabel = 'Modo B — Enfermedad activa / Evaluación seriada de respuesta';
+      treatmentIntent = 'Control de enfermedad y monitoreo de respuesta (RECIST 1.1)';
+    } else if (hasStableDisease) {
+      diseaseStatus = 'STABLE_DISEASE';
+      diseaseStatusDescription = 'Enfermedad activa con enfermedad estable bajo tratamiento sistémico.';
+      followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      modeLabel = 'Modo B — Enfermedad activa / Monitoreo de estabilidad';
+      treatmentIntent = 'Control de enfermedad y monitoreo de respuesta';
+    } else if (hasActiveSystemicTreatment || (detectedRegimen !== '' && !isTreatmentCompletedOrNone) || hasActiveLesions) {
+      diseaseStatus = 'ACTIVE_METASTATIC';
+      diseaseStatusDescription = detectedRegimen
+        ? `Enfermedad activa bajo tratamiento sistémico (${detectedRegimen}) / Control de respuesta tumoral.`
+        : 'Enfermedad activa bajo tratamiento sistémico / Control de respuesta tumoral.';
+      followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      modeLabel = detectedRegimen
+        ? `Modo B — Enfermedad activa / En tratamiento sistémico (${detectedRegimen})`
+        : 'Modo B — Enfermedad activa / Evaluación de respuesta a tratamiento sistémico';
+      treatmentIntent = 'Control tumoral y evaluación de respuesta a tratamiento sistémico';
     } else {
-      const isResectedOrNED = hasNED || isTreatmentCompletedOrNone || combined.includes('postquirurgico') || combined.includes('resecado') || combined.includes('postoperatorio') || combined.includes('operada') || combined.includes('operado') || combined.includes('hemicolectomia') || combined.includes('colectomia') || combined.includes('duodenopancreatectomia') || combined.includes('dpc') || combined.includes('whipple');
+      const isResectedOrNED = hasNED || isTreatmentCompletedOrNone || combined.includes('postquirurgico') || combined.includes('resecado') || combined.includes('postoperatorio') || combined.includes('operada') || combined.includes('operado') || combined.includes('hemicolectomia') || combined.includes('colectomia') || combined.includes('duodenopancreatectomia') || combined.includes('dpc') || combined.includes('whipple') || combined.includes('citorreduccion');
       diseaseStatus = 'NED';
       diseaseStatusDescription = isResectedOrNED
         ? 'Enfermedad localizada resecada con intención curativa, actualmente sin evidencia de enfermedad (NED).'
