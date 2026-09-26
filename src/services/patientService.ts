@@ -1,5 +1,5 @@
 import { db, storage } from '../lib/firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDoc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { ImagingStudy } from '../components/ImagingPanel'; // Asegúrate de importar la interfaz
 import { ProcessedChunkRecord } from '../utils/chunkHasher';
@@ -45,14 +45,7 @@ export interface Patient {
 
 const PATIENTS_COLLECTION = 'patients';
 
-// Escuchar cambios
-export const subscribeToPatients = (callback: (patients: Patient[]) => void) => {
-    const q = query(collection(db, PATIENTS_COLLECTION), orderBy('lastUpdated', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-        const patients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Patient));
-        callback(patients);
-    });
-};
+
 
 export const cleanForFirestore = <T,>(obj: T): T => {
     if (obj === undefined) return null as unknown as T;

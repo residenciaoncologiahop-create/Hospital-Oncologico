@@ -5,7 +5,7 @@ import RootOrchestrator from './RootOrchestrator';
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import PendientesPanel from './components/PendientesPanel';
-import ImagingPanel, { mergeImagingStudies, generateLesionKey, ImagingStudy } from './components/ImagingPanel';
+import ImagingPanel, { mergeImagingStudies, generateLesionKey, ImagingStudy, parseSafeMeasurement } from './components/ImagingPanel';
 import { extractImagingFromHistorySecure } from './utils/aiProxy';
 import { requestNotificationPermission } from './utils/notificationService';
 import OncoCalculator from './components/OncoCalculator';
@@ -18,7 +18,7 @@ import { getStoredClinicalTrials, syncAndStoreTrials } from './services/clinical
 import { PatientMatchingEvaluation } from './types/clinicalTrials';
 
 // --- FIREBASE IMPORTS ---
-import { db } from './lib/firebase';
+import { db, auth } from './lib/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
 
 import { 
@@ -70,9 +70,12 @@ const getOrInitFingerprint = () => {
 
 const logAction = async (action: string, patientId: string | null, doctorName: string | null) => {
     if (doctorName === 'Modo Demo' || patientId?.startsWith('demo-')) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
     try {
         const fingerprint = getOrInitFingerprint();
         await addDoc(collection(db, "audit_logs"), {
+            doctorId: currentUser.uid,
             action,
             patientId: patientId || 'N/A',
             doctorName: doctorName || 'Unknown',
@@ -658,11 +661,14 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                         treatment: d.treatment || null,
                         relevantFindings: d.relevantFindings || '',
                         suvMax: typeof d.suvMax === 'number' ? d.suvMax : (d.suvMax ? Number(d.suvMax) : null),
-                        targetLesions: (d.targetLesions || []).map((l: any) => ({
-                            location: l.location || 'Lesión',
-                            measurement: Number(l.measurement) || 0,
-                            lesionKey: l.lesionKey || generateLesionKey(l.location || 'lesion')
-                        })),
+                        targetLesions: (d.targetLesions || []).map((l: any) => {
+                            const parsedMeas = parseSafeMeasurement(l.measurement);
+                            return {
+                                location: l.location || 'Lesión',
+                                measurement: parsedMeas !== null ? parsedMeas : (l.measurement ?? null),
+                                lesionKey: l.lesionKey || generateLesionKey(l.location || 'lesion')
+                            };
+                        }),
                         nonTargetLesions: d.nonTargetLesions || [],
                         newLesions: !!d.newLesions,
                         extractedAt: Date.now(),
@@ -1798,7 +1804,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                     {/* FORMS */}
                                     {activeTab === 'forms' && (
                                         <div className="h-full overflow-y-auto">
-                                            <FormManager patient={selP} historyText={historyText} files={historyFiles} timeline={timeline}/>
+                                            <FormManager patient={selP} historyText={historyText} files={historyFiles} timeline={timeline} user={user} />
                                         </div>
                                     )}
 

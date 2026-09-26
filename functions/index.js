@@ -1,6 +1,14 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { defineSecret } = require("firebase-functions/params");
+const { initializeApp, getApps } = require("firebase-admin/app");
+const { getFirestore } = require("firebase-admin/firestore");
+const { syncAndSaveTrials } = require("./clinicalTrialsSync");
+
+if (getApps().length === 0) {
+  initializeApp();
+}
+const db = getFirestore();
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const MODEL_NAME = "gemini-2.5-flash";
@@ -129,6 +137,18 @@ function validateInput({ prompt, parts, systemInstruction, responseMimeType }) {
   }
 }
 
+// ── Autorización Institucional ─────────────────────────────────────────
+async function assertAuthorized(uid) {
+  const userDoc = await db.collection("authorized_users").doc(uid).get();
+
+  if (!userDoc.exists || userDoc.data()?.active !== true) {
+    throw new HttpsError(
+      "permission-denied",
+      "No cuenta con autorización activa para acceder a este servicio institucional."
+    );
+  }
+}
+
 // ── Cloud Function ─────────────────────────────────────────────────────
 exports.callGemini = onCall(
   {
@@ -144,14 +164,17 @@ exports.callGemini = onCall(
     }
     const uid = request.auth.uid;
 
-    // 2. Rate limiting
+    // 2. Autorización
+    await assertAuthorized(uid);
+
+    // 3. Rate limiting
     checkRateLimit(uid);
 
-    // 3. Validación de entrada
+    // 4. Validación de entrada
     const { prompt, parts, systemInstruction, responseMimeType } = request.data;
     validateInput({ prompt, parts, systemInstruction, responseMimeType });
 
-    // 4. Llamada a Gemini
+    // 5. Llamada a Gemini
     try {
       const cleanApiKey = GEMINI_API_KEY.value().replace(/['"]/g, "").trim();
       if (!cleanApiKey) throw new HttpsError("internal", "API Key no configurada.");
@@ -178,3 +201,42 @@ exports.callGemini = onCall(
     }
   }
 );
+
+// ── Cloud Function: syncClinicalTrials ─────────────────────────────────
+exports.syncClinicalTrials = onCall(
+  {
+    cors: true,
+    memory: "512MiB",
+    timeoutSeconds: 300,
+  },
+  async (request) => {
+    // 1. Requiere usuario autenticado
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Debe iniciar sesión para sincronizar ensayos clínicos."
+      );
+    }
+    const uid = request.auth.uid;
+
+    // 2. Requiere usuario autorizado
+    await assertAuthorized(uid);
+
+    try {
+      console.log(`[syncClinicalTrials] Sincronización iniciada por UID=${uid}`);
+      const result = await syncAndSaveTrials(db);
+      console.log(
+        `[syncClinicalTrials] Sincronización finalizada: ${result.totalSaved} guardados en Firestore.`
+      );
+      return result;
+    } catch (error) {
+      console.error(`[syncClinicalTrials] Error (UID=${uid}):`, error.message);
+      if (error instanceof HttpsError) throw error;
+      throw new HttpsError(
+        "internal",
+        `Error al sincronizar ensayos clínicos: ${error.message}`
+      );
+    }
+  }
+);
+

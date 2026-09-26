@@ -23,7 +23,7 @@ export const form03PracticasDefinition: AdminFormDefinition = {
       rows: 2,
       gridSpan: 12,
       group: '1. Datos de la Solicitud',
-      description: 'Estudio o práctica de alta complejidad a realizar fuera del establecimiento.'
+      helperText: 'Estudio o práctica de alta complejidad a realizar fuera del establecimiento.'
     },
     {
       key: 'codigo_decreto',
@@ -38,7 +38,12 @@ export const form03PracticasDefinition: AdminFormDefinition = {
       key: 'caracter_atencion',
       label: 'Carácter de la Atención',
       type: 'select',
-      options: ['Ambulatorio', 'Estabilizado', 'Urgencia', 'Emergencia'],
+      options: [
+        { label: 'Ambulatorio', value: 'Ambulatorio' },
+        { label: 'Estabilizado', value: 'Estabilizado' },
+        { label: 'Urgencia', value: 'Urgencia' },
+        { label: 'Emergencia', value: 'Emergencia' }
+      ],
       required: true,
       gridSpan: 4,
       group: '1. Datos de la Solicitud'

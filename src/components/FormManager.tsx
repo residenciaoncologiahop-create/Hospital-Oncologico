@@ -9,11 +9,16 @@ import { AdminFormDefinition, AdminFormContext } from '../services/adminForms/ty
 import AdminFormReviewModal from './adminForms/AdminFormReviewModal';
 import FormPreviewModal from './FormPreviewModal';
 
+import { User } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+import { useCurrentUser } from './AuthWrapper';
+
 interface FormManagerProps {
   patient: any;
   historyText: string;
   files: any[];
   timeline?: any[];
+  user?: User | null;
 }
 
 // Lista de campos estrictamente requeridos para el trámite oficial de PAMI
@@ -39,7 +44,7 @@ const BANCO_MANDATORY_FIELDS: Array<{ key: string; label: string; id: string }> 
   { key: 'droga_1', label: 'Droga #1 (Principal)', id: 'banco-droga_1' },
 ];
 
-const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, timeline }) => {
+const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, timeline, user }) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('');
   
@@ -264,6 +269,10 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     lugar_fecha: '',
   });
   
+  const hookUser = useCurrentUser();
+  const activeUser = user || hookUser || auth.currentUser;
+  const uid = activeUser?.uid || 'demo-user';
+
   const [showDocConfig, setShowDocConfig] = useState(false);
   const [doctorData, setDoctorData] = useState({
     nombre: '', matricula: '', especialidad: 'Oncología Clínica',
@@ -272,14 +281,64 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   });
 
   useEffect(() => {
+    if (!uid) return;
     try {
-      const savedDoc = localStorage.getItem('doctor_data_profile_v3');
-      if (savedDoc) setDoctorData(JSON.parse(savedDoc));
-    } catch (e) { console.error(e); }
-  }, []);
+      const userKey = `doctor_data_profile_v3_${uid}`;
+      const savedUserDoc = localStorage.getItem(userKey);
+      if (savedUserDoc) {
+        setDoctorData(JSON.parse(savedUserDoc));
+        return;
+      }
+
+      // Compatibilidad con clave anterior:
+      // Se exige correspondencia estricta e inequívoca del email con la identidad Firebase autenticada.
+      // Queda expresamente prohibido usar displayName, nombre o matrícula como criterio de migración.
+      const legacyDocStr = localStorage.getItem('doctor_data_profile_v3');
+      if (legacyDocStr) {
+        try {
+          const legacyDoc = JSON.parse(legacyDocStr);
+          const authEmail = activeUser?.email ? activeUser.email.toLowerCase().trim() : '';
+          const legacyEmail = legacyDoc?.email && typeof legacyDoc.email === 'string'
+            ? legacyDoc.email.toLowerCase().trim()
+            : '';
+
+          // Solo se migra si ambos emails existen, no están vacíos y son estrictamente idénticos
+          if (authEmail !== '' && authEmail === legacyEmail) {
+            setDoctorData(legacyDoc);
+            localStorage.setItem(userKey, JSON.stringify(legacyDoc));
+            localStorage.removeItem('doctor_data_profile_v3');
+            return;
+          }
+        } catch (parseErr) {
+          console.warn('Error al interpretar perfil legacy:', parseErr);
+        }
+      }
+
+      // Si no hay perfil guardado para este usuario, inicializar con datos de Auth si existen
+      setDoctorData({
+        nombre: activeUser?.displayName || '',
+        matricula: '',
+        especialidad: 'Oncología Clínica',
+        email: activeUser?.email || '',
+        provincia: '',
+        cuil_prefix: '',
+        cuil_dni: '',
+        cuil_suffix: '',
+        cel_area: '',
+        cel_num: ''
+      });
+    } catch (e) {
+      console.error('Error cargando perfil del profesional:', e);
+    }
+  }, [uid, activeUser?.displayName, activeUser?.email]);
 
   const saveDoctorData = () => {
-    localStorage.setItem('doctor_data_profile_v3', JSON.stringify(doctorData));
+    if (!uid) return;
+    const userKey = `doctor_data_profile_v3_${uid}`;
+    localStorage.setItem(userKey, JSON.stringify(doctorData));
+    if (localStorage.getItem('doctor_data_profile_v3') !== null) {
+      localStorage.removeItem('doctor_data_profile_v3');
+    }
     setShowDocConfig(false);
     alert("Datos guardados.");
   };
@@ -1956,6 +2015,7 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
         <textarea
           rows={20}
           value={summaryTextContent}
+          onChange={e => setSummaryTextContent(e.target.value)}
           style={{
             fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
             fontSize: '13.5px',

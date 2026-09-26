@@ -273,7 +273,7 @@ export const solicitudMedicamentosDefinition: AdminFormDefinition = {
       telefono_profesional: '',
       nombre_apellido: p.name || '',
       dni: p.dni || '',
-      nro_hc: p.recordNumber || '',
+      nro_hc: p.hcNumber || '',
       edad: p.age ? String(p.age) : '',
       sexo: p.sex === 'M' ? 'Masculino' : p.sex === 'F' ? 'Femenino' : '',
       domicilio: '',

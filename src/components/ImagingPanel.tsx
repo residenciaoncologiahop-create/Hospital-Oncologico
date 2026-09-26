@@ -12,7 +12,7 @@ import { extractSingleImagingReportSecure } from '../utils/aiProxy';
 // ── TIPOS ──────────────────────────────────────────────────────────────
 export interface TargetLesion {
   location: string;
-  measurement: number;
+  measurement: number | string | null;
   lesionKey?: string;
   suvMax?: number | string;
 }
@@ -87,8 +87,36 @@ const parseDate = (dateStr: string): number => {
   return 0;
 };
 
-const sumMeasurements = (lesions: TargetLesion[]): number =>
-  lesions.reduce((acc, l) => acc + (Number(l.measurement) || 0), 0);
+/**
+ * Parsea y valida de forma estricta una medición numérica en mm.
+ * Solo acepta números finitos >= 0 o strings puramente numéricos (ej: 25, 25.0, "25", "25.0", 0, "0").
+ * Rechaza y devuelve null ante valores ambiguos o no numéricos (ej: "25 mm", "2.5 cm", "no medible", null, undefined, NaN, negativos).
+ * NUNCA convierte silenciosamente un valor inválido a 0.
+ */
+export const parseSafeMeasurement = (val: unknown): number | null => {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'number') {
+    if (!Number.isFinite(val) || Number.isNaN(val) || val < 0) return null;
+    return val;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    if (!/^\d+(\.\d+)?$/.test(trimmed)) return null;
+    const num = Number(trimmed);
+    if (!Number.isFinite(num) || Number.isNaN(num) || num < 0) return null;
+    return num;
+  }
+  return null;
+};
+
+const sumMeasurements = (lesions: TargetLesion[]): number => {
+  if (!lesions || !Array.isArray(lesions)) return 0;
+  return lesions.reduce((acc, l) => {
+    const val = parseSafeMeasurement(l?.measurement);
+    return acc + (val !== null ? val : 0);
+  }, 0);
+};
 
 const CHART_COLORS = ['#2563EB', '#059669', '#D97706', '#7C3AED', '#DC2626', '#0891B2', '#C2410C', '#4D7C0F'];
 
@@ -253,6 +281,29 @@ export const evaluateRecistResponse = (
       badgeColor: 'gray',
       confidence: 'Baja',
       explanation: 'Los estudios disponibles no contienen mediciones numéricas de lesiones diana.',
+      baselineSum,
+      nadirSum,
+      latestSum,
+      pctVsBaseline: 0,
+      pctVsNadir: 0,
+      insufficientData: true
+    };
+  }
+
+  const hasInvalidMeasurements = (lesions: TargetLesion[]): boolean =>
+    Array.isArray(lesions) && lesions.some(l => parseSafeMeasurement(l?.measurement) === null);
+
+  const baselineHasInvalid = hasInvalidMeasurements(baseline?.targetLesions);
+  const latestHasInvalid = hasInvalidMeasurements(latest?.targetLesions);
+
+  if (baselineHasInvalid || latestHasInvalid) {
+    return {
+      criterion,
+      criterionNote,
+      status: 'Información insuficiente para cuantificar RECIST',
+      badgeColor: 'gray',
+      confidence: 'Baja',
+      explanation: 'Los estudios disponibles contienen mediciones no evaluables o no numéricas en lesiones diana.',
       baselineSum,
       nadirSum,
       latestSum,
@@ -664,12 +715,15 @@ const ImagingPanel: React.FC<ImagingPanelProps> = ({
           treatment: d.treatment || null,
           relevantFindings: d.relevantFindings || undefined,
           suvMax: d.suvMax !== undefined ? d.suvMax : undefined,
-          targetLesions: (d.targetLesions || []).map((l: any) => ({
-            location: l.location || 'Lesión',
-            measurement: Number(l.measurement) || 0,
-            lesionKey: l.lesionKey || generateLesionKey(l.location || 'lesion'),
-            suvMax: l.suvMax
-          })),
+          targetLesions: (d.targetLesions || []).map((l: any) => {
+            const parsedMeas = parseSafeMeasurement(l.measurement);
+            return {
+              location: l.location || 'Lesión',
+              measurement: parsedMeas !== null ? parsedMeas : (l.measurement ?? null),
+              lesionKey: l.lesionKey || generateLesionKey(l.location || 'lesion'),
+              suvMax: l.suvMax
+            };
+          }),
           nonTargetLesions: d.nonTargetLesions || [],
           newLesions: !!d.newLesions,
           extractedAt: Date.now(),

@@ -10,7 +10,7 @@ export const derivacionProfeDefinition: AdminFormDefinition = {
   shortName: 'Form 133 - Derivación PROFE',
   institution: 'Ministerio de Salud de Córdoba / Programa Incluir Salud (PROFE)',
   description: 'Planilla médica oficial 133.0 para derivación y solicitud mensual de medicamentos oncológicos y tratamientos especiales de alto costo.',
-  category: 'Farmacia y Medicación',
+  category: 'Medicación y Farmacia',
   templateFile: '/forms/derivacion_profe_133.pdf',
 
   fields: [
@@ -22,7 +22,7 @@ export const derivacionProfeDefinition: AdminFormDefinition = {
       required: true,
       gridSpan: 8,
       group: '1. Datos de la Solicitud',
-      description: 'Nombre del esquema o droga de alto costo a autorizar por PROFE.'
+      helperText: 'Nombre del esquema o droga de alto costo a autorizar por PROFE.'
     },
     {
       key: 'fecha',

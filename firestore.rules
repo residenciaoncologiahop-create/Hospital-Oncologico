@@ -2,36 +2,42 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Funciones auxiliares de autenticacion y autoria
+    // Funciones auxiliares de autenticacion y autorizacion
     function isAuthenticated() {
       return request.auth != null;
     }
 
+    function isAuthorized() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/authorized_users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/authorized_users/$(request.auth.uid)).data.active == true;
+    }
+
     function isOwner(doctorId) {
-      return isAuthenticated() && request.auth.uid == doctorId;
+      return isAuthorized() && request.auth.uid == doctorId;
     }
 
     // 1. Coleccion patients
     match /patients/{patientId} {
-      // Crear: solo si esta autenticado y se asigna como doctorId propio
-      allow create: if isAuthenticated() && request.resource.data.doctorId == request.auth.uid;
+      // Crear: solo si esta autenticado, autorizado y se asigna como doctorId propio
+      allow create: if isAuthorized() && request.resource.data.doctorId == request.auth.uid;
       
-      // Leer: solo si el paciente pertenece al medico autenticado
+      // Leer: solo si el paciente pertenece al medico autenticado y autorizado
       allow read: if isOwner(resource.data.doctorId);
       
-      // Actualizar: solo el medico propietario y manteniendo el doctorId inalterado
+      // Actualizar: solo el medico propietario autorizado y manteniendo el doctorId inalterado
       allow update: if isOwner(resource.data.doctorId) && request.resource.data.doctorId == request.auth.uid;
       
-      // Eliminar: solo el medico propietario
+      // Eliminar: solo el medico propietario autorizado
       allow delete: if isOwner(resource.data.doctorId);
     }
 
     // 2. Coleccion pendientes
     match /pendientes/{pendienteId} {
-      // Crear: solo si esta autenticado y doctorId es propio
-      allow create: if isAuthenticated() && request.resource.data.doctorId == request.auth.uid;
+      // Crear: solo si esta autenticado, autorizado y doctorId es propio
+      allow create: if isAuthorized() && request.resource.data.doctorId == request.auth.uid;
       
-      // Leer: solo tareas propias
+      // Leer: solo tareas propias de medico autorizado
       allow read: if isOwner(resource.data.doctorId);
       
       // Actualizar: solo tareas propias y manteniendo doctorId
@@ -41,24 +47,32 @@ service cloud.firestore {
       allow delete: if isOwner(resource.data.doctorId);
     }
 
-    // 3. Coleccion audit_logs (Inmutable, solo anexado por usuarios autenticados)
+    // 3. Coleccion audit_logs (Inmutable, solo anexado por usuarios autorizados)
     match /audit_logs/{logId} {
-      // Crear: usuarios autenticados pueden registrar eventos de auditoria
-      allow create: if isAuthenticated();
+      // Crear: usuarios autenticados y autorizados pueden registrar eventos de auditoria vinculados estrictamente a su UID
+      allow create: if isAuthorized() &&
+        request.resource.data.doctorId == request.auth.uid;
       
       // Leer, actualizar y borrar: totalmente prohibido desde el cliente para preservar inmutabilidad
       allow read, update, delete: if false;
     }
 
-    // 4. Coleccion clinical_trials (Registro publico de ensayos sincronizado temporalmente por el cliente)
+    // 4. Coleccion clinical_trials (Registro publico sincronizado exclusivamente por Cloud Functions backend)
     match /clinical_trials/{trialId} {
       // Lectura: todos los usuarios autenticados
       allow read: if isAuthenticated();
       
-      // Escritura: usuarios autenticados pueden sincronizar estudios desde las fuentes publicas
-      // El borrado desde cliente queda expresamente bloqueado
-      allow create, update: if isAuthenticated();
-      allow delete: if false;
+      // Escritura: prohibida desde el frontend (solo Admin SDK via Cloud Functions)
+      allow write: if false;
+    }
+
+    // 5. Coleccion authorized_users (Control de autorizacion administrado exclusivamente fuera del cliente)
+    match /authorized_users/{uid} {
+      // Lectura: solo el propio usuario autenticado puede consultar su estado de autorizacion
+      allow read: if isAuthenticated() && request.auth.uid == uid;
+      
+      // Escritura: totalmente prohibida desde cualquier cliente web
+      allow write: if false;
     }
 
     // Denegacion por defecto para cualquier otra coleccion no declarada

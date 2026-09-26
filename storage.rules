@@ -6,8 +6,14 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function isDoctorOfPatient(patientId) {
+    function isAuthorized() {
       return isAuthenticated() &&
+        firestore.exists(/databases/(default)/documents/authorized_users/$(request.auth.uid)) &&
+        firestore.get(/databases/(default)/documents/authorized_users/$(request.auth.uid)).data.active == true;
+    }
+
+    function isDoctorOfPatient(patientId) {
+      return isAuthorized() &&
         firestore.exists(/databases/(default)/documents/patients/$(patientId)) &&
         firestore.get(/databases/(default)/documents/patients/$(patientId)).data.doctorId == request.auth.uid;
     }

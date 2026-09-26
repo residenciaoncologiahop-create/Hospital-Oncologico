@@ -1,23 +1,15 @@
 import React, { useState } from 'react';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword,
-  updateProfile
-} from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { Activity, Mail, Lock, User, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
-
-type AuthMode = 'login' | 'register';
+import { Activity, Mail, Lock, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
 
 interface AuthScreenProps {
   onEnterDemo?: () => void;
 }
 
 const AuthScreen: React.FC<AuthScreenProps> = ({ onEnterDemo }) => {
-  const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,26 +20,12 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onEnterDemo }) => {
     setLoading(true);
 
     try {
-      if (mode === 'register') {
-        if (!displayName.trim()) {
-          setError('Ingrese su nombre profesional.');
-          setLoading(false);
-          return;
-        }
-        const credential = await createUserWithEmailAndPassword(auth, email, password);
-        // Guardar nombre en el perfil de Firebase
-        await updateProfile(credential.user, { displayName: displayName.trim() });
-
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
+      await signInWithEmailAndPassword(auth, email, password);
       // El listener onAuthStateChanged en App se encargará del resto
     } catch (err: any) {
       // Mensajes de error en español
       const errorMessages: Record<string, string> = {
-        'auth/email-already-in-use': 'Este email ya está registrado.',
         'auth/invalid-email': 'Email inválido.',
-        'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
         'auth/user-not-found': 'No existe una cuenta con este email.',
         'auth/wrong-password': 'Contraseña incorrecta.',
         'auth/invalid-credential': 'Email o contraseña incorrectos.',
@@ -72,43 +50,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onEnterDemo }) => {
           <p className="text-gray-400 text-xs font-medium mt-1">Herramienta de apoyo clínico y docencia</p>
         </div>
 
-        {/* Tabs Login / Registro */}
-        <div className="flex bg-gray-100 rounded-2xl p-1 mb-6">
-          <button
-            onClick={() => { setMode('login'); setError(null); }}
-            className={`flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-              mode === 'login' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-400'
-            }`}
-          >
-            Ingresar
-          </button>
-          <button
-            onClick={() => { setMode('register'); setError(null); }}
-            className={`flex-1 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-              mode === 'register' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-400'
-            }`}
-          >
-            Registrarse
-          </button>
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* Campo nombre (solo en registro) */}
-          {mode === 'register' && (
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
-              <input
-                type="text"
-                placeholder="Nombre del profesional"
-                value={displayName}
-                onChange={e => setDisplayName(e.target.value)}
-                className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm focus:bg-white focus:border-blue-100 outline-none transition-all"
-                required
-              />
-            </div>
-          )}
-
           {/* Email */}
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
@@ -127,12 +70,11 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onEnterDemo }) => {
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
             <input
               type="password"
-              placeholder="Contraseña (mín. 6 caracteres)"
+              placeholder="Contraseña"
               value={password}
               onChange={e => setPassword(e.target.value)}
               className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm focus:bg-white focus:border-blue-100 outline-none transition-all"
               required
-              minLength={6}
             />
           </div>
 
@@ -167,10 +109,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onEnterDemo }) => {
           >
             {loading ? (
               <><Loader2 size={16} className="animate-spin" /> Procesando...</>
-            ) : mode === 'login' ? (
-              <><ShieldCheck size={16} /> Ingresar de forma segura</>
             ) : (
-              'Crear cuenta'
+              <><ShieldCheck size={16} /> Ingresar de forma segura</>
             )}
           </button>
 
