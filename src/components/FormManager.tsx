@@ -87,6 +87,13 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   } | null>(null);
   const [isDinadicUpdating, setIsDinadicUpdating] = useState(false);
 
+  // Estado exclusivo e independiente para la Vista Previa de Formulario PAMI
+  const [pamiPreview, setPamiPreview] = useState<{
+    blob: Blob;
+    filename: string;
+  } | null>(null);
+  const [isPamiUpdating, setIsPamiUpdating] = useState(false);
+
   // Estados y flujo para Nuevos Formularios Administrativos Modulares
   const [selectedAdminForm, setSelectedAdminForm] = useState<AdminFormDefinition | null>(null);
   const [adminFormData, setAdminFormData] = useState<Record<string, any>>({});
@@ -1224,172 +1231,170 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     }
   };
 
-  const fillPamiPDFFromData = async (data: typeof pamiFormData) => {
-    setProcessingId('pami');
-    setStatus('Completando datos de medicación y generando PDF PAMI...');
+  const generatePamiPDFDocument = async (data: typeof pamiFormData): Promise<{ blob: Blob; filename: string }> => {
+    const bsa = calculateBSA(data.peso, data.talla);
+    const finalName = data.paciente_nombre_real || patient?.name || 'Paciente';
+
+    const activeDrugs = [data.droga_1, data.droga_2, data.droga_3, data.droga_4].map(d => (d || '').trim()).filter(Boolean);
+    let drugDetails: Array<{ droga: string; presentacion: string; dosis: string; duracion_dias: string }> = [];
+    if (activeDrugs.length > 0) {
+      drugDetails = await resolveDrugDetails(activeDrugs, data.peso, data.talla, data.diagnostico_cie10);
+    }
+
+    const formUrl = window.location.origin + '/forms/pami.pdf';
+    const res = await fetch(formUrl);
+    if (!res.ok) throw new Error(`No se encontró /forms/pami.pdf`);
+    const formBytes = await res.arrayBuffer();
+    const pdfDoc = await PDFDocument.load(formBytes);
+    const form = pdfDoc.getForm();
+
+    const setText = (name: string, val: string, maxFontSize: number = 10, minFontSize: number = 6) => {
+      try {
+        const f = form.getTextField(name);
+        if (!val || !String(val).trim()) return;
+        const text = String(val).trim();
+        let fieldWidth = 350;
+        try {
+          const widgets = (f as any).acroField.getWidgets();
+          if (widgets && widgets.length > 0) {
+            const rect = widgets[0].getRectangle();
+            fieldWidth = Math.max(rect.width - 6, 50);
+          }
+        } catch { /* field rect unavailable */ }
+        let fontSize = maxFontSize;
+        const AVG_CHAR_RATIO = 0.52;
+        while (fontSize > minFontSize) {
+          const estimatedWidth = text.length * AVG_CHAR_RATIO * fontSize;
+          if (estimatedWidth <= fieldWidth) break;
+          fontSize = Math.round((fontSize - 0.5) * 10) / 10;
+        }
+        f.setText(text);
+        f.setFontSize(fontSize);
+      } catch { /* field not found in form */ }
+    };
+
+    const setCheck = (name: string, shouldCheck: boolean) => {
+      try {
+        if (shouldCheck) form.getCheckBox(name).check();
+        else form.getCheckBox(name).uncheck();
+      } catch { /* field not found */ }
+    };
+
+    // Patient info
+    setText('Apellido y Nombre', finalName);
+    setText('fill_21', cleanDate(data.paciente_fnac) || data.paciente_fnac);
+    setText('Fecha de nacimiento', cleanDate(data.paciente_fnac) || data.paciente_fnac);
+    setText('NUMERO CELULAR', data.paciente_celular);
+    setText('NUMERO CELULAR 1', data.paciente_celular);
+
+    // Clinical & staging
+    setText('Diagnóstico (CIE 10)', data.diagnostico_cie10);
+    setText('Diagnóstico CIE 10', data.diagnostico_cie10);
+    setText('Histopatológico', data.histopatologico, 9, 6.5);
+    setText('ECOG Performance Status (0-4)', data.ecog);
+    setText('ECOG', data.ecog);
+    setText('Estadío actual', data.estadio_actual);
+    setText('Estadio actual', data.estadio_actual);
+    setText('Estadio Inicial', data.estadio_inicial);
+    setText('Fecha de Diagnóstico Inicial', data.fecha_diagnostico_inicial);
+    setText('Fecha diagnostico inicial', data.fecha_diagnostico_inicial);
+    setText('Fecha de Diagnóstico Inicial Estadio Inicial', data.estadio_inicial);
+    setText('Línea de tratamiento', data.linea_tratamiento);
+    setText('Línea tratamiento', data.linea_tratamiento);
+    setText('Ciclos', data.ciclos_planeados);
+    setText('Días', data.frecuencia_dias);
+    setText('Ciclos Días', data.frecuencia_dias);
+
+    // Antecedents & labs
+    setText('Antecedentes Quirúrgicos', data.antecedentes_qx, 9, 7);
+    setText('Antecedentes Terapia Radiante', data.antecedentes_radio, 9, 7);
+    
+    try {
+      const fTitleStrip = form.getTextField('Informe clínico actual');
+      fTitleStrip.setText('');
+    } catch { /* skip */ }
 
     try {
-      const bsa = calculateBSA(data.peso, data.talla);
-      const finalName = data.paciente_nombre_real || patient?.name || 'Paciente';
-
-      const activeDrugs = [data.droga_1, data.droga_2, data.droga_3, data.droga_4].map(d => (d || '').trim()).filter(Boolean);
-      let drugDetails: Array<{ droga: string; presentacion: string; dosis: string; duracion_dias: string }> = [];
-      if (activeDrugs.length > 0) {
-        drugDetails = await resolveDrugDetails(activeDrugs, data.peso, data.talla, data.diagnostico_cie10);
+      const fLargeBox = form.getTextField('Informe Clínico ActualRow1');
+      if (data.informe_clinico_detallado && data.informe_clinico_detallado.trim()) {
+        const reportText = data.informe_clinico_detallado.trim();
+        fLargeBox.enableMultiline();
+        const fontSize = reportText.length > 1300 ? 7.8 : reportText.length > 1000 ? 8.2 : 8.5;
+        fLargeBox.setFontSize(fontSize);
+        fLargeBox.setText(reportText);
       }
+    } catch { /* skip */ }
 
-      const formUrl = window.location.origin + '/forms/pami.pdf';
-      const res = await fetch(formUrl);
-      if (!res.ok) throw new Error(`No se encontró /forms/pami.pdf`);
-      const formBytes = await res.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(formBytes);
-      const form = pdfDoc.getForm();
+    setText('Datos positivos Laboratorio', data.laboratorio_formateado, 8.5, 7);
+    setText('Peso', data.peso);
+    setText('Talla', data.talla);
+    setText('Sup. Corporal', bsa);
+    setText('Sup Corpora', bsa);
+    setText('Esquema de tratamiento solicitado', data.esquema_tratamiento_solicitado || activeDrugs.join(' + '));
 
-      const setText = (name: string, val: string, maxFontSize: number = 10, minFontSize: number = 6) => {
-        try {
-          const f = form.getTextField(name);
-          if (!val || !String(val).trim()) return;
-          const text = String(val).trim();
-          let fieldWidth = 350;
-          try {
-            const widgets = (f as any).acroField.getWidgets();
-            if (widgets && widgets.length > 0) {
-              const rect = widgets[0].getRectangle();
-              fieldWidth = Math.max(rect.width - 6, 50);
-            }
-          } catch { /* field rect unavailable */ }
-          let fontSize = maxFontSize;
-          const AVG_CHAR_RATIO = 0.52;
-          while (fontSize > minFontSize) {
-            const estimatedWidth = text.length * AVG_CHAR_RATIO * fontSize;
-            if (estimatedWidth <= fieldWidth) break;
-            fontSize = Math.round((fontSize - 0.5) * 10) / 10;
-          }
-          f.setText(text);
-          f.setFontSize(fontSize);
-        } catch { /* field not found in form */ }
-      };
+    // Checkboxes Motivo
+    const motivo = (data.motivo_solicitud || '').toLowerCase();
+    setCheck('Inicio', motivo.includes('inicio'));
+    setCheck('Renovación', motivo.includes('renovac'));
+    setCheck('Cambio de Toxicidad', motivo.includes('toxicidad'));
+    setCheck('Cambio por Progresión', motivo.includes('progresi'));
 
-      const setCheck = (name: string, shouldCheck: boolean) => {
-        try {
-          if (shouldCheck) form.getCheckBox(name).check();
-          else form.getCheckBox(name).uncheck();
-        } catch { /* field not found */ }
-      };
+    // Checkboxes Tipo de Tratamiento
+    const tipo = (data.tipo_tratamiento || '').toLowerCase();
+    setCheck('Adyuvante', tipo.includes('adyuvante') && !tipo.includes('neo'));
+    setCheck('Neoadyuvante', tipo.includes('neoadyuvante'));
+    setCheck('Avanzado', tipo.includes('avanzado'));
 
-      // Patient info
-      setText('Apellido y Nombre', finalName);
-      setText('fill_21', cleanDate(data.paciente_fnac) || data.paciente_fnac);
-      setText('Fecha de nacimiento', cleanDate(data.paciente_fnac) || data.paciente_fnac);
-      setText('NUMERO CELULAR', data.paciente_celular);
-      setText('NUMERO CELULAR 1', data.paciente_celular);
-
-      // Clinical & staging
-      setText('Diagnóstico (CIE 10)', data.diagnostico_cie10);
-      setText('Diagnóstico CIE 10', data.diagnostico_cie10);
-      setText('Histopatológico', data.histopatologico, 9, 6.5);
-      setText('ECOG Performance Status (0-4)', data.ecog);
-      setText('ECOG', data.ecog);
-      setText('Estadío actual', data.estadio_actual);
-      setText('Estadio actual', data.estadio_actual);
-      setText('Estadio Inicial', data.estadio_inicial);
-      setText('Fecha de Diagnóstico Inicial', data.fecha_diagnostico_inicial);
-      setText('Fecha diagnostico inicial', data.fecha_diagnostico_inicial);
-      setText('Fecha de Diagnóstico Inicial Estadio Inicial', data.estadio_inicial);
-      setText('Línea de tratamiento', data.linea_tratamiento);
-      setText('Línea tratamiento', data.linea_tratamiento);
-      setText('Ciclos', data.ciclos_planeados);
-      setText('Días', data.frecuencia_dias);
-      setText('Ciclos Días', data.frecuencia_dias);
-
-      // Antecedents & labs
-      setText('Antecedentes Quirúrgicos', data.antecedentes_qx, 9, 7);
-      setText('Antecedentes Terapia Radiante', data.antecedentes_radio, 9, 7);
-      
-      try {
-        const fTitleStrip = form.getTextField('Informe clínico actual');
-        fTitleStrip.setText('');
-      } catch { /* skip */ }
-
-      try {
-        const fLargeBox = form.getTextField('Informe Clínico ActualRow1');
-        if (data.informe_clinico_detallado && data.informe_clinico_detallado.trim()) {
-          const reportText = data.informe_clinico_detallado.trim();
-          fLargeBox.enableMultiline();
-          const fontSize = reportText.length > 1300 ? 7.8 : reportText.length > 1000 ? 8.2 : 8.5;
-          fLargeBox.setFontSize(fontSize);
-          fLargeBox.setText(reportText);
-        }
-      } catch { /* skip */ }
-
-      setText('Datos positivos Laboratorio', data.laboratorio_formateado, 8.5, 7);
-      setText('Peso', data.peso);
-      setText('Talla', data.talla);
-      setText('Sup. Corporal', bsa);
-      setText('Sup Corpora', bsa);
-      setText('Esquema de tratamiento solicitado', data.esquema_tratamiento_solicitado || activeDrugs.join(' + '));
-
-      // Checkboxes Motivo
-      const motivo = (data.motivo_solicitud || '').toLowerCase();
-      setCheck('Inicio', motivo.includes('inicio'));
-      setCheck('Renovación', motivo.includes('renovac'));
-      setCheck('Cambio de Toxicidad', motivo.includes('toxicidad'));
-      setCheck('Cambio por Progresión', motivo.includes('progresi'));
-
-      // Checkboxes Tipo de Tratamiento
-      const tipo = (data.tipo_tratamiento || '').toLowerCase();
-      setCheck('Adyuvante', tipo.includes('adyuvante') && !tipo.includes('neo'));
-      setCheck('Neoadyuvante', tipo.includes('neoadyuvante'));
-      setCheck('Avanzado', tipo.includes('avanzado'));
-
-      // Drugs Table (Rows 1 to 4)
-      for (let i = 1; i <= 4; i++) {
-        const d = drugDetails[i - 1];
-        if (d && d.droga) {
-          setText(`DrogaGenéricoRow${i}`, d.droga, 9, 7);
-          setText(`PresentaciónRow${i}`, d.presentacion, 8.5, 6.5);
-          setText(`DosisRow${i}`, d.dosis, 8.5, 6.5);
-          setText(`N CiclosDuración díasRow${i}`, d.duracion_dias || data.frecuencia_dias, 8.5, 6.5);
-        } else {
-          setText(`DrogaGenéricoRow${i}`, '');
-          setText(`PresentaciónRow${i}`, '');
-          setText(`DosisRow${i}`, '');
-          setText(`N CiclosDuración díasRow${i}`, '');
-        }
+    // Drugs Table (Rows 1 to 4)
+    for (let i = 1; i <= 4; i++) {
+      const d = drugDetails[i - 1];
+      if (d && d.droga) {
+        setText(`DrogaGenéricoRow${i}`, d.droga, 9, 7);
+        setText(`PresentaciónRow${i}`, d.presentacion, 8.5, 6.5);
+        setText(`DosisRow${i}`, d.dosis, 8.5, 6.5);
+        setText(`N CiclosDuración díasRow${i}`, d.duracion_dias || data.frecuencia_dias, 8.5, 6.5);
+      } else {
+        setText(`DrogaGenéricoRow${i}`, '');
+        setText(`PresentaciónRow${i}`, '');
+        setText(`DosisRow${i}`, '');
+        setText(`N CiclosDuración díasRow${i}`, '');
       }
+    }
 
-      // Doctor information
-      setText('Apellido y Nombre_2', doctorData.nombre);
-      setText('Matricula', doctorData.matricula);
-      setText('Especialidad', doctorData.especialidad);
-      setText('Email_2', doctorData.email);
-      setText('Provincia', doctorData.provincia);
-      setText('CUIL', doctorData.cuil_prefix);
-      setText('CUIL1', doctorData.cuil_dni);
-      setText('CUIL2', doctorData.cuil_suffix);
-      setText('CUIT', doctorData.cuil_prefix);
-      setText('CUIT1', doctorData.cuil_dni);
-      setText('CUIT2', doctorData.cuil_suffix);
-      setText('Celular', doctorData.cel_area);
-      setText('Celular_2', doctorData.cel_area);
-      setText('Celular1', doctorData.cel_num);
-      setText('Lugar y fecha', `Córdoba, ${new Date().toLocaleDateString('es-AR')}`);
+    // Doctor information
+    setText('Apellido y Nombre_2', doctorData.nombre);
+    setText('Matricula', doctorData.matricula);
+    setText('Especialidad', doctorData.especialidad);
+    setText('Email_2', doctorData.email);
+    setText('Provincia', doctorData.provincia);
+    setText('CUIL', doctorData.cuil_prefix);
+    setText('CUIL1', doctorData.cuil_dni);
+    setText('CUIL2', doctorData.cuil_suffix);
+    setText('CUIT', doctorData.cuil_prefix);
+    setText('CUIT1', doctorData.cuil_dni);
+    setText('CUIT2', doctorData.cuil_suffix);
+    setText('Celular', doctorData.cel_area);
+    setText('Celular_2', doctorData.cel_area);
+    setText('Celular1', doctorData.cel_num);
+    setText('Lugar y fecha', `Córdoba, ${new Date().toLocaleDateString('es-AR')}`);
 
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `PAMI_${finalName.replace(/\s+/g, '_')}.pdf`;
-      link.click();
-      setStatus('¡Listo!');
-      const drugDesc = [data.droga_1, data.droga_2].filter(Boolean).join(' + ') || data.esquema_tratamiento_solicitado;
-      setLastRegenParams(prev => ({ ...prev, pami: { drugName: drugDesc, accumulatedCorrections: '' } }));
-      setFormGenerated(prev => ({ ...prev, pami: true }));
-      setFormCorrections(prev => ({ ...prev, pami: '' }));
-      setShowPamiReviewModal(false);
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const filename = `PAMI_${finalName.replace(/\s+/g, '_')}.pdf`;
+    return { blob, filename };
+  };
+
+  const fillPamiPDFFromData = async (data: typeof pamiFormData) => {
+    setProcessingId('pami');
+    setStatus('Completando datos y generando vista previa PAMI...');
+
+    try {
+      const { blob, filename } = await generatePamiPDFDocument(data);
+      setPamiPreview({ blob, filename });
       setShowPamiMissingConfirm(false);
+      setShowPamiReviewModal(false);
     } catch (e: any) {
-      alert('Error al generar PDF de PAMI: ' + e.message);
+      alert('Error al generar vista previa de PAMI: ' + e.message);
     } finally {
       setProcessingId(null);
       setStatus('');
@@ -1957,6 +1962,34 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
     }
   };
 
+  // --- MANEJADORES DE VISTA PREVIA EXCLUSIVA E INDEPENDIENTE PARA FORMULARIO PAMI ---
+  const handleConfirmPamiDownload = () => {
+    if (!pamiPreview || !pamiPreview.blob) return;
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(pamiPreview.blob);
+    link.download = pamiPreview.filename;
+    link.click();
+
+    const drugDesc = [pamiFormData.droga_1, pamiFormData.droga_2].filter(Boolean).join(' + ') || pamiFormData.esquema_tratamiento_solicitado;
+    setLastRegenParams(prev => ({ ...prev, pami: { drugName: drugDesc, accumulatedCorrections: '' } }));
+    setFormGenerated(prev => ({ ...prev, pami: true }));
+    setFormCorrections(prev => ({ ...prev, pami: '' }));
+    setPamiPreview(null);
+  };
+
+  const handleRefreshPamiPreview = async () => {
+    setIsPamiUpdating(true);
+    try {
+      const { blob, filename } = await generatePamiPDFDocument(pamiFormData);
+      setPamiPreview(prev => prev ? { ...prev, blob, filename } : null);
+    } catch (err: any) {
+      alert('Error al actualizar la vista previa de PAMI: ' + err.message);
+    } finally {
+      setIsPamiUpdating(false);
+    }
+  };
+
   const liveBSA = calculateBSA(pamiFormData.peso, pamiFormData.talla);
   const missingMandatoryList = PAMI_MANDATORY_FIELDS.filter(f => !String((pamiFormData as any)[f.key] || '').trim());
   const missingMandatoryCount = missingMandatoryList.length;
@@ -2027,6 +2060,280 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
       </div>
     </div>
   );
+
+  const renderPamiFieldsContent = () => {
+    const justificationLength = (pamiFormData.informe_clinico_detallado || '').length;
+
+    const renderPField = (
+      label: string,
+      fieldKey: keyof typeof pamiFormData,
+      isMandatory: boolean,
+      placeholder = '',
+      isSpan2 = false
+    ) => {
+      const val = pamiFormData[fieldKey] || '';
+      const isMissing = !String(val).trim();
+      const inputId = `pami-preview-${fieldKey}`;
+
+      return (
+        <div className={isSpan2 ? 'col-span-2' : ''}>
+          <div className="flex justify-between items-center mb-1">
+            <label htmlFor={inputId} className="block text-[11px] font-semibold text-gray-700">
+              {label} {isMandatory && <span className="text-blue-600 font-bold">*</span>}
+            </label>
+          </div>
+          <input
+            id={inputId}
+            type="text"
+            placeholder={placeholder}
+            value={val}
+            onChange={e => setPamiFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+            className={`w-full px-3 py-2 text-xs rounded-lg border transition-all outline-none ${
+              isMandatory && isMissing
+                ? 'border-slate-300 bg-slate-50/50 text-gray-900 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-100'
+                : 'border-gray-200 bg-white text-gray-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-100'
+            }`}
+          />
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Resumen de Datos Faltantes */}
+        {missingMandatoryCount > 0 && (
+          <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-900">
+              <span className="font-semibold">
+                Faltan {missingMandatoryCount} datos obligatorios:
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {missingMandatoryList.map(item => (
+                  <span
+                    key={item.key}
+                    className="px-2 py-0.5 text-[10px] font-medium bg-white text-amber-900 rounded border border-amber-300"
+                  >
+                    • {item.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 1. Datos del Paciente */}
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            1. Datos del Paciente
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {renderPField('Apellido y Nombre', 'paciente_nombre_real', true, 'Nombre completo')}
+            {renderPField('Fecha de Nacimiento', 'paciente_fnac', true, 'DD/MM/AAAA')}
+            {renderPField('Teléfono / Celular', 'paciente_celular', false, 'Ej: 3511234567')}
+          </div>
+        </div>
+
+        {/* 2. Datos Clínicos & Antropometría */}
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            2. Datos Clínicos & Antropometría
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+            <div className="sm:col-span-2 md:col-span-4">
+              {renderPField('Diagnóstico (CIE-10)', 'diagnostico_cie10', true, 'Ej: C50.9 Cáncer de mama')}
+            </div>
+            {renderPField('Peso (kg)', 'peso', true, 'Ej: 70')}
+            {renderPField('Talla (cm)', 'talla', true, 'Ej: 165')}
+            {renderPField('ECOG (0 - 4)', 'ecog', true, 'Ej: 0, 1')}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Sup. Corporal
+              </label>
+              <div className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-gray-50 text-gray-700 font-semibold">
+                {liveBSA ? `${liveBSA} m²` : '—'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Tratamiento & Cronología */}
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            3. Tratamiento & Cronología
+          </h4>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {renderPField('Línea de Tratamiento', 'linea_tratamiento', false, 'Ej: 1ra línea / Adyuvancia')}
+            {renderPField('N° Ciclos Planeados', 'ciclos_planeados', false, 'Ej: 6')}
+            {renderPField('Frecuencia (Días)', 'frecuencia_dias', false, 'Ej: 21')}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-gray-100">
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Motivo de la Solicitud
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {['Inicio', 'Renovación', 'Cambio de Toxicidad', 'Cambio por Progresión'].map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setPamiFormData(prev => ({ ...prev, motivo_solicitud: opt }))}
+                    className={`px-2 py-1 text-xs font-medium rounded-lg border text-left transition-all ${
+                      pamiFormData.motivo_solicitud === opt
+                        ? 'bg-blue-50 text-blue-700 border-blue-300 font-semibold'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Tipo de Tratamiento
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {['Adyuvante', 'Neoadyuvante', 'Avanzado'].map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setPamiFormData(prev => ({ ...prev, tipo_tratamiento: opt }))}
+                    className={`px-2 py-1 text-xs font-medium rounded-lg border text-center transition-all ${
+                      pamiFormData.tipo_tratamiento === opt
+                        ? 'bg-blue-50 text-blue-700 border-blue-300 font-semibold'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Estadificación & Antecedentes */}
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2.5">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-1.5 border-b border-gray-100">
+            4. Estadificación & Antecedentes
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {renderPField('Estadio Inicial', 'estadio_inicial', false, 'Ej: Estadio IV')}
+            {renderPField('Fecha Diagnóstico Inicial', 'fecha_diagnostico_inicial', false, 'DD/MM/AAAA')}
+            {renderPField('Estadio Actual', 'estadio_actual', false, 'Ej: Progresión / Estable')}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2 border-t border-gray-100">
+            {renderPField('Histopatológico / IHQ', 'histopatologico', false, 'Resumen patológico e IHQ')}
+            {renderPField('Laboratorio Relevante', 'laboratorio_formateado', false, 'Hb 12g/dl, Cr 0.8, marcadores')}
+            {renderPField('Antecedentes Quirúrgicos', 'antecedentes_qx', false, 'Cirugías y fechas')}
+            {renderPField('Antecedentes Radioterapia', 'antecedentes_radio', false, 'RT, dosis y fechas')}
+          </div>
+        </div>
+
+        {/* 5. Informe Clínico Actual */}
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2">
+          <div className="flex justify-between items-center pb-1.5 border-b border-gray-100">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+              5. Informe Clínico & Justificación Médica <span className="text-blue-600">*</span>
+            </h4>
+            <span className="text-[11px] text-gray-500 font-medium">
+              {justificationLength} / ~1400 caracteres
+            </span>
+          </div>
+          
+          <textarea
+            id="pami-preview-informe_clinico_detallado"
+            rows={6}
+            placeholder="Redacte la justificación médica del tratamiento solicitado..."
+            value={pamiFormData.informe_clinico_detallado}
+            onChange={e => setPamiFormData(prev => ({ ...prev, informe_clinico_detallado: e.target.value }))}
+            className="w-full p-2.5 text-xs rounded-xl border border-gray-200 bg-white text-gray-800 outline-none transition-all focus:border-blue-500 focus:ring-1 focus:ring-blue-100 leading-relaxed font-sans"
+          />
+          <p className="text-[11px] text-gray-400">
+            El informe médico se imprime en el recuadro principal del PDF oficial de PAMI.
+          </p>
+        </div>
+
+        {/* 6. Drogas Oncológicas Solicitadas */}
+        <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2.5">
+          <div className="flex justify-between items-center pb-1.5 border-b border-gray-100">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+              <Pill size={14} className="text-blue-600"/>
+              <span>6. Drogas Oncológicas Solicitadas</span>
+            </h4>
+            <span className="text-[11px] text-gray-400">
+              Presentación, dosis y ciclos se completan al emitir el PDF
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+            {renderPField('Droga #1 (Principal)', 'droga_1', true, 'Ej: Leuprolide')}
+            {renderPField('Droga #2', 'droga_2', false, 'Ej: Darolutamida')}
+            {renderPField('Droga #3', 'droga_3', false, 'Opcional')}
+            {renderPField('Droga #4', 'droga_4', false, 'Opcional')}
+          </div>
+
+          {/* Sugerencias Rápidas */}
+          <div className="pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                Sugerencias frecuentes:
+              </span>
+              {(pamiFormData.droga_1 || pamiFormData.droga_2 || pamiFormData.droga_3 || pamiFormData.droga_4) && (
+                <button
+                  type="button"
+                  onClick={() => setPamiFormData(prev => ({
+                    ...prev,
+                    droga_1: '',
+                    droga_2: '',
+                    droga_3: '',
+                    droga_4: '',
+                  }))}
+                  className="text-[11px] text-gray-500 hover:text-red-600 transition-colors"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                'Leuprolide + Darolutamida',
+                'Pembrolizumab',
+                'Trastuzumab + Pertuzumab',
+                'Carboplatino + Paclitaxel',
+                'Osimertinib 80mg',
+                'Abemaciclib + Fulvestrant',
+                'Docetaxel',
+                'Capecitabina'
+              ].map(sug => (
+                <button
+                  key={sug}
+                  type="button"
+                  onClick={() => {
+                    const parts = sug.split('+').map(s => s.trim());
+                    setPamiFormData(prev => ({
+                      ...prev,
+                      droga_1: parts[0] || '',
+                      droga_2: parts[1] || '',
+                      droga_3: parts[2] || '',
+                      droga_4: parts[3] || '',
+                      esquema_tratamiento_solicitado: sug,
+                    }));
+                  }}
+                  className="px-2 py-0.5 text-[11px] font-medium bg-gray-50 hover:bg-blue-50 hover:text-blue-700 text-gray-700 rounded-md border border-gray-200 transition-all"
+                >
+                  {sug}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
 
   return (
@@ -2337,361 +2644,7 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
         </div>
       </div>
 
-      {/* MODAL DE REVISIÓN SIMPLIFICADO: FORMULARIO PAMI ONCOLÓGICO */}
-      {showPamiReviewModal && (() => {
-        const justificationLength = (pamiFormData.informe_clinico_detallado || '').length;
 
-        const renderField = (
-          label: string,
-          fieldKey: keyof typeof pamiFormData,
-          isMandatory: boolean,
-          placeholder = '',
-          isSpan2 = false
-        ) => {
-          const val = pamiFormData[fieldKey] || '';
-          const isMissing = !String(val).trim();
-          const inputId = `pami-${fieldKey}`;
-
-          return (
-            <div className={isSpan2 ? 'col-span-2' : ''}>
-              <div className="flex justify-between items-center mb-1">
-                <label htmlFor={inputId} className="block text-[11px] font-semibold text-gray-700">
-                  {label} {isMandatory && <span className="text-blue-600 font-bold">*</span>}
-                </label>
-              </div>
-              <input
-                id={inputId}
-                type="text"
-                placeholder={placeholder}
-                value={val}
-                onChange={e => setPamiFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
-                className={`w-full px-3 py-2 text-xs rounded-lg border transition-all outline-none ${
-                  isMandatory && isMissing
-                    ? 'border-slate-300 bg-slate-50/50 text-gray-900 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-100'
-                    : 'border-gray-200 bg-white text-gray-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-100'
-                }`}
-              />
-            </div>
-          );
-        };
-
-        return (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-2xs flex items-center justify-center z-50 p-3 sm:p-5">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-gray-100">
-              
-              {/* Header Minimalista */}
-              <div className="px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-50 text-blue-700 rounded-xl">
-                    <FileText size={20} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <h3 className="font-bold text-sm text-gray-900">
-                        Formulario PAMI Oncológico
-                      </h3>
-                      {missingMandatoryCount > 0 ? (
-                        <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-full text-[11px] font-medium">
-                          {missingMandatoryCount} {missingMandatoryCount === 1 ? 'dato obligatorio pendiente' : 'datos obligatorios pendientes'}
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-medium flex items-center gap-1">
-                          <Check size={12} /> Datos completos
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Revise la información clínica. Los campos obligatorios están identificados con asterisco (*).
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowPamiReviewModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-all"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Resumen Único de Datos Faltantes (Discreto y Funcional) */}
-              {missingMandatoryCount > 0 && (
-                <div className="px-6 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-700">
-                      Faltan {missingMandatoryCount} datos obligatorios:
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {missingMandatoryList.map(item => (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() => handleFocusField(item.id)}
-                          className="px-2 py-0.5 text-[11px] font-medium bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded border border-slate-200 transition-all"
-                        >
-                          • {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Body */}
-              <div className="p-6 space-y-5 overflow-y-auto flex-1 bg-gray-50/20">
-                
-                {/* 1. Datos del Paciente */}
-                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
-                    1. Datos del Paciente
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {renderField('Apellido y Nombre', 'paciente_nombre_real', true, 'Nombre completo')}
-                    {renderField('Fecha de Nacimiento', 'paciente_fnac', true, 'DD/MM/AAAA')}
-                    {renderField('Teléfono / Celular', 'paciente_celular', false, 'Ej: 3511234567')}
-                  </div>
-                </div>
-
-                {/* 2. Datos Clínicos & Antropometría */}
-                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
-                    2. Datos Clínicos & Antropometría
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                    <div className="md:col-span-2">
-                      {renderField('Diagnóstico (CIE-10)', 'diagnostico_cie10', true, 'Ej: C50.9 Cáncer de mama')}
-                    </div>
-                    {renderField('Peso (kg)', 'peso', true, 'Ej: 70')}
-                    {renderField('Talla (cm)', 'talla', true, 'Ej: 165')}
-                    {renderField('ECOG (0 - 4)', 'ecog', true, 'Ej: 0, 1')}
-                  </div>
-
-                  {/* Superficie Corporal */}
-                  <div className="pt-2 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
-                    <span className="font-semibold text-gray-700">
-                      Superficie Corporal: {liveBSA ? `${liveBSA} m²` : 'Pendiente de peso y talla'}
-                    </span>
-                    <span className="text-[11px] text-gray-400">
-                      {liveBSA ? 'Calculada automáticamente' : 'Se calcula al ingresar peso y talla'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 3. Tratamiento & Cronología */}
-                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
-                    3. Tratamiento & Cronología
-                  </h4>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {renderField('Línea de Tratamiento', 'linea_tratamiento', false, 'Ej: 1ra línea / Adyuvancia')}
-                    {renderField('N° Ciclos Planeados', 'ciclos_planeados', false, 'Ej: 6')}
-                    {renderField('Frecuencia (Días)', 'frecuencia_dias', false, 'Ej: 21')}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-gray-100">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-700 mb-1.5">
-                        Motivo de la Solicitud
-                      </label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {['Inicio', 'Renovación', 'Cambio de Toxicidad', 'Cambio por Progresión'].map(opt => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setPamiFormData(prev => ({ ...prev, motivo_solicitud: opt }))}
-                            className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border text-left transition-all ${
-                              pamiFormData.motivo_solicitud === opt
-                                ? 'bg-blue-50 text-blue-700 border-blue-300 font-semibold'
-                                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-700 mb-1.5">
-                        Tipo de Tratamiento
-                      </label>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {['Adyuvante', 'Neoadyuvante', 'Avanzado'].map(opt => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setPamiFormData(prev => ({ ...prev, tipo_tratamiento: opt }))}
-                            className={`px-2 py-1.5 text-xs font-medium rounded-lg border text-center transition-all ${
-                              pamiFormData.tipo_tratamiento === opt
-                                ? 'bg-blue-50 text-blue-700 border-blue-300 font-semibold'
-                                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Estadificación & Antecedentes */}
-                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 pb-2 border-b border-gray-100">
-                    4. Estadificación & Antecedentes
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {renderField('Estadio Inicial', 'estadio_inicial', false, 'Ej: Estadio IV')}
-                    {renderField('Fecha Diagnóstico Inicial', 'fecha_diagnostico_inicial', false, 'DD/MM/AAAA')}
-                    {renderField('Estadio Actual', 'estadio_actual', false, 'Ej: Progresión / Estable')}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-gray-100">
-                    {renderField('Histopatológico / Inmunohistoquímica', 'histopatologico', false, 'Resumen patológico e IHQ')}
-                    {renderField('Laboratorio Relevante', 'laboratorio_formateado', false, 'Hb 12g/dl, Cr 0.8, marcadores')}
-                    {renderField('Antecedentes Quirúrgicos', 'antecedentes_qx', false, 'Cirugías y fechas')}
-                    {renderField('Antecedentes Terapia Radiante', 'antecedentes_radio', false, 'RT, dosis y fechas')}
-                  </div>
-                </div>
-
-                {/* 5. Informe Clínico Actual (Cuadro Grande) */}
-                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-2">
-                  <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                      5. Informe Clínico & Justificación Médica <span className="text-blue-600">*</span>
-                    </h4>
-                    <span className="text-[11px] text-gray-500 font-medium">
-                      {justificationLength} / ~1400 caracteres
-                    </span>
-                  </div>
-                  
-                  <textarea
-                    id="pami-informe_clinico_detallado"
-                    rows={7}
-                    placeholder="Redacte la justificación médica del tratamiento solicitado: hitos diagnósticos cronológicos, imágenes con fechas y hallazgos, estadio/reestadificación, biopsias, respuesta o suspensión de esquemas previos y fundamentación médica..."
-                    value={pamiFormData.informe_clinico_detallado}
-                    onChange={e => setPamiFormData(prev => ({ ...prev, informe_clinico_detallado: e.target.value }))}
-                    className="w-full p-3 text-xs rounded-xl border border-gray-200 bg-white text-gray-800 outline-none transition-all focus:border-blue-500 focus:ring-1 focus:ring-blue-100 leading-relaxed"
-                  />
-                  <p className="text-[11px] text-gray-400">
-                    El cuadro grande de PAMI admite un informe de 800 a 1400 caracteres con la fundamentación del esquema.
-                  </p>
-                </div>
-
-                {/* 6. Tabla de Drogas Oncológicas Solicitadas */}
-                <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
-                  <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                      <Pill size={14} className="text-blue-600"/>
-                      <span>6. Drogas Oncológicas Solicitadas</span>
-                    </h4>
-                    <span className="text-[11px] text-gray-400">
-                      Presentación, dosis y ciclos se completan al emitir el PDF
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                    {renderField('Droga #1 (Principal)', 'droga_1', true, 'Ej: Leuprolide')}
-                    {renderField('Droga #2', 'droga_2', false, 'Ej: Darolutamida')}
-                    {renderField('Droga #3', 'droga_3', false, 'Opcional')}
-                    {renderField('Droga #4', 'droga_4', false, 'Opcional')}
-                  </div>
-
-                  {/* Sugerencias Rápidas */}
-                  <div className="pt-2 border-t border-gray-100">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                        Sugerencias frecuentes:
-                      </span>
-                      {(pamiFormData.droga_1 || pamiFormData.droga_2 || pamiFormData.droga_3 || pamiFormData.droga_4) && (
-                        <button
-                          type="button"
-                          onClick={() => setPamiFormData(prev => ({
-                            ...prev,
-                            droga_1: '',
-                            droga_2: '',
-                            droga_3: '',
-                            droga_4: '',
-                          }))}
-                          className="text-[11px] text-gray-500 hover:text-red-600 transition-colors"
-                        >
-                          Limpiar
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        'Leuprolide + Darolutamida',
-                        'Pembrolizumab',
-                        'Trastuzumab + Pertuzumab',
-                        'Carboplatino + Paclitaxel',
-                        'Osimertinib 80mg',
-                        'Abemaciclib + Fulvestrant',
-                        'Docetaxel',
-                        'Capecitabina'
-                      ].map(sug => (
-                        <button
-                          key={sug}
-                          type="button"
-                          onClick={() => {
-                            const parts = sug.split('+').map(s => s.trim());
-                            setPamiFormData(prev => ({
-                              ...prev,
-                              droga_1: parts[0] || '',
-                              droga_2: parts[1] || '',
-                              droga_3: parts[2] || '',
-                              droga_4: parts[3] || '',
-                              esquema_tratamiento_solicitado: sug,
-                            }));
-                          }}
-                          className="px-2.5 py-1 text-xs font-medium bg-gray-50 hover:bg-blue-50 hover:text-blue-700 text-gray-700 rounded-md border border-gray-200 transition-all"
-                        >
-                          {sug}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Footer */}
-              <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-                <div className="text-xs text-gray-600">
-                  {missingMandatoryCount > 0 ? (
-                    <span className="text-slate-600">
-                      Faltan {missingMandatoryCount} datos obligatorios marcados con asterisco (*).
-                    </span>
-                  ) : (
-                    <span className="text-emerald-700 font-medium">
-                      Todos los datos obligatorios están listos.
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => setShowPamiReviewModal(false)}
-                    className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all w-full sm:w-auto"
-                  >
-                    Cerrar
-                  </button>
-                  <button
-                    type="button"
-                    disabled={processingId === 'pami'}
-                    onClick={handlePamiDownloadClick}
-                    className="px-5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all w-full sm:w-auto disabled:opacity-50"
-                  >
-                    {processingId === 'pami' ? <Loader2 size={14} className="animate-spin"/> : <Download size={14}/>}
-                    <span>Descargar Formulario PAMI (PDF)</span>
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        );
-      })()}
 
       {/* MODAL DE CONFIRMACIÓN ANTES DE GENERAR PDF PAMI */}
       {showPamiMissingConfirm && (
@@ -3992,6 +3945,24 @@ CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${pendingDinadicCorrection ? 
 
           </div>
         </div>
+      )}
+
+      {/* MODAL DE VISTA PREVIA EXCLUSIVO E INDEPENDIENTE PARA FORMULARIO PAMI */}
+      {pamiPreview && (
+        <FormPreviewModal
+          isOpen={pamiPreview !== null}
+          onClose={() => setPamiPreview(null)}
+          title="Formulario PAMI Oncológico"
+          code="PAMI"
+          subtitle="Revise visualmente el documento y edite los datos antes de confirmar la descarga."
+          pdfBlob={pamiPreview.blob}
+          filename={pamiPreview.filename}
+          onConfirmDownload={handleConfirmPamiDownload}
+          onUpdatePreview={handleRefreshPamiPreview}
+          isUpdating={isPamiUpdating}
+        >
+          {renderPamiFieldsContent()}
+        </FormPreviewModal>
       )}
 
     </div>
