@@ -439,14 +439,14 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                 onClick={() => handleCheckPatientTrials(selectedPatient)}
                 disabled={isEvaluatingPatientTrials}
                 className="px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase transition-all bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm active:scale-95 disabled:opacity-50"
-                title="Detectar si el paciente es candidato a ensayos clínicos disponibles"
+                title="Detectar si el paciente es potencialmente elegible para ensayos clínicos disponibles"
               >
                 {isEvaluatingPatientTrials ? (
                   <Loader2 size={13} className="animate-spin text-emerald-600" />
                 ) : (
                   <Microscope size={13} className="text-emerald-600" />
                 )}
-                <span>Ensayos Clínicos</span>
+                <span>🧪 Buscar ensayos clínicos</span>
               </button>
             )}
             {selectedPatient && (

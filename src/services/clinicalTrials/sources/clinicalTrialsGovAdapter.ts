@@ -1,4 +1,5 @@
 import { ClinicalTrial, TrialLocation, TrialStatusType } from '../../../types/clinicalTrials';
+import { parseStructuredCriteria } from '../criteriaParser';
 
 const CT_GOV_API_BASE = 'https://clinicaltrials.gov/api/v2/studies';
 
@@ -208,10 +209,11 @@ export function mapStudyToClinicalTrial(study: any): ClinicalTrial {
   if (eligMod.sex === 'FEMALE') sex = 'FEMALE';
   else if (eligMod.sex === 'MALE') sex = 'MALE';
 
-  // Procesamiento cuidadoso de ubicaciones: identificar Argentina y Córdoba
   const rawLocs = locMod.locations || [];
   const locations: TrialLocation[] = [];
   let hasCordobaCenter = false;
+  let hasCordobaRecruitingCenter = false;
+  let cordobaRecruitingStatus = 'UNKNOWN';
   let hasArgentinaCenter = false;
   const cordobaCenters: string[] = [];
 
@@ -231,6 +233,13 @@ export function mapStudyToClinicalTrial(study: any): ClinicalTrial {
 
     if (isCordoba) {
       hasCordobaCenter = true;
+      const locStatus = (l.status || '').toUpperCase();
+      if (locStatus === 'RECRUITING') {
+        hasCordobaRecruitingCenter = true;
+        cordobaRecruitingStatus = 'RECRUITING';
+      } else if (cordobaRecruitingStatus !== 'RECRUITING' && locStatus) {
+        cordobaRecruitingStatus = locStatus;
+      }
       if (facility && !cordobaCenters.includes(facility)) {
         cordobaCenters.push(facility);
       }
@@ -283,6 +292,14 @@ export function mapStudyToClinicalTrial(study: any): ClinicalTrial {
     combinedSearch.includes('unresectable') ||
     combinedSearch.includes('no resecable');
 
+  const { structuredCriteria, ecogMaxAdmissible } = parseStructuredCriteria({
+    inclusionLines: inclusion,
+    exclusionLines: exclusion,
+    minimumAgeYears: minAgeYears,
+    maximumAgeYears: maxAgeYears,
+    sex
+  });
+
   return {
     id: `ctgov_${nctId}`,
     source: 'clinicaltrials.gov',
@@ -308,6 +325,8 @@ export function mapStudyToClinicalTrial(study: any): ClinicalTrial {
     sex,
     locations,
     hasCordobaCenter,
+    hasCordobaRecruitingCenter,
+    cordobaRecruitingStatus,
     hasArgentinaCenter,
     cordobaCenters,
     contact,
@@ -316,7 +335,9 @@ export function mapStudyToClinicalTrial(study: any): ClinicalTrial {
     importedAt: Date.now(),
     tumorTypes,
     biomarkers,
-    isMetastaticEligible
+    isMetastaticEligible,
+    structuredCriteria,
+    ecogMaxAdmissible
   };
 }
 

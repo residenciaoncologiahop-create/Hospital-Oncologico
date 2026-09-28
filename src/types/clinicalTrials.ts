@@ -70,6 +70,8 @@ export interface ClinicalTrial {
   sex: 'ALL' | 'FEMALE' | 'MALE';
   locations: TrialLocation[];
   hasCordobaCenter: boolean;
+  hasCordobaRecruitingCenter?: boolean; // FASE 4.1: true solo si la sede específica de Córdoba está activamente reclutando
+  cordobaRecruitingStatus?: string;      // ej. 'RECRUITING', 'NOT_YET_RECRUITING', 'SUSPENDED', 'UNKNOWN'
   hasArgentinaCenter: boolean;
   cordobaCenters: string[];
   contact?: TrialContact;
@@ -81,6 +83,69 @@ export interface ClinicalTrial {
   biomarkers: string[]; // ej. 'KRAS', 'BRAF', 'EGFR', 'HER2', 'ALK', 'PD-L1', etc.
   lineOfTherapy?: string[]; // ej. '1L', '2L+', 'adjuvant', 'metastatic'
   isMetastaticEligible?: boolean;
+  // FASE 3: Normalización y estructuración de criterios de elegibilidad (sin reemplazar texto original)
+  structuredCriteria?: StructuredCriterion[];
+  ecogMaxAdmissible?: number; // Máximo ECOG admitido explícito del protocolo (undefined si el protocolo no especifica ECOG)
+}
+
+export type CriterionType = 'inclusion' | 'exclusion';
+
+export type CriterionCategory = 
+  | 'AGE'
+  | 'SEX'
+  | 'ECOG'
+  | 'BIOMARKER'
+  | 'MOLECULAR_ALTERATION'
+  | 'STAGE'
+  | 'CLINICAL_SCENARIO'
+  | 'PRIOR_TREATMENT'
+  | 'LINE_OF_THERAPY'
+  | 'LAB'
+  | 'CNS_METASTASIS'
+  | 'OTHER';
+
+export type CriterionParseStatus = 'STRUCTURED' | 'PARTIALLY_STRUCTURED' | 'UNSTRUCTURED';
+
+export interface StructuredCriterionDetails {
+  // ECOG
+  ecogMin?: number;
+  ecogMax?: number;
+  // LAB
+  labParameter?: 'hemoglobin' | 'neutrophils' | 'platelets' | 'total_bilirubin' | 'ast' | 'alt' | 'creatinine' | 'creatinine_clearance' | 'inr' | string;
+  labOperator?: '>=' | '<=' | '>' | '<' | 'BETWEEN';
+  labValue?: number;
+  labMaxValue?: number;
+  labUnit?: string;
+  labReference?: string; // ej. 'ULN'
+  // BIOMARKER / MOLECULAR_ALTERATION
+  gene?: string;
+  statusRequired?: 'MUTATED' | 'WILD_TYPE' | 'POSITIVE' | 'NEGATIVE' | 'OVEREXPRESSED' | 'AMPLIFIED' | 'ANY';
+  specificAlteration?: string; // ej. 'Exon 19 del', 'L858R', 'G12C', 'V600E'
+  minNumericThreshold?: number; // ej. 50 (para PD-L1 >= 50%)
+  // PRIOR_TREATMENT / LINE_OF_THERAPY
+  treatmentName?: string;
+  treatmentRequirement?: 'MUST_HAVE_RECEIVED' | 'FORBIDDEN' | 'TREATMENT_NAIVE';
+  minLines?: number;
+  maxLines?: number;
+  lineAllowed?: string;
+  // STAGE / SCENARIO
+  stage?: string;
+  scenario?: 'metastatic' | 'unresectable' | 'locally_advanced' | 'recurrent' | 'adjuvant' | 'neoadjuvant';
+  // CNS
+  cnsRule?: 'ACTIVE_EXCLUDED' | 'STABLE_TREATED_ALLOWED' | 'STRICTLY_EXCLUDED';
+}
+
+export interface StructuredCriterion {
+  id: string;
+  criterionType: CriterionType;
+  category: CriterionCategory;
+  operator?: string;
+  value?: unknown;
+  mandatory: boolean;
+  sourceText: string;
+  parseStatus: CriterionParseStatus;
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+  details?: StructuredCriterionDetails;
 }
 
 /**
@@ -116,24 +181,47 @@ export interface PatientClinicalProfile {
     totalBilirubin?: number;
     ast?: number;
     alt?: number;
+    uln?: Record<string, number | undefined>; // FASE 4.1: Valores de referencia ULN verificables
   };
 }
 
+export type CriterionEvaluationStatus = 'CUMPLE' | 'NO CUMPLE' | 'NO DOCUMENTADO' | 'NO EVALUABLE';
+
+export interface CriterionEvaluationDetail {
+  id: string;
+  criterionType: CriterionType;
+  category: CriterionCategory;
+  name: string;
+  status: CriterionEvaluationStatus;
+  statusLabel: string;
+  patientValueDescription?: string;
+  evidenceSource?: string;
+  sourceText: string;
+  isExclusion: boolean;
+  missingAction?: string;
+  isIncompatible?: boolean;
+}
+
 export type MatchCategory = 
-  | 'potential_candidate'         // 🟢 Candidato potencial
-  | 'potential_missing_data'      // 🟡 Potencialmente compatible — faltan datos
-  | 'not_compatible';             // 🔴 Probablemente no compatible
+  | 'potential_candidate'         // 🟢 Potencialmente elegible
+  | 'potential_missing_data'      // 🟡 Potencialmente elegible — falta información
+  | 'not_compatible'              // 🔴 No cumple criterio documentado
+  | 'not_evaluable';              // ⚪ No evaluable
 
 export interface TrialMatchResult {
   trial: ClinicalTrial;
   category: MatchCategory;
   categoryLabel: string;
-  categoryBadge: string; // '🟢 Candidato potencial' | '🟡 Potencialmente compatible — faltan datos' | '🔴 Probablemente no compatible'
+  categoryBadge: string;
   score: number;
   matches: string[];             // "Coincidencias encontradas"
   missingData: string[];         // "Datos faltantes"
   incompatibilities: string[];   // "Posibles incompatibilidades"
-  requiredVerificationNotice: string; // "Paciente potencialmente elegible. Requiere verificación de criterios por el equipo investigador."
+  requiredVerificationNotice: string;
+  // FASE 4: Pre-screening detallado por criterio y acciones faltantes
+  criteriaEvaluations?: CriterionEvaluationDetail[];
+  missingItems?: string[];       // Acciones/estudios que faltan para completar el pre-screening
+  unstructuredCriteriaCount?: number;
 }
 
 export interface PatientMatchingEvaluation {
@@ -146,6 +234,8 @@ export interface PatientMatchingEvaluation {
   matches: TrialMatchResult[];
   potentialCandidateCount: number;
   potentialMissingDataCount: number;
+  notCompatibleCount?: number;
+  notEvaluableCount?: number;
   bestCategory: MatchCategory;
   lastEvaluatedAt: number;
 }

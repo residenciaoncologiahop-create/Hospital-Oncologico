@@ -3,6 +3,7 @@ import { collection, getDocs, query, limit } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ClinicalTrial } from '../../types/clinicalTrials';
 import { SyncResult } from './sourcesRegistry';
+import { parseStructuredCriteria } from './criteriaParser';
 
 const COLLECTION_NAME = 'clinical_trials';
 const LOCAL_STORAGE_KEY = 'clinical_trials_cached_v2';
@@ -118,6 +119,31 @@ async function loadChunkedCache(): Promise<{ trials: ClinicalTrial[]; lastSync: 
 }
 
 /**
+ * Asegura que los ensayos dispongan de criterios estructurados.
+ * Si provienen de versiones históricas o almacenamiento sin structuredCriteria,
+ * los parsea y enriquece en memoria de forma conservadora sin modificar el texto original.
+ */
+function ensureStructuredCriteria(trials: ClinicalTrial[]): ClinicalTrial[] {
+  return trials.map(t => {
+    if (!t.structuredCriteria || t.structuredCriteria.length === 0) {
+      const { structuredCriteria, ecogMaxAdmissible } = parseStructuredCriteria({
+        inclusionLines: t.inclusionCriteria || [],
+        exclusionLines: t.exclusionCriteria || [],
+        minimumAgeYears: t.minimumAgeYears,
+        maximumAgeYears: t.maximumAgeYears,
+        sex: t.sex
+      });
+      return {
+        ...t,
+        structuredCriteria,
+        ecogMaxAdmissible: t.ecogMaxAdmissible ?? ecogMaxAdmissible
+      };
+    }
+    return t;
+  });
+}
+
+/**
  * Obtiene los ensayos almacenados:
  * 1. Intenta leer el caché estándar anterior (clinical_trials_cached_v2).
  * 2. Si no existe o está vacío, busca y reconstruye el caché fragmentado.
@@ -134,7 +160,7 @@ export async function getStoredClinicalTrials(): Promise<{ trials: ClinicalTrial
     if (rawLocal) {
       const parsed = JSON.parse(rawLocal);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        cachedTrials = parsed;
+        cachedTrials = ensureStructuredCriteria(parsed);
         if (rawSync) lastSync = parseInt(rawSync, 10);
         return { trials: cachedTrials, lastSync };
       }
@@ -147,7 +173,10 @@ export async function getStoredClinicalTrials(): Promise<{ trials: ClinicalTrial
   try {
     const chunkedResult = await loadChunkedCache();
     if (chunkedResult && chunkedResult.trials.length > 0) {
-      return chunkedResult;
+      return {
+        trials: ensureStructuredCriteria(chunkedResult.trials),
+        lastSync: chunkedResult.lastSync
+      };
     }
   } catch (e) {
     console.warn('Error leyendo caché fragmentado de ensayos:', e);
@@ -158,7 +187,7 @@ export async function getStoredClinicalTrials(): Promise<{ trials: ClinicalTrial
     const q = query(collection(db, COLLECTION_NAME), limit(300));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
-      const trials = snapshot.docs.map(d => d.data() as ClinicalTrial);
+      const trials = ensureStructuredCriteria(snapshot.docs.map(d => d.data() as ClinicalTrial));
       await saveToLocalCache(trials, Date.now());
       return { trials, lastSync: Date.now() };
     }
@@ -262,7 +291,7 @@ export async function syncAndStoreTrials(onProgress?: (msg: string) => void): Pr
   try {
     const q = query(collection(db, COLLECTION_NAME), limit(300));
     const snapshot = await getDocs(q);
-    trials = snapshot.docs.map(d => d.data() as ClinicalTrial);
+    trials = ensureStructuredCriteria(snapshot.docs.map(d => d.data() as ClinicalTrial));
   } catch (err: unknown) {
     console.error('Error al leer clinical_trials de Firestore tras sincronización:', err);
     const message = err instanceof Error ? err.message : String(err);
