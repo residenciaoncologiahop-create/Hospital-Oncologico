@@ -183,6 +183,13 @@ export interface PatientClinicalProfile {
     alt?: number;
     uln?: Record<string, number | undefined>; // FASE 4.1: Valores de referencia ULN verificables
   };
+  diagnosticConflict?: {
+    hasConflict: boolean;
+    diagnosisInput?: string;
+    historyPrimaryOrgan?: string;
+    details?: string;
+  };
+  metastaticSites?: string[]; // ej. ['pulmon', 'peritoneo', 'ganglios_a_distancia']
 }
 
 export type CriterionEvaluationStatus = 'CUMPLE' | 'NO CUMPLE' | 'NO DOCUMENTADO' | 'NO EVALUABLE';

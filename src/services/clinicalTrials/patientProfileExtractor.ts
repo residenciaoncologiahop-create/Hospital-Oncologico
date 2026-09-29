@@ -13,176 +13,523 @@ function normalize(str: string = ''): string {
 }
 
 /**
- * Detecta el tumor primario del paciente con máxima rigurosidad oncológica.
- * REGLAS CLÍNICAS FUNDAMENTALES:
- * 1. El tumor primario se extrae PRIMERO del diagnóstico explícito (patient.diagnosis).
- * 2. Si el diagnóstico contiene secundarismo (ej. "Cáncer de Colon con metástasis pulmonares"),
- *    el órgano primario es COLON, NUNCA pulmón ni hígado.
- * 3. NUNCA se debe barrer el cuerpo completo de la historia clínica (estudios de imágenes, antecedentes)
- *    para definir el tumor primario si el diagnóstico ya identifica el órgano.
+ * Elimina cláusulas con negación del texto para evitar falsos positivos
  */
-export function detectPrimaryTumorOrgan(diagnosisRaw: string = '', historyText: string = ''): string | undefined {
-  const diagNorm = normalize(diagnosisRaw);
+function removeNegatedClauses(text: string): string {
+  return text
+    .replace(/\b(?:sin|no\s+se\s+observan?|libre\s+de|descarta|no\s+presenta|ausencia\s+de|sin\s+evidencia\s+de|negativ[ao]\s+para)\s+[^.;,\n]{0,60}/gi, ' ')
+    .replace(/\b(?:no\s+metast[aá]sico|no\s+metast[aá]sica)\b/gi, ' ');
+}
 
-  // 1. EVALUAR DIAGNÓSTICO EXPLÍCITO (PRIORIDAD ABSOLUTA)
-  if (diagNorm) {
-    // MAMA (ej. "CA MAMA", "Cáncer de mama", "Carcinoma ductal invasor de mama")
-    if (
-      /\b(mama|mamari[ao]|seno)\b/i.test(diagNorm) ||
-      /\bca\s+mama\b/i.test(diagNorm) ||
-      /\b(cdi|cli)\s+mama\b/i.test(diagNorm)
-    ) {
-      return 'mama';
-    }
+export interface OrganDetectionResult {
+  organOrSite?: string;
+  diagnosticConflict?: {
+    hasConflict: boolean;
+    diagnosisInput?: string;
+    historyPrimaryOrgan?: string;
+    details?: string;
+  };
+}
 
-    // COLORRECTAL (ej. "Adenocarcinoma de Colon Sigmoides", "Cáncer de recto")
-    if (
-      /\b(colon|recto|rectal|colorrectal|sigmoides|ciego)\b/i.test(diagNorm) ||
-      /\bca\s+(?:de\s+)?colon\b/i.test(diagNorm) ||
-      /\bccr\b/i.test(diagNorm)
-    ) {
-      return 'colorrectal';
-    }
+/**
+ * Extrae un órgano candidato a partir de un fragmento de texto oncológico
+ */
+function matchOrganFromSnippet(text: string): string | undefined {
+  const norm = normalize(text);
+  if (!norm) return undefined;
 
-    // MELANOMA (ej. "Melanoma cutáneo metastásico")
-    if (/\b(melanoma)\b/i.test(diagNorm)) {
-      return 'melanoma';
-    }
+  // CÉRVIX / ENDOMETRIO / ÚTERO / VULVA
+  if (
+    /\b(cervix|cuello\s+uterino|cervicouterino|endometrio|endometrial|uterino|utero|vulva|vulvar)\b/i.test(norm) ||
+    /\bca\s+(?:de\s+)?(?:cervix|cuello|endometrio|vulva)\b/i.test(norm)
+  ) {
+    return 'cervicouterino';
+  }
 
-    // PÁNCREAS (ej. "Adenocarcinoma Ductal de Cabeza de Páncreas")
-    if (
-      /\b(pancreas|pancreatico|cefalopancreatico|cabeza.*pancreas)\b/i.test(diagNorm) ||
-      /\bca\s+(?:de\s+)?pancreas\b/i.test(diagNorm)
-    ) {
-      return 'pancreas';
-    }
+  // MAMA
+  if (
+    /\b(mama|mamari[ao]|seno)\b/i.test(norm) ||
+    /\bca\s+(?:de\s+)?mama\b/i.test(norm) ||
+    /\b(cdi|cli)\s+mama\b/i.test(norm)
+  ) {
+    return 'mama';
+  }
 
-    // PRÓSTATA (ej. "Adenocarcinoma de próstata")
-    if (
-      /\b(prostata|prostatico)\b/i.test(diagNorm) ||
-      /\bca\s+(?:de\s+)?prostata\b/i.test(diagNorm)
-    ) {
-      return 'prostata';
-    }
+  // COLORRECTAL
+  if (
+    /\b(colon|recto|rectal|colorrectal|sigmoides|ciego)\b/i.test(norm) ||
+    /\bca\s+(?:de\s+)?(?:colon|recto)\b/i.test(norm) ||
+    /\bccr\b/i.test(norm)
+  ) {
+    return 'colorrectal';
+  }
 
-    // PULMÓN (ej. "Adenocarcinoma de pulmón", "NSCLC", "CPCNP", "SCLC")
-    if (
-      /\b(nsclc|cpcnp|sclc|cpcp|carcinoma\s+pulmonar|ca\s+(?:de\s+)?pulmon|cancer\s+(?:de\s+)?pulmon)\b/i.test(diagNorm)
-    ) {
+  // MELANOMA
+  if (/\b(melanoma)\b/i.test(norm)) {
+    return 'melanoma';
+  }
+
+  // PÁNCREAS
+  if (
+    /\b(pancreas|pancreatico|cefalopancreatico|cabeza.*pancreas)\b/i.test(norm) ||
+    /\bca\s+(?:de\s+)?pancreas\b/i.test(norm)
+  ) {
+    return 'pancreas';
+  }
+
+  // PRÓSTATA
+  if (
+    /\b(prostata|prostatico)\b/i.test(norm) ||
+    /\bca\s+(?:de\s+)?prostata\b/i.test(norm)
+  ) {
+    return 'prostata';
+  }
+
+  // TESTÍCULO / GERMINAL
+  if (
+    /\b(testiculo|testicular|tumor\s+germinal|seminoma|saco\s+vitelino|teilum)\b/i.test(norm) ||
+    /\bca\s+(?:de\s+)?testiculo\b/i.test(norm)
+  ) {
+    return 'germinal';
+  }
+
+  // PULMÓN (verificar que no sea secundarismo)
+  if (
+    /\b(nsclc|cpcnp|sclc|cpcp|carcinoma\s+pulmonar|ca\s+(?:de\s+)?pulmon|cancer\s+(?:de\s+)?pulmon)\b/i.test(norm)
+  ) {
+    return 'pulmon';
+  }
+  if (/\b(pulmon|pulmonar|bronquial)\b/i.test(norm)) {
+    if (!/met[aá]stasis.*pulmon|secundarismo.*pulmon|mtsx.*pulmon|compromiso.*pulmon|n[oó]dulo.*pulmon|implantes?.*pulmon/i.test(norm)) {
       return 'pulmon';
-    }
-    // Si contiene "pulmon" o "pulmonar", verificar rigurosamente que NO sea secundarismo/metástasis
-    if (/\b(pulmon|pulmonar|bronquial)\b/i.test(diagNorm)) {
-      if (!/met[aá]stasis.*pulmon|secundarismo.*pulmon|mtsx.*pulmon|compromiso.*pulmon|n[oó]dulo.*pulmon/i.test(diagNorm)) {
-        return 'pulmon';
-      }
-    }
-
-    // OVARIO
-    if (
-      /\b(ovario|ovarico|trompa\s+de\s+falopio)\b/i.test(diagNorm) ||
-      /\bca\s+(?:de\s+)?ovario\b/i.test(diagNorm)
-    ) {
-      return 'ovario';
-    }
-
-    // GÁSTRICO / ESÓFAGO
-    if (
-      /\b(gastrico|estomago|esofago|esofagico|union\s+esofagogastrica)\b/i.test(diagNorm) ||
-      /\bca\s+(?:de\s+)?(?:gastrico|estomago|esofago)\b/i.test(diagNorm)
-    ) {
-      return 'gastrico';
-    }
-
-    // RIÑÓN
-    if (
-      /\b(rinon|renal|ccr\s+renal|rcc|celulas\s+claras)\b/i.test(diagNorm) ||
-      /\bca\s+(?:de\s+)?(?:rinon|renal)\b/i.test(diagNorm)
-    ) {
-      return 'rinon';
-    }
-
-    // VEJIGA / UROTELIAL
-    if (
-      /\b(vejiga|urotelial|urotelio)\b/i.test(diagNorm) ||
-      /\bca\s+(?:de\s+)?vejiga\b/i.test(diagNorm)
-    ) {
-      return 'vejiga';
-    }
-
-    // CÉRVIX / ENDOMETRIO / ÚTERO
-    if (
-      /\b(cervix|cuello\s+uterino|cervicouterino|endometrio|uterino)\b/i.test(diagNorm) ||
-      /\bca\s+(?:de\s+)?cervix\b/i.test(diagNorm)
-    ) {
-      return 'cervicouterino';
-    }
-
-    // CABEZA Y CUELLO
-    if (
-      /\b(cabeza\s+y\s+cuello|laringe|faringe|orofaringe|cavidad\s+oral|lengua)\b/i.test(diagNorm)
-    ) {
-      return 'cabeza_cuello';
-    }
-
-    // HEMATOLOGÍA
-    if (
-      /\b(leucemia|linfoma|mieloma|hodgkin)\b/i.test(diagNorm)
-    ) {
-      return 'hematologia';
-    }
-
-    // SNC
-    if (
-      /\b(glioblastoma|astrocitoma|glioma|tumor\s+cerebral\s+primario)\b/i.test(diagNorm)
-    ) {
-      return 'snc';
-    }
-
-    // VÍA BILIAR
-    if (
-      /\b(colangiocarcinoma|via\s+biliar|vesicula\s+biliar)\b/i.test(diagNorm)
-    ) {
-      return 'biliar';
-    }
-
-    // SARCOMA
-    if (
-      /\b(sarcoma|gist|liposarcoma|leiomiosarcoma)\b/i.test(diagNorm)
-    ) {
-      return 'sarcoma';
     }
   }
 
-  // 2. SI Y SOLO SI EL DIAGNÓSTICO NO INDICA EL ÓRGANO, BUSCAR LÍNEA ESPECÍFICA EN HISTORIA
-  const histNorm = normalize(historyText);
-  const diagLine = histNorm.match(/(?:diagnostico|tumor\s+primario|motivo\s+de\s+consulta)[:\s]+([^\n.]+)/i);
-  if (diagLine) {
-    const sec = diagLine[1];
-    if (/\b(mama|mamari[ao]|seno)\b/i.test(sec)) return 'mama';
-    if (/\b(colon|recto|rectal|colorrectal|sigmoides)\b/i.test(sec)) return 'colorrectal';
-    if (/\b(melanoma)\b/i.test(sec)) return 'melanoma';
-    if (/\b(pancreas|pancreatico)\b/i.test(sec)) return 'pancreas';
-    if (/\b(prostata|prostatico)\b/i.test(sec)) return 'prostata';
-    if (/\b(pulmon|pulmonar|nsclc|cpcnp)\b/i.test(sec) && !/met[aá]stasis/i.test(sec)) return 'pulmon';
-    if (/\b(ovario|ovarico)\b/i.test(sec)) return 'ovario';
-    if (/\b(gastrico|estomago|esofago)\b/i.test(sec)) return 'gastrico';
-    if (/\b(rinon|renal)\b/i.test(sec)) return 'rinon';
-    if (/\b(vejiga|urotelial)\b/i.test(sec)) return 'vejiga';
-    if (/\b(cervix|endometrio)\b/i.test(sec)) return 'cervicouterino';
+  // OVARIO
+  if (
+    /\b(ovario|ovarico|trompa\s+de\s+falopio|anexo\s+uterino)\b/i.test(norm) ||
+    /\bca\s+(?:de\s+)?ovario\b/i.test(norm)
+  ) {
+    return 'ovario';
+  }
+
+  // GÁSTRICO / ESÓFAGO
+  if (
+    /\b(gastrico|estomago|esofago|esofagico|union\s+esofagogastrica)\b/i.test(norm) ||
+    /\bca\s+(?:de\s+)?(?:gastrico|estomago|esofago)\b/i.test(norm)
+  ) {
+    return 'gastrico';
+  }
+
+  // RIÑÓN
+  if (
+    /\b(rinon|renal|ccr\s+renal|rcc|celulas\s+claras)\b/i.test(norm) ||
+    /\bca\s+(?:de\s+)?(?:rinon|renal)\b/i.test(norm)
+  ) {
+    return 'rinon';
+  }
+
+  // VEJIGA / UROTELIAL
+  if (
+    /\b(vejiga|urotelial|urotelio)\b/i.test(norm) ||
+    /\bca\s+(?:de\s+)?vejiga\b/i.test(norm)
+  ) {
+    return 'vejiga';
+  }
+
+  // CABEZA Y CUELLO / LARINGE / AMÍGDALA
+  if (
+    /\b(cabeza\s+y\s+cuello|laringe|faringe|orofaringe|cavidad\s+oral|lengua|amigdala)\b/i.test(norm)
+  ) {
+    return 'cabeza_cuello';
+  }
+
+  // HEMATOLOGÍA
+  if (/\b(leucemia|linfoma|mieloma|hodgkin)\b/i.test(norm)) {
+    return 'hematologia';
+  }
+
+  // SNC
+  if (/\b(glioblastoma|astrocitoma|glioma|tumor\s+cerebral\s+primario)\b/i.test(norm)) {
+    return 'snc';
+  }
+
+  // VÍA BILIAR
+  if (/\b(colangiocarcinoma|via\s+biliar|vesicula\s+biliar)\b/i.test(norm)) {
+    return 'biliar';
+  }
+
+  // SARCOMA
+  if (/\b(sarcoma|gist|liposarcoma|leiomiosarcoma)\b/i.test(norm)) {
+    return 'sarcoma';
   }
 
   return undefined;
 }
 
 /**
+ * Detecta el tumor primario y evalúa concordancia o conflicto diagnóstico
+ * entre el campo formulario (diagnosisRaw) y la evidencia clínica (historyText).
+ */
+export function detectOrganAndConflict(
+  diagnosisRaw: string = '', 
+  historyText: string = ''
+): OrganDetectionResult {
+  const diagOrgan = matchOrganFromSnippet(diagnosisRaw);
+
+  // Buscar evidencia específica de primario en líneas clave de la historia clínica
+  const histLines = historyText.split('\n');
+  const primaryEvidence: string[] = [];
+
+  for (const line of histLines) {
+    // Líneas con alto valor clínico predictivo
+    if (
+      /^\s*(?:MC|Motivo\s+de\s+consulta|DX|Dx|Diagn[oó]stico|AP|Anatom[ií]a\s+Patol[oó]gica|Biopsia|Bx)[:\s]+/i.test(line) ||
+      /\bpaciente\s+(?:con\s+dx\s+de|con\s+diagn[oó]stico\s+de)\s+/i.test(line) ||
+      /\b(?:biopsia|AP)\s+(?:de\s+)?(?:cervix|cuello|mama|colon|prostata|ovario|pulmon)/i.test(line)
+    ) {
+      primaryEvidence.push(line);
+    }
+  }
+
+  const combinedEvidenceText = primaryEvidence.join('\n');
+  let histOrgan = matchOrganFromSnippet(combinedEvidenceText);
+
+  // Si no se detectó en líneas específicas, buscar en los primeros 400 caracteres de la historia
+  if (!histOrgan) {
+    const headerSnippet = historyText.slice(0, 400);
+    histOrgan = matchOrganFromSnippet(headerSnippet);
+  }
+
+  // CASO 1: Diagnóstico explícito y evidencia de historia coinciden o historia no tiene otro primario
+  if (diagOrgan && (!histOrgan || diagOrgan === histOrgan)) {
+    return {
+      organOrSite: diagOrgan,
+      diagnosticConflict: {
+        hasConflict: false
+      }
+    };
+  }
+
+  // CASO 2: Diagnóstico no indica órgano o es término genérico ("cáncer", "neoplasia", "tumor")
+  if (!diagOrgan && histOrgan) {
+    return {
+      organOrSite: histOrgan,
+      diagnosticConflict: {
+        hasConflict: false,
+        historyPrimaryOrgan: histOrgan
+      }
+    };
+  }
+
+  // CASO 3: CONFLICTO DIAGNÓSTICO (ej: diagnosis="mama", pero historia="MC: Ca de cervix", "biopsia cervix")
+  if (diagOrgan && histOrgan && diagOrgan !== histOrgan) {
+    // Si la historia presenta evidencia contundente (biopsia, AP o MC específico),
+    // se adopta el órgano de la historia clínica para proteger la seguridad del paciente
+    // y se preserva el estado de conflicto explícito en diagnosticConflict.
+    return {
+      organOrSite: histOrgan,
+      diagnosticConflict: {
+        hasConflict: true,
+        diagnosisInput: diagnosisRaw,
+        historyPrimaryOrgan: histOrgan,
+        details: `Conflicto detectado: El campo diagnóstico indica "${diagnosisRaw}" pero la historia clínica documenta primario de "${histOrgan}".`
+      }
+    };
+  }
+
+  // Fallback estándar
+  return {
+    organOrSite: diagOrgan || histOrgan,
+    diagnosticConflict: {
+      hasConflict: false
+    }
+  };
+}
+
+/**
+ * Función pública retrocompatible: devuelve el órgano primario resuelto
+ */
+export function detectPrimaryTumorOrgan(diagnosisRaw: string = '', historyText: string = ''): string | undefined {
+  const result = detectOrganAndConflict(diagnosisRaw, historyText);
+  return result.organOrSite;
+}
+
+/**
+ * Extrae la edad del paciente evitando capturar antecedentes temporales (ej: "abandono hace 15 años")
+ */
+function extractPatientAge(patient: any, fullText: string, historyText: string): number | undefined {
+  if (typeof patient.age === 'number' && patient.age > 0) {
+    return patient.age;
+  }
+  if (patient.ageRange && typeof patient.ageRange === 'string') {
+    const rangeMatch = patient.ageRange.match(/(\d+)/);
+    if (rangeMatch) return parseInt(rangeMatch[1], 10);
+  }
+
+  // Buscar preferentemente en las primeras líneas de la historia clínica (filiación)
+  const header = (historyText || fullText).slice(0, 350);
+
+  // 1. Patrón explícito de filiación: "paciente de 48 años", "edad: 48", "edad 48"
+  const explicitMatch = header.match(/(?:edad[:\s]*|paciente\s+de\s+)(\d{1,2})\s*(?:años|anos|a|yo)?\b/i);
+  if (explicitMatch) {
+    return parseInt(explicitMatch[1], 10);
+  }
+
+  // 2. Patrón filiación paréntesis o guión: "(48 años)", "(48 a)", "48 años"
+  const parenMatch = header.match(/\((\d{1,2})\s*(?:años|anos|a|yo)\)/i);
+  if (parenMatch) {
+    return parseInt(parenMatch[1], 10);
+  }
+
+  // 3. Patrón directo con coma o identificador: "42 a,", "42a,", "52 a, NHC", "42 a ,", "Nombre, 43 a,"
+  const directMatch = header.match(/\b(\d{1,2})\s*a\s*(?:,|\s+HC|\s+NHC|\s+DNI)\b/i);
+  if (directMatch) {
+    const num = parseInt(directMatch[1], 10);
+    if (num >= 10 && num <= 115) return num;
+  }
+
+  // 4. Nombre seguido de coma y edad: "FERNANDEZ, Sandra , 52a," o "SARRIA Valeria, 43 a"
+  const nameAgeMatch = header.match(/,\s*(\d{1,2})\s*a(?:ños|nos)?\b/i);
+  if (nameAgeMatch) {
+    const num = parseInt(nameAgeMatch[1], 10);
+    if (num >= 10 && num <= 115) return num;
+  }
+
+  // 5. Al principio absoluto del texto: "^42 a" o "^42a"
+  const startMatch = header.match(/^\s*(\d{1,2})\s*a\b/i);
+  if (startMatch) {
+    const num = parseInt(startMatch[1], 10);
+    if (num >= 10 && num <= 115) return num;
+  }
+
+  // 6. Limpiar antecedentes temporales conocidos del header antes de buscar "años"
+  const cleanedHeader = header
+    .replace(/(?:hace|durante|desde\s+hace|por|abandono\s+hace|fumo\s+durante|menarca\s*a\s*los?|menarca)\s+\d{1,2}\s*(?:años|anos|a)\b/gi, ' ')
+    .replace(/\b\d+\s*p\/a\b/gi, ' ');
+
+  const generalMatch = cleanedHeader.match(/(\d{1,2})\s*(?:años|anos|years|yo)\b/i);
+  if (generalMatch) {
+    const num = parseInt(generalMatch[1], 10);
+    if (num >= 10 && num <= 115) return num;
+  }
+
+  return undefined;
+}
+
+/**
+ * Extrae el sexo del paciente reconociendo contexto ginecológico y andrológico explícito
+ */
+function extractPatientSex(fullText: string): 'MALE' | 'FEMALE' | 'OTHER' | undefined {
+  if (/\b(masculino|varon|hombre|male)\b/i.test(fullText)) {
+    return 'MALE';
+  }
+  if (/\b(femenino|mujer|female)\b/i.test(fullText)) {
+    return 'FEMALE';
+  }
+
+  // Contexto gineco-obstétrico o patología femenina unívoca
+  if (
+    /\b(ago[:\s]|menarca|fum\b|\d+g\s*\d+p\b|g\d+p\d+|g\d+a\d+|cesarea|histerectomia|anexohisterectomia|cervix|cuello\s+uterino|endometrio|endometrial|uterin[ao]|ovario|ovarico|vulva|vulvar|genitorragia|ginecorragia|metrorragia|mamografia)\b/i.test(fullText)
+  ) {
+    return 'FEMALE';
+  }
+
+  // Contexto urológico / andrológico masculino unívoco
+  if (
+    /\b(prostata|prostatico|testiculo|testicular|orquiectomia|orquidectomia|psa\b)\b/i.test(fullText)
+  ) {
+    return 'MALE';
+  }
+
+  return undefined;
+}
+
+/**
+ * Extrae el Performance Status / ECOG documentado
+ */
+function extractPerformanceStatus(fullText: string): number | undefined {
+  // 1. Notación ECOG: ECOG 0, ECOG: 1, ECOG-2
+  const ecogMatch = fullText.match(/\bECOG\s*[:=-]?\s*([0-4])\b/i);
+  if (ecogMatch) return parseInt(ecogMatch[1], 10);
+
+  // 2. Notación PS: PS: 0, PS: 1, PS0, PS1, PS 0, PS 1
+  const psMatch = fullText.match(/\b(?:PS|Performance\s+Status)\s*[:=-]?\s*([0-4])\b/i);
+  if (psMatch) return parseInt(psMatch[1], 10);
+
+  // 3. Notación compacta al inicio de línea: PS0, PS1, PS2
+  const psCompactMatch = fullText.match(/\bPS([0-4])\b/i);
+  if (psCompactMatch) return parseInt(psCompactMatch[1], 10);
+
+  return undefined;
+}
+
+/**
+ * Detecta enfermedad metastásica / secundaria y sitios involucrados
+ */
+function extractMetastaticInfo(fullText: string): { isMetastatic: boolean; sites: string[] } {
+  const cleanText = removeNegatedClauses(fullText);
+  const cleanNorm = normalize(cleanText);
+
+  const hasMetastaticEvidence = 
+    /\b(?:metastasis|metastasico|metastasica|metastasicos|metastasicas|m1|estadio\s+iv|stage\s+iv|ec\s+iv|e\s*iv)\b/i.test(cleanNorm) ||
+    /\b(?:implante\s+secundario|implantes\s+secundarios|impl\.\s*secundarios)\b/i.test(cleanNorm) ||
+    /\b(?:secundarismo|secundarismos|2rismo)\b/i.test(cleanNorm) ||
+    /\b(?:lesiones\s+secundarias|lesion\s+secundaria)\b/i.test(cleanNorm) ||
+    /\b(?:carcinomatosis(?:\s+peritoneal)?)\b/i.test(cleanNorm) ||
+    /\b(?:diseminacion\s+a\s+distancia|mtts|mtsx)\b/i.test(cleanNorm);
+
+  const sites: string[] = [];
+
+  if (hasMetastaticEvidence) {
+    if (/(?:implantes?|secundarismo|metastasis|mtts?|nodulos?).{0,35}(?:pulmon|pulmonar|pleural)/i.test(cleanNorm)) {
+      sites.push('pulmon');
+    }
+    if (/(?:implantes?|carcinomatosis|secundarismo|nodulo).{0,35}(?:peritoneo|peritoneal|epiplon)/i.test(cleanNorm)) {
+      sites.push('peritoneo');
+    }
+    if (/(?:implantes?|secundarismo|adenopatias?|conglomerado).{0,35}(?:ganglionar|mediastin|retroperitone|supraclavicular)/i.test(cleanNorm)) {
+      sites.push('ganglios_a_distancia');
+    }
+    if (/(?:implantes?|secundarismo|metastasis|mtts?).{0,35}(?:higado|hepatic)/i.test(cleanNorm)) {
+      sites.push('higado');
+    }
+    if (/(?:implantes?|secundarismo|metastasis|mtts?).{0,35}(?:oseo|osea|hueso|vertebra|calota|costal)/i.test(cleanNorm)) {
+      sites.push('hueso');
+    }
+    if (/(?:implantes?|secundarismo|metastasis|mtts?).{0,35}(?:cerebr|snc|encefal)/i.test(cleanNorm)) {
+      sites.push('cerebro_snc');
+    }
+  }
+
+  return { isMetastatic: hasMetastaticEvidence, sites };
+}
+
+/**
+ * Extrae estadio clínico, FIGO o TNM explícitamente documentado
+ */
+function extractStageDocumented(fullText: string): string | undefined {
+  // 1. FIGO (Ginecología): FIGO IIIA, FIGO 2B, FIGO IIIC1, FIGO IVB, FIGO IB3
+  const figoMatch = fullText.match(/\bFIGO\s*(?:estadio\s*)?([IVX1-4]+[A-C]?[1-3]?)\b/i);
+  if (figoMatch) {
+    return `FIGO ${figoMatch[1].toUpperCase()}`;
+  }
+
+  // 2. Prefijo E: E IV, E IIIB, EIVA, EIIIC2, EIIA
+  const ePrefixMatch = fullText.match(/\bE\s*([IVX1-4]+[A-C]?[1-3]?)\b/i);
+  if (ePrefixMatch) {
+    return `Estadio ${ePrefixMatch[1].toUpperCase()}`;
+  }
+
+  // 3. Estadio / Stage estándar: Estadio IV, Stage IIIB, EC IIA
+  const stageMatch = fullText.match(/\b(?:estadio|stage|ec)\s*[:=-]?\s*([IVXABCD1-4]+[ABCD]*)\b/i);
+  if (stageMatch) {
+    return `Estadio ${stageMatch[1].trim().toUpperCase()}`;
+  }
+
+  // 4. TNM explícito: pT2 pN0, pT2N0, cT3 cN1, pT1c pN2a, pT1b1 pN0, pT3, pN1c
+  const tnmMatch = fullText.match(/\b([cyp]?T[0-4][a-d]?(?:[,\s/]+[cyp]?N[0-3][a-c]?(?:[sn]+)?)?(?:[,\s/]+[cyp]?M[01][a-c]?)?)\b/i);
+  if (tnmMatch && tnmMatch[1].trim().length >= 4) {
+    return tnmMatch[1].trim();
+  }
+
+  return undefined;
+}
+
+/**
+ * Extrae tratamientos previos distinguiendo pasado recibido de planes futuros
+ */
+function extractPriorTreatments(fullText: string): { lines: string[]; drugs: string[] } {
+  const linesDocumented: string[] = [];
+  const priorTreatments: string[] = [];
+
+  // Separar el texto eliminando secciones de "PLAN", "CONDUCTA" o planes futuros para no inventar tratamientos
+  const planSplit = fullText.split(/\b(?:PLAN|CONDUCTA|Plan\s+terap[eé]utico|Conducta\s+sugerida|Se\s+solicita|Se\s+indica|Se\s+planifica)[:\s]+/i);
+  const historyBeforePlan = planSplit[0] || fullText;
+  const historyNorm = normalize(historyBeforePlan);
+
+  // Extraer líneas explícitas: 1ra línea, 2da línea, 1L, 2L
+  const lineMatches = historyBeforePlan.match(/(?:1ra|primera|1°|1l|2da|segunda|2°|2l|3ra|tercera|3°|3l)\s*l[ií]nea[^.\n]+/gi);
+  if (lineMatches) {
+    for (const lm of lineMatches) {
+      linesDocumented.push(lm.trim());
+    }
+  }
+
+  const commonDrugsAndRegimens = [
+    'folfox', 'folfiri', 'bevacizumab', 'beva', 'pembrolizumab', 'pembro', 'nivolumab',
+    'ipilimumab', 'osimertinib', 'trastuzumab', 'trastu', 'pertuzumab', 'pertu',
+    'carboplatino', 'cisplatino', 'cddp', 'cbp', 'paclitaxel', 'docetaxel',
+    'gemcitabina', 'capecitabina', 'cape', 'tamoxifeno', 'tam', 'letrozol',
+    'anastrozol', 'fulvestrant', 'ribociclib', 'ribo', 'palbociclib', 'abemaciclib',
+    'ac', 'ac-t', 'bep', 'tip', 'capox', 'gemox', 'folfirinox', 't-dm1', 'tdx-d'
+  ];
+
+  for (const drug of commonDrugsAndRegimens) {
+    // Verificar que esté en el cuerpo previo y que no sea una indicación futura
+    const regex = new RegExp(`\\b${drug}\\b`, 'i');
+    if (regex.test(historyNorm)) {
+      if (!priorTreatments.includes(drug)) {
+        priorTreatments.push(drug);
+      }
+    }
+  }
+
+  return { lines: linesDocumented, drugs: priorTreatments };
+}
+
+/**
+ * Extrae valores de laboratorio desde el texto libre de la historia clínica cuando no vienen estructurados
+ */
+function extractLabsFromText(fullText: string, baseLabs: PatientClinicalProfile['labsDocumented']): PatientClinicalProfile['labsDocumented'] {
+  const labs = { ...baseLabs };
+
+  // Hemoglobina: "Hb de 4", "Hb 10,1", "hb: 7.8", "hb 14.4"
+  if (labs.hemoglobin === undefined) {
+    const hbMatch = fullText.match(/\bhb\s*[:=de\s]*(\d{1,2}(?:[.,]\d+)?)\s*(?:g\/dl|gr%|g%)?\b/i);
+    if (hbMatch) labs.hemoglobin = parseFloat(hbMatch[1].replace(',', '.'));
+  }
+
+  // Creatinina: "creat 0.91", "creatinina 0,59", "Cr 0.7"
+  if (labs.creatinine === undefined) {
+    const crMatch = fullText.match(/\b(?:creat(?:inina)?|cr)\s*[:=de\s]*(\d{1,2}(?:[.,]\d+)?)\b/i);
+    if (crMatch) labs.creatinine = parseFloat(crMatch[1].replace(',', '.'));
+  }
+
+  // Plaquetas: "plaq 226000", "plaquetas 398.000", "PLQ 241000"
+  if (labs.platelets === undefined) {
+    const plqMatch = fullText.match(/\b(?:plaq(?:uetas)?|plq)\s*[:=de\s]*(\d{2,3}(?:\.\d{3})?|\d{5,6})\b/i);
+    if (plqMatch) labs.platelets = parseFloat(plqMatch[1].replace('.', ''));
+  }
+
+  // Bilirrubina: "BT 0.58", "bilirrubina total 0.9", "BB total 0,25"
+  if (labs.totalBilirubin === undefined) {
+    const btMatch = fullText.match(/\b(?:bb\s*total|bt|bilirrubina\s*total)\s*[:=de\s]*(\d{1,2}(?:[.,]\d+)?)\b/i);
+    if (btMatch) labs.totalBilirubin = parseFloat(btMatch[1].replace(',', '.'));
+  }
+
+  // AST / GOT: "got 25", "ast: 35"
+  if (labs.ast === undefined) {
+    const astMatch = fullText.match(/\b(?:ast|got)\s*[:=de\s]*(\d{1,3})\b/i);
+    if (astMatch) labs.ast = parseFloat(astMatch[1]);
+  }
+
+  // ALT / GPT: "gpt 18", "alt: 42"
+  if (labs.alt === undefined) {
+    const altMatch = fullText.match(/\b(?:alt|gpt)\s*[:=de\s]*(\d{1,3})\b/i);
+    if (altMatch) labs.alt = parseFloat(altMatch[1]);
+  }
+
+  return labs;
+}
+
+/**
  * Extrae el perfil clínico de matching de un paciente existente de forma estrictamente conservadora.
  * REGLAS DE ORO:
  * - NO infiere datos faltantes.
- * - NO inventa biomarcadores.
- * - NO infiere ECOG.
- * - NO infiere estadio ni convierte TNM a estadio.
- * - Si un dato no está explícito en la HC, se deja como undefined / no documentado.
+ * - NO inventa biomarcadores ni cuantificaciones.
+ * - Detecta y preserva conflictos diagnósticos.
+ * - Distingue tratamientos recibidos de planes futuros.
  */
 export function extractPatientClinicalProfile(patient: any): PatientClinicalProfile {
   const historyText = patient.historyText || '';
@@ -192,33 +539,15 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
   const fullTextNorm = normalize(fullText);
 
   // 1. EDAD
-  let age: number | undefined = undefined;
-  if (typeof patient.age === 'number' && patient.age > 0) {
-    age = patient.age;
-  } else if (patient.ageRange && typeof patient.ageRange === 'string') {
-    const rangeMatch = patient.ageRange.match(/(\d+)/);
-    if (rangeMatch) age = parseInt(rangeMatch[1], 10);
-  }
-  if (!age) {
-    const ageMatch = fullText.match(/(\d{1,3})\s*(?:años|anos|years|yo)/i);
-    if (ageMatch) {
-      age = parseInt(ageMatch[1], 10);
-    }
-  }
+  const age = extractPatientAge(patient, fullText, historyText);
 
   // 2. SEXO
-  let sex: 'MALE' | 'FEMALE' | 'OTHER' | undefined = undefined;
-  if (fullText.match(/\b(masculino|varon|hombre|male)\b/i)) {
-    sex = 'MALE';
-  } else if (fullText.match(/\b(femenino|mujer|female)\b/i)) {
-    sex = 'FEMALE';
-  }
+  const sex = extractPatientSex(fullText);
 
-  // 3. ÓRGANO O SITIO TUMORAL PRIMARIO
-  // Prefer structured field persisted at save time; fallback to text extraction.
-  const organOrSite: string | undefined =
-    (patient.organOrSite as string | undefined) ||
-    detectPrimaryTumorOrgan(diagnosisRaw, historyText);
+  // 3. ÓRGANO PRIMARIO Y RESOLUCIÓN DE CONFLICTOS
+  const organResult = detectOrganAndConflict(diagnosisRaw, historyText);
+  const organOrSite = (patient.organOrSite as string | undefined) || organResult.organOrSite;
+  const diagnosticConflict = organResult.diagnosticConflict;
 
   // 4. HISTOLOGÍA
   let histology: string | undefined = undefined;
@@ -226,7 +555,9 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     histology = 'Adenocarcinoma';
   } else if (fullTextNorm.includes('carcinoma ductal invasor') || fullTextNorm.includes('carcinoma ductal')) {
     histology = 'Carcinoma Ductal';
-  } else if (fullTextNorm.includes('carcinoma epidermoide') || fullTextNorm.includes('carcinoma escamoso')) {
+  } else if (fullTextNorm.includes('carcinoma lobulillar')) {
+    histology = 'Carcinoma Lobulillar';
+  } else if (fullTextNorm.includes('carcinoma epidermoide') || fullTextNorm.includes('carcinoma escamoso') || fullTextNorm.includes('espinocelular')) {
     histology = 'Carcinoma Epidermoide';
   } else if (fullTextNorm.includes('melanoma')) {
     histology = 'Melanoma';
@@ -234,153 +565,161 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     histology = 'Carcinoma de Células Claras';
   } else if (fullTextNorm.includes('carcinoma urotelial')) {
     histology = 'Carcinoma Urotelial';
+  } else if (fullTextNorm.includes('tumor germinal') || fullTextNorm.includes('seminoma') || fullTextNorm.includes('saco vitelino') || fullTextNorm.includes('teilum')) {
+    histology = 'Tumor Germinal';
+  } else if (fullTextNorm.includes('carcinoma basocelular') || fullTextNorm.includes('basocelular')) {
+    histology = 'Carcinoma Basocelular';
+  } else if (fullTextNorm.includes('sarcoma')) {
+    histology = 'Sarcoma';
   }
 
   // 5. ESTADIO EXPLÍCITAMENTE DOCUMENTADO
-  // Prefer structured stage computed at save time (most reliable).
   let stageDocumented: string | undefined = undefined;
   const structuredStage = patient.stage as StageCategory | undefined;
   if (structuredStage && structuredStage !== 'No consignado') {
     stageDocumented = structuredStage;
   } else {
-    // Fallback: regex on free text (legacy path for patients without structured fields)
-    const stageRegex = /\b(estadio\s+[IVXABCD1-4]+[ABCD]*|stage\s+[IVXABCD1-4]+[ABCD]*|ec\s+[IVXABCD1-4]+[ABCD]*)\b/i;
-    const stageMatch = fullText.match(stageRegex);
-    if (stageMatch) {
-      stageDocumented = stageMatch[1].trim();
-    }
+    stageDocumented = extractStageDocumented(fullText);
   }
 
-  // 6. ENFERMEDAD METASTÁSICA EXPLÍCITAMENTE DOCUMENTADA
-  // Prefer structured field when available.
+  // 6. ENFERMEDAD METASTÁSICA Y SITIOS
   let isMetastaticDocumented = false;
+  let metastaticSites: string[] | undefined = undefined;
   if (typeof patient.isMetastatic === 'boolean') {
     isMetastaticDocumented = patient.isMetastatic;
-  } else if (
-    fullTextNorm.includes('metastasis') ||
-    fullTextNorm.includes('metastasico') ||
-    fullTextNorm.includes('metastasica') ||
-    fullTextNorm.includes('estadio iv') ||
-    fullTextNorm.includes('m1') ||
-    fullTextNorm.includes('lesiones secundarias')
-  ) {
-    isMetastaticDocumented = true;
+  } else {
+    const metaInfo = extractMetastaticInfo(fullText);
+    isMetastaticDocumented = metaInfo.isMetastatic;
+    if (metaInfo.sites.length > 0) metastaticSites = metaInfo.sites;
   }
 
   // 7. BIOMARCADORES EXPLÍCITAMENTE DOCUMENTADOS
-  // Prefer structured field computed at save time when available.
   const biomarkersDocumented: Array<{ name: string; status: string; rawText: string }> = [];
 
   if (patient.biomarkersStructured && Array.isArray(patient.biomarkersStructured) && patient.biomarkersStructured.length > 0) {
-    // Fast path: use pre-computed structured biomarkers, skip regex
     biomarkersDocumented.push(...(patient.biomarkersStructured as BiomarkerEntry[]));
   } else {
-  // Slow path: extract from free text
+    // Extracción robusta desde texto libre
 
-  // KRAS
-  const krasMatch = fullText.match(/KRAS\s*([A-Za-z0-9_> -]+|\bmutado\b|\bwild-type\b|\bwt\b|\bno mutado\b)/i);
-  if (krasMatch) {
-    const raw = krasMatch[0];
-    const isMut = normalize(raw).includes('mutado') || /p\.[A-Z]\d+[A-Z]/i.test(raw) || /g\d+[a-z]/i.test(raw);
-    const isWT = normalize(raw).includes('wt') || normalize(raw).includes('wild') || normalize(raw).includes('no mutado');
-    biomarkersDocumented.push({
-      name: 'KRAS',
-      status: isMut ? 'Mutado' : isWT ? 'Wild-Type' : raw,
-      rawText: raw
-    });
-  }
+    // KRAS
+    const krasMatch = fullText.match(/KRAS\s*([A-Za-z0-9_> -]+|\bmutado\b|\bwild-type\b|\bwt\b|\bno mutado\b)/i);
+    if (krasMatch) {
+      const raw = krasMatch[0];
+      const isMut = normalize(raw).includes('mutado') || /p\.[A-Z]\d+[A-Z]/i.test(raw) || /g\d+[a-z]/i.test(raw);
+      const isWT = normalize(raw).includes('wt') || normalize(raw).includes('wild') || normalize(raw).includes('no mutado');
+      biomarkersDocumented.push({
+        name: 'KRAS',
+        status: isMut ? 'Mutado' : isWT ? 'Wild-Type' : raw,
+        rawText: raw
+      });
+    }
 
-  // BRAF
-  const brafMatch = fullText.match(/BRAF\s*([A-Za-z0-9_ -]+|\bmutado\b|\bwild-type\b|\bwt\b|\bno mutado\b)/i);
-  if (brafMatch) {
-    const raw = brafMatch[0];
-    const isMut = normalize(raw).includes('v600e') || normalize(raw).includes('mutado');
-    const isWT = normalize(raw).includes('wt') || normalize(raw).includes('wild') || normalize(raw).includes('no mutado');
-    biomarkersDocumented.push({
-      name: 'BRAF',
-      status: isMut ? 'V600E Mutado' : isWT ? 'Wild-Type' : raw,
-      rawText: raw
-    });
-  }
+    // BRAF
+    const brafMatch = fullText.match(/BRAF\s*([A-Za-z0-9_ -]+|\bmutado\b|\bwild-type\b|\bwt\b|\bno mutado\b)/i);
+    if (brafMatch) {
+      const raw = brafMatch[0];
+      const isMut = normalize(raw).includes('v600e') || normalize(raw).includes('mutado');
+      const isWT = normalize(raw).includes('wt') || normalize(raw).includes('wild') || normalize(raw).includes('no mutado');
+      biomarkersDocumented.push({
+        name: 'BRAF',
+        status: isMut ? 'V600E Mutado' : isWT ? 'Wild-Type' : raw,
+        rawText: raw
+      });
+    }
 
-  // EGFR
-  const egfrMatch = fullText.match(/EGFR\s*([A-Za-z0-9_ -]+|\bmutado\b|\bexon\s*19\b|\bl858r\b|\bwt\b)/i);
-  if (egfrMatch) {
-    const raw = egfrMatch[0];
-    const isExon19 = normalize(raw).includes('exon 19') || normalize(raw).includes('del');
-    const isL858R = normalize(raw).includes('l858r');
-    const isWT = normalize(raw).includes('wt') || normalize(raw).includes('wild');
-    biomarkersDocumented.push({
-      name: 'EGFR',
-      status: isExon19 ? 'Exón 19 del' : isL858R ? 'L858R' : isWT ? 'Wild-Type' : 'Mutado',
-      rawText: raw
-    });
-  }
+    // EGFR
+    const egfrMatch = fullText.match(/EGFR\s*([A-Za-z0-9_ -]+|\bmutado\b|\bexon\s*19\b|\bl858r\b|\bwt\b)/i);
+    if (egfrMatch) {
+      const raw = egfrMatch[0];
+      const isExon19 = normalize(raw).includes('exon 19') || normalize(raw).includes('del');
+      const isL858R = normalize(raw).includes('l858r');
+      const isWT = normalize(raw).includes('wt') || normalize(raw).includes('wild');
+      biomarkersDocumented.push({
+        name: 'EGFR',
+        status: isExon19 ? 'Exón 19 del' : isL858R ? 'L858R' : isWT ? 'Wild-Type' : 'Mutado',
+        rawText: raw
+      });
+    }
 
-  // HER2
-  const her2Match = fullText.match(/HER2\s*([+-]|positivo|negativo|3\+|2\+|1\+|0|amplificado|no amplificado)/i);
-  if (her2Match) {
-    const raw = her2Match[0];
-    const isPos = normalize(raw).includes('+') || normalize(raw).includes('positivo') || normalize(raw).includes('3+');
-    const isNeg = normalize(raw).includes('-') || normalize(raw).includes('negativo') || normalize(raw).includes('0') || normalize(raw).includes('1+');
-    biomarkersDocumented.push({
-      name: 'HER2',
-      status: isPos ? 'Positivo' : isNeg ? 'Negativo' : raw,
-      rawText: raw
-    });
-  }
+    // HER2
+    const her2Match = fullText.match(/HER-?2(?:\s*neu)?\s*[:\s]*([+-]|positivo|negativo|3\+|2\+|1\+|0|amplificado|no amplificado|ultra low|low)/i);
+    if (her2Match) {
+      const raw = her2Match[0];
+      const val = normalize(her2Match[1]);
+      const isPos = val.includes('+') || val.includes('positivo') || val.includes('3+') || val.includes('amplificado');
+      const isNeg = val === '0' || val.includes('negativo') || val.includes('1+') || val.includes('ultra low') || val.includes('low');
+      biomarkersDocumented.push({
+        name: 'HER2',
+        status: isPos ? 'Positivo' : isNeg ? 'Negativo' : raw,
+        rawText: raw
+      });
+    }
 
-  // MSI / MMR
-  const msiMatch = fullText.match(/\b(MSS|MSI-H|MSI-L|pMMR|dMMR|inestabilidad microsatelital estable|inestabilidad microsatelital alta)\b/i);
-  if (msiMatch) {
-    const raw = msiMatch[0];
-    const isMSI_H = normalize(raw).includes('msi-h') || normalize(raw).includes('dmmr') || normalize(raw).includes('alta');
-    biomarkersDocumented.push({
-      name: 'MSI/MMR',
-      status: isMSI_H ? 'MSI-H / dMMR' : 'MSS / pMMR (Estable)',
-      rawText: raw
-    });
-  }
+    // RE (Receptores de Estrógeno)
+    const reMatch = fullText.match(/\bRE\s*[:\s=]*([+-]|\d+%\s*(?:\([+-]+\))?|\bpositivo\b|\bnegativo\b)/i);
+    if (reMatch) {
+      biomarkersDocumented.push({
+        name: 'RE',
+        status: reMatch[1].trim(),
+        rawText: reMatch[0].trim()
+      });
+    }
 
-  // RECEPTORES HORMONALES (MAMA)
-  if (fullTextNorm.includes('luminal a') || fullTextNorm.includes('rh+') || fullTextNorm.includes('re+')) {
-    biomarkersDocumented.push({
-      name: 'RH (RE/RP)',
-      status: 'Positivo (Luminal)',
-      rawText: 'RH+ / Luminal'
-    });
-  }
+    // RP (Receptores de Progesterona)
+    const rpMatch = fullText.match(/\bRP\s*[:\s=]*([+-]|\d+%\s*(?:\([+-]+\))?|\bpositivo\b|\bnegativo\b)/i);
+    if (rpMatch) {
+      biomarkersDocumented.push({
+        name: 'RP',
+        status: rpMatch[1].trim(),
+        rawText: rpMatch[0].trim()
+      });
+    }
 
-  } // end else (slow path biomarker extraction)
+    // RH Genérico si no se discriminaron RE/RP
+    if (!reMatch && !rpMatch) {
+      if (fullTextNorm.includes('luminal a') || fullTextNorm.includes('rh+') || fullTextNorm.includes('re+')) {
+        biomarkersDocumented.push({
+          name: 'RH (RE/RP)',
+          status: 'Positivo (Luminal)',
+          rawText: 'RH+ / Luminal'
+        });
+      }
+    }
 
-  // 8. LÍNEAS Y TRATAMIENTOS PREVIOS DOCUMENTADOS
-  const linesDocumented: string[] = [];
-  const priorTreatments: string[] = [];
+    // PD-L1 (TPS / CPS / Porcentaje)
+    const pdl1Match = fullText.match(/\b(?:pdl1|pd-l1|tps|cps)\s*[:\s]*(\d+(?:\.\d+)?\s*%?|\bpositivo\b|\bnegativo\b)/i);
+    if (pdl1Match) {
+      biomarkersDocumented.push({
+        name: 'PD-L1',
+        status: pdl1Match[1].trim(),
+        rawText: pdl1Match[0].trim()
+      });
+    }
 
-  const lineMatches = fullText.match(/(?:1ra|primera|2da|segunda|3ra|tercera)\s*l[ií]nea[^.\n]+/gi);
-  if (lineMatches) {
-    for (const lm of lineMatches) {
-      linesDocumented.push(lm.trim());
+    // MSI / MMR
+    const msiMatch = fullText.match(/\b(MSS|MSI-H|MSI-L|pMMR|dMMR|proficiente|deficiente|inestabilidad microsatelital estable|inestabilidad microsatelital alta)\b/i);
+    if (msiMatch) {
+      const raw = msiMatch[0];
+      const isMSI_H = normalize(raw).includes('msi-h') || normalize(raw).includes('dmmr') || normalize(raw).includes('alta') || normalize(raw).includes('deficiente');
+      biomarkersDocumented.push({
+        name: 'MSI/MMR',
+        status: isMSI_H ? 'MSI-H / dMMR' : 'MSS / pMMR (Estable)',
+        rawText: raw
+      });
     }
   }
 
-  const commonDrugs = [
-    'folfox', 'folfiri', 'bevacizumab', 'aflibercept', 'pembrolizumab', 'nivolumab',
-    'ipilimumab', 'osimertinib', 'trastuzumab', 'pertuzumab', 'carboplatino', 'cisplatino',
-    'paclitaxel', 'docetaxel', 'gemcitabina', 'capecitabina', 'tamoxifeno', 'letrozol',
-    'anastrozol', 'fulvestrant', 'regorafenib', 'trifluridina'
-  ];
-
-  for (const drug of commonDrugs) {
-    if (fullTextNorm.includes(drug)) {
-      priorTreatments.push(drug);
-    }
-  }
+  // 8. LÍNEAS Y TRATAMIENTOS PREVIOS
+  const { lines, drugs } = extractPriorTreatments(fullText);
+  const linesDocumented = lines;
+  const priorTreatments = drugs;
 
   // 9. PROGRESIÓN DOCUMENTADA
   let progressionDocumented = false;
   if (
     fullTextNorm.includes('progresion de enfermedad') ||
+    fullTextNorm.includes('progresion osea') ||
+    fullTextNorm.includes('progresion pulmonar') ||
     fullTextNorm.includes('pd actual') ||
     fullTextNorm.includes('recidiva') ||
     fullTextNorm.includes('progresion a 1ra linea') ||
@@ -389,15 +728,11 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     progressionDocumented = true;
   }
 
-  // 10. ECOG EXPLÍCITAMENTE DOCUMENTADO
-  let ecogDocumented: number | undefined = undefined;
-  const ecogMatch = fullText.match(/\bECOG\s*([0-4])\b/i);
-  if (ecogMatch) {
-    ecogDocumented = parseInt(ecogMatch[1], 10);
-  }
+  // 10. ECOG / PERFORMANCE STATUS
+  const ecogDocumented = extractPerformanceStatus(fullText);
 
-  // 11. LABORATORIOS DOCUMENTADOS
-  const labsDocumented: PatientClinicalProfile['labsDocumented'] = {};
+  // 11. LABORATORIOS (JSON O TEXTO LIBRE)
+  const baseLabs: PatientClinicalProfile['labsDocumented'] = {};
   const allLabs = patient.labResults || patient.labs || [];
 
   for (const lab of allLabs) {
@@ -406,21 +741,24 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     if (isNaN(val)) continue;
 
     if (name.includes('hemoglobina') || name === 'hb') {
-      labsDocumented.hemoglobin = val;
+      baseLabs.hemoglobin = val;
     } else if (name.includes('plaqueta')) {
-      labsDocumented.platelets = val;
+      baseLabs.platelets = val;
     } else if (name.includes('neutrofil')) {
-      labsDocumented.neutrophils = val;
+      baseLabs.neutrophils = val;
     } else if (name.includes('creatinina')) {
-      labsDocumented.creatinine = val;
+      baseLabs.creatinine = val;
     } else if (name.includes('bilirrubina') && (name.includes('total') || !name.includes('directa'))) {
-      labsDocumented.totalBilirubin = val;
+      baseLabs.totalBilirubin = val;
     } else if (name.includes('ast') || name.includes('got')) {
-      labsDocumented.ast = val;
+      baseLabs.ast = val;
     } else if (name.includes('alt') || name.includes('gpt')) {
-      labsDocumented.alt = val;
+      baseLabs.alt = val;
     }
   }
+
+  // Complementar laboratorios con el texto libre de la historia si faltan
+  const labsDocumented = extractLabsFromText(fullText, baseLabs);
 
   return {
     patientId: patient.id || 'N/A',
@@ -439,6 +777,8 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     currentTreatment: linesDocumented[linesDocumented.length - 1],
     progressionDocumented,
     ecogDocumented,
-    labsDocumented
+    labsDocumented,
+    diagnosticConflict,
+    metastaticSites
   };
 }

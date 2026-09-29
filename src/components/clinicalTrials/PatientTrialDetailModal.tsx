@@ -117,6 +117,19 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
             </div>
           </div>
 
+          {/* ADVERTENCIA DE CONFLICTO DIAGNÓSTICO */}
+          {evaluation.profile?.diagnosticConflict?.hasConflict && (
+            <div className="bg-amber-100/90 border-b border-amber-200 px-6 py-2.5 flex items-start gap-2.5 shrink-0">
+              <AlertTriangle size={16} className="text-amber-700 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-950 leading-relaxed">
+                <span className="font-bold text-amber-900">Se detectó una discrepancia en el caso: </span>
+                <span>El campo diagnóstico indica: <strong className="font-semibold">"{evaluation.profile.diagnosticConflict.diagnosisInput || 'No especificado'}"</strong>. </span>
+                <span>La historia clínica documenta como primario: <strong className="font-semibold">"{evaluation.profile.diagnosticConflict.historyPrimaryOrgan || 'No especificado'}"</strong>. </span>
+                <span className="text-amber-800 font-medium block sm:inline">El pre-screening se está evaluando según el primario documentado en la historia clínica.</span>
+              </div>
+            </div>
+          )}
+
           {/* FILTER TABS */}
           <div className="px-6 py-2.5 bg-gray-50 border-b border-gray-200/70 flex items-center gap-2 overflow-x-auto shrink-0 text-xs font-bold">
             <span className="text-gray-400 uppercase text-[10px] tracking-wider mr-1">Filtrar:</span>
