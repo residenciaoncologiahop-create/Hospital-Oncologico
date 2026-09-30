@@ -1,4 +1,5 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp, getApps } = require("firebase-admin/app");
@@ -236,6 +237,29 @@ exports.syncClinicalTrials = onCall(
         "internal",
         `Error al sincronizar ensayos clínicos: ${error.message}`
       );
+    }
+  }
+);
+
+// ── Cloud Function: syncClinicalTrialsScheduled (Diaria) ───────────────
+exports.syncClinicalTrialsScheduled = onSchedule(
+  {
+    schedule: "0 3 * * *",
+    timeZone: "America/Argentina/Cordoba",
+    memory: "512MiB",
+    timeoutSeconds: 300,
+  },
+  async (event) => {
+    console.log(`[syncClinicalTrialsScheduled] Sincronización diaria iniciada: ${new Date().toISOString()}`);
+    try {
+      const result = await syncAndSaveTrials(db);
+      console.log(
+        `[syncClinicalTrialsScheduled] Sincronización finalizada exitosamente: ${result.totalSaved} guardados.`
+      );
+      return result;
+    } catch (error) {
+      console.error("[syncClinicalTrialsScheduled] Error en sincronización programada:", error.message);
+      throw error;
     }
   }
 );
