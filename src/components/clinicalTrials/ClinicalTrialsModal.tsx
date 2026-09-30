@@ -32,6 +32,7 @@ export const ClinicalTrialsModal: React.FC<Props> = ({ patients, onClose }) => {
   const [phaseFilter, setPhaseFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [biomarkerFilter, setBiomarkerFilter] = useState<string>('all');
+  const [showNonOncology, setShowNonOncology] = useState<boolean>(false); // Por defecto ocultar no oncológicos
 
   // Modales de detalle
   const [detailTrial, setDetailTrial] = useState<ClinicalTrial | null>(null);
@@ -119,6 +120,11 @@ export const ClinicalTrialsModal: React.FC<Props> = ({ patients, onClose }) => {
   const filteredTrials = useMemo(() => {
     let list = [...trials];
 
+    // Filtro de ensayos no oncológicos (por defecto ocultos)
+    if (!showNonOncology) {
+      list = list.filter(t => t.isOncology !== false);
+    }
+
     // Filtro de ubicación
     if (locationFilter === 'cordoba') {
       // Priorizar Córdoba: los que tienen centro en Córdoba primero, luego el resto de Argentina
@@ -179,7 +185,13 @@ export const ClinicalTrialsModal: React.FC<Props> = ({ patients, onClose }) => {
     });
 
     return list;
-  }, [trials, locationFilter, tumorFilter, phaseFilter, statusFilter, biomarkerFilter, searchTerm]);
+  }, [trials, showNonOncology, locationFilter, tumorFilter, phaseFilter, statusFilter, biomarkerFilter, searchTerm]);
+
+  // Cantidad de ensayos no oncológicos ocultos
+  const hiddenNonOncologyCount = useMemo(() => {
+    if (showNonOncology) return 0;
+    return trials.filter(t => t.isOncology === false).length;
+  }, [trials, showNonOncology]);
 
   // Lista de biomarcadores disponibles para el selector
   const availableBiomarkers = useMemo(() => {
@@ -280,7 +292,7 @@ export const ClinicalTrialsModal: React.FC<Props> = ({ patients, onClose }) => {
               }`}
             >
               <Search size={14} />
-              <span>Buscador de Ensayos ({trials.length})</span>
+              <span>Buscador de Ensayos ({filteredTrials.length})</span>
             </button>
 
             <button
@@ -446,6 +458,24 @@ export const ClinicalTrialsModal: React.FC<Props> = ({ patients, onClose }) => {
 
                   </div>
 
+                  {/* FILA 3: TOGGLE DE NO ONCOLÓGICOS */}
+                  <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={showNonOncology}
+                        onChange={(e) => setShowNonOncology(e.target.checked)}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                      />
+                      <span>Mostrar ensayos no oncológicos</span>
+                      {!showNonOncology && hiddenNonOncologyCount > 0 && (
+                        <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded-full font-bold">
+                          {hiddenNonOncologyCount} ocultos
+                        </span>
+                      )}
+                    </label>
+                  </div>
+
                 </div>
 
                 {/* CONTADOR DE RESULTADOS */}
@@ -455,6 +485,11 @@ export const ClinicalTrialsModal: React.FC<Props> = ({ patients, onClose }) => {
                     {locationFilter === 'cordoba' && (
                       <span className="text-indigo-600 font-bold ml-1">
                         ({filteredTrials.filter(t => t.hasCordobaCenter).length} con centro activo en Córdoba)
+                      </span>
+                    )}
+                    {!showNonOncology && hiddenNonOncologyCount > 0 && (
+                      <span className="text-slate-400 font-normal ml-2">
+                        ({hiddenNonOncologyCount} {hiddenNonOncologyCount === 1 ? 'no oncológico oculto' : 'no oncológicos ocultos'})
                       </span>
                     )}
                   </span>
@@ -510,6 +545,13 @@ export const ClinicalTrialsModal: React.FC<Props> = ({ patients, onClose }) => {
                               {trial.syncStatus === 'STALE' && (
                                 <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md" title="El ensayo no reportó reclutamiento activo en la última sincronización">
                                   No verificado
+                                </span>
+                              )}
+
+                              {/* NO ONCOLÓGICO */}
+                              {trial.isOncology === false && (
+                                <span className="text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300 px-2 py-0.5 rounded-md" title="Clasificado como no oncológico (excluido de matching oncológico)">
+                                  No oncológico
                                 </span>
                               )}
 
