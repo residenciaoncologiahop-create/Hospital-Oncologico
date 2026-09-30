@@ -75,6 +75,165 @@ function extractBiomarkers(text) {
 }
 
 /**
+ * Normaliza texto a minúsculas y elimina diacríticos/acentos.
+ */
+function normalizeOncologyText(str) {
+  if (!str || typeof str !== "string") return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+/**
+ * Neutraliza menciones de "tumor necrosis factor" / "factor de necrosis tumoral"
+ * para evitar falsos positivos en patologías no oncológicas (artritis, Crohn, etc.).
+ */
+function sanitizeTnf(text) {
+  if (!text) return "";
+  return text
+    .replace(/anti[-\s]?tumou?r\s+necrosis\s+factor/g, " ")
+    .replace(/factor\s+de\s+necrosis\s+tumoral/g, " ")
+    .replace(/tumou?r\s+necrosis\s+factor/g, " ")
+    .replace(/anti[-\s]?tnf/g, " ")
+    .replace(/\btnf\b/g, " ");
+}
+
+const STRONG_ONCOLOGY_TERMS = [
+  "cancer", "cancerous", "carcinoma", "adenocarcinoma", "neoplasm", "neoplasia", "neoplasma",
+  "neoplasic", "neoplastic", "tumor", "tumour", "tumoral", "tumores", "malignan", "maligno",
+  "maligna", "malignidad", "metasta", "metastatic", "metastasis", "metastasico", "metastasica",
+  "leukemia", "leucemia", "lymphoma", "linfoma", "myeloma", "mieloma", "sarcoma", "melanoma",
+  "glioma", "glioblastoma", "astrocytoma", "astrocitoma", "oligodendroglioma", "ependymoma",
+  "ependimoma", "blastoma", "myelodysplastic", "mielodisplasic", "myelodysplasia", "mielodisplasia",
+  "oncolog", "oncologia", "oncologico", "oncology", "mesothelioma", "mesotelioma", "seminoma",
+  "teratoma", "choriocarcinoma", "coriocarcinoma", "thymoma", "timoma", "carcinoid", "carcinoide",
+  "hodgkin", "wilms", "ewing", "kaposi", "waldenstrom", "myelofibrosis", "mielofibrosis",
+  "polycythemia vera", "policitemia vera"
+];
+
+const SUPPORTIVE_ONCOLOGY_TERMS = [
+  "quimioterap", "chemotherap", "chemo-", "radioterap", "radiotherap", "radiation therapy",
+  "antineoplas", "antineoplastic", "neutropenia febril", "febrile neutropenia",
+  "trasplante de medula", "bone marrow transplant", "marrow transplantation",
+  "trasplante hematopoyetico", "hematopoietic stem cell", "hematopoietic cell transplant",
+  "inmunooncolog", "immuno-oncology"
+];
+
+function findMatchedTerm(text, termList) {
+  if (!text) return null;
+  for (const term of termList) {
+    if (text.includes(term)) return term;
+  }
+  return null;
+}
+
+/**
+ * Clasifica si un ensayo clínico es de índole oncológica o no.
+ * Criterio conservador: ante la duda, clasifica como oncológico.
+ * NO utiliza briefSummary ni eligibilityCriteria para evitar falsos positivos.
+ * @param {{ conditions?: string[], title?: string, officialTitle?: string, keywords?: string[] }} input
+ * @returns {{ isOncology: boolean, matchType?: 'strong' | 'supportive' | 'keywords' | 'default', isWeakMatch: boolean, matchedTerm?: string }}
+ */
+function classifyOncologyTrial(input = {}) {
+  const { conditions, title, officialTitle, keywords } = input || {};
+
+  const condArray = Array.isArray(conditions)
+    ? conditions.map((c) => String(c || "").trim()).filter(Boolean)
+    : [];
+  const kwArray = Array.isArray(keywords)
+    ? keywords.map((k) => String(k || "").trim()).filter(Boolean)
+    : [];
+
+  const mainTexts = [
+    ...condArray,
+    title || "",
+    officialTitle || "",
+  ]
+    .map((t) => sanitizeTnf(normalizeOncologyText(t)))
+    .filter(Boolean);
+
+  // 1. Coincidencia fuerte en condiciones o títulos
+  for (const text of mainTexts) {
+    const term = findMatchedTerm(text, STRONG_ONCOLOGY_TERMS);
+    if (term) {
+      return {
+        isOncology: true,
+        matchType: "strong",
+        isWeakMatch: false,
+        matchedTerm: term,
+      };
+    }
+  }
+
+  // 2. Coincidencia de soporte / terapia oncológica en condiciones o títulos
+  for (const text of mainTexts) {
+    const term = findMatchedTerm(text, SUPPORTIVE_ONCOLOGY_TERMS);
+    if (term) {
+      return {
+        isOncology: true,
+        matchType: "supportive",
+        isWeakMatch: true,
+        matchedTerm: term,
+      };
+    }
+  }
+
+  // 3. Coincidencia en keywords (Tier 1 o Tier 2)
+  const kwTexts = kwArray
+    .map((k) => sanitizeTnf(normalizeOncologyText(k)))
+    .filter(Boolean);
+
+  for (const text of kwTexts) {
+    const strongTerm = findMatchedTerm(text, STRONG_ONCOLOGY_TERMS);
+    if (strongTerm) {
+      return {
+        isOncology: true,
+        matchType: "keywords",
+        isWeakMatch: true,
+        matchedTerm: strongTerm,
+      };
+    }
+    const suppTerm = findMatchedTerm(text, SUPPORTIVE_ONCOLOGY_TERMS);
+    if (suppTerm) {
+      return {
+        isOncology: true,
+        matchType: "keywords",
+        isWeakMatch: true,
+        matchedTerm: suppTerm,
+      };
+    }
+  }
+
+  // 4. Criterio conservador: si no hay condiciones especificadas, se asume oncológico por defecto
+  if (condArray.length === 0) {
+    return {
+      isOncology: true,
+      matchType: "default",
+      isWeakMatch: false,
+      matchedTerm: "default_empty_conditions",
+    };
+  }
+
+  // 5. No oncológico
+  return {
+    isOncology: false,
+    matchType: undefined,
+    isWeakMatch: false,
+    matchedTerm: undefined,
+  };
+}
+
+/**
+ * Función pública pura requerida: devuelve exclusivamente boolean
+ * @param {{ conditions?: string[], title?: string, officialTitle?: string, keywords?: string[] }} input
+ * @returns {boolean}
+ */
+function isOncologyTrial(input) {
+  return classifyOncologyTrial(input).isOncology;
+}
+
+/**
  * Parsea el bloque de texto de criterios de elegibilidad en listas separadas
  */
 function parseEligibilityCriteria(rawCriteria) {
@@ -193,6 +352,7 @@ function mapStudyToClinicalTrial(study) {
   const { phase, phaseNormalized } = normalizePhase(designMod.phases);
 
   const conditions = condMod.conditions || [];
+  const keywords = condMod.keywords || [];
   const interventions = (armsMod.interventions || []).map((i) => {
     return i.type ? `${i.type}: ${i.name}` : i.name;
   });
@@ -278,6 +438,14 @@ function mapStudyToClinicalTrial(study) {
     combinedSearch.includes("unresectable") ||
     combinedSearch.includes("no resecable");
 
+  const oncologyClassification = classifyOncologyTrial({
+    conditions,
+    title,
+    officialTitle,
+    keywords,
+  });
+  const isOncology = oncologyClassification.isOncology;
+
   const record = {
     id: `ctgov_${nctId}`,
     source: "clinicaltrials.gov",
@@ -285,6 +453,8 @@ function mapStudyToClinicalTrial(study) {
     nctId,
     title,
     officialTitle: officialTitle || null,
+    isOncology,
+    _oncologyClassification: oncologyClassification,
     sponsor,
     status,
     statusLabel,
@@ -454,8 +624,9 @@ async function syncAndSaveTrials(db) {
 
     for (const trial of chunk) {
       const docRef = db.collection("clinical_trials").doc(trial.id);
+      const { _oncologyClassification, ...restTrial } = trial;
       const trialData = {
-        ...trial,
+        ...restTrial,
         lastSyncedAt: runTimestamp,
         syncStatus: "ACTIVE",
         staleSince: FieldValue.delete(),
@@ -509,6 +680,46 @@ async function syncAndSaveTrials(db) {
     console.warn("[syncClinicalTrials] Marcado de STALE omitido: la corrida se cortó por el límite de páginas.");
   }
 
+  // Análisis y log de clasificación oncológica
+  const nonOncologyTrials = [];
+  const weakOncologyTrials = [];
+
+  for (const trial of trials) {
+    const classification = trial._oncologyClassification || classifyOncologyTrial({
+      conditions: trial.conditions,
+      title: trial.title,
+      officialTitle: trial.officialTitle,
+      keywords: trial.keywords,
+    });
+
+    if (!classification.isOncology) {
+      nonOncologyTrials.push(trial);
+    } else if (classification.isWeakMatch) {
+      weakOncologyTrials.push({
+        trial,
+        matchedTerm: classification.matchedTerm || "coincidencia débil",
+      });
+    }
+  }
+
+  if (nonOncologyTrials.length > 0) {
+    console.log(`\n=== [syncClinicalTrials] ENSAYOS NO ONCOLÓGICOS DETECTADOS (${nonOncologyTrials.length} total) ===`);
+    const sampleNonOncology = nonOncologyTrials.slice(0, 100);
+    sampleNonOncology.forEach((t) => {
+      const conds = (t.conditions || []).join(", ") || "Sin condiciones";
+      console.log(`${t.nctId || t.id} | ${t.title} | ${conds}`);
+    });
+  }
+
+  if (weakOncologyTrials.length > 0) {
+    console.log(`\n=== [syncClinicalTrials] ENSAYOS ONCOLÓGICOS POR COINCIDENCIA DÉBIL (${weakOncologyTrials.length} total) ===`);
+    const sampleWeak = weakOncologyTrials.slice(0, 50);
+    sampleWeak.forEach(({ trial: t, matchedTerm }) => {
+      const conds = (t.conditions || []).join(", ") || "Sin condiciones";
+      console.log(`${t.nctId || t.id} | ${t.title} | ${conds} | ${matchedTerm}`);
+    });
+  }
+
   const cordobaCount = trials.filter((t) => t.hasCordobaCenter).length;
 
   return {
@@ -517,6 +728,8 @@ async function syncAndSaveTrials(db) {
     totalSaved: savedCount,
     staleCount,
     cordobaCount,
+    nonOncologyCount: nonOncologyTrials.length,
+    weakOncologyCount: weakOncologyTrials.length,
     truncated,
     timestamp: runTimestamp,
     errors: errors.length > 0 ? errors : null,
@@ -528,4 +741,6 @@ module.exports = {
   syncAndSaveTrials,
   mapStudyToClinicalTrial,
   identifyStaleTrials,
+  classifyOncologyTrial,
+  isOncologyTrial,
 };

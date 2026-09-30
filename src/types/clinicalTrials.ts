@@ -81,6 +81,7 @@ export interface ClinicalTrial {
   lastSyncedAt?: number;
   syncStatus?: 'ACTIVE' | 'STALE';
   staleSince?: number;
+  isOncology?: boolean; // false si se clasificó como no oncológico. Si undefined o true, se considera oncológico por defecto.
   // Campos normalizados para búsqueda y matching rápido
   tumorTypes: string[]; // ej. 'colon', 'mama', 'pulmon', 'melanoma', 'pancreas', etc.
   biomarkers: string[]; // ej. 'KRAS', 'BRAF', 'EGFR', 'HER2', 'ALK', 'PD-L1', etc.
