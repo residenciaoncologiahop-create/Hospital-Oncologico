@@ -6,7 +6,6 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   AlertCircle, 
-  ShieldAlert, 
   Eye, 
   Microscope,
   ChevronDown,
@@ -109,13 +108,6 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
             </div>
           </div>
 
-          {/* OBLIGATORY LEGAL & MEDICAL NOTICE */}
-          <div className="bg-amber-50/90 border-b border-amber-200/80 px-6 py-2.5 flex items-center gap-3 shrink-0">
-            <ShieldAlert size={16} className="text-amber-600 shrink-0" />
-            <div className="text-xs font-bold text-amber-950 leading-tight">
-              Paciente potencialmente elegible. Requiere verificación de criterios por el equipo investigador. Herramienta orientativa para el médico residente. No constituye confirmación de elegibilidad ni reemplaza la evaluación por el investigador principal del ensayo.
-            </div>
-          </div>
 
           {/* ADVERTENCIA DE CONFLICTO DIAGNÓSTICO */}
           {evaluation.profile?.diagnosticConflict?.hasConflict && (
@@ -493,10 +485,7 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
           </div>
 
           {/* FOOTER */}
-          <div className="p-4 border-t bg-gray-50 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
-            <span className="text-[11px]">
-              Herramienta orientativa para el médico residente. No constituye confirmación de elegibilidad ni reemplaza la evaluación por el investigador principal. Análisis determinístico de solo lectura.
-            </span>
+          <div className="p-4 border-t bg-gray-50 flex items-center justify-end gap-3 text-xs text-gray-500">
             <button
               onClick={onClose}
               className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition-colors shrink-0"
