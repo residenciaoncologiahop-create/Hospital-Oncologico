@@ -3,6 +3,8 @@
  * Conecta con ClinicalTrials.gov API v2 y persiste en Firestore usando Firebase Admin SDK.
  */
 
+const { FieldValue } = require("firebase-admin/firestore");
+
 const CT_GOV_API_BASE = "https://clinicaltrials.gov/api/v2/studies";
 
 /**
@@ -383,14 +385,52 @@ async function fetchClinicalTrialsGov(options = {}) {
 }
 
 /**
+ * Identifica los documentos que deben marcarse como STALE.
+ * Regla: STALE si lastSyncedAt es undefined, null o menor que runTimestamp.
+ * Si ya tiene syncStatus === 'STALE', no se reescribe (conservando su staleSince original).
+ * @param {Array<{id: string, data?: Function, [key: string]: any}>} existingDocs
+ * @param {number} runTimestamp
+ * @returns {Array<{id: string, staleSince: number}>}
+ */
+function identifyStaleTrials(existingDocs, runTimestamp) {
+  const staleList = [];
+  if (!Array.isArray(existingDocs)) return staleList;
+
+  for (const doc of existingDocs) {
+    const data = typeof doc.data === "function" ? doc.data() : doc;
+    const id = doc.id || data.id;
+    const lastSynced = data.lastSyncedAt;
+    const isStale = lastSynced === undefined || lastSynced === null || lastSynced < runTimestamp;
+
+    if (isStale && id) {
+      if (data.syncStatus !== "STALE") {
+        staleList.push({
+          id,
+          staleSince: data.staleSince || runTimestamp,
+        });
+      }
+    }
+  }
+  return staleList;
+}
+
+/**
  * Ejecuta la sincronización completa y persiste en Firestore usando Firebase Admin SDK
  */
 async function syncAndSaveTrials(db) {
   const errors = [];
   let trials = [];
+  let truncated = false;
+  const runTimestamp = Date.now();
 
   try {
-    trials = await fetchClinicalTrialsGov();
+    const fetchResult = await fetchClinicalTrialsGov();
+    if (Array.isArray(fetchResult)) {
+      trials = fetchResult;
+    } else {
+      trials = fetchResult.trials || [];
+      truncated = Boolean(fetchResult.truncated);
+    }
   } catch (err) {
     errors.push(`Fallo al consultar ClinicalTrials.gov: ${err.message}`);
     throw err;
@@ -405,7 +445,13 @@ async function syncAndSaveTrials(db) {
 
     for (const trial of chunk) {
       const docRef = db.collection("clinical_trials").doc(trial.id);
-      batch.set(docRef, trial, { merge: true });
+      const trialData = {
+        ...trial,
+        lastSyncedAt: runTimestamp,
+        syncStatus: "ACTIVE",
+        staleSince: FieldValue.delete(),
+      };
+      batch.set(docRef, trialData, { merge: true });
     }
 
     try {
@@ -416,14 +462,54 @@ async function syncAndSaveTrials(db) {
     }
   }
 
+  // Marcado de ensayos obsoletos (STALE):
+  // Solo si la corrida fue exitosa (sin errores) y no truncada por maxPages.
+  let staleCount = 0;
+  const isRunSuccessful = errors.length === 0;
+  const isNotTruncated = !truncated;
+
+  if (isRunSuccessful && isNotTruncated) {
+    try {
+      const allDocsSnap = await db.collection("clinical_trials").get();
+      const staleToUpdate = identifyStaleTrials(allDocsSnap.docs, runTimestamp);
+
+      for (let i = 0; i < staleToUpdate.length; i += BATCH_SIZE) {
+        const chunk = staleToUpdate.slice(i, i + BATCH_SIZE);
+        const batch = db.batch();
+
+        for (const item of chunk) {
+          const docRef = db.collection("clinical_trials").doc(item.id);
+          batch.update(docRef, {
+            syncStatus: "STALE",
+            staleSince: item.staleSince,
+          });
+        }
+
+        await batch.commit();
+        staleCount += chunk.length;
+      }
+
+      if (staleCount > 0) {
+        console.log(`[syncClinicalTrials] ${staleCount} ensayos marcados como obsoletos (STALE).`);
+      }
+    } catch (err) {
+      console.error("Error al marcar ensayos obsoletos como STALE:", err.message);
+      errors.push(`Error al marcar obsoletos: ${err.message}`);
+    }
+  } else if (truncated) {
+    console.warn("[syncClinicalTrials] Marcado de STALE omitido: la corrida se cortó por el límite de páginas.");
+  }
+
   const cordobaCount = trials.filter((t) => t.hasCordobaCenter).length;
 
   return {
     success: errors.length === 0,
     totalFetched: trials.length,
     totalSaved: savedCount,
+    staleCount,
     cordobaCount,
-    timestamp: Date.now(),
+    truncated,
+    timestamp: runTimestamp,
     errors: errors.length > 0 ? errors : null,
   };
 }
@@ -432,4 +518,5 @@ module.exports = {
   fetchClinicalTrialsGov,
   syncAndSaveTrials,
   mapStudyToClinicalTrial,
+  identifyStaleTrials,
 };

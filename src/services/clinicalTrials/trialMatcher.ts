@@ -740,6 +740,23 @@ export function evaluateTrialMatch(
   const missingItems: string[] = [];
   const criteriaEvaluations: CriterionEvaluationDetail[] = [];
 
+  // 0. EXCLUSIÓN DE ENSAYOS OBSOLETOS / NO VERIFICADOS
+  if (trial.syncStatus === 'STALE') {
+    return {
+      trial,
+      category: 'not_compatible',
+      categoryBadge: '🔴',
+      categoryLabel: 'No cumple criterio documentado',
+      score: 0,
+      matches: [],
+      incompatibilities: ['Ensayo no verificado / obsoleto: dejó de reportar reclutamiento activo en la sincronización oficial.'],
+      missingData: [],
+      missingItems: [],
+      requiredVerificationNotice: REQUIRED_NOTICE,
+      criteriaEvaluations: []
+    };
+  }
+
   // 1. EVALUACIÓN ESTRICTA DE TUMOR PRIMARIO / SITIO
   if (!patient.organOrSite) {
     const siteCrit: CriterionEvaluationDetail = {
@@ -1033,8 +1050,9 @@ export function evaluateSinglePatientTrials(
 ): PatientMatchingEvaluation {
   const profile = extractPatientClinicalProfile(patient);
   const trialResults: TrialMatchResult[] = [];
+  const activeTrials = trials.filter(t => t.syncStatus !== 'STALE');
 
-  for (const trial of trials) {
+  for (const trial of activeTrials) {
     const result = evaluateTrialMatch(profile, trial);
     // Incluir ensayos relevantes para la patología del paciente o que tengan potencial compatibilidad
     const isRelevantOrgan = trial.tumorTypes.includes(profile.organOrSite || '') || trial.tumorTypes.includes('solido_agnostico');
@@ -1111,12 +1129,13 @@ export function analyzeDoctorPatients(
   patients: any[], 
   trials: ClinicalTrial[]
 ): DoctorMatchingSummary {
+  const activeTrials = trials.filter(t => t.syncStatus !== 'STALE');
   const evaluations: PatientMatchingEvaluation[] = [];
   let patientsWithMatchesCount = 0;
   let totalMatchesCount = 0;
 
   for (const patient of patients) {
-    const evalResult = evaluateSinglePatientTrials(patient, trials);
+    const evalResult = evaluateSinglePatientTrials(patient, activeTrials);
     if (evalResult.matches.length > 0) {
       patientsWithMatchesCount++;
       totalMatchesCount += evalResult.matches.length;

@@ -78,6 +78,9 @@ export interface ClinicalTrial {
   url: string;
   lastUpdated: string; // ISO o fecha provista por la fuente
   importedAt: number;
+  lastSyncedAt?: number;
+  syncStatus?: 'ACTIVE' | 'STALE';
+  staleSince?: number;
   // Campos normalizados para búsqueda y matching rápido
   tumorTypes: string[]; // ej. 'colon', 'mama', 'pulmon', 'melanoma', 'pancreas', etc.
   biomarkers: string[]; // ej. 'KRAS', 'BRAF', 'EGFR', 'HER2', 'ALK', 'PD-L1', etc.

@@ -496,6 +496,13 @@ export const ClinicalTrialsModal: React.FC<Props> = ({ patients, onClose }) => {
                                 {trial.statusLabel}
                               </span>
 
+                              {/* NO VERIFICADO (STALE) */}
+                              {trial.syncStatus === 'STALE' && (
+                                <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md" title="El ensayo no reportó reclutamiento activo en la última sincronización">
+                                  No verificado
+                                </span>
+                              )}
+
                               {/* FASE */}
                               <span className="text-[10px] font-bold bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-md">
                                 {trial.phaseNormalized}

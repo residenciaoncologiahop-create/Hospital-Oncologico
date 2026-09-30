@@ -65,12 +65,12 @@ const ResidentApp = () => {
     setIsEvaluatingPatientTrials(true);
     try {
       const { trials: loaded } = await getStoredClinicalTrials();
-      let trialsList = loaded;
+      let trialsList = (loaded || []).filter(t => t.syncStatus !== 'STALE');
       if (!trialsList || trialsList.length === 0) {
         const res = await syncAndStoreTrials();
-        trialsList = res.trials;
+        trialsList = (res.trials || []).filter(t => t.syncStatus !== 'STALE');
       }
-      const evaluation = evaluateSinglePatientTrials(patient, trialsList || []);
+      const evaluation = evaluateSinglePatientTrials(patient, trialsList);
       setSelectedPatientTrialEvaluation(evaluation);
     } catch (err) {
       console.error('Error evaluando ensayos para el paciente:', err);
