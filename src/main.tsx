@@ -729,6 +729,91 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
         await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ labResults: updatedLabs, lastUpdated: Date.now() }));
     };
 
+    const handleDeleteLab = async (labToDelete: LabResult, index?: number) => {
+        if (!selectedPatientId) return;
+        const currentLabs = patients.find(p => p.id === selectedPatientId)?.labResults || [];
+        let updatedLabs: LabResult[];
+        if (typeof index === 'number' && index >= 0 && index < currentLabs.length) {
+            const candidate = currentLabs[index];
+            if (candidate && candidate.date === labToDelete.date && candidate.value === labToDelete.value) {
+                updatedLabs = currentLabs.filter((_, i) => i !== index);
+            } else {
+                const idx = currentLabs.findIndex(l => 
+                    (labToDelete.id && l.id === labToDelete.id) ||
+                    (l.date === labToDelete.date && l.value === labToDelete.value && l.unit === labToDelete.unit)
+                );
+                if (idx !== -1) {
+                    updatedLabs = currentLabs.filter((_, i) => i !== idx);
+                } else {
+                    updatedLabs = currentLabs.filter(l => l !== labToDelete);
+                }
+            }
+        } else {
+            const idx = currentLabs.findIndex(l => 
+                (labToDelete.id && l.id === labToDelete.id) ||
+                (l.date === labToDelete.date && l.value === labToDelete.value && l.unit === labToDelete.unit)
+            );
+            if (idx !== -1) {
+                updatedLabs = currentLabs.filter((_, i) => i !== idx);
+            } else {
+                updatedLabs = currentLabs.filter(l => l !== labToDelete);
+            }
+        }
+
+        setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, labResults: updatedLabs, lastUpdated: Date.now() } : p));
+        if (isDemoMode) return;
+        await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ labResults: updatedLabs, lastUpdated: Date.now() }));
+        logAction("DELETE_LAB_RESULT", selectedPatientId, doctorName);
+    };
+
+    const handleEditLab = async (originalLab: LabResult, updatedLab: LabResult, index?: number) => {
+        if (!selectedPatientId) return;
+        const normTest = normalizeLabTestName(updatedLab.test);
+        if (!isPlausibleLabResult(normTest, updatedLab.value, updatedLab.unit)) {
+            alert('El valor ingresado no es clínicamente plausible para el parámetro y unidad especificados.');
+            return;
+        }
+        const currentLabs = patients.find(p => p.id === selectedPatientId)?.labResults || [];
+        const labWithAuthor: LabResult = {
+            ...updatedLab,
+            test: updatedLab.test,
+            professional: doctorName || originalLab.professional || 'Manual'
+        };
+
+        let updatedLabs: LabResult[];
+        if (typeof index === 'number' && index >= 0 && index < currentLabs.length) {
+            const candidate = currentLabs[index];
+            if (candidate && candidate.date === originalLab.date && candidate.value === originalLab.value) {
+                updatedLabs = currentLabs.map((l, i) => i === index ? { ...l, ...labWithAuthor } : l);
+            } else {
+                const idx = currentLabs.findIndex(l => 
+                    (originalLab.id && l.id === originalLab.id) ||
+                    (l.date === originalLab.date && l.value === originalLab.value && l.unit === originalLab.unit)
+                );
+                if (idx !== -1) {
+                    updatedLabs = currentLabs.map((l, i) => i === idx ? { ...l, ...labWithAuthor } : l);
+                } else {
+                    updatedLabs = currentLabs;
+                }
+            }
+        } else {
+            const idx = currentLabs.findIndex(l => 
+                (originalLab.id && l.id === originalLab.id) ||
+                (l.date === originalLab.date && l.value === originalLab.value && l.unit === originalLab.unit)
+            );
+            if (idx !== -1) {
+                updatedLabs = currentLabs.map((l, i) => i === idx ? { ...l, ...labWithAuthor } : l);
+            } else {
+                updatedLabs = currentLabs;
+            }
+        }
+
+        setPatients(prev => prev.map(p => p.id === selectedPatientId ? { ...p, labResults: updatedLabs, lastUpdated: Date.now() } : p));
+        if (isDemoMode) return;
+        await updateDoc(doc(db, "patients", selectedPatientId), cleanForFirestore({ labResults: updatedLabs, lastUpdated: Date.now() }));
+        logAction("EDIT_LAB_RESULT", selectedPatientId, doctorName);
+    };
+
     const handleAddManualEvolution = async () => {
         if (!manualNote.trim() || !selectedPatientId) return;
         const [y, m, d] = manualDate.split('-');
@@ -1811,7 +1896,13 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                                     {/* LABS */}
                                     {activeTab === 'labs' && (
                                         <div className="h-full p-6 overflow-y-auto">
-                                            <LabPanel results={selP?.labResults || []} onAddManual={handleAddManualLab} isResident={false}/>
+                                            <LabPanel 
+                                                results={selP?.labResults || []} 
+                                                onAddManual={handleAddManualLab} 
+                                                onDeleteResult={handleDeleteLab}
+                                                onEditResult={handleEditLab}
+                                                isResident={false}
+                                            />
                                         </div>
                                     )}
 
