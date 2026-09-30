@@ -99,17 +99,34 @@ function sanitizeTnf(text) {
     .replace(/\btnf\b/g, " ");
 }
 
-const STRONG_ONCOLOGY_TERMS = [
+// Términos cortos o ambiguos que requieren límites de palabra estrictos (\b)
+// para evitar falsos positivos como "chewing" o "viewing".
+const BOUNDED_STRONG_PATTERNS = [
+  { term: "ewing", regex: /\bewing\b/i },
+  { term: "wilms", regex: /\bwilms\b/i },
+  { term: "kaposi", regex: /\bkaposi\b/i },
+  { term: "hodgkin", regex: /\bhodgkin\b/i },
+  { term: "teratoma", regex: /\bteratoma(s)?\b/i },
+  { term: "thymoma", regex: /\bthymoma(s)?\b/i },
+  { term: "timoma", regex: /\btimoma(s)?\b/i },
+];
+
+// Raíces y términos por prefijo o coincidencia amplia
+const PREFIX_STRONG_TERMS = [
   "cancer", "cancerous", "carcinoma", "adenocarcinoma", "neoplasm", "neoplasia", "neoplasma",
-  "neoplasic", "neoplastic", "tumor", "tumour", "tumoral", "tumores", "malignan", "maligno",
+  "neoplasic", "neoplastic", "neoplas", "tumor", "tumour", "tumoral", "tumores", "malignan", "maligno",
   "maligna", "malignidad", "metasta", "metastatic", "metastasis", "metastasico", "metastasica",
-  "leukemia", "leucemia", "lymphoma", "linfoma", "myeloma", "mieloma", "sarcoma", "melanoma",
+  "leukemia", "leukaemia", "leucemia", "lymphoma", "linfoma", "myeloma", "mieloma", "sarcoma", "melanoma",
   "glioma", "glioblastoma", "astrocytoma", "astrocitoma", "oligodendroglioma", "ependymoma",
   "ependimoma", "blastoma", "myelodysplastic", "mielodisplasic", "myelodysplasia", "mielodisplasia",
-  "oncolog", "oncologia", "oncologico", "oncology", "mesothelioma", "mesotelioma", "seminoma",
-  "teratoma", "choriocarcinoma", "coriocarcinoma", "thymoma", "timoma", "carcinoid", "carcinoide",
-  "hodgkin", "wilms", "ewing", "kaposi", "waldenstrom", "myelofibrosis", "mielofibrosis",
-  "polycythemia vera", "policitemia vera"
+  "oncolog", "oncologia", "oncologico", "oncology", "haemato-oncolog", "haematooncolog",
+  "mesothelioma", "mesotelioma", "seminoma", "choriocarcinoma", "coriocarcinoma",
+  "carcinoid", "carcinoide", "waldenstrom", "myelofibrosis", "mielofibrosis",
+  "polycythemia vera", "policitemia vera",
+  "lymphoblastic", "linfoblast", "lymphocytic leuk", "leucemia linfocit",
+  "myeloproliferative", "mieloproliferativ", "lymphoproliferative", "linfoproliferativ",
+  "mastocytosis", "mastocitosis", "histiocytosis", "histiocitosis",
+  "plasmacytoma", "plasmocitoma"
 ];
 
 const SUPPORTIVE_ONCOLOGY_TERMS = [
@@ -120,9 +137,20 @@ const SUPPORTIVE_ONCOLOGY_TERMS = [
   "inmunooncolog", "immuno-oncology"
 ];
 
-function findMatchedTerm(text, termList) {
+function findMatchedStrongTerm(text) {
   if (!text) return null;
-  for (const term of termList) {
+  for (const { term, regex } of BOUNDED_STRONG_PATTERNS) {
+    if (regex.test(text)) return term;
+  }
+  for (const term of PREFIX_STRONG_TERMS) {
+    if (text.includes(term)) return term;
+  }
+  return null;
+}
+
+function findMatchedSupportiveTerm(text) {
+  if (!text) return null;
+  for (const term of SUPPORTIVE_ONCOLOGY_TERMS) {
     if (text.includes(term)) return term;
   }
   return null;
@@ -155,7 +183,7 @@ function classifyOncologyTrial(input = {}) {
 
   // 1. Coincidencia fuerte en condiciones o títulos
   for (const text of mainTexts) {
-    const term = findMatchedTerm(text, STRONG_ONCOLOGY_TERMS);
+    const term = findMatchedStrongTerm(text);
     if (term) {
       return {
         isOncology: true,
@@ -168,7 +196,7 @@ function classifyOncologyTrial(input = {}) {
 
   // 2. Coincidencia de soporte / terapia oncológica en condiciones o títulos
   for (const text of mainTexts) {
-    const term = findMatchedTerm(text, SUPPORTIVE_ONCOLOGY_TERMS);
+    const term = findMatchedSupportiveTerm(text);
     if (term) {
       return {
         isOncology: true,
@@ -185,7 +213,7 @@ function classifyOncologyTrial(input = {}) {
     .filter(Boolean);
 
   for (const text of kwTexts) {
-    const strongTerm = findMatchedTerm(text, STRONG_ONCOLOGY_TERMS);
+    const strongTerm = findMatchedStrongTerm(text);
     if (strongTerm) {
       return {
         isOncology: true,
@@ -194,7 +222,7 @@ function classifyOncologyTrial(input = {}) {
         matchedTerm: strongTerm,
       };
     }
-    const suppTerm = findMatchedTerm(text, SUPPORTIVE_ONCOLOGY_TERMS);
+    const suppTerm = findMatchedSupportiveTerm(text);
     if (suppTerm) {
       return {
         isOncology: true,
@@ -709,6 +737,8 @@ async function syncAndSaveTrials(db) {
       const conds = (t.conditions || []).join(", ") || "Sin condiciones";
       console.log(`${t.nctId || t.id} | ${t.title} | ${conds}`);
     });
+  } else {
+    console.log("\n=== [syncClinicalTrials] ENSAYOS NO ONCOLÓGICOS DETECTADOS: 0 ===");
   }
 
   if (weakOncologyTrials.length > 0) {
@@ -718,6 +748,8 @@ async function syncAndSaveTrials(db) {
       const conds = (t.conditions || []).join(", ") || "Sin condiciones";
       console.log(`${t.nctId || t.id} | ${t.title} | ${conds} | ${matchedTerm}`);
     });
+  } else {
+    console.log("\n=== [syncClinicalTrials] ENSAYOS ONCOLÓGICOS POR COINCIDENCIA DÉBIL: 0 (coincidencias débiles: 0) ===");
   }
 
   const cordobaCount = trials.filter((t) => t.hasCordobaCenter).length;

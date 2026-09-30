@@ -225,4 +225,95 @@ describe('FASE A: Clasificación de Ensayos Oncológicos (isOncologyTrial / clas
     expect(marrowClassification.matchType).toBe('supportive');
     expect(marrowClassification.matchedTerm).toBe('bone marrow transplant');
   });
+
+  describe('Refinamiento de términos fuertes y prevención de falsos positivos con límites de palabra (\\b)', () => {
+    it('clasifica "Acute Lymphoblastic Leukaemia" (NCT01949129, grafía británica) como oncológico', () => {
+      const trial = {
+        conditions: ['Acute Lymphoblastic Leukaemia'],
+        title: 'Phase II Trial of Novel Targeted Agent in Relapsed/Refractory ALL',
+        officialTitle: 'A Study in Patients with Acute Lymphoblastic Leukaemia'
+      };
+
+      expect(isOncologyTrial(trial)).toBe(true);
+      const classification = classifyOncologyTrial(trial);
+      expect(classification.isOncology).toBe(true);
+      expect(classification.isWeakMatch).toBe(false);
+      expect(['leukaemia', 'lymphoblastic']).toContain(classification.matchedTerm);
+    });
+
+    it('clasifica "Indolent Systemic Mastocytosis" (NCT04910685) como oncológico', () => {
+      const trial = {
+        conditions: ['Indolent Systemic Mastocytosis'],
+        title: 'A Study to Evaluate the Safety and Efficacy of BLU-263 in Indolent Systemic Mastocytosis',
+        officialTitle: 'Phase 2 Study in Adult Patients with Indolent Systemic Mastocytosis'
+      };
+
+      expect(isOncologyTrial(trial)).toBe(true);
+      const classification = classifyOncologyTrial(trial);
+      expect(classification.isOncology).toBe(true);
+      expect(classification.isWeakMatch).toBe(false);
+      expect(classification.matchedTerm).toBe('mastocytosis');
+    });
+
+    it('clasifica "Generalized Myasthenia Gravis" como NO oncológico', () => {
+      const trial = {
+        conditions: ['Generalized Myasthenia Gravis'],
+        title: 'Study of Monoclonal Antibody in Generalized Myasthenia Gravis',
+        officialTitle: 'A Phase 3 Study in Patients with Acetylcholine Receptor Positive Generalized Myasthenia Gravis'
+      };
+
+      expect(isOncologyTrial(trial)).toBe(false);
+      const classification = classifyOncologyTrial(trial);
+      expect(classification.isOncology).toBe(false);
+    });
+
+    it('clasifica "Lymphatic Malformations" como NO oncológico (no confunde con lymphoma)', () => {
+      const trial = {
+        conditions: ['Lymphatic Malformations'],
+        title: 'Efficacy of Sildenafil in Congenital Lymphatic Malformations',
+        officialTitle: 'Prospective Clinical Trial in Microcystic Lymphatic Malformations'
+      };
+
+      expect(isOncologyTrial(trial)).toBe(false);
+      const classification = classifyOncologyTrial(trial);
+      expect(classification.isOncology).toBe(false);
+    });
+
+    it('clasifica "Chewing gum for postoperative ileus" como NO oncológico (evita falso positivo de "ewing")', () => {
+      const trial = {
+        conditions: ['Postoperative Ileus'],
+        title: 'Chewing gum for postoperative ileus in abdominal surgery',
+        officialTitle: 'Randomized Controlled Trial of Chewing Gum versus Standard Care'
+      };
+
+      expect(isOncologyTrial(trial)).toBe(false);
+      const classification = classifyOncologyTrial(trial);
+      expect(classification.isOncology).toBe(false);
+    });
+
+    it('clasifica "Ewing Sarcoma" como oncológico mediante límite de palabra estricto', () => {
+      const trial = {
+        conditions: ['Ewing Sarcoma'],
+        title: 'Chemotherapy Intensification in Localized Ewing Sarcoma',
+        officialTitle: 'International Phase 3 Trial for Patients with Ewing Sarcoma'
+      };
+
+      expect(isOncologyTrial(trial)).toBe(true);
+      const classification = classifyOncologyTrial(trial);
+      expect(classification.isOncology).toBe(true);
+      expect(classification.isWeakMatch).toBe(false);
+      expect(['ewing', 'sarcoma']).toContain(classification.matchedTerm);
+    });
+
+    it('confirma que la excepción de "tumor necrosis factor" sigue funcionando correctamente', () => {
+      const tnfTrial = {
+        conditions: ['Rheumatoid Arthritis'],
+        title: 'Adalimumab Anti-Tumor Necrosis Factor Therapy in Severe RA',
+        officialTitle: 'Monitoring Tumor Necrosis Factor blockade in Rheumatoid Arthritis'
+      };
+
+      expect(isOncologyTrial(tnfTrial)).toBe(false);
+      expect(classifyOncologyTrial(tnfTrial).isOncology).toBe(false);
+    });
+  });
 });
