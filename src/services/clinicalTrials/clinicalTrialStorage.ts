@@ -144,26 +144,30 @@ function ensureStructuredCriteria(trials: ClinicalTrial[]): ClinicalTrial[] {
   });
 }
 
-/**
- * Obtiene los ensayos almacenados:
- * 1. Intenta leer el caché estándar anterior (clinical_trials_cached_v2).
- * 2. Si no existe o está vacío, busca y reconstruye el caché fragmentado.
- * 3. Si no hay ningún caché válido, consulta Firestore.
- */
-export async function getStoredClinicalTrials(): Promise<{ trials: ClinicalTrial[]; lastSync: number | null }> {
-  let cachedTrials: ClinicalTrial[] = [];
-  let lastSync: number | null = null;
+export const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 
-  // 1. Intentar leer caché actual estándar en una sola clave (compatibilidad con versiones previas)
+/**
+ * Determina si una marca de sincronización es válida y reciente (< 24 horas).
+ */
+export function isCacheFresh(lastSync: number | null | undefined, now = Date.now(), ttlMs = CACHE_TTL_MS): boolean {
+  if (lastSync === null || lastSync === undefined || isNaN(lastSync)) return false;
+  const age = now - lastSync;
+  return age >= 0 && age <= ttlMs;
+}
+
+/**
+ * Intenta leer el caché local disponible (estándar o fragmentado).
+ */
+export async function getLocalCachedTrials(): Promise<{ trials: ClinicalTrial[]; lastSync: number | null } | null> {
+  // 1. Intentar leer caché actual estándar en una sola clave
   try {
     const rawLocal = localStorage.getItem(LOCAL_STORAGE_KEY);
     const rawSync = localStorage.getItem(LAST_SYNC_KEY);
     if (rawLocal) {
       const parsed = JSON.parse(rawLocal);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        cachedTrials = ensureStructuredCriteria(parsed);
-        if (rawSync) lastSync = parseInt(rawSync, 10);
-        return { trials: cachedTrials, lastSync };
+        const lastSync = rawSync ? parseInt(rawSync, 10) : null;
+        return { trials: ensureStructuredCriteria(parsed), lastSync: isNaN(lastSync as number) ? null : lastSync };
       }
     }
   } catch (e) {
@@ -183,20 +187,60 @@ export async function getStoredClinicalTrials(): Promise<{ trials: ClinicalTrial
     console.warn('Error leyendo caché fragmentado de ensayos:', e);
   }
 
-  // 3. Si no hay ningún caché válido, leer desde Firestore
+  return null;
+}
+
+/**
+ * Obtiene los ensayos almacenados:
+ * 1. Si existe caché local y tiene menos de 24h, devuelve el caché local.
+ * 2. Si el caché tiene más de 24h (o no existe), consulta Firestore para traer datos actualizados.
+ *    - Calcula lastSync como el máximo lastSyncedAt de los documentos (o null si ninguno lo tiene).
+ *    - Actualiza el caché local.
+ * 3. Si la lectura de Firestore falla, utiliza el caché local previo como respaldo resiliente.
+ */
+export async function getStoredClinicalTrials(): Promise<{ trials: ClinicalTrial[]; lastSync: number | null }> {
+  const localCache = await getLocalCachedTrials();
+
+  // Si el caché local existe y está fresco (< 24h), lo usamos directamente
+  if (localCache && isCacheFresh(localCache.lastSync)) {
+    return localCache;
+  }
+
+  // Si tiene más de 24h o no existe caché, leemos desde Firestore
   try {
     const q = query(collection(db, COLLECTION_NAME), limit(FIRESTORE_READ_LIMIT));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
       const trials = ensureStructuredCriteria(snapshot.docs.map(d => d.data() as ClinicalTrial));
-      await saveToLocalCache(trials, Date.now());
-      return { trials, lastSync: Date.now() };
+
+      // Extraer el máximo lastSyncedAt entre los documentos
+      let maxLastSyncedAt: number | null = null;
+      for (const d of snapshot.docs) {
+        const t = d.data() as ClinicalTrial;
+        if (typeof t.lastSyncedAt === 'number' && !isNaN(t.lastSyncedAt)) {
+          if (maxLastSyncedAt === null || t.lastSyncedAt > maxLastSyncedAt) {
+            maxLastSyncedAt = t.lastSyncedAt;
+          }
+        }
+      }
+
+      await saveToLocalCache(trials, maxLastSyncedAt);
+      return { trials, lastSync: maxLastSyncedAt };
     }
   } catch (err) {
-    console.warn('Firestore clinical_trials no disponible o sin conexión:', err);
+    console.warn('Firestore clinical_trials no disponible o sin conexión. Usando respaldo:', err);
+    // Respaldo: si Firestore falló pero teníamos caché (aunque tenga más de 24h), lo usamos
+    if (localCache && localCache.trials.length > 0) {
+      return localCache;
+    }
   }
 
-  return { trials: [], lastSync };
+  // Si Firestore no tenía docs y teníamos caché de respaldo, lo devolvemos
+  if (localCache && localCache.trials.length > 0) {
+    return localCache;
+  }
+
+  return { trials: [], lastSync: null };
 }
 
 /**
@@ -205,12 +249,16 @@ export async function getStoredClinicalTrials(): Promise<{ trials: ClinicalTrial
  * - Si excede cuota, fragmenta y almacena en chunks con manifiesto.
  * - Solo actualiza clinical_trials_last_sync_v2 si el guardado fue exitoso.
  */
-export async function saveToLocalCache(trials: ClinicalTrial[], timestamp: number): Promise<void> {
+export async function saveToLocalCache(trials: ClinicalTrial[], timestamp: number | null): Promise<void> {
   // 1. Intentar guardado directo estándar en una sola entrada
   try {
     cleanOldChunks();
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(trials));
-    localStorage.setItem(LAST_SYNC_KEY, timestamp.toString());
+    if (timestamp !== null && !isNaN(timestamp)) {
+      localStorage.setItem(LAST_SYNC_KEY, timestamp.toString());
+    } else {
+      localStorage.removeItem(LAST_SYNC_KEY);
+    }
     return;
   } catch {
     // Si excede la cuota en una sola clave, proceder con el almacenamiento fragmentado
@@ -235,12 +283,16 @@ export async function saveToLocalCache(trials: ClinicalTrial[], timestamp: numbe
     const manifest: ChunkManifest = {
       chunkCount,
       totalTrials: trials.length,
-      timestamp,
+      timestamp: timestamp || 0,
       compressed,
     };
 
     localStorage.setItem(CHUNK_MANIFEST_KEY, JSON.stringify(manifest));
-    localStorage.setItem(LAST_SYNC_KEY, timestamp.toString());
+    if (timestamp !== null && !isNaN(timestamp)) {
+      localStorage.setItem(LAST_SYNC_KEY, timestamp.toString());
+    } else {
+      localStorage.removeItem(LAST_SYNC_KEY);
+    }
   } catch (e) {
     console.warn('No se pudo guardar ensayos en localStorage fragmentado (límite de cuota):', e);
   }

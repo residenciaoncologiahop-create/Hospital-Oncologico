@@ -207,13 +207,23 @@ export const ClinicalTrialsModal: React.FC<Props> = ({ patients, onClose }) => {
                 <Microscope size={22} className="text-white" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded text-indigo-100">
                     Herramienta Clínica Independiente
                   </span>
-                  {lastSyncTime && (
-                    <span className="text-[10px] text-indigo-200 flex items-center gap-1">
-                      <Clock size={11} /> Sincronizado: {new Date(lastSyncTime).toLocaleDateString()} {new Date(lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {lastSyncTime ? (
+                    <span className="text-[11px] font-bold text-white bg-white/15 px-2 py-0.5 rounded-md flex items-center gap-1 border border-white/20">
+                      <Clock size={12} className="text-indigo-200" />
+                      Última sinc.: {new Date(lastSyncTime).toLocaleDateString()} {new Date(lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-medium text-indigo-200 flex items-center gap-1">
+                      <Clock size={12} /> Sin sincronización registrada
+                    </span>
+                  )}
+                  {(!lastSyncTime || (Date.now() - lastSyncTime > 3 * 24 * 60 * 60 * 1000)) && (
+                    <span className="text-[10px] font-bold bg-amber-400 text-amber-950 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-xs border border-amber-300">
+                      <span>⚠️ Sincronización desactualizada (&gt;3 días)</span>
                     </span>
                   )}
                 </div>
