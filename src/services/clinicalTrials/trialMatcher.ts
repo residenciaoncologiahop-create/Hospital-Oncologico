@@ -740,8 +740,9 @@ export function evaluateTrialMatch(
   const missingItems: string[] = [];
   const criteriaEvaluations: CriterionEvaluationDetail[] = [];
 
-  // 0. EXCLUSIÓN DE ENSAYOS OBSOLETOS / NO VERIFICADOS
-  if (trial.syncStatus === 'STALE') {
+  // 0. EXCLUSIÓN DE ENSAYOS OBSOLETOS / NO VERIFICADOS O NO ONCOLÓGICOS
+  if (trial.syncStatus === 'STALE' || trial.isOncology === false) {
+    const isNonOncology = trial.isOncology === false;
     return {
       trial,
       category: 'not_compatible',
@@ -749,7 +750,11 @@ export function evaluateTrialMatch(
       categoryLabel: 'No cumple criterio documentado',
       score: 0,
       matches: [],
-      incompatibilities: ['Ensayo no verificado / obsoleto: dejó de reportar reclutamiento activo en la sincronización oficial.'],
+      incompatibilities: [
+        isNonOncology
+          ? 'Ensayo clasificado como no oncológico: excluido del pre-screening oncológico.'
+          : 'Ensayo no verificado / obsoleto: dejó de reportar reclutamiento activo en la sincronización oficial.'
+      ],
       missingData: [],
       missingItems: [],
       requiredVerificationNotice: REQUIRED_NOTICE,
@@ -1050,7 +1055,7 @@ export function evaluateSinglePatientTrials(
 ): PatientMatchingEvaluation {
   const profile = extractPatientClinicalProfile(patient);
   const trialResults: TrialMatchResult[] = [];
-  const activeTrials = trials.filter(t => t.syncStatus !== 'STALE');
+  const activeTrials = trials.filter(t => t.syncStatus !== 'STALE' && t.isOncology !== false);
 
   for (const trial of activeTrials) {
     const result = evaluateTrialMatch(profile, trial);
@@ -1129,7 +1134,7 @@ export function analyzeDoctorPatients(
   patients: any[], 
   trials: ClinicalTrial[]
 ): DoctorMatchingSummary {
-  const activeTrials = trials.filter(t => t.syncStatus !== 'STALE');
+  const activeTrials = trials.filter(t => t.syncStatus !== 'STALE' && t.isOncology !== false);
   const evaluations: PatientMatchingEvaluation[] = [];
   let patientsWithMatchesCount = 0;
   let totalMatchesCount = 0;

@@ -65,10 +65,10 @@ const ResidentApp = () => {
     setIsEvaluatingPatientTrials(true);
     try {
       const { trials: loaded } = await getStoredClinicalTrials();
-      let trialsList = (loaded || []).filter(t => t.syncStatus !== 'STALE');
+      let trialsList = (loaded || []).filter(t => t.syncStatus !== 'STALE' && t.isOncology !== false);
       if (!trialsList || trialsList.length === 0) {
         const res = await syncAndStoreTrials();
-        trialsList = (res.trials || []).filter(t => t.syncStatus !== 'STALE');
+        trialsList = (res.trials || []).filter(t => t.syncStatus !== 'STALE' && t.isOncology !== false);
       }
       const evaluation = evaluateSinglePatientTrials(patient, trialsList);
       setSelectedPatientTrialEvaluation(evaluation);
