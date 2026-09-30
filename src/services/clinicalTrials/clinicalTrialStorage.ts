@@ -10,6 +10,7 @@ const LOCAL_STORAGE_KEY = 'clinical_trials_cached_v2';
 const LAST_SYNC_KEY = 'clinical_trials_last_sync_v2';
 const CHUNK_MANIFEST_KEY = 'clinical_trials_manifest_v2';
 const CHUNK_PREFIX = 'clinical_trials_chunk_v2_';
+const FIRESTORE_READ_LIMIT = 2500;
 
 interface ChunkManifest {
   chunkCount: number;
@@ -184,7 +185,7 @@ export async function getStoredClinicalTrials(): Promise<{ trials: ClinicalTrial
 
   // 3. Si no hay ningún caché válido, leer desde Firestore
   try {
-    const q = query(collection(db, COLLECTION_NAME), limit(300));
+    const q = query(collection(db, COLLECTION_NAME), limit(FIRESTORE_READ_LIMIT));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
       const trials = ensureStructuredCriteria(snapshot.docs.map(d => d.data() as ClinicalTrial));
@@ -289,7 +290,7 @@ export async function syncAndStoreTrials(onProgress?: (msg: string) => void): Pr
   // Recuperar los estudios actualizados desde Firestore (solo lectura)
   let trials: ClinicalTrial[] = [];
   try {
-    const q = query(collection(db, COLLECTION_NAME), limit(300));
+    const q = query(collection(db, COLLECTION_NAME), limit(FIRESTORE_READ_LIMIT));
     const snapshot = await getDocs(q);
     trials = ensureStructuredCriteria(snapshot.docs.map(d => d.data() as ClinicalTrial));
   } catch (err: unknown) {

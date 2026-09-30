@@ -377,11 +377,20 @@ async function fetchClinicalTrialsGov(options = {}) {
     if (data.nextPageToken && studies.length > 0) {
       pageToken = data.nextPageToken;
     } else {
+      pageToken = undefined;
       break;
     }
   }
 
-  return Array.from(trialsMap.values());
+  const truncated = Boolean(pageToken);
+  if (truncated) {
+    console.warn(`[fetchClinicalTrialsGov] Se alcanzó maxPages (${maxPages}) y la API aún devuelve más estudios (nextPageToken). Sincronización truncada.`);
+  }
+
+  return {
+    trials: Array.from(trialsMap.values()),
+    truncated,
+  };
 }
 
 /**
