@@ -774,18 +774,31 @@ export function parseStructuredCriteria(params: {
   let ecogMaxAdmissible: number | undefined = undefined;
 
   // Criterio de edad demográfica (si está presente en metadatos del estudio)
-  if (minimumAgeYears !== undefined || maximumAgeYears !== undefined) {
-    const ageText = `Age >= ${minimumAgeYears ?? 0}${maximumAgeYears ? ` and <= ${maximumAgeYears}` : ''} years`;
+  const normMin = typeof minimumAgeYears === 'number' && !isNaN(minimumAgeYears) && minimumAgeYears >= 0 
+    ? minimumAgeYears 
+    : (typeof minimumAgeYears === 'string' && (minimumAgeYears as any).trim() !== '' && !isNaN(Number(minimumAgeYears)) ? Number(minimumAgeYears) : undefined);
+  const validMin = normMin !== undefined && !isNaN(normMin) ? normMin : undefined;
+
+  const normMax = typeof maximumAgeYears === 'number' && !isNaN(maximumAgeYears) && maximumAgeYears > 0 
+    ? maximumAgeYears 
+    : (typeof maximumAgeYears === 'string' && (maximumAgeYears as any).trim() !== '' && !isNaN(Number(maximumAgeYears)) && Number(maximumAgeYears) > 0 ? Number(maximumAgeYears) : undefined);
+  const validMax = normMax !== undefined && !isNaN(normMax) && normMax > 0 ? normMax : undefined;
+
+  if (validMin !== undefined || validMax !== undefined) {
+    const ageText = `Age >= ${validMin ?? 0}${validMax !== undefined ? ` and <= ${validMax}` : ''} years`;
     structuredCriteria.push({
       id: `crit_age_${Math.random().toString(36).substring(2, 9)}`,
       criterionType: 'inclusion',
       category: 'AGE',
-      operator: maximumAgeYears !== undefined ? 'BETWEEN' : '>=',
-      value: { min: minimumAgeYears, max: maximumAgeYears },
+      operator: validMax !== undefined ? 'BETWEEN' : '>=',
+      value: { min: validMin, max: validMax },
       mandatory: true,
       sourceText: ageText,
       parseStatus: 'STRUCTURED',
-      confidence: 'HIGH'
+      confidence: 'HIGH',
+      details: {
+        minNumericThreshold: validMin
+      }
     });
   }
 

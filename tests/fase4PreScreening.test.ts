@@ -667,4 +667,33 @@ describe('FASE 4: Pre-Screening de Ensayos Clínicos en Modo Residente (20 Tests
     expect(evalRes.bestCategory).toBe('potential_candidate');
     expect(evalRes.matches[0].category).toBe('potential_candidate');
   });
+
+  // 21. Paciente de 41 años con ensayo de 18 a sin límite (maximumAgeYears: null)
+  it('21. Paciente de 41 años con ensayo de 18 a sin límite (maximumAgeYears null/0): evalúa edad como CUMPLE y no fuera de rango', () => {
+    const trialWithNullMaxAge: ClinicalTrial = {
+      ...baseTrial,
+      minimumAgeYears: 18,
+      maximumAgeYears: null as any,
+      structuredCriteria: [
+        {
+          id: 'c_age_18_nolimit',
+          criterionType: 'inclusion',
+          category: 'AGE',
+          mandatory: true,
+          sourceText: 'Age >= 18 years',
+          parseStatus: 'STRUCTURED',
+          value: { min: 18, max: null }
+        }
+      ]
+    };
+
+    const patient = createPatient({
+      age: 41
+    });
+
+    const result = evaluateTrialMatch(patient, trialWithNullMaxAge);
+    const ageCrit = result.criteriaEvaluations?.find(c => c.category === 'AGE');
+    expect(ageCrit?.status).toBe('CUMPLE');
+    expect(result.incompatibilities.some(i => i.toLowerCase().includes('fuera del rango'))).toBe(false);
+  });
 });

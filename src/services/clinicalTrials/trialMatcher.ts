@@ -98,11 +98,24 @@ export function evaluateSingleCriterion(
 
   // 1. EDAD
   if (criterion.category === 'AGE') {
-    const minAge = criterion.details?.minNumericThreshold ?? trial.minimumAgeYears;
-    const maxAge = trial.maximumAgeYears;
-    const name = `Edad (${minAge ?? 0}${maxAge ? ` - ${maxAge}` : '+'} años)`;
+    const rawMin = criterion.details?.minNumericThreshold ?? 
+      (typeof criterion.value === 'object' && criterion.value && 'min' in criterion.value ? (criterion.value as any).min : undefined) ?? 
+      trial.minimumAgeYears;
+    const numMin = typeof rawMin === 'number' ? rawMin : (typeof rawMin === 'string' && rawMin.trim() !== '' ? Number(rawMin) : NaN);
+    const minAge = !isNaN(numMin) && numMin >= 0 ? numMin : undefined;
 
-    if (typeof patient.age !== 'number') {
+    const rawMax = (typeof criterion.value === 'object' && criterion.value && 'max' in criterion.value ? (criterion.value as any).max : undefined) ?? 
+      trial.maximumAgeYears;
+    const numMax = typeof rawMax === 'number' ? rawMax : (typeof rawMax === 'string' && rawMax.trim() !== '' ? Number(rawMax) : NaN);
+    const maxAge = !isNaN(numMax) && numMax > 0 ? numMax : undefined;
+
+    const name = `Edad (${minAge ?? 0}${maxAge !== undefined ? ` - ${maxAge}` : '+'} años)`;
+
+    const patientAge = typeof patient.age === 'number' && !isNaN(patient.age) 
+      ? patient.age 
+      : (typeof patient.age === 'string' && !isNaN(Number(patient.age)) ? Number(patient.age) : undefined);
+
+    if (patientAge === undefined) {
       status = 'NO DOCUMENTADO';
       statusLabel = 'No documentado';
       patientValueDescription = 'Edad no documentada en el perfil del paciente';
@@ -110,31 +123,31 @@ export function evaluateSingleCriterion(
       missingAction = 'Documentar edad del paciente';
       missingActionItem = 'Documentar edad del paciente';
     } else {
-      const isTooYoung = minAge !== undefined && patient.age < minAge;
-      const isTooOld = maxAge !== undefined && patient.age > maxAge;
+      const isTooYoung = minAge !== undefined && patientAge < minAge;
+      const isTooOld = maxAge !== undefined && patientAge > maxAge;
 
       if (!isExclusion) {
         if (isTooYoung || isTooOld) {
           status = 'NO CUMPLE';
           statusLabel = 'No cumple';
-          patientValueDescription = `Edad actual: ${patient.age} años (rango admitido: ${minAge ?? 'sin mín.'} - ${maxAge ?? 'sin máx.'} años)`;
-          incompatibility = `Edad del paciente (${patient.age} años) fuera del rango admitido por protocolo (${minAge ?? 0} - ${maxAge ?? 'sin límite'}).`;
+          patientValueDescription = `Edad actual: ${patientAge} años (rango admitido: ${minAge ?? 'sin mín.'} - ${maxAge !== undefined ? `${maxAge} años` : 'sin máx.'})`;
+          incompatibility = `Edad del paciente (${patientAge} años) fuera del rango admitido por protocolo (${minAge ?? 0} - ${maxAge !== undefined ? maxAge : 'sin límite'}).`;
         } else {
           status = 'CUMPLE';
           statusLabel = 'Cumple';
-          patientValueDescription = `Edad actual: ${patient.age} años (dentro del rango)`;
-          match = `Edad (${patient.age} años) dentro del rango del protocolo ✓`;
+          patientValueDescription = `Edad actual: ${patientAge} años (dentro del rango)`;
+          match = `Edad (${patientAge} años) dentro del rango del protocolo ✓`;
         }
       } else {
         if (isTooYoung || isTooOld) {
           status = 'NO CUMPLE';
           statusLabel = 'No cumple (exclusión activa)';
-          patientValueDescription = `Edad actual: ${patient.age} años (coincide con criterio de exclusión)`;
-          incompatibility = `Edad del paciente (${patient.age} años) coincide con criterio de exclusión.`;
+          patientValueDescription = `Edad actual: ${patientAge} años (coincide con criterio de exclusión)`;
+          incompatibility = `Edad del paciente (${patientAge} años) coincide con criterio de exclusión.`;
         } else {
           status = 'CUMPLE';
           statusLabel = 'Cumple';
-          patientValueDescription = `Edad actual: ${patient.age} años (sin exclusión)`;
+          patientValueDescription = `Edad actual: ${patientAge} años (sin exclusión)`;
         }
       }
     }
@@ -833,14 +846,25 @@ export function evaluateTrialMatch(
   // 3. EVALUACIONES DETERMINÍSTICAS ADICIONALES (SI NO FUERON CUBIERTAS EN CRITERIOS)
   // Edad
   const hasAgeInCrit = criteriaEvaluations.some(c => c.category === 'AGE');
-  if (!hasAgeInCrit && (trial.minimumAgeYears || trial.maximumAgeYears)) {
-    if (typeof patient.age === 'number') {
-      if (trial.minimumAgeYears && patient.age < trial.minimumAgeYears) {
-        incompatibilities.push(`Edad del paciente (${patient.age} años) inferior al mínimo requerido (${trial.minimumAgeYears} años).`);
-      } else if (trial.maximumAgeYears && patient.age > trial.maximumAgeYears) {
-        incompatibilities.push(`Edad del paciente (${patient.age} años) superior al máximo admitido (${trial.maximumAgeYears} años).`);
+  if (!hasAgeInCrit && (trial.minimumAgeYears !== undefined && trial.minimumAgeYears !== null || trial.maximumAgeYears !== undefined && trial.maximumAgeYears !== null)) {
+    const rawMin = trial.minimumAgeYears;
+    const rawMax = trial.maximumAgeYears;
+    const numMin = typeof rawMin === 'number' ? rawMin : (typeof rawMin === 'string' && rawMin.trim() !== '' ? Number(rawMin) : NaN);
+    const minYears = !isNaN(numMin) && numMin >= 0 ? numMin : undefined;
+    const numMax = typeof rawMax === 'number' ? rawMax : (typeof rawMax === 'string' && rawMax.trim() !== '' ? Number(rawMax) : NaN);
+    const maxYears = !isNaN(numMax) && numMax > 0 ? numMax : undefined;
+
+    const patientAge = typeof patient.age === 'number' && !isNaN(patient.age)
+      ? patient.age
+      : (typeof patient.age === 'string' && !isNaN(Number(patient.age)) ? Number(patient.age) : undefined);
+
+    if (patientAge !== undefined) {
+      if (minYears !== undefined && patientAge < minYears) {
+        incompatibilities.push(`Edad del paciente (${patientAge} años) inferior al mínimo requerido (${minYears} años).`);
+      } else if (maxYears !== undefined && patientAge > maxYears) {
+        incompatibilities.push(`Edad del paciente (${patientAge} años) superior al máximo admitido (${maxYears} años).`);
       } else {
-        matches.push(`Edad (${patient.age} años) dentro del rango elegible ✓`);
+        matches.push(`Edad (${patientAge} años) dentro del rango elegible ✓`);
       }
     } else {
       missingData.push('Edad del paciente [No documentada en registro]');
