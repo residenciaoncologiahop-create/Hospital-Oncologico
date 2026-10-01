@@ -54,6 +54,8 @@ export interface NCCNGuideline {
     localizedSurveillance?: ScenarioRecommendations;
     activeMetastatic?: ScenarioRecommendations;
     resectedMetastatic?: ScenarioRecommendations;
+    postTreatmentEvaluation?: ScenarioRecommendations;
+    symptomaticReevaluation?: ScenarioRecommendations;
   };
 }
 
@@ -65,12 +67,30 @@ export type FollowUpMode =
 
 export type DiseaseStatus = 
   | 'NED'                              
+  | 'POST_TREATMENT_EVALUATION'
   | 'ACTIVE_METASTATIC'                
   | 'PARTIAL_RESPONSE'                 
   | 'STABLE_DISEASE'                   
   | 'PROGRESSION'                      
   | 'RESECTED_OLIGOMETASTATIC_NED'     
   | 'INDETERMINATE';                   
+
+export type FollowUpState =
+  | 'ROUTINE_SURVEILLANCE'
+  | 'POST_TREATMENT_EVALUATION'
+  | 'SYMPTOMATIC_REEVALUATION'
+  | 'CONFIRMED_RECURRENCE'
+  | 'CONFIRMED_PROGRESSIVE_DISEASE'
+  | 'ACTIVE_TREATMENT_MONITORING'
+  | 'UNDETERMINED';
+
+export interface PendingStudy {
+  type: 'imaging' | 'laboratory' | 'endoscopy' | 'other';
+  study: string;
+  status: 'pending' | 'requested';
+  date?: string;
+  reason?: string;
+}
 
 export interface ClinicalScenarioProfile {
   organ: string;
@@ -81,6 +101,7 @@ export interface ClinicalScenarioProfile {
   diseaseStatus: DiseaseStatus;
   diseaseStatusDescription: string;
   followUpMode: FollowUpMode;
+  followUpState: FollowUpState;
   modeLabel: string;
   activeTreatment: string;
   hasActiveSystemicTreatment: boolean;
@@ -89,7 +110,15 @@ export interface ClinicalScenarioProfile {
   lastTreatmentDate: string;
   surgeryDate: string;
   isHistologyIncomplete: boolean;
+  symptomFlag: boolean;
+  relevantSymptoms: string[];
+  pendingStudies: PendingStudy[];
+  confirmedRecurrence: boolean;
+  confirmedProgression: boolean;
   summary: string;
+  margin?: string;
+  clinicalStatus?: string;
+  treatment?: string;
 }
 
 export type PatientTumorProfile = ClinicalScenarioProfile;
@@ -157,15 +186,49 @@ export const nccnGuidelines: NCCNGuideline[] = [
       'cérvix', 'cervix', 'cervical', 'cuello uterino', 'carcinoma escamoso de cuello',
       'carcinoma epidermoide de cervix', 'adenocarcinoma de cuello uterino'
     ],
-    intention: 'Detección precoz de recaída pélvica o a distancia, manejo de toxicidad por radioterapia pélvica (estenosis vaginal, fístulas, disfunción vesical/rectal), y seguimiento de secuelas quirúrgicas.',
+    intention: 'Detección precoz de recaída pélvica o a distancia, manejo de toxicidad por radioterapia pélvica (estenosis vaginal, fístulas, disfunción vesical/rectal), y seguimiento de secuelas del tratamiento.',
     schedule: 'Años 1–2: consulta cada 3–6 meses. Años 3–5: cada 6–12 meses. Después del año 5: anual. Examen pélvico con espéculo y tacto vaginal/rectal en cada visita.',
-    imaging: 'TAC tórax-abdomen-pelvis o PET-TC con contraste: cada 6 meses en los primeros 2 años post-tratamiento en estadios IB2–IVA de alto riesgo, o ante hallazgos sospechosos. No se recomienda imagen de rutina en estadios tempranos asintomáticos. Citología vaginal/Papanicolaou anual.',
-    labs: 'SCC (carcinoma escamoso) o CA-125 (adenocarcinoma) según indicación específica ante sospecha. Función renal periódica en pacientes con antecedentes obstructivos.',
+    imaging: 'Evaluación de respuesta inicial post-tratamiento definitivo no antes de 3 meses de completado el tratamiento (modalidad según evaluación inicial y contexto clínico: PET-TC, RMN de pelvis o TAC). En pacientes asintomáticas con respuesta completa documentada, no se recomiendan imágenes seriadas de rutina. Citología vaginal anual.',
+    labs: 'Laboratorio de control general. Función renal periódica en pacientes con antecedentes obstructivos o compromiso parametrial. Marcadores tumorales (SCC o CA-125) solo condicionales si estaban documentadamente elevados al diagnóstico.',
     alarmSigns: 'Sangrado vaginal anormal; dolor pélvico o lumbar persistente; edema unilateral de miembro inferior; hematuria o fístulas; rectorragia o tenesmo; adenopatías inguinales o supraclaviculares.',
-    specialConsiderations: 'Radioterapia pélvica previa: dilatadores vaginales y rehabilitación pélvica. Asesoría en salud sexual y función renal.',
-    source: 'NCCN Cervical Cancer v1.2024',
+    specialConsiderations: 'Radioterapia pélvica previa: dilatadores vaginales y rehabilitación pélvica iniciada 2–4 semanas post-tratamiento. Asesoría en salud sexual y función renal.',
+    source: 'NCCN Cervical Cancer v1.2024 / ESGO-ESTRO-ESP 2023',
     version: 'v1.2024',
-    organization: 'NCCN'
+    organization: 'NCCN / ESGO',
+    scenarios: {
+      postTreatmentEvaluation: {
+        scenarioTitle: 'Evaluación de respuesta post-tratamiento definitivo (Período basal post-CRT / Braquiterapia)',
+        intention: 'Evaluación basal de respuesta antitumoral post-tratamiento definitivo y manejo de toxicidad aguda y secuelas tempranas.',
+        schedule: 'Consulta clínica y examen físico pélvico en el período post-tratamiento inicial (a las 6–12 semanas) para evaluar síntomas, tolerancia y recuperación de tejidos.',
+        imaging: 'La evaluación de respuesta post-tratamiento debe realizarse no antes de 3 meses después de completar el tratamiento definitivo, utilizando la modalidad de imagen apropiada según la evaluación inicial y el contexto clínico (PET-TC de cuerpo entero, RMN de pelvis o TAC con contraste, según disponibilidad y estadificación previa). No realizar imágenes seriadas de rutina.',
+        labs: 'Laboratorio general de control. Función renal (urea, creatinina) en pacientes con antecedente de uropatía obstructiva o compromiso parametrial. Marcadores tumorales (SCC / CA-125) únicamente condicionales si estaban documentadamente elevados al diagnóstico.',
+        specialRules: 'Prevención y tratamiento de estenosis vaginal: uso de dilatadores vaginales y rehabilitación pélvica iniciada 2–4 semanas post-radioterapia. Asesoramiento en salud sexual. Considerar biopsia únicamente si existe una lesión o respuesta incierta/sospechosa en imágenes/examen y el resultado histológico puede modificar la conducta terapéutica (no realizar biopsia de rutina para demostrar respuesta completa).'
+      },
+      symptomaticReevaluation: {
+        scenarioTitle: 'Reevaluación clínica dirigida por síntomas de alarma / Sospecha de recidiva',
+        intention: 'Evaluación diagnóstica dirigida ante síntomas de sospecha para descartar o confirmar persistencia o recurrencia tumoral (locorregional o a distancia), sin asumir a priori progresión no confirmada.',
+        schedule: 'Consulta y reevaluación médica oncológica dirigida e inmediata ante la aparición o persistencia de síntomas de alarma.',
+        imaging: 'Reevaluación clínica dirigida y estudios por imágenes según la localización de los síntomas y la sospecha clínica: RMN de pelvis para evaluación locorregional (cérvix, parametrios, pared pélvica, plexo lumbosacro), y/o TAC de tórax-abdomen-pelvis / PET-TC cuando esté indicado por el contexto clínico o sospecha de enfermedad extrapelviana. No se exige de forma fija ni obligatoria una modalidad única para todo síntoma.',
+        labs: 'Laboratorio de control con función renal y metabólica. Marcadores tumorales (SCC / CA-125) condicionales si existía elevación basal demostrada.',
+        specialRules: 'Los síntomas de alarma (dolor pélvico, lumbociatalgia, edema de miembros inferiores, sangrado) exigen reevaluación diagnóstica pero NO constituyen por sí mismos progresión ni recurrencia confirmada. Ante cualquier hallazgo sospechoso de recidiva en imágenes o examen físico, se requiere confirmación histológica mediante biopsia antes de iniciar tratamientos de rescate.'
+      },
+      localizedSurveillance: {
+        scenarioTitle: 'Vigilancia rutinaria post-tratamiento curativo (Respuesta completa documentada, asintomática, NED)',
+        intention: 'Detección precoz de recurrencia asintomática y monitoreo de secuelas a largo plazo en pacientes con respuesta completa consolidada.',
+        schedule: 'Años 1–2: consulta oncológica y examen físico pélvico cada 3–6 meses. Años 3–5: cada 6–12 meses. A partir del año 6: control anual individualizado.',
+        imaging: 'No se recomiendan estudios de imagen seriados rutinarios (TAC ni PET-TC de rutina) en pacientes asintomáticas con respuesta completa documentada. Citología vaginal / Papanicolaou anual (según indicación de NCCN para detección de neoplasias del tracto genital inferior; no como método primario de detección de recurrencia post-radioterapia).',
+        labs: 'No se recomiendan marcadores tumorales (SCC, CA-125, CEA) de rutina en el seguimiento asintomático. Función renal periódica si antecedente de uropatía obstructiva.',
+        specialRules: 'Educación exhaustiva sobre signos y síntomas de alarma que requieren consulta anticipada (sangrado vaginal, dolor pélvico/lumbar persistente, edema unilateral de miembro inferior, síntomas urinarios o rectales). Mantenimiento de dilatadores vaginales y salud sexual post-radioterapia.'
+      },
+      activeMetastatic: {
+        scenarioTitle: 'Enfermedad metastásica activa / Recidiva no pasible de rescate local en tratamiento sistémico',
+        intention: 'Evaluación seriada de respuesta antitumoral objetiva (criterios RECIST 1.1 / iRECIST), control de síntomas y manejo de toxicidad.',
+        schedule: 'Evaluación clínica antes de cada ciclo de tratamiento sistémico.',
+        imaging: 'TAC de tórax, abdomen y pelvis con contraste IV (o PET-TC) cada 2 a 3 meses (cada 8–12 semanas) para Evaluación de Respuesta al tratamiento.',
+        labs: 'Hemograma completo, perfil hepático y renal antes de cada ciclo de tratamiento.',
+        specialRules: 'No aplicar pautas de vigilancia rutinaria en pacientes con enfermedad activa bajo tratamiento sistémico.'
+      }
+    }
   },
 
   {
@@ -676,33 +739,7 @@ export const nccnGuidelines: NCCNGuideline[] = [
   }
 ];
 
-/**
- * Normaliza cadenas para comparación clínica segura
- */
-export interface PatientTumorProfile {
-  organ: string;
-  histology: string;
-  subtype: string;
-  stage: string;
-  margin: string;
-  clinicalStatus: string;
-  treatment: string;
-  surgeryDate: string;
-  isHistologyIncomplete: boolean;
-  summary: string;
-}
 
-export interface CandidateValidationResult {
-  canProceed: boolean;
-  profile: PatientTumorProfile;
-  sourceMode: 'CLOSED_SOURCE_MANUAL' | 'SYSTEM_NCCN' | 'NONE';
-  validAttachedGuidelines: { name: string; type: string; data: string }[];
-  validSystemGuideline: NCCNGuideline | null;
-  excludedSources: { name: string; detectedTarget: string; reason: string }[];
-  stopReason?: 'HISTOLOGY_INCOMPLETE' | 'EXCLUDED_ATTACHED_NO_VALID' | 'NO_MATCHING_SYSTEM_GUIDELINE';
-  stopTitle?: string;
-  stopMessage?: string;
-}
 
 /**
  * Normaliza cadenas para comparación clínica segura
@@ -752,7 +789,10 @@ const ORGAN_DEFINITIONS: OrganDefinition[] = [
       ) {
         return false;
       }
-      const withoutCuello = str.replace(/cuello (?:uterino|de utero)/g, ' ');
+      const withoutCuello = str
+        .replace(/\b(?:cervic\w*|cervix|cuello)\s+(?:uterin\w*|de\s+utero)\b/g, ' ')
+        .replace(/\bcuello\s+(?:uterin\w*|de\s+utero)\b/g, ' ')
+        .replace(/\bcervicouterin\w*\b/g, ' ');
       return /\b(endometri\w*)\b/.test(str) || /\b(uterin\w*|utero)\b/.test(withoutCuello);
     },
     terms: ['endometrio', 'endometrial', 'endometrioide', 'utero', 'uterino', 'uterina']
@@ -882,7 +922,7 @@ function isOrganMentionIncidental(text: string, organTermRegex: RegExp): boolean
  */
 function detectCandidateOrgans(rawOrNormStr: string, isExplicitContext: boolean = false): string[] {
   const str = normalizeStr(rawOrNormStr);
-  const found: string[] = [];
+  let found: string[] = [];
 
   for (const def of ORGAN_DEFINITIONS) {
     let matches = false;
@@ -902,7 +942,16 @@ function detectCandidateOrgans(rawOrNormStr: string, isExplicitContext: boolean 
 
   // Si coexisten Trofoblasto gestacional y Endometrio / Útero, prevalece Trofoblasto
   if (found.includes('Trofoblasto gestacional (Útero)') && found.includes('Endometrio / Útero')) {
-    return found.filter(o => o !== 'Endometrio / Útero');
+    found = found.filter(o => o !== 'Endometrio / Útero');
+  }
+
+  // Si coexisten Cuello uterino (Cérvix) y Endometrio / Útero:
+  // Si no hay mención explícita de endometrio/endometrial/cuerpo uterino, el término "uterino" proviene de cérvix uterino o útero en contexto cervical.
+  if (found.includes('Cuello uterino (Cérvix)') && found.includes('Endometrio / Útero')) {
+    const hasExplicitEndometrium = /\b(endometri\w*|cuerpo\s+uterin\w*|cuerpo\s+de\s+utero)\b/.test(str);
+    if (!hasExplicitEndometrium) {
+      found = found.filter(o => o !== 'Endometrio / Útero');
+    }
   }
 
   return found;
@@ -1243,6 +1292,402 @@ export function detectStageIV(clinicalText: string, explicitDiagnosis: string = 
 }
 
 /**
+ * Detecta la estirpe histológica a partir de un texto respetando límites de palabra y contexto clínico.
+ */
+export function detectHistologyFromText(text: string, organ: string): string | null {
+  const norm = normalizeStr(text);
+  if (!norm) return null;
+
+  // 1. Tumores Neuroendocrinos
+  if (/\b(?:neuroendocrin\w*|tne|pnet|carcinoide|net\s+g[1-3])\b/.test(norm)) {
+    return 'Tumor neuroendocrino (TNE / NET)';
+  }
+
+  // 2. Patología Trofoblástica Gestacional (GTN / Mola)
+  if (/\bcoriocarcinoma\s+gestacional\b/.test(norm) || (/\bcoriocarcinoma\b/.test(norm) && organ !== 'Testículo')) {
+    return 'Coriocarcinoma gestacional';
+  }
+  if (/\b(?:mola\s+hidat(?:id)?iforme\s+completa|mola\s+completa)\b/.test(norm)) {
+    return 'Mola hidatiforme completa';
+  }
+  if (/\b(?:mola\s+hidat(?:id)?iforme\s+parcial|mola\s+parcial)\b/.test(norm)) {
+    return 'Mola hidatiforme parcial';
+  }
+  if (/\bmola\s+invasora\b/.test(norm)) {
+    return 'Mola invasora';
+  }
+  if (/\bmola\s+hidat(?:id)?iforme\b/.test(norm) || (/\bmola\b/.test(norm) && (organ === 'Trofoblasto gestacional (Útero)' || /\b(?:embarazo|gestacion\w*|trofoblast\w*|vesicul\w*|evacuacion)\b/.test(norm)))) {
+    return 'Mola hidatiforme';
+  }
+  if (/\btumor\s+trofoblastico\s+del\s+sitio\s+placentario\b/.test(norm) || /\bpstt\b/.test(norm)) {
+    return 'Tumor trofoblástico del sitio placentario';
+  }
+  if (/\btumor\s+trofoblastico\s+epitelioide\b/.test(norm) || /\bett\b/.test(norm)) {
+    return 'Tumor trofoblástico epitelioide';
+  }
+  if (/\b(?:neoplasia\s+trofoblastica\s+gestacional|enfermedad\s+trofoblastica\s+gestacional|gtn)\b/.test(norm)) {
+    return 'Neoplasia trofoblástica gestacional';
+  }
+
+  // 3. Carcinoma Epidermoide / Escamoso / Escamocelular
+  if (/\b(?:carcinoma\s+epidermoide|carcinoma\s+escamoso|carcinoma\s+espinocelular|carcinoma\s+escamocelular|escamocelular)\b/.test(norm)) {
+    if (organ === 'Cuello uterino (Cérvix)') return 'Carcinoma epidermoide de cérvix';
+    if (organ === 'Piel') return 'Carcinoma espinocelular cutáneo';
+    if (organ === 'Pulmón') return 'Carcinoma epidermoide de pulmón (NSCLC)';
+    return 'Carcinoma epidermoide / escamoso';
+  }
+
+  // 4. Adenocarcinoma Ductal
+  if (/\badenocarcinoma\s+ductal\b/.test(norm) || (/\badenocarcinoma\b/.test(norm) && /\bductal\b/.test(norm))) {
+    return organ === 'Páncreas' ? 'Adenocarcinoma ductal de páncreas' : 'Adenocarcinoma ductal';
+  }
+
+  // 5. Adenocarcinoma por órgano
+  if (/\badenocarcinoma\b/.test(norm)) {
+    if (organ === 'Colon') {
+      if (norm.includes('mucinoso')) return 'Adenocarcinoma mucinoso de colon';
+      if (norm.includes('colorrectal') || norm.includes('colorectal')) return 'Adenocarcinoma colorrectal';
+      return 'Adenocarcinoma de colon';
+    }
+    if (organ === 'Páncreas') return 'Adenocarcinoma de páncreas';
+    if (organ === 'Recto') return 'Adenocarcinoma de recto';
+    if (organ === 'Próstata') return 'Adenocarcinoma de próstata';
+    if (organ === 'Estómago') return 'Adenocarcinoma gástrico';
+    if (organ === 'Endometrio / Útero') return 'Adenocarcinoma endometrioide';
+    if (organ === 'Cuello uterino (Cérvix)') return 'Adenocarcinoma de cérvix';
+    if (organ === 'Ovario') return 'Adenocarcinoma de ovario';
+    if (organ === 'Pulmón') return 'Adenocarcinoma de pulmón';
+    return 'Adenocarcinoma';
+  }
+
+  // 6. Otras estirpes específicas
+  if (/\b(?:microcitico|celulas\s+pequenas|sclc)\b/.test(norm)) {
+    return 'Carcinoma microcítico (SCLC)';
+  }
+  if (/\b(?:celulas\s+no\s+pequenas|nsclc)\b/.test(norm)) {
+    return 'Carcinoma de células no pequeñas (NSCLC)';
+  }
+  if (/\b(?:basocelular|bcc)\b/.test(norm)) {
+    return 'Carcinoma basocelular';
+  }
+  if (/\bmelanoma\b/.test(norm)) {
+    return 'Melanoma';
+  }
+  if (/\bseminoma\b/.test(norm)) {
+    return 'Seminoma';
+  }
+  if (/\b(?:urotelial|transicional)\b/.test(norm)) {
+    return 'Carcinoma urotelial';
+  }
+  if (/\bcelulas\s+claras\b/.test(norm)) {
+    return organ === 'Riñón' ? 'Carcinoma de células claras de riñon' : 'Carcinoma de células claras';
+  }
+  if (/\bseroso\b/.test(norm)) {
+    return organ === 'Ovario' ? 'Carcinoma seroso de alto grado' : 'Carcinoma seroso';
+  }
+
+  return null;
+}
+
+/**
+ * Detecta de forma estructurada síntomas de alarma o sospecha relevantes para el seguimiento oncológico,
+ * respetando estrictamente las negaciones clínicas (ej. "niega genitorragia", "sin dolor lumbar").
+ */
+export function detectRelevantSymptoms(text: string): { symptomFlag: boolean; relevantSymptoms: string[] } {
+  const norm = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const clauses = norm.split(/[\n.;]+/).map(c => c.trim()).filter(Boolean);
+  const detected = new Set<string>();
+
+  const symptomDefinitions = [
+    {
+      name: 'Dolor pélvico',
+      regex: /\b(?:dolor|molestia)\b[\s\w]*?\b(?:pelvis|pelvic\w*|pelvian\w*)\b|\bpelvalgia\b/,
+    },
+    {
+      name: 'Dolor lumbar',
+      regex: /\b(?:dolor|molestia)\b[\s\w]*?\b(?:lumbar\w*|lumbarg\w*)\b|\blumbalgia\b/,
+    },
+    {
+      name: 'Dolor en miembros inferiores',
+      regex: /\b(?:dolor|molestia)\b[\s\w]*?\b(?:miembros\s+inferiores|mmii|piernas|ciatic\w*)\b/,
+    },
+    {
+      name: 'Edema de miembros inferiores',
+      regex: /\bedema\b[\s\w]*?\b(?:miembros\s+inferiores|mmii|piernas|unilateral)\b/,
+    },
+    {
+      name: 'Genitorragia / Sangrado vaginal',
+      regex: /\b(?:genitorragia|metrorragia|sangrado\s+vaginal|sangrado\s+uterino|ginecrorragia)\b/,
+    },
+    {
+      name: 'Síntomas urinarios',
+      regex: /\b(?:hematuria|disuria|polaquiuria|sintomas\s+urinarios|alteraciones\s+urinarias|fistula\s+vesic\w*)\b/,
+    },
+    {
+      name: 'Síntomas intestinales / rectales',
+      regex: /\b(?:rectorragia|tenesmo|alteraciones\s+intestinales|sintomas\s+intestinales|fistula\s+recto\w*)\b/,
+    },
+  ];
+
+  for (const clause of clauses) {
+    for (const s of symptomDefinitions) {
+      if (s.regex.test(clause)) {
+        const isNegated =
+          /\b(?:niega|sin|no\s+presenta|no\s+refiere|no\s+se\s+observa|ausencia\s+de|libre\s+de|descartad[ao]s?)\b/i.test(clause) &&
+          new RegExp(`(?:niega|sin|no\\s+presenta|no\\s+refiere|no\\s+se\\s+observa|ausencia\\s+de|libre\\s+de|descartad[ao]s?)[\\s\\w]*?(?:${s.regex.source})`, 'i').test(clause);
+
+        if (!isNegated) {
+          detected.add(s.name);
+        }
+      }
+    }
+  }
+
+  return {
+    symptomFlag: detected.size > 0,
+    relevantSymptoms: Array.from(detected),
+  };
+}
+
+/**
+ * Detecta estudios solicitados o pendientes de realización documentados en la historia clínica.
+ */
+export function detectPendingStudies(text: string): PendingStudy[] {
+  const clauses = text.split(/[\n.;]+/).map(c => c.trim()).filter(Boolean);
+  const studies: PendingStudy[] = [];
+  const seen = new Set<string>();
+
+  for (const clause of clauses) {
+    const cNorm = clause.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    // PET-CT
+    if (/\b(?:pet|pet-ct|pet-tc)\b/.test(cNorm)) {
+      const isPending = /\b(?:pendiente|programad[ao]|a\s+realizar)\b/.test(cNorm);
+      const isRequested = /\b(?:solicitad[ao]|se\s+solicita|solicitar|pedido\s+de)\b/.test(cNorm);
+      if (isPending || isRequested) {
+        const key = 'PET-CT';
+        if (!seen.has(key)) {
+          seen.add(key);
+          studies.push({
+            type: 'imaging',
+            study: 'PET-CT',
+            status: isPending ? 'pending' : 'requested',
+            reason: 'Control post-tratamiento',
+          });
+        }
+      }
+    }
+
+    // RMN de pelvis / RM
+    if (/\b(?:rmn|rm|resonancia)\b/.test(cNorm)) {
+      const isPelvis = /\b(?:pelvis|pelvic\w*)\b/.test(cNorm);
+      const isPending = /\b(?:pendiente|programad[ao]|a\s+realizar)\b/.test(cNorm);
+      const isRequested = /\b(?:solicitad[ao]|se\s+solicita|solicitar|pedido\s+de)\b/.test(cNorm);
+      if (isPending || isRequested) {
+        const studyName = isPelvis ? 'RMN de pelvis' : 'RMN';
+        const key = studyName;
+        if (!seen.has(key)) {
+          seen.add(key);
+          studies.push({
+            type: 'imaging',
+            study: studyName,
+            status: isRequested ? 'requested' : 'pending',
+            reason: 'Evaluación post-tratamiento',
+          });
+        }
+      }
+    }
+
+    // TAC
+    if (/\b(?:tac|tc|tomografia)\b/.test(cNorm) && !/\b(?:pet-ct|pet-tc)\b/.test(cNorm)) {
+      const isPending = /\b(?:pendiente|programad[ao]|a\s+realizar)\b/.test(cNorm);
+      const isRequested = /\b(?:solicitad[ao]|se\s+solicita|solicitar|pedido\s+de)\b/.test(cNorm);
+      if (isPending || isRequested) {
+        const key = 'TAC';
+        if (!seen.has(key)) {
+          seen.add(key);
+          studies.push({
+            type: 'imaging',
+            study: 'TAC',
+            status: isRequested ? 'requested' : 'pending',
+            reason: 'Control post-tratamiento',
+          });
+        }
+      }
+    }
+
+    // Laboratorio de control
+    if (/\b(?:laboratorio|analisis|hemograma)\b/.test(cNorm)) {
+      const isPending = /\b(?:pendiente|programad[ao]|a\s+realizar)\b/.test(cNorm);
+      const isRequested = /\b(?:solicitad[ao]|se\s+solicita|solicitar|pedido\s+de)\b/.test(cNorm);
+      if (isPending || isRequested) {
+        const key = 'Laboratorio';
+        if (!seen.has(key)) {
+          seen.add(key);
+          studies.push({
+            type: 'laboratory',
+            study: 'Laboratorio de control',
+            status: isRequested ? 'requested' : 'pending',
+            reason: 'Control post-tratamiento',
+          });
+        }
+      }
+    }
+  }
+
+  return studies;
+}
+
+/**
+ * Extrae la fecha de finalización del tratamiento oncológico definitivo completo
+ * (ej. quimioterapia, radioterapia externa, braquiterapia), seleccionando la fecha cronológicamente más reciente.
+ */
+export function extractLastTreatmentDate(clinicalText: string): string {
+  const lines = clinicalText.split('\n');
+  const foundDates: { dateStr: string; timestamp: number }[] = [];
+
+  const parseDate = (dStr: string): number | null => {
+    const m = dStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+    if (!m) return null;
+    const day = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10) - 1;
+    let year = parseInt(m[3], 10);
+    if (year < 100) year += 2000;
+    return new Date(year, month, day).getTime();
+  };
+
+  for (const line of lines) {
+    const lNorm = line.toLowerCase();
+    const isTxLine =
+      lNorm.includes('tratamiento') ||
+      lNorm.includes('quimioterapia') ||
+      lNorm.includes('radioterapia') ||
+      lNorm.includes('braquiterapia') ||
+      lNorm.includes('cirugia') ||
+      lNorm.includes('vmat') ||
+      lNorm.includes('hdr') ||
+      lNorm.includes('finalizad') ||
+      lNorm.includes('completad') ||
+      lNorm.includes('ciclo') ||
+      lNorm.includes('adyuvancia');
+
+    if (isTxLine) {
+      const dateMatches = Array.from(line.matchAll(/\b(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b/g));
+      for (const dm of dateMatches) {
+        const dStr = dm[1];
+        const ts = parseDate(dStr);
+        if (ts) {
+          foundDates.push({ dateStr: dStr, timestamp: ts });
+        }
+      }
+    }
+  }
+
+  if (foundDates.length > 0) {
+    foundDates.sort((a, b) => b.timestamp - a.timestamp);
+    return foundDates[0].dateStr;
+  }
+
+  return 'No documentada';
+}
+
+/**
+ * Extrae la fecha del último estudio de imagen efectivamente REALIZADO (excluyendo estudios pendientes o solicitados).
+ */
+export function extractLastImagingDate(clinicalText: string): string {
+  const lines = clinicalText.split('\n');
+  const foundDates: { dateStr: string; timestamp: number }[] = [];
+
+  const parseDate = (dStr: string): number | null => {
+    const m = dStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+    if (!m) return null;
+    const day = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10) - 1;
+    let year = parseInt(m[3], 10);
+    if (year < 100) year += 2000;
+    return new Date(year, month, day).getTime();
+  };
+
+  for (const line of lines) {
+    const lNorm = line.toLowerCase();
+    if (
+      lNorm.includes('pendiente') ||
+      lNorm.includes('solicitar') ||
+      lNorm.includes('se solicita') ||
+      lNorm.includes('solicitada') ||
+      lNorm.includes('solicitado') ||
+      lNorm.includes('pedido')
+    ) {
+      continue;
+    }
+
+    const isImagingLine =
+      lNorm.includes('tac') ||
+      lNorm.includes('tc') ||
+      lNorm.includes('tomografia') ||
+      lNorm.includes('rm') ||
+      lNorm.includes('rmn') ||
+      lNorm.includes('resonancia') ||
+      lNorm.includes('pet') ||
+      lNorm.includes('pet-ct') ||
+      lNorm.includes('pet-tc') ||
+      lNorm.includes('ecografia');
+
+    if (isImagingLine) {
+      const dateMatches = Array.from(line.matchAll(/\b(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b/g));
+      for (const dm of dateMatches) {
+        const dStr = dm[1];
+        const ts = parseDate(dStr);
+        if (ts) {
+          foundDates.push({ dateStr: dStr, timestamp: ts });
+        }
+      }
+    }
+  }
+
+  if (foundDates.length > 0) {
+    foundDates.sort((a, b) => b.timestamp - a.timestamp);
+    return foundDates[0].dateStr;
+  }
+
+  return 'No documentada';
+}
+
+/**
+ * Extrae el estadio tumoral a partir del texto clínico y del diagnóstico explícito,
+ * exigiendo contexto clínico riguroso (FIGO, Estadio/Stage, TNM) y evitando
+ * falsas capturas de letras dentro de palabras (ej. "cérvix" -> "vix").
+ */
+export function extractStageFromClinicalText(clinicalText: string, explicitDiagnosis: string = ''): string {
+  const combined = `${explicitDiagnosis} ${clinicalText}`;
+
+  // 1. Patrones explícitos de FIGO (ej: FIGO IIIC2, FIGO IIIC, FIGO II, FIGO IB1, FIGO IA, FIGO IVB)
+  const figoRegex = /\bFIGO\s+(?:(?:I[VX]|V?I{1,3}|[1-4])[A-C]?[1-3]?)\b/gi;
+  const figoMatches = Array.from(combined.matchAll(figoRegex));
+  if (figoMatches.length > 0) {
+    const sorted = figoMatches.map(m => m[0].trim()).sort((a, b) => b.length - a.length);
+    return sorted[0];
+  }
+
+  // 2. Patrones explícitos de Estadio / Stage / Etapa (ej: Estadio IIIC, Estadio II, Estadio IA, Stage IV, Stage IIIC, Estadio 3, Stage 4B)
+  const explicitStageRegex = /\b(?:estadio|stage|etapa)\s+(?:(?:I[VX]|V?I{1,3}|IV|III|II|I|0|[0-4])[A-C]?[1-3]?)\b/gi;
+  const explicitMatches = Array.from(combined.matchAll(explicitStageRegex));
+  if (explicitMatches.length > 0) {
+    const sorted = explicitMatches.map(m => m[0].trim()).sort((a, b) => b.length - a.length);
+    return sorted[0];
+  }
+
+  // 3. Patrones estructurados de TNM (ej: pT2 pN1 M0, pT2N1M0, cT3N2M0, ypT2N1M0, T1bN0M0, T3 N1 M0)
+  const tnmFullRegex = /\b(?:(?:[pcy]|yp|yc)T[0-4][a-d]?(?:is)?(?:\s*[pcy]?N[0-3][a-c]?)?(?:\s*[pcy]?M[0-1][a-c]?)?|T[0-4][a-d]?(?:is)?\s*[pcy]?N[0-3][a-c]?(?:\s*[pcy]?M[0-1][a-c]?)?)\b/i;
+  const tnmMatch = combined.match(tnmFullRegex);
+  if (tnmMatch) {
+    return tnmMatch[0].trim();
+  }
+
+  return 'No documentado';
+}
+
+/**
  * Extrae el perfil tumoral ancla del paciente a partir de su diagnóstico explícito
  * y/o de la historia clínica patológica, anclando al diagnóstico principal y
  * filtrando menciones incidentales o hallazgos normales de otros órganos.
@@ -1307,7 +1752,7 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
 
   // Nivel 2: Encabezados diagnósticos explícitos en el texto clínico
   if (organ === 'Desconocido / No identificado') {
-    const dxHeaderRegex = /(?:diagn[oó]stico(?:[\s\w]*)|anatom[ií]a patol[oó]gica|informe anatomopatol[oó]gico|biopsia(?:[\s\w]*)|ap|tumor primario|juicio cl[ií]nico|impresi[oó]n diagn[oó]stica)[\s:]+([^\n.;]+)/gi;
+    const dxHeaderRegex = /(?:diagn[oó]stico(?:[\s\w]*)|anatom[ií]a\s+patol[oó]gica|informe\s+anatomopatol[oó]gico|biopsia(?:[\s\w]*)|ap|tumor\s+primario|juicio\s+cl[ií]nico|impresi[oó]n\s+diagn[oó]stica)[\s:]+([^\n.;]+)/gi;
     const headerOrgans = new Set<string>();
     let match: RegExpExecArray | null;
     while ((match = dxHeaderRegex.exec(clinicalText)) !== null) {
@@ -1366,91 +1811,49 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
     }
   }
 
-  // 2. Detección de estirpe histológica
+  // 2. Detección de estirpe histológica con jerarquía estricta
   let histology = 'No especificada / Pendiente de confirmación';
 
-  const targetSearchStr = `${normDx} ${normText}`;
-  const hasNeuroendocrine =
-    targetSearchStr.includes('neuroendocrin') || targetSearchStr.includes('tne') || targetSearchStr.includes('pnet') || targetSearchStr.includes('carcinoide') || targetSearchStr.includes('net g');
-
-  if (hasNeuroendocrine) {
-    histology = 'Tumor neuroendocrino (TNE / NET)';
-  } else if (targetSearchStr.includes('coriocarcinoma')) {
-    histology = 'Coriocarcinoma gestacional';
-  } else if (
-    targetSearchStr.includes('mola hidatiforme completa') ||
-    targetSearchStr.includes('mola completa') ||
-    (targetSearchStr.includes('mola') && targetSearchStr.includes('completa'))
-  ) {
-    histology = 'Mola hidatiforme completa';
-  } else if (
-    targetSearchStr.includes('mola hidatiforme parcial') ||
-    targetSearchStr.includes('mola parcial') ||
-    (targetSearchStr.includes('mola') && targetSearchStr.includes('parcial'))
-  ) {
-    histology = 'Mola hidatiforme parcial';
-  } else if (
-    targetSearchStr.includes('mola invasora') ||
-    (targetSearchStr.includes('mola') && targetSearchStr.includes('invasora'))
-  ) {
-    histology = 'Mola invasora';
-  } else if (targetSearchStr.includes('mola hidatiforme') || targetSearchStr.includes('mola')) {
-    histology = 'Mola hidatiforme';
-  } else if (targetSearchStr.includes('sitio placentario')) {
-    histology = 'Tumor trofoblástico del sitio placentario';
-  } else if (targetSearchStr.includes('trofoblastico epitelioide') || targetSearchStr.includes('trofoblastica epitelioide')) {
-    histology = 'Tumor trofoblástico epitelioide';
-  } else if (targetSearchStr.includes('trofoblast')) {
-    histology = 'Neoplasia trofoblástica gestacional';
-  } else if (targetSearchStr.includes('adenocarcinoma ductal') || (targetSearchStr.includes('adenocarcinoma') && targetSearchStr.includes('ductal'))) {
-    histology = organ === 'Páncreas' ? 'Adenocarcinoma ductal de páncreas' : 'Adenocarcinoma ductal';
-  } else if (targetSearchStr.includes('adenocarcinoma')) {
-    if (organ === 'Colon') {
-      if (targetSearchStr.includes('mucinoso')) histology = 'Adenocarcinoma mucinoso de colon';
-      else if (targetSearchStr.includes('colorrectal') || targetSearchStr.includes('colorectal')) histology = 'Adenocarcinoma colorrectal';
-      else histology = 'Adenocarcinoma de colon';
-    } else if (organ === 'Páncreas') {
-      histology = 'Adenocarcinoma de páncreas';
-    } else if (organ === 'Recto') {
-      histology = 'Adenocarcinoma de recto';
-    } else if (organ === 'Próstata') {
-      histology = 'Adenocarcinoma de próstata';
-    } else if (organ === 'Estómago') {
-      histology = 'Adenocarcinoma gástrico';
-    } else if (organ === 'Endometrio / Útero') {
-      histology = 'Adenocarcinoma endometrioide';
-    } else if (organ === 'Cuello uterino (Cérvix)') {
-      histology = 'Adenocarcinoma de cérvix';
-    } else if (organ === 'Ovario') {
-      histology = 'Adenocarcinoma de ovario';
-    } else if (organ === 'Pulmón') {
-      histology = 'Adenocarcinoma de pulmón';
-    } else {
-      histology = 'Adenocarcinoma';
+  // Nivel 1: Diagnóstico estructurado explícito (prioridad absoluta)
+  if (explicitDiagnosis) {
+    const detected = detectHistologyFromText(explicitDiagnosis, organ);
+    if (detected) {
+      histology = detected;
     }
-  } else if (targetSearchStr.includes('carcinoma epidermoide') || targetSearchStr.includes('carcinoma escamoso') || targetSearchStr.includes('escamocelular')) {
-    if (organ === 'Cuello uterino (Cérvix)') histology = 'Carcinoma epidermoide de cérvix';
-    else if (organ === 'Piel') histology = 'Carcinoma espinocelular cutáneo';
-    else if (organ === 'Pulmón') histology = 'Carcinoma epidermoide de pulmón (NSCLC)';
-    else histology = 'Carcinoma epidermoide / escamoso';
-  } else if (targetSearchStr.includes('microcitico') || targetSearchStr.includes('celulas pequenas') || targetSearchStr.includes('sclc')) {
-    histology = 'Carcinoma microcítico (SCLC)';
-  } else if (targetSearchStr.includes('celulas no pequenas') || targetSearchStr.includes('nsclc')) {
-    histology = 'Carcinoma de células no pequeñas (NSCLC)';
-  } else if (targetSearchStr.includes('basocelular') || targetSearchStr.includes('bcc')) {
-    histology = 'Carcinoma basocelular';
-  } else if (targetSearchStr.includes('melanoma')) {
-    histology = 'Melanoma';
-  } else if (targetSearchStr.includes('seminoma')) {
-    histology = 'Seminoma';
-  } else if (targetSearchStr.includes('urotelial') || targetSearchStr.includes('transicional')) {
-    histology = 'Carcinoma urotelial';
-  } else if (targetSearchStr.includes('celulas claras')) {
-    histology = organ === 'Riñón' ? 'Carcinoma de células claras de riñon' : 'Carcinoma de células claras';
-  } else if (targetSearchStr.includes('seroso')) {
-    histology = organ === 'Ovario' ? 'Carcinoma seroso de alto grado' : 'Carcinoma seroso';
-  } else if (organ !== 'Desconocido / No identificado' && !organ.toLowerCase().includes('ambiguo')) {
-    // Si el órgano es conocido, asignar la estirpe estándar predominante según NCCN
+  }
+
+  // Nivel 2: Encabezados diagnósticos explícitos en el texto clínico
+  if (histology === 'No especificada / Pendiente de confirmación') {
+    const dxHeaderRegex = /(?:diagn[oó]stico(?:[\s\w]*)|anatom[ií]a\s+patol[oó]gica|informe\s+anatomopatol[oó]gico|biopsia(?:[\s\w]*)|ap|tumor\s+primario|juicio\s+cl[ií]nico|impresi[oó]n\s+diagn[oó]stica)[\s:]+([^\n.;]+)/gi;
+    let match: RegExpExecArray | null;
+    while ((match = dxHeaderRegex.exec(clinicalText)) !== null) {
+      const snippet = match[1];
+      const detected = detectHistologyFromText(snippet, organ);
+      if (detected) {
+        histology = detected;
+        break;
+      }
+    }
+  }
+
+  // Nivel 3: Filtrado en texto clínico completo
+  if (histology === 'No especificada / Pendiente de confirmación') {
+    const detected = detectHistologyFromText(clinicalText, organ);
+    if (detected) {
+      // Si se detectó mola o trofoblasto gestacional pero el órgano primario identificado no es trofoblasto,
+      // no permitir que menciones incidentales desplacen el órgano primario
+      if (detected.includes('Mola') || detected.includes('trofoblástic') || detected.includes('Coriocarcinoma')) {
+        if (organ === 'Trofoblasto gestacional (Útero)' || organ === 'Desconocido / No identificado') {
+          histology = detected;
+        }
+      } else {
+        histology = detected;
+      }
+    }
+  }
+
+  // Nivel 4: Si el órgano es conocido y no ambiguo, asignar la estirpe estándar predominante según NCCN
+  if (histology === 'No especificada / Pendiente de confirmación' && organ !== 'Desconocido / No identificado' && !organ.toLowerCase().includes('ambiguo')) {
     if (organ === 'Páncreas') histology = 'Adenocarcinoma de páncreas';
     else if (organ === 'Mama') histology = 'Carcinoma invasor de mama';
     else if (organ === 'Colon') histology = 'Adenocarcinoma de colon';
@@ -1470,19 +1873,18 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
   }
 
   // Detección de diagnóstico incompleto o ambiguo
+  const combinedNorm = `${normDx} ${normText}`;
   if (
     organ.toLowerCase().includes('ambiguo') ||
     (organ === 'Desconocido / No identificado' &&
-      (targetSearchStr.includes('neoplasia') || targetSearchStr.includes('tumor') || targetSearchStr.includes('lesion') || targetSearchStr.includes('masa')) &&
+      (combinedNorm.includes('neoplasia') || combinedNorm.includes('tumor') || combinedNorm.includes('lesion') || combinedNorm.includes('masa')) &&
       histology === 'No especificada / Pendiente de confirmación')
   ) {
     isHistologyIncomplete = true;
   }
 
   // 3. Extracción de estadio
-  let stage = 'No documentado';
-  const stageMatch = (explicitDiagnosis + ' ' + clinicalText).match(/(?:estadio|stage|pt\d[a-c]?n\d[a-c]?m\d[a-c]?|pt\d[a-c]?n\d[a-c]?|t\d[a-c]?n\d[a-c]?m\d[a-c]?|[I|V|X]+[A-C]?)/i);
-  if (stageMatch) stage = stageMatch[0].trim();
+  const stage = extractStageFromClinicalText(clinicalText, explicitDiagnosis);
 
   // 4. Extracción de márgenes
   let margin = 'No especificado';
@@ -1552,6 +1954,22 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
     surgeryDate,
     isHistologyIncomplete,
     summary: `${organ} — ${histology} (${stage})`,
+    isStageIV: false,
+    diseaseStatus: 'NED',
+    diseaseStatusDescription: '',
+    followUpMode: 'CURATIVE_SURVEILLANCE',
+    followUpState: 'ROUTINE_SURVEILLANCE',
+    modeLabel: '',
+    activeTreatment: '',
+    hasActiveSystemicTreatment: false,
+    treatmentIntent: '',
+    lastImagingDate: 'No documentada',
+    lastTreatmentDate: 'No documentada',
+    symptomFlag: false,
+    relevantSymptoms: [],
+    pendingStudies: [],
+    confirmedRecurrence: false,
+    confirmedProgression: false,
   };
 }
 
@@ -1559,8 +1977,10 @@ export function extractPatientTumorProfile(clinicalText: string, explicitDiagnos
  * Extrae el perfil de escenario clínico profundo del paciente:
  * - Diagnóstico e Histología
  * - Estadio (Estadio IV vs Estadios I–III)
- * - Estado de Enfermedad Actual (NED vs Metastásico Activo vs Progresión vs Metastasectomía R0 vs Indeterminado)
+ * - Estado de Enfermedad Actual (NED vs Evaluación Post-Tratamiento vs Metastásico Activo vs Progresión)
+ * - Estado de Seguimiento (followUpState: ROUTINE_SURVEILLANCE vs POST_TREATMENT_EVALUATION vs SYMPTOMATIC_REEVALUATION)
  * - Modo de Seguimiento (Modo A: Curativo Localizado vs Modo B: Metastásico Activo vs Modo C: Post-Metastasectomía)
+ * - Síntomas de Alarma y Estudios Pendientes
  * - Tratamiento Activo y Respuesta
  * - Fechas Clave
  */
@@ -1572,11 +1992,21 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
   // 1. Perfil tumoral base
   const baseProfile = extractPatientTumorProfile(clinicalText, explicitDiagnosis);
 
+  // Síntomas estructurados y estudios pendientes
+  const { symptomFlag, relevantSymptoms } = detectRelevantSymptoms(clinicalText);
+  const pendingStudies = detectPendingStudies(clinicalText);
+
   // Si el tumor está fuera de la cobertura de guías o no identificado, devolver perfil base bloqueado
   if (baseProfile.organ.includes('No cubierto') || baseProfile.organ === 'Desconocido / No identificado') {
     return {
       ...baseProfile,
       followUpMode: 'INDETERMINATE_STATUS',
+      followUpState: 'UNDETERMINED',
+      symptomFlag,
+      relevantSymptoms,
+      pendingStudies,
+      confirmedRecurrence: false,
+      confirmedProgression: false,
       modeLabel: 'Sin guía disponible para este diagnóstico',
       summary: `${baseProfile.organ} — ${baseProfile.histology} | Sin guía en el sistema`,
     };
@@ -1593,8 +2023,9 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
   const activeTreatment = tx.activeTreatment;
 
   // 4. Estado de Enfermedad, Metástasis y Negaciones Clínicas
-  const cleanedForProgression = cleanTextForProgression(combined);
   const hasProgression = detectConfirmedProgression(combined);
+  const confirmedProgression = hasProgression;
+  const confirmedRecurrence = hasProgression;
 
   const cleanedForActive = combined
     .replace(/sin (?:evidencia de |signos de )?(?:lesiones|metastasis|enfermedad activa)/g, ' ')
@@ -1625,9 +2056,25 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
   const hasPartialResponse = combined.includes('respuesta parcial') || combined.includes('reduccion tumoral');
   const hasStableDisease = combined.includes('enfermedad estable') || combined.includes('estabilidad lesional');
 
+  // Distinción entre tratamiento quirúrgico vs tratamiento definitivo no quirúrgico
+  const isSurgical = /\b(?:resecad[ao]|postquirurgic[ao]|postoperatori[ao]|operad[ao]|mastectom\w*|colectom\w*|histerectom\w*|duodenopancreatectom\w*|whipple|lobectom\w*|gastrectom\w*|nefrectom\w*|prostatectom\w*|citorreducci[oó]n|metastasectom\w*|resecci[oó]n)\b/i.test(combined);
+  const isDefinitiveNonSurgical = !isSurgical && /\b(?:quimiorradioterapia|radioterapia|braquiterapia|rt\s+concurrente|vmat|imrt|hdr|quimiort)\b/i.test(combined);
+
+  // Evaluación post-tratamiento pendiente o reevaluación sintomática
+  const isAsymptomaticWithNormalFindings =
+    !symptomFlag &&
+    (combined.includes('asintomatic') || combined.includes('sin hallazgos') || combined.includes('sin alteraciones') || combined.includes('normal'));
+
+  const isPostTreatmentEvaluation =
+    symptomFlag ||
+    /\b(?:evaluaci[oó]n|control)\s+(?:basal\s+)?post[\s-]?tratamiento\b/i.test(clinicalText) ||
+    /\bpost[\s-]?tratamiento\s+pendiente\b/i.test(clinicalText) ||
+    (pendingStudies.length > 0 && !isAsymptomaticWithNormalFindings);
+
   let diseaseStatus: DiseaseStatus = 'INDETERMINATE';
   let diseaseStatusDescription = '';
   let followUpMode: FollowUpMode = 'INDETERMINATE_STATUS';
+  let followUpState: FollowUpState = 'UNDETERMINED';
   let modeLabel = '';
   let treatmentIntent = '';
 
@@ -1636,42 +2083,49 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
       diseaseStatus = 'RESECTED_OLIGOMETASTATIC_NED';
       diseaseStatusDescription = 'Estadio IV con resección completa de metástasis (metastasectomía R0), actualmente sin evidencia de enfermedad activa (NED).';
       followUpMode = 'RESECTED_METASTATIC_SURVEILLANCE';
+      followUpState = 'ROUTINE_SURVEILLANCE';
       modeLabel = 'Modo C — Vigilancia intensiva post-tratamiento potencialmente curativo de metástasis (NED)';
       treatmentIntent = 'Vigilancia post-tratamiento con intención curativa / consolidativa';
     } else if (hasProgression) {
       diseaseStatus = 'PROGRESSION';
       diseaseStatusDescription = 'Enfermedad metastásica activa en progresión.';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      followUpState = 'CONFIRMED_PROGRESSIVE_DISEASE';
       modeLabel = 'Modo B — Enfermedad metastásica activa en progresión / Reevaluación';
       treatmentIntent = 'Evaluación de progresión y cambio de línea sistémica';
     } else if (hasPartialResponse) {
       diseaseStatus = 'PARTIAL_RESPONSE';
       diseaseStatusDescription = 'Enfermedad metastásica activa con respuesta parcial objetiva a tratamiento sistémico.';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      followUpState = 'ACTIVE_TREATMENT_MONITORING';
       modeLabel = 'Modo B — Enfermedad metastásica activa / Evaluación seriada de respuesta';
       treatmentIntent = 'Control de enfermedad y monitoreo de respuesta (RECIST 1.1)';
     } else if (hasStableDisease) {
       diseaseStatus = 'STABLE_DISEASE';
       diseaseStatusDescription = 'Enfermedad metastásica activa con enfermedad estable bajo tratamiento sistémico.';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      followUpState = 'ACTIVE_TREATMENT_MONITORING';
       modeLabel = 'Modo B — Enfermedad metastásica activa / Monitoreo de estabilidad';
       treatmentIntent = 'Control de enfermedad y monitoreo de respuesta';
     } else if (hasActiveSystemicTreatment || hasActiveLesions || combined.includes('metastasis activas') || combined.includes('metastasico activo')) {
       diseaseStatus = 'ACTIVE_METASTATIC';
       diseaseStatusDescription = 'Enfermedad metastásica activa bajo tratamiento sistémico / control de respuesta tumoral.';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      followUpState = 'ACTIVE_TREATMENT_MONITORING';
       modeLabel = 'Modo B — Enfermedad metastásica activa / Evaluación de respuesta a tratamiento sistémico';
       treatmentIntent = 'Control tumoral y evaluación de respuesta a tratamiento sistémico';
     } else if (hasNED) {
       diseaseStatus = 'RESECTED_OLIGOMETASTATIC_NED';
       diseaseStatusDescription = 'Estadio IV sin evidencia de enfermedad activa documentada (NED).';
       followUpMode = 'RESECTED_METASTATIC_SURVEILLANCE';
+      followUpState = 'ROUTINE_SURVEILLANCE';
       modeLabel = 'Modo C — Vigilancia intensiva post-tratamiento de metástasis (NED)';
       treatmentIntent = 'Vigilancia post-tratamiento curativo';
     } else {
       diseaseStatus = 'ACTIVE_METASTATIC';
       diseaseStatusDescription = 'Enfermedad metastásica / Estadio IV (Control y monitoreo de respuesta).';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      followUpState = 'ACTIVE_TREATMENT_MONITORING';
       modeLabel = 'Modo B — Enfermedad metastásica activa / Evaluación de respuesta a tratamiento sistémico';
       treatmentIntent = 'Control tumoral y evaluación de respuesta a tratamiento sistémico';
     }
@@ -1683,6 +2137,7 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
         ? `Recidiva o progresión de enfermedad en tratamiento sistémico activo${detectedRegimen ? ` (${detectedRegimen})` : ''}.`
         : 'Recidiva o progresión de enfermedad documentada.';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      followUpState = 'CONFIRMED_PROGRESSIVE_DISEASE';
       modeLabel = hasActiveSystemicTreatment
         ? `Modo B — Recidiva activa / En tratamiento sistémico${detectedRegimen ? ` (${detectedRegimen})` : ''}`
         : 'Modo B — Recidiva activa / Re-estadificación y evaluación terapéutica';
@@ -1693,12 +2148,14 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
       diseaseStatus = 'PARTIAL_RESPONSE';
       diseaseStatusDescription = 'Enfermedad activa con respuesta parcial objetiva a tratamiento sistémico.';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      followUpState = 'ACTIVE_TREATMENT_MONITORING';
       modeLabel = 'Modo B — Enfermedad activa / Evaluación seriada de respuesta';
       treatmentIntent = 'Control de enfermedad y monitoreo de respuesta (RECIST 1.1)';
     } else if (hasStableDisease) {
       diseaseStatus = 'STABLE_DISEASE';
       diseaseStatusDescription = 'Enfermedad activa con enfermedad estable bajo tratamiento sistémico.';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      followUpState = 'ACTIVE_TREATMENT_MONITORING';
       modeLabel = 'Modo B — Enfermedad activa / Monitoreo de estabilidad';
       treatmentIntent = 'Control de enfermedad y monitoreo de respuesta';
     } else if (hasActiveSystemicTreatment || (detectedRegimen !== '' && !isTreatmentCompletedOrNone) || hasActiveLesions) {
@@ -1707,34 +2164,51 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
         ? `Enfermedad activa bajo tratamiento sistémico (${detectedRegimen}) / Control de respuesta tumoral.`
         : 'Enfermedad activa bajo tratamiento sistémico / Control de respuesta tumoral.';
       followUpMode = 'ACTIVE_METASTATIC_MONITORING';
+      followUpState = 'ACTIVE_TREATMENT_MONITORING';
       modeLabel = detectedRegimen
         ? `Modo B — Enfermedad activa / En tratamiento sistémico (${detectedRegimen})`
         : 'Modo B — Enfermedad activa / Evaluación de respuesta a tratamiento sistémico';
       treatmentIntent = 'Control tumoral y evaluación de respuesta a tratamiento sistémico';
+    } else if (isPostTreatmentEvaluation) {
+      // Paciente con tratamiento completado en período de evaluación post-tratamiento o con síntomas en reevaluación
+      followUpState = symptomFlag ? 'SYMPTOMATIC_REEVALUATION' : 'POST_TREATMENT_EVALUATION';
+      diseaseStatus = 'POST_TREATMENT_EVALUATION';
+      
+      if (isDefinitiveNonSurgical) {
+        diseaseStatusDescription = 'Tratamiento definitivo con intención curativa completado; sin progresión/recidiva confirmada documentada; actualmente en evaluación post-tratamiento.';
+      } else if (isSurgical) {
+        diseaseStatusDescription = 'Tratamiento quirúrgico completado; sin progresión/recidiva confirmada documentada; actualmente en evaluación post-tratamiento.';
+      } else {
+        diseaseStatusDescription = 'Tratamiento completado; sin progresión/recidiva confirmada documentada; actualmente en evaluación post-tratamiento.';
+      }
+      
+      followUpMode = 'CURATIVE_SURVEILLANCE';
+      modeLabel = symptomFlag
+        ? 'Modo A — Vigilancia post-tratamiento curativo / Reevaluación por síntomas'
+        : 'Modo A — Vigilancia post-tratamiento curativo (Evaluación post-tratamiento)';
+      treatmentIntent = 'Evaluación de respuesta post-tratamiento y detección precoz de recidiva';
     } else {
-      const isResectedOrNED = hasNED || isTreatmentCompletedOrNone || combined.includes('postquirurgico') || combined.includes('resecado') || combined.includes('postoperatorio') || combined.includes('operada') || combined.includes('operado') || combined.includes('hemicolectomia') || combined.includes('colectomia') || combined.includes('duodenopancreatectomia') || combined.includes('dpc') || combined.includes('whipple') || combined.includes('citorreduccion');
+      // Paciente asintomático en seguimiento rutinario prolongado (NED)
+      followUpState = 'ROUTINE_SURVEILLANCE';
       diseaseStatus = 'NED';
-      diseaseStatusDescription = isResectedOrNED
-        ? 'Enfermedad localizada resecada con intención curativa, actualmente sin evidencia de enfermedad (NED).'
-        : 'Enfermedad localizada / en seguimiento, sin evidencia de progresión documentada (Vigilancia oncológica).';
+      
+      if (isDefinitiveNonSurgical) {
+        diseaseStatusDescription = 'Tratamiento definitivo completado, actualmente sin evidencia clínica de progresión (Vigilancia post-tratamiento curativo).';
+      } else if (isSurgical) {
+        diseaseStatusDescription = 'Enfermedad localizada resecada con intención curativa, actualmente sin evidencia de enfermedad (NED).';
+      } else {
+        diseaseStatusDescription = 'Enfermedad localizada / en seguimiento, sin evidencia de progresión documentada (Vigilancia oncológica).';
+      }
+
       followUpMode = 'CURATIVE_SURVEILLANCE';
       modeLabel = 'Modo A — Vigilancia post-tratamiento curativo (Enfermedad localizada)';
       treatmentIntent = 'Detección precoz de recidiva locorregional o sistémica curable';
     }
   }
 
-  // 5. Extracción de fechas clave
-  let lastImagingDate = 'No documentada';
-  const imgDateMatch = clinicalText.match(/(?:tac|tc|tomograf[ií]a|rm|rmn|pet|pet-tc|pet-ct)[^\d]*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/i);
-  if (imgDateMatch && imgDateMatch[1]) {
-    lastImagingDate = imgDateMatch[1];
-  }
-
-  let lastTreatmentDate = 'No documentada';
-  const txDateMatch = clinicalText.match(/(?:quimioterapia|ciclo|infusi[oó]n|folfox|folfiri|adyuvancia)[^\d]*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/i);
-  if (txDateMatch && txDateMatch[1]) {
-    lastTreatmentDate = txDateMatch[1];
-  }
+  // 5. Extracción robusta de fechas clave
+  const lastImagingDate = extractLastImagingDate(clinicalText);
+  const lastTreatmentDate = extractLastTreatmentDate(clinicalText);
 
   return {
     ...baseProfile,
@@ -1742,12 +2216,18 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
     diseaseStatus,
     diseaseStatusDescription,
     followUpMode,
+    followUpState,
     modeLabel,
     activeTreatment,
     hasActiveSystemicTreatment,
     treatmentIntent,
     lastImagingDate,
     lastTreatmentDate,
+    symptomFlag,
+    relevantSymptoms,
+    pendingStudies,
+    confirmedRecurrence,
+    confirmedProgression,
     summary: `${baseProfile.organ} — ${baseProfile.histology} (${baseProfile.stage}) | ${modeLabel}`,
   };
 }
@@ -1946,7 +2426,13 @@ export function validateCandidateSources(
     } else if (profile.followUpMode === 'RESECTED_METASTATIC_SURVEILLANCE') {
       activeScenarioRecommendations = g.scenarios?.resectedMetastatic || g.scenarios?.localizedSurveillance || null;
     } else if (profile.followUpMode === 'CURATIVE_SURVEILLANCE') {
-      activeScenarioRecommendations = g.scenarios?.localizedSurveillance || null;
+      if (profile.followUpState === 'SYMPTOMATIC_REEVALUATION' && g.scenarios?.symptomaticReevaluation) {
+        activeScenarioRecommendations = g.scenarios.symptomaticReevaluation;
+      } else if (profile.followUpState === 'POST_TREATMENT_EVALUATION' && g.scenarios?.postTreatmentEvaluation) {
+        activeScenarioRecommendations = g.scenarios.postTreatmentEvaluation;
+      } else {
+        activeScenarioRecommendations = g.scenarios?.localizedSurveillance || null;
+      }
     }
 
     return {

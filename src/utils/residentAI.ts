@@ -249,11 +249,14 @@ REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones aplicables a
             - Diagnóstico Primario: ${validation.profile.organ} — ${validation.profile.histology}
             - Estadio Documentado: ${validation.profile.stage}
             - Modo / Escenario Clínico: ${validation.profile.modeLabel}
+            - Estado de Seguimiento: ${validation.profile.followUpState}
             - Estado Actual de Enfermedad: ${validation.profile.diseaseStatusDescription}
-            - Tratamiento Sistémico Actual: ${validation.profile.activeTreatment}
+            - Tratamiento Actual: ${validation.profile.activeTreatment}
             - Intención: ${validation.profile.treatmentIntent}
-            - Fecha de Último Estudio de Imagen: ${validation.profile.lastImagingDate}
-            - Fecha de Último Ciclo / Tratamiento: ${validation.profile.lastTreatmentDate}
+            - Fecha de Último Estudio de Imagen Realizado: ${validation.profile.lastImagingDate}
+            - Fecha de Fin de Tratamiento Definitivo: ${validation.profile.lastTreatmentDate}
+            - Síntomas Relevantes / Hallazgos en Reevaluación: ${validation.profile.relevantSymptoms && validation.profile.relevantSymptoms.length > 0 ? validation.profile.relevantSymptoms.join(', ') : 'Asintomático / Sin síntomas de alarma documentados'}
+            - Estudios Solicitados o Pendientes: ${validation.profile.pendingStudies && validation.profile.pendingStudies.length > 0 ? validation.profile.pendingStudies.map(s => `${s.study} (${s.status === 'pending' ? 'PENDIENTE' : 'SOLICITADO'})`).join(', ') : 'Ninguno documentado en trámite'}
 
             REGLAS CLÍNICAS FUNDAMENTALES DE APLICABILIDAD POR ESCENARIO:
             
@@ -267,18 +270,23 @@ REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones aplicables a
                  * PROHIBIDO incluir recomendaciones exclusivas de vigilancia de estadios II–III (ej. Colonoscopía rutinaria de vigilancia de estadios II-III post-resección o TAC cada 6-12 meses de vigilancia II-III).
                  * PROHIBIDO incluir filas que digan "No aplica directamente para estadio IV". Si no aplica, DEBE QUEDAR EXCLUIDA de la tabla.
                - Si el paciente presenta VIGILANCIA POST-TRATAMIENTO CURATIVO (Modo A):
-                 * Aplicar recomendaciones de vigilancia post-quirúrgica (TAC cada 6-12m en estadios II-III por 3-5 años, CEA cada 3-6m por 5 años, Colonoscopía al año).
+                 * Aplicar recomendaciones de vigilancia post-tratamiento (TAC/PET-CT e imágenes según riesgo del estadio y guía de referencia, examen pélvico, citología, laboratorios).
                - Si el paciente presenta VIGILANCIA POST-METASTASECTOMÍA R0 (Modo C):
                  * Aplicar vigilancia intensiva post-resección de metástasis (TAC/RM cada 3-6m los primeros 2 años, luego cada 6-12m; CEA cada 3m por 2 años).
 
-            2. CÁLCULO DE FECHAS PRÓXIMAS:
+            2. MANEJO DE ESTUDIOS PENDIENTES Y SÍNTOMAS DE ALARMA:
+               - Si el paciente presenta ESTUDIOS SOLICITADOS O PENDIENTES (ej: PET-CT de control pendiente, RMN pelvis solicitada, Laboratorio solicitado):
+                 * Deben figurar en la tabla como estudios en trámite con estado "Pendiente / Solicitado" y fecha sugerida "Inmediato / En curso" para su reevaluación post-tratamiento.
+                 * NUNCA transformar un estudio pendiente o solicitado en un estudio "ya realizado" ni inventar fechas previas.
+
+            3. CÁLCULO DE FECHAS PRÓXIMAS:
                - Si existe fecha de último estudio (ej: TAC del ${validation.profile.lastImagingDate}):
                  * Calcular la ventana sugerida según el intervalo recomendado (ej: intervalo 8–12 semanas $\rightarrow$ sugerir mes/ventana aproximada).
                  * No inventar fechas exactas si la guía establece un intervalo (ej: "Septiembre 2026 (a las 8–12 semanas del estudio previo)").
                - Diferenciar estado: "Próximo programado" vs "Atrasado / Pendiente" con respecto a hoy (${today}).
 
-            3. NO RECOMENDAR ESTUDIOS INNECESARIOS:
-               - No indicar PET/TC de rutina salvo sospecha fundada o indicación formal de la guía.
+            4. NO RECOMENDAR ESTUDIOS INNECESARIOS:
+               - No indicar PET/TC de rutina salvo estadios de alto riesgo que lo requieran según guía o sospecha fundada / estudio ya programado.
 
             FORMATO DE SALIDA (HTML PURO CON TAILWIND CSS):
             Devuelve ÚNICAMENTE HTML dentro de un contenedor <div> sin bloques de código markdown \`\`\`html.
@@ -301,6 +309,8 @@ REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones aplicables a
                         <div><span class="font-bold text-blue-800">Escenario Clínico:</span> <span class="font-bold text-indigo-900">${validation.profile.modeLabel}</span></div>
                         <div><span class="font-bold text-blue-800">Estado de Enfermedad:</span> ${validation.profile.diseaseStatusDescription}</div>
                         <div><span class="font-bold text-blue-800">Tratamiento Actual:</span> ${validation.profile.activeTreatment}</div>
+                        ${validation.profile.relevantSymptoms && validation.profile.relevantSymptoms.length > 0 ? `<div class="col-span-2 md:col-span-3 text-amber-900 bg-amber-50/90 px-2.5 py-1.5 rounded-lg border border-amber-200/80"><span class="font-bold text-amber-950">Síntomas en Reevaluación:</span> ${validation.profile.relevantSymptoms.join(', ')}</div>` : ''}
+                        ${validation.profile.pendingStudies && validation.profile.pendingStudies.length > 0 ? `<div class="col-span-2 md:col-span-3 text-indigo-900 bg-indigo-50/90 px-2.5 py-1.5 rounded-lg border border-indigo-200/80"><span class="font-bold text-indigo-950">Estudios en Trámite / Solicitados:</span> ${validation.profile.pendingStudies.map(s => `<strong>${s.study}</strong> (${s.status === 'pending' ? 'Pendiente' : 'Solicitado'})`).join(', ')}</div>` : ''}
                     </div>
                 </div>
 

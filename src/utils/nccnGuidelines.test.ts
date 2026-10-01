@@ -8,6 +8,7 @@ import {
   extractClinicalScenarioProfile,
   validateCandidateSources,
   matchGuidelineByProfile,
+  extractStageFromClinicalText,
 } from './nccnGuidelines.ts';
 import type { PatientTumorProfile } from './nccnGuidelines.ts';
 
@@ -586,9 +587,189 @@ assert(
   `modeLabel: ${profileCaseM2.modeLabel}`
 );
 
+// ------------------------------------------------------------------------------------------------
+// CASO N: Carcinoma epidermoide de cérvix, estadio FIGO IIIC2, prevención de bugs "vix" y "mola"
+// ------------------------------------------------------------------------------------------------
+
+// N.1: Detección precisa de Cuello uterino y Carcinoma epidermoide sin estadio falso
+const textN1 = 'Carcinoma epidermoide moderadamente diferenciado invasor de cérvix uterino.';
+const profileN1 = extractPatientTumorProfile(textN1, '');
+assert(profileN1.organ === 'Cuello uterino (Cérvix)', 'Caso N.1 - Órgano detectado como Cuello uterino (Cérvix)', `Órgano: ${profileN1.organ}`);
+assert(profileN1.histology === 'Carcinoma epidermoide de cérvix', 'Caso N.1 - Histología detectada como Carcinoma epidermoide de cérvix', `Histología: ${profileN1.histology}`);
+assert(profileN1.stage === 'No documentado', 'Caso N.1 - Estadio es No documentado (no inventa vix)', `Estadio: ${profileN1.stage}`);
+assert(!profileN1.histology.includes('Mola'), 'Caso N.1 - Histología NO contiene Mola', `Histología: ${profileN1.histology}`);
+
+// N.2: "cérvix" nunca genera el estadio "vix"
+const textN2 = 'Carcinoma epidermoide de cérvix.';
+const profileN2 = extractPatientTumorProfile(textN2, '');
+assert(profileN2.stage !== 'vix' && !profileN2.stage.includes('vix'), 'Caso N.2 - Estadio NO contiene "vix"', `Estadio: ${profileN2.stage}`);
+const stageDirectN2 = extractStageFromClinicalText(textN2, '');
+assert(stageDirectN2 !== 'vix', 'Caso N.2 - extractStageFromClinicalText no extrae "vix"', `Estadio: ${stageDirectN2}`);
+
+// N.3: Reconocimiento correcto de estadio FIGO IIIC2
+const textN3 = 'Carcinoma epidermoide de cérvix FIGO IIIC2.';
+const profileN3 = extractPatientTumorProfile(textN3, '');
+assert(profileN3.stage === 'FIGO IIIC2', 'Caso N.3 - Reconoce estadio FIGO IIIC2', `Estadio: ${profileN3.stage}`);
+
+// N.4: Frase con "completamente" no debe transformarse en Mola hidatiforme completa
+const textN4 = 'Paciente con carcinoma epidermoide de cérvix. Presenta dolor pélvico que no cede completamente con paracetamol.';
+const profileN4 = extractPatientTumorProfile(textN4, '');
+assert(profileN4.organ === 'Cuello uterino (Cérvix)', 'Caso N.4 - Órgano es Cuello uterino (Cérvix)', `Órgano: ${profileN4.organ}`);
+assert(profileN4.histology === 'Carcinoma epidermoide de cérvix', 'Caso N.4 - Histología es Carcinoma epidermoide de cérvix', `Histología: ${profileN4.histology}`);
+assert(profileN4.histology !== 'Mola hidatiforme completa', 'Caso N.4 - NO asigna Mola hidatiforme completa', `Histología: ${profileN4.histology}`);
+
+// N.5: explicitDiagnosis tiene prioridad absoluta sobre menciones incidentales
+const explicitDxN5 = 'Carcinoma epidermoide moderadamente diferenciado invasor de cérvix uterino.';
+const textN5 = 'Antecedente de embarazo molar / mola mencionada en antecedentes obstétricos antiguos.';
+const profileN5 = extractPatientTumorProfile(textN5, explicitDxN5);
+assert(profileN5.organ === 'Cuello uterino (Cérvix)', 'Caso N.5 - explicitDiagnosis prioriza Cuello uterino (Cérvix)', `Órgano: ${profileN5.organ}`);
+assert(profileN5.histology === 'Carcinoma epidermoide de cérvix', 'Caso N.5 - explicitDiagnosis prioriza Carcinoma epidermoide', `Histología: ${profileN5.histology}`);
+
+// N.6: Caso real de carcinoma de cérvix FIGO IIIC2 completo
+const explicitDxReal = 'Carcinoma Epidermoide Moderadamente Diferenciado Invasor de cérvix uterino.';
+const clinicalTextReal = `
+Anatomía patológica: 19/12/2025.
+Inicialmente FIGO IIIC por RMN del 20/12/2025.
+Posteriormente FIGO IIIC2 por PET-CT del 10/02/2026, con compromiso ganglionar ilíaco y retroperitoneal.
+Tratamiento:
+- Quimioterapia de inducción Carboplatino/Paclitaxel: 3 ciclos, finalizada 06/05/2026.
+- Quimiorradioterapia concurrente con Cisplatino.
+- Radioterapia externa VMAT: iniciada 26/05/2026, finalizada 30/06/2026.
+- Braquiterapia HDR endocervicouterina: 3 sesiones, finalizada 28/07/2026.
+Evaluación post-tratamiento:
+03/08/2026: asintomática, buen estado general.
+Se indicaron medidas preventivas para sinequias vaginales.
+Se programó PET-CT de control para septiembre/2026.
+Situación actual:
+23/09/2026.
+No presenta estudios nuevos.
+Actualmente refiere dolor a nivel de pelvis y miembros inferiores que no cede completamente con paracetamol.
+Niega genitorragia.
+Niega alteraciones urinarias o intestinales.
+Buen estado general.
+PS 1.
+PLAN ACTUAL DOCUMENTADO:
+- Pendiente PET-CT.
+- Solicitar RMN de pelvis.
+- Solicitar laboratorio de control.
+`.trim();
+
+const profileReal = extractPatientTumorProfile(clinicalTextReal, explicitDxReal);
+assert(profileReal.organ === 'Cuello uterino (Cérvix)', 'Caso N.6 - Caso real asigna Cuello uterino (Cérvix)', `Órgano: ${profileReal.organ}`);
+assert(profileReal.histology === 'Carcinoma epidermoide de cérvix', 'Caso N.6 - Caso real asigna Carcinoma epidermoide', `Histología: ${profileReal.histology}`);
+assert(profileReal.histology !== 'Mola hidatiforme completa', 'Caso N.6 - Caso real NO asigna Mola', `Histología: ${profileReal.histology}`);
+assert(profileReal.stage === 'FIGO IIIC2', 'Caso N.6 - Caso real asigna FIGO IIIC2', `Estadio: ${profileReal.stage}`);
+assert(profileReal.stage !== 'vix', 'Caso N.6 - Caso real NO asigna "vix"', `Estadio: ${profileReal.stage}`);
+
+const validationReal = validateCandidateSources(clinicalTextReal, [], explicitDxReal);
+assert(validationReal.canProceed === true, 'Caso N.6 - validateCandidateSources permite proceder', `canProceed: ${validationReal.canProceed}`);
+assert(validationReal.validSystemGuideline?.id === 'cervical-cancer', 'Caso N.6 - Guía válida es cervical-cancer', `Guideline: ${validationReal.validSystemGuideline?.id}`);
+
+// ------------------------------------------------------------------------------------------------
+// ITERACIÓN 3 — TESTS DE ESTADO CLÍNICO
+// ------------------------------------------------------------------------------------------------
+
+// N.7: Paciente cervical post-tratamiento definitivo no quirúrgico NO se describe como "enfermedad resecada"
+const scenarioReal = extractClinicalScenarioProfile(clinicalTextReal, explicitDxReal);
+assert(!scenarioReal.diseaseStatusDescription.includes('resecada'), 'Caso N.7 - diseaseStatusDescription NO contiene "resecada"', `Descripción: ${scenarioReal.diseaseStatusDescription}`);
+assert(scenarioReal.diseaseStatusDescription.includes('Tratamiento definitivo'), 'Caso N.7 - diseaseStatusDescription indica Tratamiento definitivo', `Descripción: ${scenarioReal.diseaseStatusDescription}`);
+assert(scenarioReal.diseaseStatusDescription.includes('evaluación post-tratamiento'), 'Caso N.7 - diseaseStatusDescription indica evaluación post-tratamiento', `Descripción: ${scenarioReal.diseaseStatusDescription}`);
+
+// N.8: lastTreatmentDate captura la finalización del tratamiento definitivo (Braquiterapia 28/07/2026)
+assert(scenarioReal.lastTreatmentDate === '28/07/2026', 'Caso N.8 - lastTreatmentDate es 28/07/2026', `lastTreatmentDate: ${scenarioReal.lastTreatmentDate}`);
+
+// N.9: Dolor pélvico activa symptomFlag pero NO confirmedRecurrence ni confirmedProgression
+assert(scenarioReal.symptomFlag === true, 'Caso N.9 - symptomFlag es true', `symptomFlag: ${scenarioReal.symptomFlag}`);
+assert(scenarioReal.relevantSymptoms.includes('Dolor pélvico'), 'Caso N.9 - relevantSymptoms incluye Dolor pélvico', `Síntomas: ${scenarioReal.relevantSymptoms.join(', ')}`);
+assert(scenarioReal.relevantSymptoms.includes('Dolor en miembros inferiores'), 'Caso N.9 - relevantSymptoms incluye Dolor en miembros inferiores', `Síntomas: ${scenarioReal.relevantSymptoms.join(', ')}`);
+assert(!scenarioReal.relevantSymptoms.includes('Genitorragia / Sangrado vaginal'), 'Caso N.9 - relevantSymptoms NO incluye genitorragia (negada)', `Síntomas: ${scenarioReal.relevantSymptoms.join(', ')}`);
+assert(scenarioReal.confirmedRecurrence === false, 'Caso N.9 - confirmedRecurrence es false', `confirmedRecurrence: ${scenarioReal.confirmedRecurrence}`);
+assert(scenarioReal.confirmedProgression === false, 'Caso N.9 - confirmedProgression es false', `confirmedProgression: ${scenarioReal.confirmedProgression}`);
+
+// N.10: followUpState asigna SYMPTOMATIC_REEVALUATION
+assert(scenarioReal.followUpState === 'SYMPTOMATIC_REEVALUATION', 'Caso N.10 - followUpState es SYMPTOMATIC_REEVALUATION', `followUpState: ${scenarioReal.followUpState}`);
+
+// N.11: Estudios pendientes estructurados correctamente
+const hasPetPending = scenarioReal.pendingStudies.some(s => s.study === 'PET-CT' && s.status === 'pending');
+assert(hasPetPending, 'Caso N.11 - PET-CT está en pendingStudies como pending', `pendingStudies: ${JSON.stringify(scenarioReal.pendingStudies)}`);
+const hasRmnRequested = scenarioReal.pendingStudies.some(s => s.study === 'RMN de pelvis' && s.status === 'requested');
+assert(hasRmnRequested, 'Caso N.11 - RMN de pelvis está en pendingStudies como requested', `pendingStudies: ${JSON.stringify(scenarioReal.pendingStudies)}`);
+const hasLabRequested = scenarioReal.pendingStudies.some(s => s.study === 'Laboratorio de control' && s.status === 'requested');
+assert(hasLabRequested, 'Caso N.11 - Laboratorio de control está en pendingStudies como requested', `pendingStudies: ${JSON.stringify(scenarioReal.pendingStudies)}`);
+
+// N.12: lastImagingDate no inventa fechas para estudios pendientes
+assert(scenarioReal.lastImagingDate === '10/02/2026', 'Caso N.12 - lastImagingDate es la fecha del último estudio realizado (10/02/2026)', `lastImagingDate: ${scenarioReal.lastImagingDate}`);
+
+// N.13: activeScenarioRecommendations selecciona el escenario symptomaticReevaluation para el caso con dolor
+assert(
+  validationReal.activeScenarioRecommendations !== null &&
+  validationReal.activeScenarioRecommendations !== undefined &&
+  validationReal.activeScenarioRecommendations.scenarioTitle.includes('Reevaluación clínica dirigida por síntomas de alarma'),
+  'Caso N.13 - activeScenarioRecommendations selecciona symptomaticReevaluation para paciente con dolor',
+  `Escenario: ${validationReal.activeScenarioRecommendations?.scenarioTitle}`
+);
+assert(
+  validationReal.activeScenarioRecommendations?.imaging.includes('Reevaluación clínica dirigida') === true,
+  'Caso N.13 - imaging de symptomaticReevaluation indica reevaluación dirigida y no PET/TAC obligatorio cada 6 meses',
+  `Imaging: ${validationReal.activeScenarioRecommendations?.imaging}`
+);
+
+// N.14: postTreatmentEvaluation se activa para paciente asintomática con evaluación basal pendiente
+const textPostTx = `
+Carcinoma epidermoide de cérvix FIGO IIIC2.
+Tratamiento: Cisplatino concurrente + Radioterapia VMAT finalizada 30/06/2026. Braquiterapia HDR finalizada 28/07/2026.
+Asintomática.
+Evaluación post-tratamiento pendiente. PET-CT de control pendiente.
+`.trim();
+const validationPostTx = validateCandidateSources(textPostTx, [], 'Carcinoma epidermoide de cérvix');
+assert(
+  validationPostTx.activeScenarioRecommendations?.scenarioTitle.includes('Evaluación de respuesta post-tratamiento definitivo') === true,
+  'Caso N.14 - activeScenarioRecommendations selecciona postTreatmentEvaluation cuando asintomática con evaluación pendiente',
+  `Escenario: ${validationPostTx.activeScenarioRecommendations?.scenarioTitle}`
+);
+assert(
+  validationPostTx.activeScenarioRecommendations?.imaging.includes('no antes de 3 meses') === true,
+  'Caso N.14 - imaging de postTreatmentEvaluation indica no antes de 3 meses post-tratamiento',
+  `Imaging: ${validationPostTx.activeScenarioRecommendations?.imaging}`
+);
+
+// N.15: localizedSurveillance se activa para paciente asintomática con respuesta completa (NED)
+const textSurveillance = `
+Carcinoma epidermoide de cérvix FIGO IIIC2.
+Tratamiento: Quimiorradioterapia y braquiterapia finalizadas en 2025.
+PET-CT de control basal: Remisión completa, sin evidencia de enfermedad activa (NED).
+Actualmente asintomática, examen ginecológico normal.
+`.trim();
+const validationSurveillance = validateCandidateSources(textSurveillance, [], 'Carcinoma epidermoide de cérvix');
+assert(
+  validationSurveillance.activeScenarioRecommendations?.scenarioTitle.includes('Vigilancia rutinaria post-tratamiento curativo') === true,
+  'Caso N.15 - activeScenarioRecommendations selecciona localizedSurveillance para paciente asintomática con NED',
+  `Escenario: ${validationSurveillance.activeScenarioRecommendations?.scenarioTitle}`
+);
+assert(
+  validationSurveillance.activeScenarioRecommendations?.imaging.includes('No se recomiendan estudios de imagen seriados rutinarios') === true,
+  'Caso N.15 - imaging de localizedSurveillance no indica imágenes seriadas rutinarias',
+  `Imaging: ${validationSurveillance.activeScenarioRecommendations?.imaging}`
+);
+
+// N.16: Invariantes de seguridad (dolor != progresión, IIIC2 != metastásico)
+const textInvariants = `
+Carcinoma epidermoide de cérvix FIGO IIIC2.
+Tratamiento: Quimiorradioterapia + Braquiterapia finalizada 28/07/2026.
+Presenta dolor lumbar y dolor en miembros inferiores.
+PET-CT pendiente de realización.
+`.trim();
+const profileInvariants = extractClinicalScenarioProfile(textInvariants, 'Carcinoma epidermoide de cérvix');
+assert(profileInvariants.symptomFlag === true, 'Caso N.16 - dolor activa symptomFlag', `symptomFlag: ${profileInvariants.symptomFlag}`);
+assert(profileInvariants.confirmedProgression === false, 'Caso N.16 - dolor NO genera confirmedProgression', `confirmedProgression: ${profileInvariants.confirmedProgression}`);
+assert(profileInvariants.confirmedRecurrence === false, 'Caso N.16 - dolor NO genera confirmedRecurrence', `confirmedRecurrence: ${profileInvariants.confirmedRecurrence}`);
+assert(profileInvariants.isStageIV === false, 'Caso N.16 - FIGO IIIC2 NO es isStageIV', `isStageIV: ${profileInvariants.isStageIV}`);
+assert(profileInvariants.followUpMode === 'CURATIVE_SURVEILLANCE', 'Caso N.16 - FIGO IIIC2 mantiene CURATIVE_SURVEILLANCE', `followUpMode: ${profileInvariants.followUpMode}`);
+
 console.log(`\n=== RESUMEN DE PRUEBAS: ${passed} PASARON, ${failed} FALLARON ===`);
 if (failed > 0) {
   process.exit(1);
 } else {
   console.log('¡TODAS LAS PRUEBAS COMPLETADAS SATISFACTORIAMENTE!');
 }
+
