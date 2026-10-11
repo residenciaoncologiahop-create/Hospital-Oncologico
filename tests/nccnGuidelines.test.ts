@@ -5,6 +5,7 @@ import {
   validateCandidateSources,
   matchGuidelineByProfile,
   detectConfirmedProgression,
+  detectRelevantSymptoms,
   extractStageFromClinicalText,
 } from '../src/utils/nccnGuidelines';
 
@@ -368,6 +369,305 @@ PET-CT pendiente de realización.
     // PET pendiente != PET realizado
     expect(profile.pendingStudies.some(s => s.study === 'PET-CT' && s.status === 'pending')).toBe(true);
     expect(profile.lastImagingDate).toBe('No documentada');
+  });
+
+  // -------------------------------------------------------------------------
+  // ITERACIÓN 4 — TESTS OBLIGATORIOS DE CÁNCER DE ENDOMETRIO Y ESTADIO NO DOCUMENTADO
+  // -------------------------------------------------------------------------
+
+  // TEST 18: Identificación de cáncer de endometrio y guía endometrial-cancer
+  it('TEST 18: identifica correctamente Endometrio / Útero, Adenocarcinoma endometrioide y guía endometrial-cancer', () => {
+    const explicitDiagnosis = 'Adenocarcinoma endometrioide de endometrio.';
+    const clinicalText = 'Paciente en seguimiento oncológico post-histerectomía total con doble anexectomía.';
+
+    const profile = extractPatientTumorProfile(clinicalText, explicitDiagnosis);
+    expect(profile.organ).toBe('Endometrio / Útero');
+    expect(profile.histology).toBe('Adenocarcinoma endometrioide');
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(true);
+    expect(validation.validSystemGuideline?.id).toBe('endometrial-cancer');
+    expect(validation.validSystemGuideline?.source).toBe('NCCN Uterine Neoplasms v1.2024');
+    expect(validation.activeScenarioRecommendations).toBeDefined();
+    expect(validation.activeScenarioRecommendations?.scenarioTitle).toContain('Seguimiento rutinario');
+    expect(validation.activeScenarioRecommendations?.schedule).toContain('espéculo para evaluar cúpula vaginal');
+  });
+
+  // TEST 19: Estadio no documentado con seguimiento post-tratamiento NO se clasifica como "enfermedad localizada"
+  it('TEST 19: estadio no documentado con tratamiento/seguimiento documentado no asume falsamente "enfermedad localizada"', () => {
+    const explicitDiagnosis = 'Adenocarcinoma endometrioide.';
+    const clinicalText = 'Sin tratamiento sistémico activo. Actualmente en controles oncológicos periódicos.';
+
+    const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
+
+    expect(profile.stage).toBe('No documentado');
+    expect(profile.followUpMode).toBe('CURATIVE_SURVEILLANCE');
+    expect(profile.modeLabel).toBe('Modo A — Seguimiento post-tratamiento primario (Estadio no documentado)');
+    expect(profile.modeLabel).not.toContain('Enfermedad localizada');
+    expect(profile.diseaseStatusDescription).toContain('estadio inicial no documentado');
+    expect(profile.diseaseStatusDescription).not.toContain('Enfermedad localizada resecada');
+    expect(profile.treatmentIntent).toContain('precisar estadio inicial');
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(true);
+    expect(validation.activeScenarioRecommendations).toBeDefined();
+    expect(validation.activeScenarioRecommendations?.schedule).toContain('cada 3–6 meses');
+  });
+
+  // TEST 20: Caso con estadio y antecedentes de tratamiento no documentados bloquea con INDETERMINATE_STATUS
+  it('TEST 20: ausencia simultánea de estadio y antecedentes de tratamiento no infiere vigilancia y bloquea con INDETERMINATE_STATUS', () => {
+    const explicitDiagnosis = 'Adenocarcinoma endometrioide.';
+    const clinicalText = ''; // Sin texto clínico, sin cirugía, sin mención de tratamiento ni seguimiento
+
+    const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
+
+    expect(profile.stage).toBe('No documentado');
+    expect(profile.followUpMode).toBe('INDETERMINATE_STATUS');
+    expect(profile.modeLabel).toContain('Situación clínica insuficientemente documentada');
+    expect(profile.diseaseStatus).toBe('INDETERMINATE');
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(false);
+    expect(validation.stopReason).toBe('INDETERMINATE_STATUS');
+    expect(validation.stopTitle).toBe('Estado de Enfermedad Indeterminado');
+    expect(validation.stopMessage).toBeDefined();
+  });
+
+  // TEST 21: Sangrado vaginal / metrorragia activa SYMPTOMATIC_REEVALUATION y no es progresión confirmada
+  it('TEST 21: síntoma de alarma (sangrado vaginal) en endometrio activa reevaluación sintomática sin declarar progresión', () => {
+    const explicitDiagnosis = 'Adenocarcinoma endometrioide de endometrio estadio IA.';
+    const clinicalText = `
+Anexohisterectomía total bilateral realizada en 2025.
+Actualmente consulta por metrorragia / sangrado vaginal escaso intermitente.
+Niega dolor abdominal ni síntomas urinarios.
+Se solicita examen con espéculo de cúpula vaginal y ecografía/RMN de pelvis.
+    `.trim();
+
+    const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
+
+    expect(profile.symptomFlag).toBe(true);
+    expect(profile.relevantSymptoms).toContain('Genitorragia / Sangrado vaginal');
+    expect(profile.confirmedProgression).toBe(false);
+    expect(profile.confirmedRecurrence).toBe(false);
+    expect(profile.followUpState).toBe('SYMPTOMATIC_REEVALUATION');
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(true);
+    expect(validation.validSystemGuideline?.id).toBe('endometrial-cancer');
+    expect(validation.activeScenarioRecommendations?.scenarioTitle).toContain('Reevaluación clínica dirigida por síntomas de alarma');
+    expect(validation.activeScenarioRecommendations?.imaging).toContain('RMN de pelvis con contraste');
+    expect(validation.activeScenarioRecommendations?.specialRules).toContain('confirmación histológica mediante biopsia');
+  });
+
+  // TEST 22: Asintomática con respuesta completa (NED) recibe vigilancia rutinaria estructurada
+  it('TEST 22: paciente con adenocarcinoma endometrioide estadio IA tratada y asintomática recibe recomendaciones de vigilancia rutinaria', () => {
+    const explicitDiagnosis = 'Adenocarcinoma endometrioide estadio IA.';
+    const clinicalText = `
+Tratamiento quirúrgico: Anexohisterectomía total completada. Margen libre.
+Examen clínico y ginecológico normal: cúpula vaginal sana, sin lesiones.
+Asintomática, sin evidencia de enfermedad (NED).
+    `.trim();
+
+    const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
+
+    expect(profile.followUpMode).toBe('CURATIVE_SURVEILLANCE');
+    expect(profile.followUpState).toBe('ROUTINE_SURVEILLANCE');
+    expect(profile.diseaseStatus).toBe('NED');
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(true);
+    expect(validation.activeScenarioRecommendations).toBeDefined();
+    expect(validation.activeScenarioRecommendations?.imaging).toContain('NO se recomiendan de rutina en estadios iniciales (estadio I) asintomáticos');
+    expect(validation.activeScenarioRecommendations?.labs).toContain('CA-125');
+    expect(validation.activeScenarioRecommendations?.specialRules).toContain('síndrome de Lynch');
+  });
+
+  // TEST 23: Fallback de compatibilidad: si una guía carece de bloque scenarios, no pierde sus recomendaciones documentadas
+  it('TEST 23: compatibilidad garantizada: si una guía no tiene bloque scenarios, validateCandidateSources no descarta las recomendaciones de nivel superior', () => {
+    // Probamos con melanoma cutáneo que solo tiene campos de nivel superior
+    const explicitDiagnosis = 'Melanoma cutáneo estadio IA.';
+    const clinicalText = 'Resección completa con ampliación de márgenes. Sin tratamiento sistémico activo, en seguimiento.';
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(true);
+    expect(validation.validSystemGuideline?.id).toBe('cutaneous-melanoma');
+    expect(validation.activeScenarioRecommendations).toBeDefined();
+    expect(validation.activeScenarioRecommendations?.schedule).toContain('examen cutáneo');
+    expect(validation.activeScenarioRecommendations?.imaging).toContain('NO recomendadas');
+  });
+
+  // TEST 24: Endometrio recurrente o metastásico en tratamiento activo asigna activeMetastatic
+  it('TEST 24: adenocarcinoma endometrioide metastásico activo asigna activeMetastatic (Modo B)', () => {
+    const explicitDiagnosis = 'Adenocarcinoma endometrioide estadio IV con metástasis pulmonares.';
+    const clinicalText = 'Actualmente recibe carboplatino y paclitaxel en curso. En tratamiento activo.';
+
+    const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
+    expect(profile.isStageIV).toBe(true);
+    expect(profile.followUpMode).toBe('ACTIVE_METASTATIC_MONITORING');
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(true);
+    expect(validation.activeScenarioRecommendations?.scenarioTitle).toContain('Enfermedad recurrente');
+    expect(validation.activeScenarioRecommendations?.imaging).toContain('cada 2 a 3 meses');
+  });
+
+  // TEST 25: Guía sin subescenarios en escenario incompatible (ej. estadio IV activo) no extrapola vigilancia rutinaria
+  it('TEST 25: guía sin subescenarios en escenario incompatible (metástasis activa) no vuelca cronograma de vigilancia y declara escenario no determinado', () => {
+    const explicitDiagnosis = 'Melanoma cutáneo estadio IV con metástasis pulmonares y hepáticas.';
+    const clinicalText = 'En tratamiento activo con inmunoterapia nivolumab/ipilimumab.';
+
+    const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
+    expect(profile.isStageIV).toBe(true);
+    expect(profile.followUpMode).toBe('ACTIVE_METASTATIC_MONITORING');
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(true);
+    expect(validation.validSystemGuideline?.id).toBe('cutaneous-melanoma');
+    expect(validation.activeScenarioRecommendations).toBeDefined();
+    // No debe volcar el cronograma de estadios 0-IA / II-IV NED de vigilancia rutinaria
+    expect(validation.activeScenarioRecommendations?.scenarioTitle).toContain('no determinado');
+    expect(validation.activeScenarioRecommendations?.schedule).toContain('No determinado en la guía para este escenario');
+    expect(validation.activeScenarioRecommendations?.specialRules).toContain('Prohibido aplicar cronogramas rutinarios de vigilancia');
+    // Conserva fuente y versión
+    expect(validation.activeScenarioRecommendations?.scenarioTitle).toContain(validation.validSystemGuideline?.source || 'NCCN');
+  });
+
+  // TEST 26: Tratamiento finalizado sin respuesta documentada no asume automáticamente NED ni vigilancia rutinaria
+  it('TEST 26: tratamiento finalizado sin evaluación formal de respuesta no asume automáticamente NED ni vigilancia rutinaria', () => {
+    const explicitDiagnosis = 'Carcinoma epidermoide de cérvix FIGO IIIC2.';
+    const clinicalText = 'Tratamiento con quimiorradioterapia completado el mes pasado. No se registran estudios por imágenes posteriores ni constancia de remisión.';
+
+    const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
+    // NO debe asumir remisión completa / NED si no hay evaluación objetiva documentada
+    expect(profile.diseaseStatus).not.toBe('NED');
+    expect(profile.followUpState).toBe('POST_TREATMENT_EVALUATION');
+    expect(profile.modeLabel).toContain('Evaluación de respuesta');
+    expect(profile.diseaseStatusDescription).toContain('evaluación formal de respuesta');
+  });
+
+  // TEST 27: Sospecha clínica por síntomas de alarma sin confirmación de recurrencia
+  it('TEST 27: sospecha clínica por síntomas de alarma activa reevaluación dirigida sin marcar progresión confirmada', () => {
+    const explicitDiagnosis = 'Adenocarcinoma endometrioide de endometrio.';
+    const clinicalText = 'Paciente tratada con cirugía y radioterapia adyuvante. Consulta por dolor pélvico persistente y flujo vaginal anormal. Niega lesiones visibles a la inspección.';
+
+    const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
+    expect(profile.symptomFlag).toBe(true);
+    expect(profile.confirmedProgression).toBe(false);
+    expect(profile.confirmedRecurrence).toBe(false);
+    expect(profile.followUpState).toBe('SYMPTOMATIC_REEVALUATION');
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(true);
+    expect(validation.activeScenarioRecommendations?.scenarioTitle).toContain('Reevaluación clínica dirigida');
+  });
+
+  // TEST 28: Regla de biopsia contempla factibilidad técnica, seguridad clínica y urgencias
+  it('TEST 28: regla de confirmación histológica contempla factibilidad, seguridad clínica y no demorar urgencias', () => {
+    const explicitDiagnosis = 'Adenocarcinoma endometrioide.';
+    const clinicalText = 'Anexohisterectomía realizada. Sospecha de recidiva locorregional en cúpula vaginal por sangrado vaginal.';
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(true);
+    const specialRules = validation.activeScenarioRecommendations?.specialRules || '';
+    expect(specialRules).toContain('técnicamente factible');
+    expect(specialRules).toContain('clínicamente seguro');
+    expect(specialRules).toContain('sin demorar');
+    expect(specialRules).toContain('urgencias');
+  });
+
+  // TEST 29: Conservación estricta de fuente y versión sin inventar datos no verificados
+  it('TEST 29: todas las recomendaciones de seguimiento conservan la fuente oficial y versión declarada en la guía', () => {
+    const explicitDiagnosis = 'Adenocarcinoma endometrioide estadio IA.';
+    const clinicalText = 'Anexohisterectomía total realizada, asintomática, controles normales (NED).';
+
+    const validation = validateCandidateSources(clinicalText, [], explicitDiagnosis);
+    expect(validation.canProceed).toBe(true);
+    expect(validation.validSystemGuideline?.source).toBe('NCCN Uterine Neoplasms v1.2024');
+    expect(validation.validSystemGuideline?.version).toBe('v1.2024');
+    expect(validation.validSystemGuideline?.organization).toBe('NCCN');
+    // El texto del escenario incluye mención a la fuente oficial
+    expect(validation.validSystemGuideline?.scenarios?.localizedSurveillance.specialRules).toBeDefined();
+  });
+
+  // TEST 30: Ausencia de estadio sin asumir enfermedad localizada ni remisión completa infundada
+  it('TEST 30: ausencia de estadio no asume enfermedad localizada ni remisión completa por defecto', () => {
+    const explicitDiagnosis = 'Adenocarcinoma endometrioide.';
+    const clinicalText = 'Tratamiento completado previamente en otra institución. Sin datos de estadio patológico ni evaluación de respuesta.';
+
+    const profile = extractClinicalScenarioProfile(clinicalText, explicitDiagnosis);
+    expect(profile.stage).toBe('No documentado');
+    expect(profile.modeLabel).not.toContain('Enfermedad localizada');
+    expect(profile.diseaseStatus).not.toBe('NED');
+    expect(profile.diseaseStatusDescription).not.toContain('Enfermedad localizada resecada');
+    expect(profile.treatmentIntent).toContain('precisión de estadio inicial');
+  });
+
+  // TEST 31: Antecedente de recidiva en 2024, tratado, actualmente asintomática: no marcar progresión actual
+  it('TEST 31: antecedente de recidiva en 2024 tratado no marca progresión actual', () => {
+    const text = 'Antecedente de recidiva en 2024, tratado, actualmente asintomática.';
+    expect(detectConfirmedProgression(text)).toBe(false);
+
+    const profile = extractClinicalScenarioProfile(text, 'Adenocarcinoma endometrioide');
+    expect(profile.confirmedProgression).toBe(false);
+    expect(profile.confirmedRecurrence).toBe(false);
+    expect(profile.followUpMode).toBe('CURATIVE_SURVEILLANCE');
+    expect(profile.diseaseStatus).toBe('INDETERMINATE');
+  });
+
+  // TEST 32: Sospecha actual de recidiva: activar reevaluación sintomática sin confirmar recurrencia
+  it('TEST 32: sospecha actual de recidiva activa reevaluación sintomática sin confirmar recurrencia', () => {
+    const text = 'Paciente con adenocarcinoma endometrioide. Sospecha actual de recidiva.';
+    expect(detectConfirmedProgression(text)).toBe(false);
+
+    const profile = extractClinicalScenarioProfile(text, 'Adenocarcinoma endometrioide');
+    expect(profile.confirmedProgression).toBe(false);
+    expect(profile.confirmedRecurrence).toBe(false);
+    expect(profile.symptomFlag).toBe(true);
+    expect(profile.followUpState).toBe('SYMPTOMATIC_REEVALUATION');
+
+    const validation = validateCandidateSources(text, [], 'Adenocarcinoma endometrioide');
+    expect(validation.activeScenarioRecommendations?.scenarioTitle).toContain('Reevaluación clínica dirigida');
+  });
+
+  // TEST 33: Recurrencia actual explícitamente confirmada: conservar detección correspondiente
+  it('TEST 33: recurrencia actual explícitamente confirmada conserva la detección de progresión', () => {
+    const text = 'Recurrencia actual explícitamente confirmada por biopsia y tomografía.';
+    expect(detectConfirmedProgression(text)).toBe(true);
+
+    const profile = extractClinicalScenarioProfile(text, 'Adenocarcinoma endometrioide');
+    expect(profile.confirmedProgression).toBe(true);
+    expect(profile.diseaseStatus).toBe('PROGRESSION');
+    expect(profile.followUpMode).toBe('ACTIVE_METASTATIC_MONITORING');
+  });
+
+  // TEST 34: Sangrado de cúpula, sangrado genital y sangrado postcoital detectan el síntoma
+  it('TEST 34: detecta sangrado de cúpula, sangrado genital y sangrado postcoital', () => {
+    const s1 = detectRelevantSymptoms('Paciente presenta sangrado de cúpula.');
+    expect(s1.symptomFlag).toBe(true);
+    expect(s1.relevantSymptoms).toContain('Genitorragia / Sangrado vaginal');
+
+    const s2 = detectRelevantSymptoms('Refiere sangrado genital intermitente.');
+    expect(s2.symptomFlag).toBe(true);
+    expect(s2.relevantSymptoms).toContain('Genitorragia / Sangrado vaginal');
+
+    const s3 = detectRelevantSymptoms('Presenta sangrado postcoital tras relaciones.');
+    expect(s3.symptomFlag).toBe(true);
+    expect(s3.relevantSymptoms).toContain('Genitorragia / Sangrado vaginal');
+  });
+
+  // TEST 35: «Sin sangrado» y «niega sangrado vaginal» evitan falsos positivos
+  it('TEST 35: "sin sangrado" y "niega sangrado vaginal" evitan falsos positivos', () => {
+    const s1 = detectRelevantSymptoms('Examen ginecológico normal, sin sangrado.');
+    expect(s1.symptomFlag).toBe(false);
+    expect(s1.relevantSymptoms).toHaveLength(0);
+
+    const s2 = detectRelevantSymptoms('Actualmente niega sangrado vaginal.');
+    expect(s2.symptomFlag).toBe(false);
+    expect(s2.relevantSymptoms).toHaveLength(0);
+
+    const s3 = detectRelevantSymptoms('Niega sangrado postcoital ni sangrado de cúpula.');
+    expect(s3.symptomFlag).toBe(false);
+    expect(s3.relevantSymptoms).toHaveLength(0);
   });
 });
 

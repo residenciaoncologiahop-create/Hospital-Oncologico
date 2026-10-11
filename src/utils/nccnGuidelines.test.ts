@@ -9,6 +9,8 @@ import {
   validateCandidateSources,
   matchGuidelineByProfile,
   extractStageFromClinicalText,
+  detectRelevantSymptoms,
+  detectConfirmedProgression,
 } from './nccnGuidelines.ts';
 import type { PatientTumorProfile } from './nccnGuidelines.ts';
 
@@ -765,6 +767,194 @@ assert(profileInvariants.confirmedProgression === false, 'Caso N.16 - dolor NO g
 assert(profileInvariants.confirmedRecurrence === false, 'Caso N.16 - dolor NO genera confirmedRecurrence', `confirmedRecurrence: ${profileInvariants.confirmedRecurrence}`);
 assert(profileInvariants.isStageIV === false, 'Caso N.16 - FIGO IIIC2 NO es isStageIV', `isStageIV: ${profileInvariants.isStageIV}`);
 assert(profileInvariants.followUpMode === 'CURATIVE_SURVEILLANCE', 'Caso N.16 - FIGO IIIC2 mantiene CURATIVE_SURVEILLANCE', `followUpMode: ${profileInvariants.followUpMode}`);
+
+// ------------------------------------------------------------------------------------------------
+// ITERACIÓN 4 — CASOS DE PRUEBA: CÁNCER DE ENDOMETRIO Y GESTIÓN DE ESTADIO NO DOCUMENTADO
+// ------------------------------------------------------------------------------------------------
+
+// O.1: Identificación y matching de endometrial-cancer
+const textEndo1 = 'Paciente en seguimiento oncológico post-anexohisterectomía total bilateral.';
+const dxEndo1 = 'Adenocarcinoma endometrioide de endometrio';
+const profileEndo1 = extractPatientTumorProfile(textEndo1, dxEndo1);
+assert(profileEndo1.organ === 'Endometrio / Útero', 'Caso O.1 - Órgano detectado como Endometrio / Útero', `organ: ${profileEndo1.organ}`);
+assert(profileEndo1.histology === 'Adenocarcinoma endometrioide', 'Caso O.1 - Histología detectada como Adenocarcinoma endometrioide', `histology: ${profileEndo1.histology}`);
+
+const validationEndo1 = validateCandidateSources(textEndo1, [], dxEndo1);
+assert(validationEndo1.canProceed === true, 'Caso O.1 - validateCandidateSources permite proceder', `canProceed: ${validationEndo1.canProceed}`);
+assert(validationEndo1.validSystemGuideline?.id === 'endometrial-cancer', 'Caso O.1 - Guía seleccionada es endometrial-cancer', `guideline: ${validationEndo1.validSystemGuideline?.id}`);
+assert(validationEndo1.validSystemGuideline?.source === 'NCCN Uterine Neoplasms v1.2024', 'Caso O.1 - Fuente oficial es NCCN Uterine Neoplasms v1.2024', `source: ${validationEndo1.validSystemGuideline?.source}`);
+assert(validationEndo1.activeScenarioRecommendations !== null, 'Caso O.1 - activeScenarioRecommendations no es null');
+
+// O.2: Estadio no documentado con seguimiento NO asume falsamente "enfermedad localizada"
+const textEndo2 = 'Sin tratamiento sistémico activo. Actualmente en controles oncológicos periódicos.';
+const dxEndo2 = 'Adenocarcinoma endometrioide';
+const scenarioEndo2 = extractClinicalScenarioProfile(textEndo2, dxEndo2);
+assert(scenarioEndo2.stage === 'No documentado', 'Caso O.2 - Estadio es No documentado', `stage: ${scenarioEndo2.stage}`);
+assert(scenarioEndo2.followUpMode === 'CURATIVE_SURVEILLANCE', 'Caso O.2 - followUpMode es CURATIVE_SURVEILLANCE');
+assert(scenarioEndo2.modeLabel === 'Modo A — Seguimiento post-tratamiento primario (Estadio no documentado)', 'Caso O.2 - modeLabel es Seguimiento post-tratamiento primario (Estadio no documentado)', `modeLabel: ${scenarioEndo2.modeLabel}`);
+assert(!scenarioEndo2.modeLabel.includes('Enfermedad localizada'), 'Caso O.2 - modeLabel NO contiene "Enfermedad localizada"');
+assert(scenarioEndo2.diseaseStatusDescription.includes('estadio inicial no documentado'), 'Caso O.2 - diseaseStatusDescription aclara que el estadio no está documentado');
+
+const validationEndo2 = validateCandidateSources(textEndo2, [], dxEndo2);
+assert(validationEndo2.canProceed === true, 'Caso O.2 - validateCandidateSources procede para seguimiento primario');
+assert(validationEndo2.activeScenarioRecommendations?.schedule.includes('cada 3–6 meses') === true, 'Caso O.2 - schedule tiene controles cada 3–6 meses');
+
+// O.3: Estadio no documentado sin tratamiento ni seguimiento bloquea con INDETERMINATE_STATUS
+const textEndo3 = ''; // completamente vacío
+const dxEndo3 = 'Adenocarcinoma endometrioide';
+const scenarioEndo3 = extractClinicalScenarioProfile(textEndo3, dxEndo3);
+assert(scenarioEndo3.followUpMode === 'INDETERMINATE_STATUS', 'Caso O.3 - Sin estadio ni tratamiento asigna INDETERMINATE_STATUS', `mode: ${scenarioEndo3.followUpMode}`);
+assert(scenarioEndo3.diseaseStatus === 'INDETERMINATE', 'Caso O.3 - diseaseStatus es INDETERMINATE');
+
+const validationEndo3 = validateCandidateSources(textEndo3, [], dxEndo3);
+assert(validationEndo3.canProceed === false, 'Caso O.3 - validateCandidateSources bloquea ejecución (canProceed === false)');
+assert(validationEndo3.stopReason === 'INDETERMINATE_STATUS', 'Caso O.3 - stopReason es INDETERMINATE_STATUS');
+
+// O.4: Sangrado vaginal en endometrio activa symptomFlag y SYMPTOMATIC_REEVALUATION sin declarar progresión
+const textEndo4 = `
+Anexohisterectomía total bilateral realizada en 2025.
+Consulta por metrorragia y sangrado vaginal intermitente.
+Niega dolor abdominal ni síntomas urinarios.
+Se solicita examen con espéculo de cúpula vaginal y RMN de pelvis.
+`.trim();
+const scenarioEndo4 = extractClinicalScenarioProfile(textEndo4, 'Adenocarcinoma endometrioide estadio IA');
+assert(scenarioEndo4.symptomFlag === true, 'Caso O.4 - sangrado vaginal activa symptomFlag');
+assert(scenarioEndo4.relevantSymptoms.includes('Genitorragia / Sangrado vaginal'), 'Caso O.4 - detecta Genitorragia / Sangrado vaginal en relevantSymptoms');
+assert(scenarioEndo4.confirmedProgression === false, 'Caso O.4 - sangrado vaginal NO genera confirmedProgression');
+assert(scenarioEndo4.confirmedRecurrence === false, 'Caso O.4 - sangrado vaginal NO genera confirmedRecurrence');
+assert(scenarioEndo4.followUpState === 'SYMPTOMATIC_REEVALUATION', 'Caso O.4 - followUpState es SYMPTOMATIC_REEVALUATION');
+
+const validationEndo4 = validateCandidateSources(textEndo4, [], 'Adenocarcinoma endometrioide estadio IA');
+assert(validationEndo4.canProceed === true, 'Caso O.4 - validateCandidateSources procede');
+assert(validationEndo4.activeScenarioRecommendations?.scenarioTitle.includes('Reevaluación clínica dirigida') === true, 'Caso O.4 - activeScenarioRecommendations es reevaluación sintomática');
+assert(validationEndo4.activeScenarioRecommendations?.specialRules.includes('confirmación histológica mediante biopsia') === true, 'Caso O.4 - specialRules exige biopsia antes de rescate');
+
+// O.5: Paciente asintomática con respuesta completa (NED) recibe localizedSurveillance
+const textEndo5 = `
+Tratamiento quirúrgico: Anexohisterectomía total completada. Margen libre.
+Examen clínico y ginecológico normal: cúpula vaginal sana, sin lesiones.
+Asintomática, sin evidencia de enfermedad (NED).
+`.trim();
+const scenarioEndo5 = extractClinicalScenarioProfile(textEndo5, 'Adenocarcinoma endometrioide estadio IA');
+assert(scenarioEndo5.followUpState === 'ROUTINE_SURVEILLANCE', 'Caso O.5 - followUpState es ROUTINE_SURVEILLANCE');
+assert(scenarioEndo5.diseaseStatus === 'NED', 'Caso O.5 - diseaseStatus es NED');
+
+const validationEndo5 = validateCandidateSources(textEndo5, [], 'Adenocarcinoma endometrioide estadio IA');
+assert(validationEndo5.canProceed === true, 'Caso O.5 - validateCandidateSources procede');
+assert(validationEndo5.activeScenarioRecommendations?.imaging.includes('NO se recomiendan de rutina en estadios iniciales (estadio I) asintomáticos') === true, 'Caso O.5 - imaging desaconseja TAC rutinario en estadio I asintomático');
+
+// O.6: Fallback de compatibilidad si una guía carece de bloque scenarios
+const textEndo6 = 'Resección completa con márgenes libres. En seguimiento.';
+const validationEndo6 = validateCandidateSources(textEndo6, [], 'Melanoma cutáneo estadio IA');
+assert(validationEndo6.canProceed === true, 'Caso O.6 - validateCandidateSources procede con fallback de compatibilidad');
+assert(validationEndo6.activeScenarioRecommendations !== null, 'Caso O.6 - activeScenarioRecommendations sintetizado por fallback no es null');
+assert(validationEndo6.activeScenarioRecommendations?.schedule.includes('examen cutáneo') === true, 'Caso O.6 - schedule del fallback incluye datos documentados');
+
+// O.7: Endometrio metastásico activo asigna activeMetastatic (Modo B)
+const textEndo7 = 'Actualmente recibe carboplatino y paclitaxel en curso. En tratamiento activo.';
+const scenarioEndo7 = extractClinicalScenarioProfile(textEndo7, 'Adenocarcinoma endometrioide estadio IV con metástasis pulmonares');
+assert(scenarioEndo7.isStageIV === true, 'Caso O.7 - isStageIV es true');
+assert(scenarioEndo7.followUpMode === 'ACTIVE_METASTATIC_MONITORING', 'Caso O.7 - followUpMode es ACTIVE_METASTATIC_MONITORING');
+
+const validationEndo7 = validateCandidateSources(textEndo7, [], 'Adenocarcinoma endometrioide estadio IV con metástasis pulmonares');
+assert(validationEndo7.canProceed === true, 'Caso O.7 - validateCandidateSources procede');
+assert(validationEndo7.activeScenarioRecommendations?.scenarioTitle.includes('Enfermedad recurrente') === true, 'Caso O.7 - scenarioTitle es enfermedad recurrente / metastásica activa');
+
+// O.8: Guía sin subescenarios en escenario incompatible no vuelca vigilancia y declara escenario no determinado
+const textEndo8 = 'En tratamiento activo con nivolumab/ipilimumab.';
+const validationEndo8 = validateCandidateSources(textEndo8, [], 'Melanoma cutáneo estadio IV con metástasis pulmonares y hepáticas');
+assert(validationEndo8.canProceed === true, 'Caso O.8 - validateCandidateSources procede');
+assert(validationEndo8.activeScenarioRecommendations?.scenarioTitle.includes('no determinado') === true, 'Caso O.8 - scenarioTitle indica escenario no determinado');
+assert(validationEndo8.activeScenarioRecommendations?.schedule.includes('No determinado en la guía para este escenario') === true, 'Caso O.8 - schedule indica no determinado');
+assert(validationEndo8.activeScenarioRecommendations?.specialRules.includes('Prohibido aplicar cronogramas rutinarios de vigilancia') === true, 'Caso O.8 - specialRules prohíbe aplicar cronogramas rutinarios');
+
+// O.9: Tratamiento finalizado sin respuesta documentada no asume automáticamente NED ni vigilancia rutinaria
+const textEndo9 = 'Tratamiento con quimiorradioterapia completado el mes pasado. No se registran estudios por imágenes posteriores ni constancia de remisión.';
+const profileEndo9 = extractClinicalScenarioProfile(textEndo9, 'Carcinoma epidermoide de cérvix FIGO IIIC2');
+assert(profileEndo9.diseaseStatus !== 'NED', 'Caso O.9 - diseaseStatus NO es NED sin evaluación objetiva');
+assert(profileEndo9.followUpState === 'POST_TREATMENT_EVALUATION', 'Caso O.9 - followUpState es POST_TREATMENT_EVALUATION');
+assert(profileEndo9.modeLabel.includes('Evaluación de respuesta'), 'Caso O.9 - modeLabel indica evaluación de respuesta');
+
+// O.10: Sospecha clínica por síntomas de alarma sin confirmación de recurrencia
+const textEndo10 = 'Consulta por dolor pélvico persistente y flujo vaginal anormal tras cirugía y radioterapia. Sin lesiones visibles a la inspección.';
+const profileEndo10 = extractClinicalScenarioProfile(textEndo10, 'Adenocarcinoma endometrioide de endometrio');
+assert(profileEndo10.symptomFlag === true, 'Caso O.10 - symptomFlag es true');
+assert(profileEndo10.confirmedProgression === false, 'Caso O.10 - confirmedProgression es false');
+assert(profileEndo10.confirmedRecurrence === false, 'Caso O.10 - confirmedRecurrence es false');
+assert(profileEndo10.followUpState === 'SYMPTOMATIC_REEVALUATION', 'Caso O.10 - followUpState es SYMPTOMATIC_REEVALUATION');
+
+// O.11: Regla de biopsia contempla factibilidad técnica, seguridad clínica y urgencias
+const textEndo11 = 'Anexohisterectomía realizada. Sospecha de recidiva locorregional en cúpula vaginal por sangrado vaginal.';
+const validationEndo11 = validateCandidateSources(textEndo11, [], 'Adenocarcinoma endometrioide');
+assert(validationEndo11.activeScenarioRecommendations?.specialRules.includes('técnicamente factible') === true, 'Caso O.11 - specialRules incluye técnicamente factible');
+assert(validationEndo11.activeScenarioRecommendations?.specialRules.includes('clínicamente seguro') === true, 'Caso O.11 - specialRules incluye clínicamente seguro');
+assert(validationEndo11.activeScenarioRecommendations?.specialRules.includes('sin demorar') === true, 'Caso O.11 - specialRules incluye sin demorar urgencias');
+
+// O.12: Conservación de fuente oficial y versión
+const textEndo12 = 'Anexohisterectomía total realizada, asintomática, controles normales (NED).';
+const validationEndo12 = validateCandidateSources(textEndo12, [], 'Adenocarcinoma endometrioide estadio IA');
+assert(validationEndo12.validSystemGuideline?.source === 'NCCN Uterine Neoplasms v1.2024', 'Caso O.12 - source es NCCN Uterine Neoplasms v1.2024');
+assert(validationEndo12.validSystemGuideline?.version === 'v1.2024', 'Caso O.12 - version es v1.2024');
+
+// O.13: Ausencia de estadio sin asumir enfermedad localizada ni remisión completa
+const textEndo13 = 'Tratamiento completado previamente en otra institución. Sin datos de estadio patológico ni evaluación de respuesta.';
+const profileEndo13 = extractClinicalScenarioProfile(textEndo13, 'Adenocarcinoma endometrioide');
+assert(profileEndo13.stage === 'No documentado', 'Caso O.13 - stage es No documentado');
+assert(!profileEndo13.modeLabel.includes('Enfermedad localizada'), 'Caso O.13 - modeLabel NO incluye Enfermedad localizada');
+assert(profileEndo13.diseaseStatus !== 'NED', 'Caso O.13 - diseaseStatus NO es NED');
+assert(profileEndo13.treatmentIntent.includes('precisión de estadio inicial'), 'Caso O.13 - treatmentIntent pide precisión de estadio');
+
+// ------------------------------------------------------------------------------------------------
+// ITERACIÓN 5 — PRUEBAS DE REGRESIÓN OBLIGATORIAS: ANTECEDENTES Y SÍNTOMAS GINECOLÓGICOS
+// ------------------------------------------------------------------------------------------------
+
+// P.1: Antecedente de recidiva en 2024, tratado, actualmente asintomática: no marcar progresión actual
+const textReg1 = 'Antecedente de recidiva en 2024, tratado, actualmente asintomática.';
+assert(!detectConfirmedProgression(textReg1), 'Caso P.1 - Antecedente de recidiva en 2024 tratado no marca progresión actual en detectConfirmedProgression');
+const profileReg1 = extractClinicalScenarioProfile(textReg1, 'Adenocarcinoma endometrioide');
+assert(profileReg1.confirmedProgression === false, 'Caso P.1 - confirmedProgression es false');
+assert(profileReg1.confirmedRecurrence === false, 'Caso P.1 - confirmedRecurrence es false');
+assert(profileReg1.followUpMode === 'CURATIVE_SURVEILLANCE', 'Caso P.1 - followUpMode es CURATIVE_SURVEILLANCE');
+assert(profileReg1.diseaseStatus === 'INDETERMINATE', 'Caso P.1 - Antecedente tratado ambiguo conserva estado INDETERMINATE');
+
+// P.2: Sospecha actual de recidiva: activar reevaluación sintomática sin confirmar recurrencia
+const textReg2 = 'Paciente con adenocarcinoma endometrioide. Sospecha actual de recidiva.';
+assert(!detectConfirmedProgression(textReg2), 'Caso P.2 - Sospecha actual no confirma progresión en detectConfirmedProgression');
+const profileReg2 = extractClinicalScenarioProfile(textReg2, 'Adenocarcinoma endometrioide');
+assert(profileReg2.confirmedProgression === false, 'Caso P.2 - confirmedProgression es false ante sospecha');
+assert(profileReg2.confirmedRecurrence === false, 'Caso P.2 - confirmedRecurrence es false ante sospecha');
+assert(profileReg2.symptomFlag === true, 'Caso P.2 - symptomFlag es true para sospecha actual');
+assert(profileReg2.followUpState === 'SYMPTOMATIC_REEVALUATION', 'Caso P.2 - followUpState es SYMPTOMATIC_REEVALUATION');
+const validationReg2 = validateCandidateSources(textReg2, [], 'Adenocarcinoma endometrioide');
+assert(validationReg2.activeScenarioRecommendations?.scenarioTitle.includes('Reevaluación clínica dirigida') === true, 'Caso P.2 - Selecciona symptomaticReevaluation');
+
+// P.3: Recurrencia actual explícitamente confirmada: conservar la detección correspondiente
+const textReg3 = 'Recurrencia actual explícitamente confirmada por biopsia y tomografía.';
+assert(detectConfirmedProgression(textReg3), 'Caso P.3 - detectConfirmedProgression detecta recurrencia confirmada');
+const profileReg3 = extractClinicalScenarioProfile(textReg3, 'Adenocarcinoma endometrioide');
+assert(profileReg3.confirmedProgression === true, 'Caso P.3 - confirmedProgression es true');
+assert(profileReg3.diseaseStatus === 'PROGRESSION', 'Caso P.3 - diseaseStatus es PROGRESSION');
+assert(profileReg3.followUpMode === 'ACTIVE_METASTATIC_MONITORING', 'Caso P.3 - followUpMode es ACTIVE_METASTATIC_MONITORING (Modo B)');
+
+// P.4: «Sangrado de cúpula», «sangrado genital» y «sangrado postcoital»: detectar el síntoma
+const sympCupula = detectRelevantSymptoms('Paciente presenta sangrado de cúpula.');
+assert(sympCupula.symptomFlag === true && sympCupula.relevantSymptoms.includes('Genitorragia / Sangrado vaginal'), 'Caso P.4a - detecta sangrado de cúpula');
+
+const sympGenital = detectRelevantSymptoms('Refiere sangrado genital intermitente.');
+assert(sympGenital.symptomFlag === true && sympGenital.relevantSymptoms.includes('Genitorragia / Sangrado vaginal'), 'Caso P.4b - detecta sangrado genital');
+
+const sympPostcoital = detectRelevantSymptoms('Presenta sangrado postcoital tras relaciones.');
+assert(sympPostcoital.symptomFlag === true && sympPostcoital.relevantSymptoms.includes('Genitorragia / Sangrado vaginal'), 'Caso P.4c - detecta sangrado postcoital');
+
+// P.5: «Sin sangrado» y «niega sangrado vaginal»: evitar falsos positivos
+const sympSinSangrado = detectRelevantSymptoms('Examen ginecológico normal, sin sangrado.');
+assert(sympSinSangrado.symptomFlag === false && sympSinSangrado.relevantSymptoms.length === 0, 'Caso P.5a - "sin sangrado" evita falso positivo');
+
+const sympNiegaVaginal = detectRelevantSymptoms('Actualmente niega sangrado vaginal.');
+assert(sympNiegaVaginal.symptomFlag === false && sympNiegaVaginal.relevantSymptoms.length === 0, 'Caso P.5b - "niega sangrado vaginal" evita falso positivo');
+
+const sympNiegaPostcoital = detectRelevantSymptoms('Niega sangrado postcoital ni sangrado de cúpula.');
+assert(sympNiegaPostcoital.symptomFlag === false && sympNiegaPostcoital.relevantSymptoms.length === 0, 'Caso P.5c - "niega sangrado postcoital ni sangrado de cúpula" evita falso positivo');
 
 console.log(`\n=== RESUMEN DE PRUEBAS: ${passed} PASARON, ${failed} FALLARON ===`);
 if (failed > 0) {

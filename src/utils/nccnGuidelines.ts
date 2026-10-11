@@ -210,7 +210,7 @@ export const nccnGuidelines: NCCNGuideline[] = [
         schedule: 'Consulta y reevaluación médica oncológica dirigida e inmediata ante la aparición o persistencia de síntomas de alarma.',
         imaging: 'Reevaluación clínica dirigida y estudios por imágenes según la localización de los síntomas y la sospecha clínica: RMN de pelvis para evaluación locorregional (cérvix, parametrios, pared pélvica, plexo lumbosacro), y/o TAC de tórax-abdomen-pelvis / PET-TC cuando esté indicado por el contexto clínico o sospecha de enfermedad extrapelviana. No se exige de forma fija ni obligatoria una modalidad única para todo síntoma.',
         labs: 'Laboratorio de control con función renal y metabólica. Marcadores tumorales (SCC / CA-125) condicionales si existía elevación basal demostrada.',
-        specialRules: 'Los síntomas de alarma (dolor pélvico, lumbociatalgia, edema de miembros inferiores, sangrado) exigen reevaluación diagnóstica pero NO constituyen por sí mismos progresión ni recurrencia confirmada. Ante cualquier hallazgo sospechoso de recidiva en imágenes o examen físico, se requiere confirmación histológica mediante biopsia antes de iniciar tratamientos de rescate.'
+        specialRules: 'Los síntomas de alarma (dolor pélvico, lumbociatalgia, edema de miembros inferiores, sangrado) exigen reevaluación diagnóstica pero NO constituyen por sí mismos progresión ni recurrencia confirmada. Ante sospecha clínica o en imágenes de recidiva, se debe procurar confirmación histológica mediante biopsia de lesiones accesibles siempre que sea técnicamente factible y clínicamente seguro antes de iniciar tratamientos de rescate; si la localización es inaccesible o existen urgencias clínicas, consensuar conducta por comité multidisciplinario sin demorar la atención urgente.'
       },
       localizedSurveillance: {
         scenarioTitle: 'Vigilancia rutinaria post-tratamiento curativo (Respuesta completa documentada, asintomática, NED)',
@@ -377,7 +377,41 @@ export const nccnGuidelines: NCCNGuideline[] = [
     specialConsiderations: 'Determinación de subtipo molecular (POLE, MMRd/MSI, p53abn). Síndrome de Lynch screening. Dilatadores vaginales post-braquiterapia.',
     source: 'NCCN Uterine Neoplasms v1.2024',
     version: 'v1.2024',
-    organization: 'NCCN'
+    organization: 'NCCN',
+    scenarios: {
+      localizedSurveillance: {
+        scenarioTitle: 'Vigilancia post-tratamiento curativo / Seguimiento rutinario (Estadios I–IV resecados/tratados, NED)',
+        intention: 'Detección precoz de recidiva locorregional (cúpula vaginal/pelvis) o a distancia, y manejo de secuelas terapéuticas.',
+        schedule: 'Años 1–3: consulta clínica y examen físico pélvico (espéculo para evaluar cúpula vaginal y tacto bimanual/rectovaginal) cada 3–6 meses. Años 4–5: cada 6 meses. A partir del año 6: control anual.',
+        imaging: 'TAC de tórax, abdomen y pelvis con contraste o PET-TC: NO se recomiendan de rutina en estadios iniciales (estadio I) asintomáticos. En estadios avanzados (estadios III–IV) tratados con intención curativa de alto riesgo, considerar TAC cada 6–12 meses durante los primeros 2–3 años. No realizar citología vaginal (Papanicolaou) de rutina.',
+        labs: 'CA-125 sérico opcional o condicional: no de rutina para todos los estadios; considerar únicamente si estuvo elevado al diagnóstico o en histologías de alto riesgo (seroso) para monitoreo serológico.',
+        specialRules: 'Educación exhaustiva sobre síntomas de alarma (sangrado o flujo vaginal, dolor pélvico/lumbar). Cribado de síndrome de Lynch (IHC MMR). Uso de dilatadores vaginales iniciado 2–4 semanas post-braquiterapia para prevenir estenosis vaginal y favorecer salud sexual.'
+      },
+      symptomaticReevaluation: {
+        scenarioTitle: 'Reevaluación clínica dirigida por síntomas de alarma / Sospecha de recidiva',
+        intention: 'Evaluación diagnóstica urgente ante síntomas sospechosos de recaída vaginal, locorregional o sistémica, sin asumir progresión confirmada.',
+        schedule: 'Consulta oncológica inmediata y examen físico pélvico exhaustivo (inspección de cúpula vaginal con espéculo, palpación bimanual y rectovaginal) ante sangrado vaginal o dolor.',
+        imaging: 'Estudios de imagen dirigidos según la sospecha clínica: RMN de pelvis con contraste para evaluar cúpula vaginal y tejidos pélvicos blandos; TAC de tórax, abdomen y pelvis con contraste para descartar diseminación retroperitoneal o a distancia; PET-TC ante sospecha con TAC/RMN equívocos.',
+        labs: 'CA-125 sérico ante sospecha clínica o si estuvo previamente elevado. Laboratorio general y función renal.',
+        specialRules: 'Ante sospecha de recidiva locorregional (cúpula vaginal o pelvis), se debe procurar confirmación histológica mediante biopsia de lesiones accesibles siempre que sea técnicamente factible y clínicamente seguro antes de definir tratamiento de rescate (radioterapia, cirugía de rescate o terapia sistémica); si la localización es anatómicamente inaccesible, el riesgo es prohibitivo o median complicaciones agudas, la conducta debe consensuarse en comité multidisciplinario en base a imágenes evolutivas y clínica, sin demorar el manejo médico o quirúrgico de urgencias. Los síntomas por sí solos exigen estudio pero no configuran progresión confirmada.'
+      },
+      postTreatmentEvaluation: {
+        scenarioTitle: 'Evaluación post-tratamiento inmediato / Evaluación basal',
+        intention: 'Evaluación basal post-quirúrgica o post-adyuvancia (RT/braquiterapia/quimioterapia), evaluación de secuelas agudas y confirmación de remisión.',
+        schedule: 'Consulta clínica y examen pélvico inicial a las 6–12 semanas de completado el tratamiento primario o adyuvante.',
+        imaging: 'Estudios basales únicamente si indicados por estadio inicial o hallazgos quirúrgicos (no TAC rutinario en estadio I asintomático). Registrar estudios en trámite.',
+        labs: 'Laboratorio general de control. Dosaje basal de CA-125 si estuvo elevado al diagnóstico.',
+        specialRules: 'Inicio de dilatadores vaginales y lubricantes 2–4 semanas post-braquiterapia para prevención de estenosis vaginal y preservación de la función sexual.'
+      },
+      activeMetastatic: {
+        scenarioTitle: 'Enfermedad recurrente no pasible de rescate local o metastásica activa bajo tratamiento sistémico',
+        intention: 'Monitoreo seriado de respuesta antitumoral objetiva (RECIST 1.1 / iRECIST), control sintomático y manejo de toxicidad.',
+        schedule: 'Evaluación médica previa a cada ciclo de quimioterapia o inmunoterapia (cada 3 semanas) o cada 2–3 meses en terapia hormonal.',
+        imaging: 'TAC de tórax, abdomen y pelvis con contraste cada 2 a 3 meses (cada 8–12 semanas o cada 3–4 ciclos) para evaluación de respuesta.',
+        labs: 'CA-125 seriado como marcador de respuesta si elevado basalmente. Hemograma, función hepática y renal previos a cada ciclo.',
+        specialRules: 'Determinación de estado de inestabilidad microsatelital (MSI-H/dMMR) o receptores hormonales (RE/RP) para guiar terapia sistémica.'
+      }
+    }
   },
 
   {
@@ -920,7 +954,7 @@ function isOrganMentionIncidental(text: string, organTermRegex: RegExp): boolean
 /**
  * Extrae todos los órganos candidatos presentes en una cadena, descartando menciones secundarias o descartadas.
  */
-function detectCandidateOrgans(rawOrNormStr: string, isExplicitContext: boolean = false): string[] {
+function detectCandidateOrgans(rawOrNormStr: string, _isExplicitContext: boolean = false): string[] {
   const str = normalizeStr(rawOrNormStr);
   let found: string[] = [];
 
@@ -1055,10 +1089,11 @@ function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
     if (p.test(norm)) return true;
   }
 
-  // 3. Sospecha a confirmar / descartar / evaluar / no confirmada
+  // 3. Sospecha a confirmar / descartar / evaluar / sospecha clínica (no confirmada objetivamente)
   const unconfirmedSuspicionPatterns = [
-    /\bsospecha\s+de\s+(?:posible\s+)?(recidiva|progresion|recaida|recurrencia|recurrente)\b(?:[\s\w]*)\b(?:a\s+(?:confirmar|descartar|evaluar|estudiar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio|no\s+confirmada?|a\s+determinar)\b/,
-    /\b(?:a\s+(?:confirmar|descartar|evaluar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio)\b(?:[\s\w]*)\b(?:sospecha\s+de\s+)?(recidiva|progresion|recaida|recurrencia|recurrente)\b/
+    /\bsospecha\s+(?:clinica\s+|inicial\s+|diagnostica\s+|actual\s+)?de\s+(?:posible\s+|franca\s+|nueva\s+)?(?:recidiva|progresion|recaida|recurrencia|recurrente)\b/,
+    /\bsospecha\s+(?:actual\s+)?(?:de\s+)?(?:nueva\s+|posible\s+)?(?:recidiva|progresion|recaida|recurrencia|recurrente)\b/,
+    /\b(?:a\s+(?:confirmar|descartar|evaluar)|pendiente\s+de\s+confirmaci[oó]n|en\s+estudio|en\s+reevaluaci[oó]n)\b(?:[\s\w]*)\b(?:sospecha\s+(?:actual\s+)?de\s+)?(?:recidiva|progresion|recaida|recurrencia|recurrente)\b/
   ];
 
   for (const p of unconfirmedSuspicionPatterns) {
@@ -1088,6 +1123,26 @@ function isProgressionMentionNegatedOrSurveillance(clause: string): boolean {
   // Cláusula donde se menciona recidiva/recurrencia pero concluye sin hallazgos patológicos o negativos
   if (/\b(recidiva|progresion|recaida|recurrencia|recurrente)\b/.test(norm) && hasNegativeFindings) {
     return true;
+  }
+
+  // 6. Antecedente histórico o remoto de recidiva / recaída previa tratada (no progresión actual)
+  const isHistoricalRecurrenceMention =
+    /\b(?:antecedente|antecedentes|historia|h\s*x)\s+(?:remot[ao]\s+|previ[ao]\s+)?de\s+(?:recidiva|recaida|recurrencia)\b/.test(norm) ||
+    /\b(?:recidiva|recaida|recurrencia)\s+(?:previa|anterior|pasada)\b/.test(norm) ||
+    /\b(?:recidiva|recaida|recurrencia)\s+en\s+(?:19|20)\d{2}\b/.test(norm) ||
+    /\b(?:recidiva|recaida|recurrencia)(?:[\s\w]*?)\b(?:ya\s+)?(?:tratad[ao]|resecad[ao]|irradiad[ao]|operad[ao]|resuelta?|superad[ao])\b/.test(norm) ||
+    /\b(?:tratad[ao]|resecad[ao]|irradiad[ao]|operad[ao])\s+(?:por|de)\s+(?:recidiva|recaida|recurrencia)\b/.test(norm);
+
+  if (isHistoricalRecurrenceMention) {
+    // Si la misma cláusula no documenta expresamente una nueva recurrencia actual confirmada, se considera antecedente histórico
+    const hasCurrentConfirmedIndicator =
+      /\b(?:actual(?:mente)?\s+presenta|presenta\s+(?:actual\s+|nueva\s+)|nueva\s+|nuevo\s+)(?:recidiva|recaida|recurrencia|progresion)\b/.test(norm) ||
+      /\b(?:recidiva|recaida|recurrencia|progresion)\s+(?:actual|nueva)\s+(?:confirmada|documentada|evidente)\b/.test(norm) ||
+      /\b(?:se\s+confirma|se\s+constata|se\s+documenta)\s+(?:nueva\s+|actual\s+)(?:recidiva|recaida|recurrencia|progresion)\b/.test(norm);
+
+    if (!hasCurrentConfirmedIndicator) {
+      return true;
+    }
   }
 
   return false;
@@ -1139,8 +1194,8 @@ export function detectConfirmedProgression(text: string): boolean {
     }
 
     const affirmativePatterns = [
-      /\b(?:recidiva|progresion|recaida|recurrencia)\s+(?:confirmada|documentada|evidente|tumoral|locorregional|local|a\s+distancia|ganglionar|hepatica|peritoneal|anastomotica|en\s+lecho|clinica|radiologica|bioquimica|pelvica|platino\s+sensible|platino\s+resistente|platino\s+refractaria?)\b/,
-      /\b(?:se\s+constata|se\s+confirma|se\s+documenta|se\s+aprecia|presenta|evidencia|muestra)\s+(?:franca\s+|nueva\s+)?(?:recidiva|progresion|recaida|recurrencia)\b/,
+      /\b(?:recidiva|progresion|recaida|recurrencia)\b(?:[\s\w]*?)\b(?:confirmada|documentada|evidente|tumoral|locorregional|local|a\s+distancia|ganglionar|hepatica|peritoneal|anastomotica|en\s+lecho|clinica|radiologica|bioquimica|pelvica|platino\s+sensible|platino\s+resistente|platino\s+refractaria?)\b/,
+      /\b(?:se\s+constata|se\s+confirma|se\s+documenta|se\s+aprecia|presenta|evidencia|muestra)\b(?:[\s\w]*?)\b(?:franca\s+|nueva\s+|actual\s+)?(?:recidiva|progresion|recaida|recurrencia)\b/,
       /\benfermedad\s+(?:en\s+progresion|progresiva|recurrente)\b/,
       /\b(?:progresion|recidiva|recurrencia)\s+(?:de\s+enfermedad|por\s+recist|segun\s+recist|objetiva|bioquimica|radiologica|tomografica)\b/,
       /\b(?:aparicion\s+de|nuevas?)\s+(?:lesion\w*|metastasis|implantes?)\b/,
@@ -1203,8 +1258,8 @@ export function detectTreatmentStatus(text: string): {
 
   const isTreatmentCompletedOrPast = !hasActiveOngoingTreatment && [
     /adyuvancia\s+(?:finalizada|completada|cumplida|realizada)/,
-    /quimioterapia\s+(?:adyuvante\s+)?(?:finalizada|completada|cumplida|realizada)/,
-    /tratamiento\s+(?:adyuvante\s+)?(?:finalizado|completado|cumplido|realizado)/,
+    /(?:tratamiento|quimioterapia|quimiorradioterapia|radioterapia|braquiterapia)(?:[\s\w]*?)(?:finalizad[ao]|completad[ao]|cumplid[ao]|realizad[ao]|terminad[ao])/,
+    /\b(?:completo|finalizo|termino|cumplio|realizo)\s+(?:el\s+)?(?:tratamiento|quimioterapia|quimiorradioterapia|radioterapia|braquiterapia|esquema|adyuvancia)/,
     /completo\s+(?:adyuvancia|quimioterapia|tratamiento|esquema|ciclos?)/,
     /cumplio\s+(?:adyuvancia|quimioterapia|tratamiento|esquema|ciclos?)/,
     /finalizo\s+(?:adyuvancia|quimioterapia|tratamiento|esquema|ciclos?)/,
@@ -1417,7 +1472,7 @@ export function detectRelevantSymptoms(text: string): { symptomFlag: boolean; re
     },
     {
       name: 'Genitorragia / Sangrado vaginal',
-      regex: /\b(?:genitorragia|metrorragia|sangrado\s+vaginal|sangrado\s+uterino|ginecrorragia)\b/,
+      regex: /\b(?:genitorragia|metrorragia|ginecrorragia|flujo\s+vaginal|sangrado\s+(?:vaginal|uterino|de\s+cupula|cupula|genital|post[\s-]?coital))\b/,
     },
     {
       name: 'Síntomas urinarios',
@@ -2027,6 +2082,25 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
   const confirmedProgression = hasProgression;
   const confirmedRecurrence = hasProgression;
 
+  // Sospecha actual no confirmada de recidiva
+  const hasActiveSuspicionOfRecurrence =
+    !hasProgression &&
+    /\bsospecha\s+actual\s+de\s+(?:posible\s+|nueva\s+)?(?:recidiva|recaida|recurrencia)\b/i.test(combined) &&
+    !/\b(?:descartad[ao]s?|se\s+descarta|qued[aoó]\s+descartad[ao]s?)\b/i.test(combined);
+
+  const effectiveSymptomFlag = symptomFlag || hasActiveSuspicionOfRecurrence;
+  const effectiveSymptoms = [...relevantSymptoms];
+  if (hasActiveSuspicionOfRecurrence && !effectiveSymptoms.includes('Sospecha clínica de recidiva')) {
+    effectiveSymptoms.push('Sospecha clínica de recidiva');
+  }
+
+  const hasHistoricalRecurrence =
+    /\b(?:antecedente|antecedentes|historia|h\s*x)\s+(?:remot[ao]\s+|previ[ao]\s+)?de\s+(?:recidiva|recaida|recurrencia)\b/i.test(combined) ||
+    /\b(?:recidiva|recaida|recurrencia)\s+(?:previa|anterior|pasada)\b/i.test(combined) ||
+    /\b(?:recidiva|recaida|recurrencia)\s+en\s+(?:19|20)\d{2}\b/i.test(combined) ||
+    /\b(?:recidiva|recaida|recurrencia)(?:[\s\w]*?)\b(?:ya\s+)?(?:tratad[ao]|resecad[ao]|irradiad[ao]|operad[ao]|resuelta?|superad[ao])\b/i.test(combined) ||
+    /\b(?:tratad[ao]|resecad[ao]|irradiad[ao]|operad[ao])\s+(?:por|de)\s+(?:recidiva|recaida|recurrencia)\b/i.test(combined);
+
   const cleanedForActive = combined
     .replace(/sin (?:evidencia de |signos de )?(?:lesiones|metastasis|enfermedad activa)/g, ' ')
     .replace(/no presenta (?:lesiones|metastasis|enfermedad activa)/g, ' ')
@@ -2044,29 +2118,56 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
      combined.includes('metastasectomia r0') || combined.includes('reseccion de metastasis')) &&
     (combined.includes('r0') || combined.includes('completa') || combined.includes('resecadas') || combined.includes('ned'));
 
-  const hasNED = 
+  const hasExplicitNED =
     combined.includes('ned') || combined.includes('libre de enfermedad') || combined.includes('sin evidencia de enfermedad') ||
     combined.includes('remision completa') || combined.includes('sin lesiones activas') || combined.includes('sin recidiva') ||
     combined.includes('sin signos de recidiva') || combined.includes('sin signos tomograficos de recidiva') ||
     combined.includes('se descarta recidiva') || combined.includes('sin hallazgos patologicos') || combined.includes('sin hallazgos') ||
-    combined.includes('sin recurrencia') || combined.includes('sin signos de recurrencia') || combined.includes('se descarta recurrencia') ||
-    combined.includes('asintomatica') || combined.includes('asintomatico') ||
-    (!hasProgression && (tx.isTreatmentCompletedOrPast || combined.includes('en seguimiento')));
+    combined.includes('sin recurrencia') || combined.includes('sin signos de recurrencia') || combined.includes('se descarta recurrencia');
+
+  const hasNED =
+    hasExplicitNED ||
+    (!hasHistoricalRecurrence && !effectiveSymptomFlag && (combined.includes('asintomatica') || combined.includes('asintomatico')) && (combined.includes('control') || combined.includes('seguimiento') || combined.includes('examen') || combined.includes('normal') || combined.includes('sin hallazgos')));
 
   const hasPartialResponse = combined.includes('respuesta parcial') || combined.includes('reduccion tumoral');
   const hasStableDisease = combined.includes('enfermedad estable') || combined.includes('estabilidad lesional');
 
   // Distinción entre tratamiento quirúrgico vs tratamiento definitivo no quirúrgico
-  const isSurgical = /\b(?:resecad[ao]|postquirurgic[ao]|postoperatori[ao]|operad[ao]|mastectom\w*|colectom\w*|histerectom\w*|duodenopancreatectom\w*|whipple|lobectom\w*|gastrectom\w*|nefrectom\w*|prostatectom\w*|citorreducci[oó]n|metastasectom\w*|resecci[oó]n)\b/i.test(combined);
+  const isSurgical = /\b(?:resecad[ao]|postquirurgic[ao]|postoperatori[ao]|operad[ao]|mastectom\w*|colectom\w*|histerectom\w*|anexohisterectom\w*|duodenopancreatectom\w*|whipple|lobectom\w*|gastrectom\w*|nefrectom\w*|prostatectom\w*|citorreducci[oó]n|metastasectom\w*|resecci[oó]n|evacuaci\w*|legrad\w*|ameu)\b/i.test(combined);
   const isDefinitiveNonSurgical = !isSurgical && /\b(?:quimiorradioterapia|radioterapia|braquiterapia|rt\s+concurrente|vmat|imrt|hdr|quimiort)\b/i.test(combined);
+
+  const hasDocumentedTreatmentOrSurveillance =
+    isSurgical ||
+    isDefinitiveNonSurgical ||
+    tx.isTreatmentCompletedOrPast ||
+    hasHistoricalRecurrence ||
+    /\btratad[ao]\b/i.test(combined) ||
+    combined.includes('en seguimiento') ||
+    combined.includes('en vigilancia') ||
+    combined.includes('en control') ||
+    combined.includes('postoperatorio') ||
+    combined.includes('postquirurgico') ||
+    combined.includes('post-tratamiento') ||
+    combined.includes('post-evacuacion') ||
+    combined.includes('postevacuacion') ||
+    combined.includes('evacuacion') ||
+    combined.includes('legrado') ||
+    combined.includes('ameu') ||
+    combined.includes('tratamiento completado') ||
+    combined.includes('sin tratamiento activo') ||
+    combined.includes('sin tratamiento sistemico activo') ||
+    combined.includes('libre de enfermedad') ||
+    combined.includes('ned') ||
+    combined.includes('remision') ||
+    (combined.includes('mola') && (combined.includes('descenso') || combined.includes('hcg')));
 
   // Evaluación post-tratamiento pendiente o reevaluación sintomática
   const isAsymptomaticWithNormalFindings =
-    !symptomFlag &&
+    !effectiveSymptomFlag &&
     (combined.includes('asintomatic') || combined.includes('sin hallazgos') || combined.includes('sin alteraciones') || combined.includes('normal'));
 
   const isPostTreatmentEvaluation =
-    symptomFlag ||
+    effectiveSymptomFlag ||
     /\b(?:evaluaci[oó]n|control)\s+(?:basal\s+)?post[\s-]?tratamiento\b/i.test(clinicalText) ||
     /\bpost[\s-]?tratamiento\s+pendiente\b/i.test(clinicalText) ||
     (pendingStudies.length > 0 && !isAsymptomaticWithNormalFindings);
@@ -2171,38 +2272,126 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
       treatmentIntent = 'Control tumoral y evaluación de respuesta a tratamiento sistémico';
     } else if (isPostTreatmentEvaluation) {
       // Paciente con tratamiento completado en período de evaluación post-tratamiento o con síntomas en reevaluación
-      followUpState = symptomFlag ? 'SYMPTOMATIC_REEVALUATION' : 'POST_TREATMENT_EVALUATION';
+      followUpState = effectiveSymptomFlag ? 'SYMPTOMATIC_REEVALUATION' : 'POST_TREATMENT_EVALUATION';
       diseaseStatus = 'POST_TREATMENT_EVALUATION';
       
-      if (isDefinitiveNonSurgical) {
-        diseaseStatusDescription = 'Tratamiento definitivo con intención curativa completado; sin progresión/recidiva confirmada documentada; actualmente en evaluación post-tratamiento.';
-      } else if (isSurgical) {
-        diseaseStatusDescription = 'Tratamiento quirúrgico completado; sin progresión/recidiva confirmada documentada; actualmente en evaluación post-tratamiento.';
-      } else {
-        diseaseStatusDescription = 'Tratamiento completado; sin progresión/recidiva confirmada documentada; actualmente en evaluación post-tratamiento.';
-      }
-      
-      followUpMode = 'CURATIVE_SURVEILLANCE';
-      modeLabel = symptomFlag
-        ? 'Modo A — Vigilancia post-tratamiento curativo / Reevaluación por síntomas'
-        : 'Modo A — Vigilancia post-tratamiento curativo (Evaluación post-tratamiento)';
-      treatmentIntent = 'Evaluación de respuesta post-tratamiento y detección precoz de recidiva';
-    } else {
-      // Paciente asintomático en seguimiento rutinario prolongado (NED)
-      followUpState = 'ROUTINE_SURVEILLANCE';
-      diseaseStatus = 'NED';
-      
-      if (isDefinitiveNonSurgical) {
-        diseaseStatusDescription = 'Tratamiento definitivo completado, actualmente sin evidencia clínica de progresión (Vigilancia post-tratamiento curativo).';
-      } else if (isSurgical) {
-        diseaseStatusDescription = 'Enfermedad localizada resecada con intención curativa, actualmente sin evidencia de enfermedad (NED).';
-      } else {
-        diseaseStatusDescription = 'Enfermedad localizada / en seguimiento, sin evidencia de progresión documentada (Vigilancia oncológica).';
-      }
+      const isUndocumentedStage = baseProfile.stage === 'No documentado' || baseProfile.stage === 'Desconocido' || !baseProfile.stage;
 
-      followUpMode = 'CURATIVE_SURVEILLANCE';
-      modeLabel = 'Modo A — Vigilancia post-tratamiento curativo (Enfermedad localizada)';
-      treatmentIntent = 'Detección precoz de recidiva locorregional o sistémica curable';
+      if (isUndocumentedStage) {
+        diseaseStatusDescription = effectiveSymptomFlag
+          ? 'Seguimiento post-tratamiento primario; estadio inicial no documentado; presenta síntomas o hallazgos sospechosos que requieren reevaluación clínica dirigida.'
+          : 'Tratamiento completado; estadio inicial no documentado; actualmente en evaluación post-tratamiento.';
+        followUpMode = 'CURATIVE_SURVEILLANCE';
+        modeLabel = effectiveSymptomFlag
+          ? 'Modo A — Seguimiento post-tratamiento primario / Reevaluación por síntomas (Estadio no documentado)'
+          : 'Modo A — Seguimiento post-tratamiento primario (Evaluación post-tratamiento, Estadio no documentado)';
+        treatmentIntent = 'Evaluación de respuesta post-tratamiento y detección precoz de recidiva (requiere precisar estadio inicial para estratificación de riesgo)';
+      } else {
+        if (isDefinitiveNonSurgical) {
+          diseaseStatusDescription = 'Tratamiento definitivo con intención curativa completado; sin progresión/recidiva confirmada documentada; actualmente en evaluación post-tratamiento.';
+        } else if (isSurgical) {
+          diseaseStatusDescription = 'Tratamiento quirúrgico completado; sin progresión/recidiva confirmada documentada; actualmente en evaluación post-tratamiento.';
+        } else {
+          diseaseStatusDescription = 'Tratamiento completado; sin progresión/recidiva confirmada documentada; actualmente en evaluación post-tratamiento.';
+        }
+
+        followUpMode = 'CURATIVE_SURVEILLANCE';
+        modeLabel = effectiveSymptomFlag
+          ? 'Modo A — Vigilancia post-tratamiento curativo / Reevaluación por síntomas'
+          : 'Modo A — Vigilancia post-tratamiento curativo (Evaluación post-tratamiento)';
+        treatmentIntent = 'Evaluación de respuesta post-tratamiento y detección precoz de recidiva';
+      }
+    } else {
+      const isUndocumentedStage = baseProfile.stage === 'No documentado' || baseProfile.stage === 'Desconocido' || !baseProfile.stage;
+
+      if (isUndocumentedStage && !hasDocumentedTreatmentOrSurveillance) {
+        // Estadio no documentado Y sin antecedentes de tratamiento ni seguimiento documentados:
+        // Situación clínica insuficientemente documentada (No asumir enfermedad localizada ni vigilancia por defecto)
+        followUpState = 'UNDETERMINED';
+        diseaseStatus = 'INDETERMINATE';
+        followUpMode = 'INDETERMINATE_STATUS';
+        modeLabel = 'Situación clínica insuficientemente documentada (Estadio y tratamiento no documentados)';
+        diseaseStatusDescription = 'Estadio inicial y antecedentes de tratamiento no documentados en la historia clínica. No es posible determinar si la paciente se encuentra pre-quirúrgica, en tratamiento activo o en seguimiento post-tratamiento.';
+        treatmentIntent = 'Requiere precisar estadio inicial y antecedentes terapéuticos antes de establecer un plan de seguimiento.';
+      } else if (isUndocumentedStage) {
+        // Estadio no documentado PERO con tratamiento primario o seguimiento documentado:
+        // Seguimiento post-tratamiento primario (sin asumir falsamente "enfermedad localizada resecada")
+        const hasSurveillanceContext = combined.includes('control') || combined.includes('seguimiento') || combined.includes('vigilancia');
+
+        if (!hasNED && !hasSurveillanceContext) {
+          // Tratamiento registrado pero sin constancia de seguimiento, evaluación de respuesta ni remisión
+          followUpState = 'POST_TREATMENT_EVALUATION';
+          diseaseStatus = 'INDETERMINATE';
+          followUpMode = 'CURATIVE_SURVEILLANCE';
+          modeLabel = 'Modo A — Seguimiento post-tratamiento primario (Evaluación de respuesta no documentada, Estadio no documentado)';
+          diseaseStatusDescription = 'Tratamiento completado; estadio inicial y evaluación de respuesta no documentados en la historia clínica. No puede asumirse remisión completa ni ausencia de enfermedad sin constatación objetiva.';
+          treatmentIntent = 'Evaluación de respuesta post-tratamiento y precisión de estadio inicial';
+        } else if (hasHistoricalRecurrence && !hasExplicitNED) {
+          followUpState = 'ROUTINE_SURVEILLANCE';
+          diseaseStatus = 'INDETERMINATE';
+          followUpMode = 'CURATIVE_SURVEILLANCE';
+          modeLabel = 'Modo A — Seguimiento post-tratamiento de rescate (Estadio y respuesta no documentados)';
+          diseaseStatusDescription = 'Antecedente de recidiva previa tratada; estadio inicial y evaluación de respuesta no documentados en la historia clínica; sin evidencia clínica de progresión actual.';
+          treatmentIntent = 'Seguimiento y confirmación de respuesta post-rescate';
+        } else {
+          followUpState = 'ROUTINE_SURVEILLANCE';
+          diseaseStatus = hasNED ? 'NED' : 'INDETERMINATE';
+          followUpMode = 'CURATIVE_SURVEILLANCE';
+          modeLabel = 'Modo A — Seguimiento post-tratamiento primario (Estadio no documentado)';
+          diseaseStatusDescription = hasNED
+            ? (isSurgical
+              ? 'Tratamiento quirúrgico primario realizado; estadio inicial no documentado; sin evidencia documentada de progresión.'
+              : isDefinitiveNonSurgical
+              ? 'Tratamiento definitivo primario completado; estadio inicial no documentado; sin evidencia documentada de progresión.'
+              : 'Seguimiento después del tratamiento primario; estadio inicial no documentado; sin evidencia documentada de progresión (Vigilancia oncológica).')
+            : 'Seguimiento después del tratamiento primario; estadio inicial no documentado; evaluación de respuesta no constatada con precisión; sin evidencia clínica de progresión.';
+          treatmentIntent = 'Seguimiento y detección precoz de recidiva (requiere precisar estadio inicial para estratificación de riesgo)';
+        }
+      } else {
+        // Paciente con estadio documentado asintomático
+        const hasSurveillanceContext = combined.includes('control') || combined.includes('seguimiento') || combined.includes('vigilancia');
+
+        if (!hasNED && isTreatmentCompletedOrNone && !isSurgical && !hasSurveillanceContext) {
+          // Tratamiento sistémico/definitivo completado pero sin evaluación formal de respuesta documentada ni seguimiento establecido
+          followUpState = 'POST_TREATMENT_EVALUATION';
+          diseaseStatus = 'POST_TREATMENT_EVALUATION';
+          followUpMode = 'CURATIVE_SURVEILLANCE';
+          modeLabel = 'Modo A — Vigilancia post-tratamiento curativo (Evaluación de respuesta pendiente/no documentada)';
+          diseaseStatusDescription = isDefinitiveNonSurgical
+            ? 'Tratamiento definitivo completado; evaluación formal de respuesta pendiente de documentación objetiva.'
+            : 'Tratamiento completado; evaluación formal de respuesta tumoral no documentada en la historia clínica.';
+          treatmentIntent = 'Evaluación de respuesta post-tratamiento y confirmación de remisión';
+        } else if (hasHistoricalRecurrence && !hasExplicitNED) {
+          // Antecedente de recidiva tratada sin documentación explícita de NED ni remisión actual:
+          // Estado indeterminado (no asumir progresión activa ni ausencia de enfermedad)
+          followUpState = 'ROUTINE_SURVEILLANCE';
+          diseaseStatus = 'INDETERMINATE';
+          followUpMode = 'CURATIVE_SURVEILLANCE';
+          modeLabel = 'Modo A — Vigilancia post-tratamiento de rescate (Estado de respuesta no documentado)';
+          diseaseStatusDescription = 'Antecedente de recidiva previa tratada; sin evidencia documentada de progresión actual; evaluación objetiva de remisión o estado actual no constatada en la historia clínica.';
+          treatmentIntent = 'Vigilancia oncológica y confirmación de remisión tras tratamiento de rescate';
+        } else {
+          // Paciente con estadio documentado asintomático en seguimiento rutinario prolongado (NED o quirúrgico con margen libre)
+          followUpState = 'ROUTINE_SURVEILLANCE';
+          diseaseStatus = 'NED';
+
+          if (hasHistoricalRecurrence && hasExplicitNED) {
+            diseaseStatusDescription = 'Antecedente de recidiva previa tratada, actualmente en remisión completa / sin evidencia de enfermedad (NED).';
+            modeLabel = 'Modo A — Vigilancia post-tratamiento curativo / de rescate (NED)';
+            treatmentIntent = 'Detección precoz de recidiva y vigilancia oncológica tras rescate';
+          } else if (isDefinitiveNonSurgical) {
+            diseaseStatusDescription = 'Tratamiento definitivo completado, actualmente sin evidencia clínica de progresión (Vigilancia post-tratamiento curativo).';
+          } else if (isSurgical) {
+            diseaseStatusDescription = 'Enfermedad localizada resecada con intención curativa, actualmente sin evidencia de enfermedad (NED).';
+          } else {
+            diseaseStatusDescription = 'Enfermedad localizada / en seguimiento, sin evidencia de progresión documentada (Vigilancia oncológica).';
+          }
+
+          followUpMode = 'CURATIVE_SURVEILLANCE';
+          modeLabel = 'Modo A — Vigilancia post-tratamiento curativo (Enfermedad localizada)';
+          treatmentIntent = 'Detección precoz de recidiva locorregional o sistémica curable';
+        }
+      }
     }
   }
 
@@ -2223,8 +2412,8 @@ export function extractClinicalScenarioProfile(clinicalText: string, explicitDia
     treatmentIntent,
     lastImagingDate,
     lastTreatmentDate,
-    symptomFlag,
-    relevantSymptoms,
+    symptomFlag: effectiveSymptomFlag,
+    relevantSymptoms: effectiveSymptoms,
     pendingStudies,
     confirmedRecurrence,
     confirmedProgression,
@@ -2432,6 +2621,39 @@ export function validateCandidateSources(
         activeScenarioRecommendations = g.scenarios.postTreatmentEvaluation;
       } else {
         activeScenarioRecommendations = g.scenarios?.localizedSurveillance || null;
+      }
+    }
+
+    // Fallback de compatibilidad controlado y trazable:
+    // Si la guía no posee bloque estructurado scenarios o el escenario específico es null:
+    if (!activeScenarioRecommendations) {
+      const sourceLabel = g.source || g.version || 'NCCN';
+      const isCurativeSurveillance =
+        profile.followUpMode === 'CURATIVE_SURVEILLANCE' &&
+        (profile.followUpState === 'ROUTINE_SURVEILLANCE' || profile.followUpState === 'POST_TREATMENT_EVALUATION');
+
+      if (!g.scenarios && isCurativeSurveillance && (g.schedule || g.imaging || g.labs)) {
+        // Guía sin subescenarios en paciente de vigilancia rutinaria/post-tratamiento:
+        // Se preservan las recomendaciones documentadas de nivel superior indicando su fuente y versión oficial
+        activeScenarioRecommendations = {
+          scenarioTitle: `${g.pathology} — Recomendaciones documentadas de vigilancia (${sourceLabel})`,
+          intention: g.intention || 'Seguimiento oncológico y detección precoz de recidiva.',
+          schedule: g.schedule || 'Consulta médica periódica según pauta oncológica documentada.',
+          imaging: g.imaging || 'Estudios por imágenes según indicación de la guía.',
+          labs: g.labs || 'Laboratorio y marcadores tumorales según pauta de la guía.',
+          specialRules: g.specialConsiderations || `Seguimiento individualizado según pauta documentada en ${sourceLabel}.`,
+        };
+      } else {
+        // Escenario no cubierto o incompatible (ej. ACTIVE_METASTATIC_MONITORING o SYMPTOMATIC_REEVALUATION en guía que carece de ese bloque específico):
+        // NO extrapolar recomendaciones rutinarias de vigilancia a enfermedad metastásica activa ni a sospecha de recaída.
+        activeScenarioRecommendations = {
+          scenarioTitle: `${g.pathology} — Escenario clínico no determinado en guía disponible (${sourceLabel})`,
+          intention: `La guía (${sourceLabel}) contiene recomendaciones para vigilancia, pero no especifica pautas estructuradas para el escenario "${profile.modeLabel}".`,
+          schedule: `No determinado en la guía para este escenario específico (${profile.modeLabel}). Requiere indicación individualizada según situación clínica y esquema de tratamiento.`,
+          imaging: `No determinado en la guía para este escenario. Evaluación de respuesta o estudios dirigidos según criterio oncológico especializado.`,
+          labs: `No determinado en la guía para este escenario. Monitoreo según toxicidad del tratamiento o sospecha clínica.`,
+          specialRules: `La guía asignada (${sourceLabel}) carece de especificaciones validadas para este escenario. Prohibido aplicar cronogramas rutinarios de vigilancia a pacientes en tratamiento activo o con sospecha clínica.`,
+        };
       }
     }
 
