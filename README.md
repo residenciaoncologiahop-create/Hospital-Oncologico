@@ -318,7 +318,26 @@ firebase deploy --only functions
 ```
 
 ### 9.3. Integración continua (CI)
-El flujo `.github/workflows/lint.yml` ejecuta automáticamente el linter ESLint ante cada *push* o *pull request* dirigido a la rama `main`.
+
+El flujo de GitHub Actions (`.github/workflows/lint.yml`) valida lint, tipos y tests ante cada *push* o *pull request* hacia la rama `main`:
+
+1. **Lint (`npm run lint`):** Análisis estático de código con ESLint en la raíz.
+2. **Dependencias de Backend (`npm ci --prefix functions`):** Instala las dependencias de Cloud Functions para que las suites de prueba que importan utilidades de sincronización (`functions/clinicalTrialsSync.js`) resuelvan `firebase-admin`.
+3. **Chequeo de tipos con ratchet (`npm run typecheck`):** Ejecuta `tsc --noEmit` a través de `.ci/tsc-ratchet.mjs` y compara el resultado con el baseline versionado en `.ci/tsc-baseline.txt` (35 errores preexistentes). Falla si la cantidad de errores supera el baseline, impidiendo nuevas regresiones de tipos.
+4. **Tests unitarios e integración (`npx vitest run`):** Ejecución de la suite completa de pruebas en Vitest.
+
+#### Ejecución local unificada
+Para replicar las validaciones de CI localmente:
+
+```bash
+npm run ci
+```
+
+#### Cómo bajar el baseline de TypeScript (Ratchet)
+Cuando se corrijan errores de tipos preexistentes:
+1. Al ejecutar `npm run typecheck` (o `npm run ci`), el script advertirá que la cantidad de errores disminuyó: `⚠️ NOTICE: TypeScript errors decreased from X to Y!`.
+2. Actualizá el número en `.ci/tsc-baseline.txt` con el nuevo valor reducido.
+3. Guardá y commiteá el archivo para consolidar la mejora y evitar que se vuelvan a introducir errores que superen la nueva cota.
 
 ---
 
