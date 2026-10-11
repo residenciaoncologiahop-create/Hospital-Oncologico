@@ -30,3 +30,10 @@ jobs:
       - run: npm ci --prefix functions
       - run: npm run typecheck
       - run: npx vitest run
+        env:
+          VITE_API_KEY_FIREBASE: ci-dummy-api-key
+          VITE_AUTH_DOMAIN: ci-dummy.firebaseapp.com
+          VITE_PROJECT_ID: ci-dummy-project
+          VITE_STORAGE_BUCKET: ci-dummy.appspot.com
+          VITE_MESSAGING_SENDER_ID: "0"
+          VITE_APP_ID: "1:0:web:0"
