@@ -55,9 +55,109 @@ function getSafeMessage(error: any): string {
 }
 
 // ──────────────────────────────────────────────
+// CONTROL GLOBAL DE FRECUENCIA (RATE LIMITER)
+// Configuración confirmada de functions/index.js (RATE_LIMIT):
+// - Anti-burst: máx 4 solicitudes en 5s por UID
+// - Ventana 1 minuto: máx 15 solicitudes en 60s por UID
+// ──────────────────────────────────────────────
+export const RATE_LIMIT_CONFIG = {
+  burstWindowMs: 5000,
+  burstMaxRequests: 4,      // Servidor: burst.length >= 4 rechaza
+  burstSafeThreshold: 3,    // Cliente preventivo: máx 3 para asegurar que la siguiente no sea rechazada
+  windowMs: 60000,
+  maxRequests: 15,          // Servidor: recent.length >= 15 rechaza
+  safeThreshold: 14,        // Cliente preventivo: máx 14 para asegurar margen seguro
+  safetyMarginMs: 150,      // Margen de latencia y desvío de reloj
+};
+
+let requestTimestamps: number[] = [];
+let rateLimitMutex: Promise<void> = Promise.resolve();
+
+export function resetRateLimiterState(): void {
+  requestTimestamps = [];
+  rateLimitMutex = Promise.resolve();
+}
+
+export function getRateLimiterStats(): { burstCount: number; minuteCount: number; timestamps: number[] } {
+  const now = Date.now();
+  const burstStart = now - RATE_LIMIT_CONFIG.burstWindowMs;
+  const minuteStart = now - RATE_LIMIT_CONFIG.windowMs;
+  return {
+    burstCount: requestTimestamps.filter(ts => ts > burstStart).length,
+    minuteCount: requestTimestamps.filter(ts => ts > minuteStart).length,
+    timestamps: [...requestTimestamps],
+  };
+}
+
+export async function acquireRateLimitSlot(): Promise<void> {
+  const previousMutex = rateLimitMutex;
+  let releaseMutex: () => void;
+  rateLimitMutex = new Promise<void>(resolve => {
+    releaseMutex = resolve;
+  });
+
+  await previousMutex;
+
+  try {
+    while (true) {
+      const now = Date.now();
+      // 1. Limpieza de marcas de tiempo fuera de la ventana de 1 minuto
+      const windowStart = now - RATE_LIMIT_CONFIG.windowMs;
+      requestTimestamps = requestTimestamps.filter(ts => ts > windowStart);
+
+      // 2. Control anti-burst (ventana de 5s)
+      const burstStart = now - RATE_LIMIT_CONFIG.burstWindowMs;
+      const recentBurst = requestTimestamps.filter(ts => ts > burstStart);
+
+      let waitMs = 0;
+      if (recentBurst.length >= RATE_LIMIT_CONFIG.burstSafeThreshold) {
+        const oldestBurst = recentBurst[0];
+        const burstWait = (oldestBurst + RATE_LIMIT_CONFIG.burstWindowMs) - now + RATE_LIMIT_CONFIG.safetyMarginMs;
+        if (burstWait > waitMs) waitMs = burstWait;
+      }
+
+      // 3. Control de cuota por minuto (ventana de 60s)
+      if (requestTimestamps.length >= RATE_LIMIT_CONFIG.safeThreshold) {
+        const oldestMinute = requestTimestamps[0];
+        const minuteWait = (oldestMinute + RATE_LIMIT_CONFIG.windowMs) - now + RATE_LIMIT_CONFIG.safetyMarginMs;
+        if (minuteWait > waitMs) waitMs = minuteWait;
+      }
+
+      if (waitMs > 0) {
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+
+      // Slot adquirido exitosamente
+      requestTimestamps.push(Date.now());
+      break;
+    }
+  } finally {
+    releaseMutex!();
+  }
+}
+
+function parseRetryAfter(error: any): number | null {
+  if (!error) return null;
+  const details = error?.details;
+  if (details && typeof details.retryAfter === 'number' && details.retryAfter > 0) {
+    return details.retryAfter;
+  }
+  const msg = String(error.message || '');
+  const match = msg.match(/retry[- ]after[:\s]+(\d+)/i) || msg.match(/esper[aá]\s+(\d+)\s+segundo/i);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return null;
+}
+
+// ──────────────────────────────────────────────
 // FUNCIÓN PRINCIPAL
 // ──────────────────────────────────────────────
-export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiResult> => {
+export const callGemini = async (
+  params: CallGeminiParams,
+  maxRetries = 2
+): Promise<CallGeminiResult> => {
   const user = auth.currentUser;
   if (!user) {
     throw new Error(SAFE_ERROR_MESSAGES.unauthenticated);
@@ -70,13 +170,34 @@ export const callGemini = async (params: CallGeminiParams): Promise<CallGeminiRe
     { timeout: CLIENT_TIMEOUT_MS }
   );
 
-  // AbortController para detectar timeout antes de Firebase
-  try {
-  const result = await callGeminiFn(params);
-  return result.data;
-} catch (error: any) {
-  throw new Error(getSafeMessage(error));
-}
+  let attempt = 0;
+  while (true) {
+    // 1. Respetar ventana de frecuencia global antes de enviar solicitud
+    await acquireRateLimitSlot();
+
+    try {
+      const result = await callGeminiFn(params);
+      return result.data;
+    } catch (error: any) {
+      const code = error?.code?.replace("functions/", "") as string;
+      const isRateLimited =
+        code === "resource-exhausted" ||
+        error?.message?.includes("resource-exhausted") ||
+        error?.message?.includes("Demasiadas solicitudes") ||
+        error?.message?.includes("Límite de");
+
+      if (isRateLimited && attempt < maxRetries) {
+        attempt++;
+        const retryAfterSec = parseRetryAfter(error);
+        const waitMs = retryAfterSec ? retryAfterSec * 1000 : 5200; // 5.2s cubre la ventana anti-burst
+        console.warn(`[callGemini] Cuota alcanzada en servidor. Reintento ${attempt}/${maxRetries} tras esperar ${waitMs}ms...`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+
+      throw new Error(getSafeMessage(error));
+    }
+  }
 };
 
 // ──────────────────────────────────────────────
@@ -230,8 +351,9 @@ export { consolidateTimelineEvents, normalizeEventCategory, normalizeEventDate }
 export { splitPdfIntoChunks, splitFilesIntoProcessableChunks } from './pdfChunker';
 export type { ClinicalEvent } from './timelineConsolidator';
 export type { DocumentChunk } from './pdfChunker';
-export { computeChunkHash, filterProcessableChunks, computeContentHash } from './chunkHasher';
-export type { ProcessedChunkRecord, ChunkFilterResult } from './chunkHasher';
+export { computeChunkHash, filterProcessableChunks, computeContentHash, filterSuccessfulChunkRecords } from './chunkHasher';
+export type { ProcessedChunkRecord, ChunkFilterResult, SuccessfulChunkFilterParams } from './chunkHasher';
+
 
 export interface TimelineProgressCallback {
   (progress: { current: number; total: number; message: string; stage?: string }): void;
@@ -251,6 +373,18 @@ export const extractTimelineSecure = async (
 
   const instructionText = `
     Eres un asistente médico experto en oncología. Analiza toda la documentación y extrae la cronología clínica completa del paciente.
+
+    TRATAMIENTO DE DOCUMENTOS MIXTOS, ESCANEOS Y FOTOGRAFÍAS:
+    - DOCUMENTOS ESCANEADOS O FOTOGRAFIADOS (INFORMES, BIOPSIAS, EPICRISIS, HOJAS DE EVOLUCIÓN):
+      Lee minuciosamente el texto incrustado, mecanografiado o manuscrito mediante reconocimiento visual de texto (OCR multimodal).
+      Extrae todos los eventos, fechas, diagnósticos, patologías y tratamientos que figuren en ellos.
+      NO clasifiques una página escaneada como vacía si contiene texto visible en la imagen.
+    - FOTOGRAFÍAS CLÍNICAS (HERIDAS, LESIONES, CIRUGÍAS, PACIENTES):
+      ❌ ESTÁ PROHIBIDO interpretar visualmente fotografías clínicas (no diagnosticar lesiones, tumores ni heridas a partir de la imagen).
+      Si la imagen contiene una fotografía con TEXTO SUPERPUESTO, LEYENDA O RÓTULO CLÍNICO (ej. fecha, localización anatómica, dimensiones, informe adjunto):
+      extrae EXCLUSIVAMENTE ese texto informativo.
+      Si una imagen o página contiene únicamente una fotografía clínica sin texto útil o sin información clínica:
+      IGNÓRALA y no inventes eventos ni supongas diagnósticos no escritos.
 
     REGLAS DE EXTRACCIÓN Y COBERTURA:
     1. ❌ Extrae TODOS los eventos clínicos documentados a lo largo de este fragmento de historia clínica sin omitir ninguno.
@@ -300,7 +434,7 @@ export const extractTimelineSecure = async (
     // 1. Particionar archivos PDF en bloques de páginas manejables (o usar bloques precalculados)
     const chunks = precomputedChunks && precomputedChunks.length > 0
       ? precomputedChunks
-      : await splitFilesIntoProcessableChunks(files || []);
+      : await splitFilesIntoProcessableChunks(files || [], undefined, onWarning);
 
     if (chunks.length > 0) {
       for (let i = 0; i < chunks.length; i++) {
@@ -337,9 +471,9 @@ export const extractTimelineSecure = async (
           }
         }
 
-        // Pequeña pausa entre bloques para respetar rate limits si hay múltiples bloques
+        // Breve cesión al bucle de eventos para actualización de UI (frecuencia regulada por acquireRateLimitSlot)
         if (i < chunks.length - 1) {
-          await sleep(600);
+          await sleep(50);
         }
       }
     }
@@ -400,15 +534,31 @@ export const extractTimelineSecure = async (
 export { normalizeLabTestName, normalizeLabUnit, isPlausibleLabResult, validateLabResult } from './labValidation';
 import { normalizeLabTestName, isPlausibleLabResult } from './labValidation';
 
+export interface LabExtractionProgressCallback {
+  (progress: { current: number; total: number; message: string }): void;
+}
+
 // ── Extracción de Laboratorios ─────────────────
 export const extractLabsSecure = async (
   text: string,
-  files: FileData[]
+  files: FileData[],
+  onProgress?: LabExtractionProgressCallback,
+  onWarning?: (msg: string) => void,
+  precomputedChunks?: DocumentChunk[]
 ): Promise<any[]> => {
-  if (!text && files.length === 0) return [];
+  if (!text && (!files || files.length === 0) && (!precomputedChunks || precomputedChunks.length === 0)) return [];
 
   const instructionText = `
     Eres un oncólogo y bioquímico clínico experto. Analiza la historia clínica y extrae los resultados de laboratorio clínico.
+
+    TRATAMIENTO DE DOCUMENTOS ESCANEADOS Y FOTOGRAFÍAS:
+    - HOJAS DE LABORATORIO ESCANEADAS O FOTOGRAFIADAS:
+      Lee minuciosamente las tablas, analitos, valores numéricos y unidades mediante reconocimiento visual de texto (OCR multimodal).
+      NO clasifiques un informe escaneado como vacío si contiene resultados legibles.
+    - FOTOGRAFÍAS CLÍNICAS SIN DATOS DE LABORATORIO:
+      Ignora completamente fotografías clínicas de pacientes, heridas o lesiones que no contengan parámetros bioquímicos o analíticos.
+      No intentes realizar interpretaciones visuales ni supongas valores analíticos a partir de imágenes.
+      Si un bloque contiene únicamente fotografías o notas sin resultados analíticos, devuelve un array vacío [].
 
     REGLA 0: NORMALIZACIÓN INTELIGENTE DE PARÁMETROS:
     Antes de extraer, interpreta los nombres de los parámetros utilizando razonamiento clínico.
@@ -446,56 +596,110 @@ export const extractLabsSecure = async (
     ]
   `;
 
-  const parts = buildParts(instructionText, []);
-  if (text) parts.push({ text: `Notas clínicas:\n${text}` });
-  files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+  const accumulatedRawLabs: any[] = [];
+  const failedChunks: string[] = [];
 
-  const res = await callGemini({ parts, responseMimeType: "application/json" });
+  const chunks = precomputedChunks && precomputedChunks.length > 0
+    ? precomputedChunks
+    : await splitFilesIntoProcessableChunks(files || [], undefined, onWarning);
 
-  try {
-    const raw = parseJsonArraySafely(res.text || '');
-
-    const EXCLUDED_TERMS = [
-      'suv', 'suvmax', 'suvpeak', 'mtv', 'tlg', 'recist', 'tnm', 'ctnm', 'ptnm',
-      'pd-l1', 'tps', 'cps', 'tmb', 'msi', 'dmmr', 'her2', 'egfr', 'kras', 'nras',
-      'braf', 'alk', 'ros1', 'met', 'ret', 'fgfr', 'ntrk', 'esr1', 'brca', 'pik3ca', 'ki67'
-    ];
-
-    const resultMap = new Map<string, any>();
-    for (const item of raw) {
-      if (!item || !item.test || typeof item.test !== 'string') continue;
-      const tLower = item.test.toLowerCase().trim();
-
-      // Exclusión estricta de biomarcadores/imágenes
-      if (EXCLUDED_TERMS.some(ex => tLower.includes(ex))) continue;
-
-      const normTest = normalizeLabTestName(item.test);
-      const date = item.date ? item.date.trim() : 'S/F';
-      const key = `${date}|${normTest.toLowerCase()}`;
-      const valNum = parseFloat(String(item.value).replace(',', '.'));
-      const unit = item.unit || '';
-
-      // Validación de plausibilidad clínica: descarta valores imposibles o errores de OCR sin alterar valores originales
-      if (
-        !isNaN(valNum) &&
-        valNum !== 0 &&
-        !resultMap.has(key) &&
-        isPlausibleLabResult(normTest, valNum, unit)
-      ) {
-        resultMap.set(key, {
-          ...item,
-          test: normTest,
-          value: valNum,
-          unit: unit
+  if (chunks.length > 0) {
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      if (onProgress) {
+        onProgress({
+          current: i + 1,
+          total: chunks.length,
+          message: `Extrayendo laboratorios: ${chunk.label}...`,
         });
       }
-    }
 
-    return Array.from(resultMap.values());
-  } catch (err) {
-    console.error("Error en extractLabsSecure:", err);
-    return [];
+      const parts = buildParts(instructionText, []);
+      if (text && i === 0 && chunks.length === 1) {
+        parts.push({ text: `Notas clínicas anónimas:\n${text}` });
+      }
+      parts.push({
+        inlineData: { mimeType: chunk.file.type, data: chunk.file.data },
+      });
+
+      try {
+        const res = await callGemini({ parts, responseMimeType: "application/json" });
+        const parsed = parseJsonArraySafely(res.text || '');
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          accumulatedRawLabs.push(...parsed);
+        }
+      } catch (chunkErr: any) {
+        console.warn(`[extractLabsSecure] Error en bloque "${chunk.label}":`, chunkErr);
+        failedChunks.push(chunk.label);
+        if (onWarning) {
+          onWarning(`No se pudieron extraer laboratorios de ${chunk.label} (${chunkErr.message || 'Error'}).`);
+        }
+      }
+
+      if (i < chunks.length - 1) {
+        await sleep(50);
+      }
+    }
   }
+
+  // Si hay texto clínico y múltiples chunks (o ningún chunk), procesarlo de forma aislada
+  if (text && (chunks.length === 0 || chunks.length > 1)) {
+    try {
+      const parts = buildParts(instructionText, []);
+      parts.push({ text: `Notas clínicas anónimas:\n${text}` });
+      const res = await callGemini({ parts, responseMimeType: "application/json" });
+      const parsed = parseJsonArraySafely(res.text || '');
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        accumulatedRawLabs.push(...parsed);
+      }
+    } catch (textErr: any) {
+      console.warn('[extractLabsSecure] Error en extracción de texto:', textErr);
+      if (onWarning) {
+        onWarning(`Error al extraer laboratorios de notas de texto: ${textErr.message}`);
+      }
+    }
+  }
+
+  // Si TODOS los bloques fallaron (y había bloques a procesar), no transformar el fallo en resultado vacío exitoso
+  if (chunks.length > 0 && failedChunks.length === chunks.length) {
+    throw new Error(`Falló la extracción de laboratorios en todos los bloques procesados (${failedChunks.join(', ')}).`);
+  }
+
+  // Procesar y validar analitos acumulados
+  const EXCLUDED_TERMS = [
+    'suv', 'suvmax', 'suvpeak', 'mtv', 'tlg', 'recist', 'tnm', 'ctnm', 'ptnm',
+    'pd-l1', 'tps', 'cps', 'tmb', 'msi', 'dmmr', 'her2', 'egfr', 'kras', 'nras',
+    'braf', 'alk', 'ros1', 'met', 'ret', 'fgfr', 'ntrk', 'esr1', 'brca', 'pik3ca', 'ki67'
+  ];
+
+  const resultMap = new Map<string, any>();
+  for (const item of accumulatedRawLabs) {
+    if (!item || !item.test || typeof item.test !== 'string') continue;
+    const tLower = item.test.toLowerCase().trim();
+    if (EXCLUDED_TERMS.some(ex => tLower.includes(ex))) continue;
+
+    const normTest = normalizeLabTestName(item.test);
+    const date = item.date ? item.date.trim() : 'S/F';
+    const key = `${date}|${normTest.toLowerCase()}`;
+    const valNum = parseFloat(String(item.value).replace(',', '.'));
+    const unit = item.unit || '';
+
+    if (
+      !isNaN(valNum) &&
+      valNum !== 0 &&
+      !resultMap.has(key) &&
+      isPlausibleLabResult(normTest, valNum, unit)
+    ) {
+      resultMap.set(key, {
+        ...item,
+        test: normTest,
+        value: valNum,
+        unit: unit
+      });
+    }
+  }
+
+  return Array.from(resultMap.values());
 };
 
 // ── Auditoría Clínica / Control de Calidad ──────────────────
@@ -587,13 +791,20 @@ export const getDrugInfoSecure = async (drugName: string): Promise<string> => {
   return res.text.replace(/```html|```/g, '').trim();
 };
 
+export interface ImagingExtractionProgressCallback {
+  (progress: { current: number; total: number; message: string }): void;
+}
+
 // ── Extracción masiva de imágenes desde historia clínica ───────────────
 // Detecta ÚNICAMENTE estudios con hallazgos oncológicos relevantes o positivos
 export const extractImagingFromHistorySecure = async (
   text: string,
-  files: FileData[]
+  files: FileData[],
+  onProgress?: ImagingExtractionProgressCallback,
+  onWarning?: (msg: string) => void,
+  precomputedChunks?: DocumentChunk[]
 ): Promise<any[]> => {
-  if (!text && files.length === 0) return [];
+  if (!text && (!files || files.length === 0) && (!precomputedChunks || precomputedChunks.length === 0)) return [];
 
   const instructionText = `
     Sos un radiólogo oncólogo experimentado. Tu objetivo es identificar y sintetizar la EVOLUCIÓN RADIOLÓGICA del paciente.
@@ -605,6 +816,13 @@ export const extractImagingFromHistorySecure = async (
     - RM con hallazgos oncológicos patológicos (ej: SNC, hepáticas, pélvicas).
     - Otros estudios que documenten enfermedad activa o resolución/respuesta completa de lesiones previas.
     ❌ EVITAR incorporar estudios normales o sin hallazgos relevantes, salvo que sean necesarios para documentar remisión completa.
+
+    REGLA ESTRICTA — ESTUDIOS RADIOLÓGICOS VS. FOTOGRAFÍAS CLÍNICAS:
+    - Esta función extrae EXCLUSIVAMENTE informes estructurados, leyendas y datos de ESTUDIOS RADIOLÓGICOS DIAGNÓSTICOS (TC, RMN, PET-TC, Ecografía, Centellograma).
+    - ❌ PROHIBIDO interpretar visualmente fotografías clínicas de pacientes, heridas, lesiones cutáneas, fotografías quirúrgicas o macroscópicas.
+    - Si el documento contiene una fotografía de una lesión o paciente:
+      • Si tiene texto superpuesto, rótulo o leyenda médica de un estudio radiológico con hallazgos (ej: "Ecografía mamaria: nódulo 15 mm"): extrae ese texto descriptivo.
+      • Si es una fotografía clínica sin texto o sin informe de estudio por imágenes: IGNÓRALA completamente y devuelve []. NO intentes diagnosticar la imagen visualmente ni inventar mediciones radiológicas.
 
     REGLAS DE SÍNTESIS:
     1. NO COPIAR INFORMES COMPLETOS: Extrae únicamente información concisa y cuantitativa.
@@ -636,18 +854,88 @@ export const extractImagingFromHistorySecure = async (
     ]
   `;
 
-  const parts = buildParts(instructionText, []);
-  if (text) parts.push({ text: `Historia clínica:\n${text}` });
-  files.forEach(f => parts.push({ inlineData: { mimeType: f.type, data: f.data } }));
+  const accumulatedRawStudies: any[] = [];
+  const failedChunks: string[] = [];
 
-  const res = await callGemini({ parts, responseMimeType: "application/json" });
+  const chunks = precomputedChunks && precomputedChunks.length > 0
+    ? precomputedChunks
+    : await splitFilesIntoProcessableChunks(files || [], undefined, onWarning);
 
-  try {
-    return parseJsonArraySafely(res.text || '');
-  } catch (err) {
-    console.error("Error en extractImagingFromHistorySecure:", err);
-    return [];
+  if (chunks.length > 0) {
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      if (onProgress) {
+        onProgress({
+          current: i + 1,
+          total: chunks.length,
+          message: `Extrayendo estudios de imágenes: ${chunk.label}...`,
+        });
+      }
+
+      const parts = buildParts(instructionText, []);
+      if (text && i === 0 && chunks.length === 1) {
+        parts.push({ text: `Historia clínica:\n${text}` });
+      }
+      parts.push({
+        inlineData: { mimeType: chunk.file.type, data: chunk.file.data },
+      });
+
+      try {
+        const res = await callGemini({ parts, responseMimeType: "application/json" });
+        const parsed = parseJsonArraySafely(res.text || '');
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          accumulatedRawStudies.push(...parsed);
+        }
+      } catch (chunkErr: any) {
+        console.warn(`[extractImagingFromHistorySecure] Error en bloque "${chunk.label}":`, chunkErr);
+        failedChunks.push(chunk.label);
+        if (onWarning) {
+          onWarning(`No se pudieron extraer estudios de imágenes de ${chunk.label} (${chunkErr.message || 'Error'}).`);
+        }
+      }
+
+      if (i < chunks.length - 1) {
+        await sleep(50);
+      }
+    }
   }
+
+  // Si hay texto clínico y múltiples chunks (o ningún chunk), procesarlo de forma aislada
+  if (text && (chunks.length === 0 || chunks.length > 1)) {
+    try {
+      const parts = buildParts(instructionText, []);
+      parts.push({ text: `Historia clínica:\n${text}` });
+      const res = await callGemini({ parts, responseMimeType: "application/json" });
+      const parsed = parseJsonArraySafely(res.text || '');
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        accumulatedRawStudies.push(...parsed);
+      }
+    } catch (textErr: any) {
+      console.warn('[extractImagingFromHistorySecure] Error en extracción de texto:', textErr);
+      if (onWarning) {
+        onWarning(`Error al extraer estudios de imágenes de notas de texto: ${textErr.message}`);
+      }
+    }
+  }
+
+  // Si TODOS los bloques fallaron (y había bloques a procesar), no transformar el fallo en resultado vacío exitoso
+  if (chunks.length > 0 && failedChunks.length === chunks.length) {
+    throw new Error(`Falló la extracción de estudios de imágenes en todos los bloques procesados (${failedChunks.join(', ')}).`);
+  }
+
+  // Deduplicar estudios idénticos entre chunks que compartan solapamiento (overlap)
+  const seenStudyKeys = new Set<string>();
+  const uniqueStudies: any[] = [];
+  for (const item of accumulatedRawStudies) {
+    if (!item || typeof item !== 'object') continue;
+    const key = `${(item.date || '').trim()}|${(item.type || '').toUpperCase()}|${(item.bodyRegion || '').toLowerCase().trim()}|${(item.relevantFindings || '').slice(0, 40)}`;
+    if (!seenStudyKeys.has(key)) {
+      seenStudyKeys.add(key);
+      uniqueStudies.push(item);
+    }
+  }
+
+  return uniqueStudies;
 };
 
 // ── Comparación RECIST 1.1 entre estudios ─────────────────────────────

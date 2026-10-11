@@ -130,3 +130,52 @@ export async function filterProcessableChunks(
 
   return { newChunks, skippedChunks, newRecords };
 }
+
+export interface SuccessfulChunkFilterParams {
+  newChunks: DocumentChunk[];
+  newRecords: ProcessedChunkRecord[];
+  failedChunkLabels: Set<string>;
+  batchProcessesSucceeded: boolean;
+  textRecord?: ProcessedChunkRecord | null;
+  textExtractionSucceeded?: boolean;
+}
+
+/**
+ * Filtra y devuelve exclusivamente los registros técnicos de bloques (y texto)
+ * cuyos procesos obligatorios asociados concluyeron satisfactoriamente.
+ *
+ * Si falló algún proceso obligatorio a nivel de lote (ej: laboratorios o imágenes),
+ * ningún bloque es considerado exitoso para evitar omisiones permanentes en reintentos.
+ */
+export function filterSuccessfulChunkRecords(
+  params: SuccessfulChunkFilterParams
+): ProcessedChunkRecord[] {
+  const {
+    newChunks,
+    newRecords,
+    failedChunkLabels,
+    batchProcessesSucceeded,
+    textRecord,
+    textExtractionSucceeded = true,
+  } = params;
+
+  if (!batchProcessesSucceeded) {
+    return [];
+  }
+
+  const successful: ProcessedChunkRecord[] = [];
+
+  for (let i = 0; i < newChunks.length; i++) {
+    const chunk = newChunks[i];
+    const record = newRecords[i];
+    if (chunk && record && !failedChunkLabels.has(chunk.label)) {
+      successful.push(record);
+    }
+  }
+
+  if (textRecord && textExtractionSucceeded) {
+    successful.push(textRecord);
+  }
+
+  return successful;
+}

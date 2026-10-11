@@ -47,6 +47,7 @@ import {
     splitFilesIntoProcessableChunks,
     filterProcessableChunks,
     computeContentHash,
+    filterSuccessfulChunkRecords,
     ProcessedChunkRecord,
     DocumentChunk
 } from './utils/aiProxy';
@@ -556,7 +557,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
             // 1. Particionar archivos mediante el mecanismo existente
             let allChunks: DocumentChunk[] = [];
             if (historyFiles && historyFiles.length > 0) {
-                allChunks = await splitFilesIntoProcessableChunks(historyFiles);
+                allChunks = await splitFilesIntoProcessableChunks(historyFiles, undefined, (w) => extractionWarnings.push(w));
             }
 
             // 2. Filtrar bloques determinísticamente por huella (hash) de contenido
@@ -569,17 +570,18 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
             const trimmedText = (historyText || '').trim();
             const savedText = (selPatient?.clinicalContext || selPatient?.historyText || '').trim();
             let isTextNew = false;
+            let textRecord: ProcessedChunkRecord | null = null;
             if (trimmedText.length > 0) {
                 const textHash = await computeContentHash(trimmedText);
                 const existingHashes = new Set<string>(existingRecords.map(r => r.hash));
                 const isFirstProcessing = existingRecords.length === 0;
                 if (isFirstProcessing || (!existingHashes.has(textHash) && trimmedText !== savedText)) {
                     isTextNew = true;
-                    newRecords.push({
+                    textRecord = {
                         hash: textHash,
                         sourceFileName: '__clinical_text__',
                         processedAt: Date.now(),
-                    });
+                    };
                 }
             }
 
@@ -597,31 +599,121 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
             }
 
             // 5. Las extracciones se ejecutan EXCLUSIVAMENTE sobre el contenido nuevo
-            const [rawEvents, extractedLabs, extractedImaging] = await Promise.all([
-                extractTimelineSecure(textToProcess, newFiles, undefined, (w) => extractionWarnings.push(w), newChunks),
-                extractLabsSecure(textToProcess, newFiles),
-                extractImagingFromHistorySecure(textToProcess, newFiles),
-            ]);
+            // Seguimiento granular de fallos por bloque y por módulo para asegurar integridad documental
+            const failedChunkLabels = new Set<string>();
+            let generalTimelineError: string | null = null;
+            let textExtractionError: string | null = null;
 
-            // 6. Consolidar nuevos eventos en la cronología clínica existente
-            const combinedTimeline = consolidateTimelineEvents(timeline || [], rawEvents);
-            setTimeline(combinedTimeline);
+            const handleTimelineWarning = (warningMsg: string) => {
+                extractionWarnings.push(warningMsg);
+                for (const chunk of newChunks) {
+                    if (warningMsg.includes(`No se pudo procesar completamente ${chunk.label}`)) {
+                        failedChunkLabels.add(chunk.label);
+                    }
+                }
+                if (warningMsg.includes('Error general en la extracción de eventos')) {
+                    generalTimelineError = warningMsg;
+                }
+                if (warningMsg.includes('Error al extraer eventos de las notas de texto')) {
+                    textExtractionError = warningMsg;
+                }
+            };
+
+            const handleLabsWarning = (warningMsg: string) => {
+                extractionWarnings.push(warningMsg);
+                for (const chunk of newChunks) {
+                    if (warningMsg.includes(chunk.label)) {
+                        failedChunkLabels.add(chunk.label);
+                    }
+                }
+            };
+
+            const handleImagingWarning = (warningMsg: string) => {
+                extractionWarnings.push(warningMsg);
+                for (const chunk of newChunks) {
+                    if (warningMsg.includes(chunk.label)) {
+                        failedChunkLabels.add(chunk.label);
+                    }
+                }
+            };
+
+            // Ejecución secuencial con protección de burst limit (evita 429 Resource Exhausted)
+            let rawEvents: ClinicalEvent[] = [];
+            let timelineFailed = false;
+            let timelineErrorMessage: string | null = null;
+            try {
+                rawEvents = await extractTimelineSecure(textToProcess, newFiles, undefined, handleTimelineWarning, newChunks);
+            } catch (err: any) {
+                timelineFailed = true;
+                timelineErrorMessage = err?.message || 'Error en extracción de cronología';
+                extractionWarnings.push(`Error en extracción de cronología: ${timelineErrorMessage}`);
+            }
+
+            let extractedLabs: any[] = [];
+            let labsFailed = false;
+            let labsErrorMessage: string | null = null;
+            if (newFiles.length > 0 || (isTextNew && textToProcess)) {
+                // Breve cesión para actualización de estado en UI (la tasa de envío es gobernada centralmente por aiProxy)
+                await new Promise(r => setTimeout(r, 50));
+                try {
+                    extractedLabs = await extractLabsSecure(textToProcess, newFiles, undefined, handleLabsWarning, newChunks);
+                } catch (err: any) {
+                    labsFailed = true;
+                    labsErrorMessage = err?.message || 'Error en extracción de laboratorios';
+                    extractionWarnings.push(`No se pudieron extraer laboratorios: ${labsErrorMessage}`);
+                }
+            }
+
+            let extractedImaging: any[] = [];
+            let imagingFailed = false;
+            let imagingErrorMessage: string | null = null;
+            if (newFiles.length > 0 || (isTextNew && textToProcess)) {
+                // Breve cesión para actualización de estado en UI
+                await new Promise(r => setTimeout(r, 50));
+                try {
+                    extractedImaging = await extractImagingFromHistorySecure(textToProcess, newFiles, undefined, handleImagingWarning, newChunks);
+                } catch (err: any) {
+                    imagingFailed = true;
+                    imagingErrorMessage = err?.message || 'Error en extracción de imágenes';
+                    extractionWarnings.push(`No se pudieron extraer estudios de imágenes: ${imagingErrorMessage}`);
+                }
+            }
+
+            // 6. Consolidar nuevos eventos en la cronología clínica existente (resguardando los recuperados)
+            const combinedTimeline = rawEvents.length > 0
+                ? consolidateTimelineEvents(timeline || [], rawEvents)
+                : (timeline || []);
+            if (rawEvents.length > 0) {
+                setTimeline(combinedTimeline);
+            }
 
             const currentLabs = (patients.find(p => p.id === selectedPatientId)?.labResults || [])
                 .filter((l: any) => isPlausibleLabResult(l.test, l.value, l.unit));
             const validExtractedLabs = extractedLabs.filter((l: any) => isPlausibleLabResult(l.test, l.value, l.unit));
-            const combinedLabs = deduplicateByKey(
-                currentLabs,
-                validExtractedLabs,
-                (l: any) => `${l.date}|${normalizeLabTestName(l.test)}`
-            );
+            const combinedLabs = validExtractedLabs.length > 0
+                ? deduplicateByKey(
+                    currentLabs,
+                    validExtractedLabs,
+                    (l: any) => `${l.date}|${normalizeLabTestName(l.test)}`
+                )
+                : currentLabs;
 
-            // 7. Consolidar registros técnicos de bloques procesados
+            // 7. Determinar bloques exitosos: NINGÚN bloque se persiste en processedChunks si falló algún proceso obligatorio
+            const batchProcessesSucceeded = !labsFailed && !imagingFailed && !timelineFailed && !generalTimelineError;
+            const successfulRecords = filterSuccessfulChunkRecords({
+                newChunks,
+                newRecords,
+                failedChunkLabels,
+                batchProcessesSucceeded,
+                textRecord,
+                textExtractionSucceeded: !textExtractionError,
+            });
+
             const recordsMap = new Map<string, ProcessedChunkRecord>();
             for (const r of existingRecords) {
                 recordsMap.set(r.hash, r);
             }
-            for (const r of newRecords) {
+            for (const r of successfulRecords) {
                 recordsMap.set(r.hash, r);
             }
             const updatedProcessedChunks = Array.from(recordsMap.values());
@@ -695,7 +787,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 } else {
                     const patientRef = doc(db, "patients", selectedPatientId);
                     await updateDoc(patientRef, cleanForFirestore(updateData));
-                    if (historyText) {
+                    if (historyText && (!isTextNew || !textExtractionError)) {
                         await saveClinicalContext(selectedPatientId, historyText);
                         setClinicalContextUpdatedAt(Date.now());
                     }
@@ -703,10 +795,100 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 }
             }
 
+            // 8. Notificación clara y médicamente rigurosa según estado de completitud
+            // Identificar advertencias específicas de páginas omitidas o contenido clínico no procesado
+            const omittedPageWarnings = extractionWarnings.filter(w =>
+                /p[aá]gina\s+\d+.*supera\s+el\s+l[ií]mite.*transporte\s+seguro/i.test(w) ||
+                /supera\s+el\s+l[ií]mite\s+m[aá]ximo\s+permitido\s+para\s+el\s+transporte\s+seguro/i.test(w)
+            );
+            const unprocessedContentWarnings = extractionWarnings.filter(w =>
+                /no\s+se\s+pud(?:o|ieron)\s+procesar/i.test(w) ||
+                /no\s+se\s+pudieron\s+extraer/i.test(w) ||
+                /bloque\(s\)\s+tuvieron\s+dificultades/i.test(w) ||
+                /error\s+(?:en|al\s+extraer|general)/i.test(w)
+            );
+            const hasOmittedPages = omittedPageWarnings.length > 0;
+            const hasUnprocessedWarnings = hasOmittedPages || unprocessedContentWarnings.length > 0;
+
+            const hasFailures = failedChunkLabels.size > 0 || labsFailed || imagingFailed || timelineFailed || !!generalTimelineError || !!textExtractionError || hasUnprocessedWarnings;
+            const hasAnyData = rawEvents.length > 0 || validExtractedLabs.length > 0 || extractedImaging.length > 0;
             const skippedCount = skippedChunks.length;
-            const skippedMsg = skippedCount > 0 ? ` (${skippedCount} bloque(s) previos ya analizados fueron omitidos)` : '';
-            const warningMsg = extractionWarnings.length > 0 ? `\n\nAvisos en procesamiento:\n• ${extractionWarnings.join('\n• ')}` : '';
-            alert(`Procesado: ${rawEvents.length} eventos extraídos (${combinedTimeline.length} totales en cronología) y ${validExtractedLabs.length} laboratorios.${skippedMsg}${warningMsg}`);
+            const skippedMsg = skippedCount > 0 ? `\n• Bloques previos ya analizados omitidos: ${skippedCount}` : '';
+
+            if (hasFailures && !hasAnyData) {
+                // Fallo total: ningún dato se pudo extraer
+                const failureDetails = extractionWarnings.length > 0
+                    ? `\n\nDetalle:\n• ${extractionWarnings.join('\n• ')}`
+                    : '';
+                alert(`❌ No se pudo completar el análisis de la documentación.\n\nNingún bloque fue registrado como procesado para permitir reintentar la operación. La información previa del paciente permanece intacta.${failureDetails}`);
+            } else if (hasFailures && hasAnyData) {
+                // Procesamiento parcial: se resguardan datos pero se advierte claramente sobre los bloques/módulos incompletos
+                const failedParts: string[] = [];
+                if (hasOmittedPages) {
+                    failedParts.push(...omittedPageWarnings.map(w => `• Página omitida: ${w}`));
+                }
+                if (failedChunkLabels.size > 0) {
+                    failedParts.push(`• Bloques con error en cronología (${failedChunkLabels.size} de ${newChunks.length}): ${Array.from(failedChunkLabels).join(', ')}`);
+                }
+                if (labsFailed) {
+                    failedParts.push(`• Análisis de laboratorio: ❌ Falló (${labsErrorMessage || 'Error'}). Los documentos pueden contener parámetros que no pudieron leerse.`);
+                }
+                if (imagingFailed) {
+                    failedParts.push(`• Estudios de imágenes: ❌ Falló (${imagingErrorMessage || 'Error'}). Los documentos pueden contener estudios que no pudieron leerse.`);
+                }
+                if (timelineFailed || generalTimelineError) {
+                    failedParts.push(`• Cronología clínica: ❌ Interrumpida parcialmente.`);
+                }
+                for (const w of unprocessedContentWarnings) {
+                    if (!omittedPageWarnings.includes(w) && !failedParts.some(p => p.includes(w))) {
+                        failedParts.push(`• Contenido no procesado: ${w}`);
+                    }
+                }
+
+                const successParts: string[] = [];
+                successParts.push(`• Eventos de cronología guardados: ${rawEvents.length} (${combinedTimeline.length} totales en paciente)`);
+                if (!labsFailed) {
+                    successParts.push(`• Laboratorios extraídos: ${validExtractedLabs.length}${validExtractedLabs.length === 0 ? ' (sin parámetros en bloques leídos)' : ''}`);
+                }
+                if (!imagingFailed) {
+                    successParts.push(`• Estudios de imágenes: ${extractedImaging.length}${extractedImaging.length === 0 ? ' (sin estudios nuevos en bloques leídos)' : ''}`);
+                }
+
+                const alertHeader = hasOmittedPages
+                    ? '⚠️ PROCESAMIENTO PARCIAL CON ADVERTENCIAS:'
+                    : '⚠️ PROCESAMIENTO PARCIAL (Atención requerida):';
+
+                const alertSubhead = hasOmittedPages
+                    ? 'Se guardaron los datos extraídos exitosamente de las páginas legibles, pero se detectaron páginas omitidas por límite de transporte que requieren optimización de resolución.'
+                    : 'Se guardaron los datos extraídos exitosamente, pero hubo bloques o módulos incompletos que NO fueron marcados como finalizados para permitir su reintento.';
+
+                const alertLines = [
+                    alertHeader,
+                    alertSubhead,
+                    '',
+                    'Datos recuperados y resguardados:',
+                    ...successParts,
+                    skippedMsg,
+                    '',
+                    'Páginas afectadas y procesos incompletos:',
+                    ...failedParts,
+                    '',
+                    '👉 Puede volver a presionar "Procesar Historia" para reintentar los bloques pendientes o ajustar la resolución de las páginas omitidas.',
+                ];
+                alert(alertLines.filter(Boolean).join('\n'));
+            } else {
+                // Éxito completo: todos los bloques y módulos concluyeron satisfactoriamente sin páginas omitidas ni fallos
+                const infoMsg = !hasAnyData
+                    ? '\n\nℹ️ No se detectaron eventos clínicos, parámetros de laboratorio ni estudios radiológicos en los documentos analizados. Las fotografías clínicas sin texto útil fueron ignoradas de conformidad con las pautas de seguridad médica.'
+                    : '';
+                const successParts: string[] = [
+                    `• Eventos clínicos extraídos: ${rawEvents.length} (${combinedTimeline.length} totales en cronología)`,
+                    `• Laboratorios extraídos: ${validExtractedLabs.length}${validExtractedLabs.length === 0 ? ' (sin parámetros clínicos en los documentos analizados)' : ''}`,
+                    `• Estudios de imágenes: ${extractedImaging.length}${extractedImaging.length === 0 ? ' (sin estudios adicionales en los documentos analizados)' : ''}`,
+                ];
+                const warningMsg = extractionWarnings.length > 0 ? `\n\nAvisos:\n• ${extractionWarnings.join('\n• ')}` : '';
+                alert(`✅ Procesamiento completado con éxito:\n${successParts.join('\n')}${skippedMsg}${infoMsg}${warningMsg}`);
+            }
         } catch (e: any) {
             setLastError(e.message);
         } finally {
