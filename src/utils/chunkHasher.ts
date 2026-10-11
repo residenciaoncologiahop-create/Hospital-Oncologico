@@ -9,6 +9,7 @@
  */
 
 import { DocumentChunk } from './pdfChunker';
+export type { DocumentChunk };
 
 export interface ProcessedChunkRecord {
   hash: string;
@@ -117,9 +118,22 @@ export async function filterProcessableChunks(
       // Bloque nuevo que debe ser analizado por Gemini
       seenInBatch.add(hash);
       newChunks.push(chunk);
+
+      // Desidentificación para persistencia en Firestore: se almacena un identificador genérico doc_<hash8>
+      // (con la extensión real del archivo si está disponible) para que Firestore no almacene nombres de archivo originales.
+      const rawName = chunk.sourceFileName || chunk.file?.name || '';
+      let genericFileName: string;
+      if (rawName === '__clinical_text__') {
+        genericFileName = '__clinical_text__';
+      } else {
+        const extMatch = rawName.match(/\.[a-zA-Z0-9]+$/);
+        const ext = extMatch ? extMatch[0].toLowerCase() : '';
+        genericFileName = `doc_${hash.substring(0, 8)}${ext}`;
+      }
+
       newRecords.push({
         hash,
-        sourceFileName: chunk.sourceFileName || chunk.file?.name,
+        sourceFileName: genericFileName,
         startPage: chunk.startPage,
         endPage: chunk.endPage,
         totalPages: chunk.totalPages,

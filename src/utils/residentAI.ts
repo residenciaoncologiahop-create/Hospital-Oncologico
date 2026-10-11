@@ -227,10 +227,12 @@ Reevaluación por Imágenes: ${scenarioRec.imaging}
 Laboratorio y Marcadores: ${scenarioRec.labs}
 Reglas Específicas del Escenario: ${scenarioRec.specialRules}
 ` : `
-Intención General: ${g.intention}
-Cronograma General: ${g.schedule}
-Imágenes: ${g.imaging}
-Laboratorio: ${g.labs}
+--- RECOMENDACIONES DOCUMENTADAS DE LA GUÍA DE REFERENCIA APLICABLES A ESTE ESCENARIO ---
+Intención: ${g.intention}
+Cronograma / Consultas: ${g.schedule}
+Reevaluación por Imágenes: ${g.imaging}
+Laboratorio y Marcadores: ${g.labs}
+Reglas / Consideraciones: ${g.specialConsiderations}
 `}
 Signos de Alarma: ${g.alarmSigns}
 Consideraciones Especiales: ${g.specialConsiderations}
@@ -269,8 +271,14 @@ REGLA ESTRICTA: Basa el plan EXCLUSIVAMENTE en las especificaciones aplicables a
                  * Marcadores tumorales (CEA / CA 19-9) como "Monitoreo de Respuesta / Progresión Bioquímica".
                  * PROHIBIDO incluir recomendaciones exclusivas de vigilancia de estadios II–III (ej. Colonoscopía rutinaria de vigilancia de estadios II-III post-resección o TAC cada 6-12 meses de vigilancia II-III).
                  * PROHIBIDO incluir filas que digan "No aplica directamente para estadio IV". Si no aplica, DEBE QUEDAR EXCLUIDA de la tabla.
-               - Si el paciente presenta VIGILANCIA POST-TRATAMIENTO CURATIVO (Modo A):
-                 * Aplicar recomendaciones de vigilancia post-tratamiento (TAC/PET-CT e imágenes según riesgo del estadio y guía de referencia, examen pélvico, citología, laboratorios).
+               - Si el paciente presenta VIGILANCIA POST-TRATAMIENTO CURATIVO (Modo A) o SEGUIMIENTO POST-TRATAMIENTO PRIMARIO:
+                 * Aplicar recomendaciones de vigilancia post-tratamiento de la guía (examen clínico y pélvico con espéculo de cúpula vaginal, palpación bimanual/rectovaginal, imágenes según riesgo del estadio y guía de referencia, citología si aplica, laboratorios).
+                 * Si el estadio inicial no está documentado en la historia clínica, precisar en la columna de fundamento que se requiere documentar el estadio patológico inicial para individualizar la indicación de imágenes toracoabdominales o pélvicas de alto riesgo.
+               - Si el paciente presenta REEVALUACIÓN POR SÍNTOMAS DE ALARMA:
+                 * Indicar evaluación diagnóstica dirigida según la localización sintomática (RMN de pelvis, TAC toracoabdominal con contraste, etc.).
+                 * Procurar confirmación histológica de lesiones sospechosas accesibles siempre que sea técnicamente factible y clínicamente seguro antes de iniciar terapias de rescate, sin demorar la resolución de urgencias ni impedir el abordaje multidisciplinario ante lesiones inaccesibles.
+               - Si las especificaciones de la guía indican que el escenario NO ESTÁ DETERMINADO o cubierto:
+                 * No extrapolar pautas rutinarias de vigilancia ni inventar calendarios fijos. Señalar con precisión que la guía no contiene pautas estructuradas para dicho escenario y consignar la necesidad de indicación médica individualizada.
                - Si el paciente presenta VIGILANCIA POST-METASTASECTOMÍA R0 (Modo C):
                  * Aplicar vigilancia intensiva post-resección de metástasis (TAC/RM cada 3-6m los primeros 2 años, luego cada 6-12m; CEA cada 3m por 2 años).
 

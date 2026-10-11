@@ -134,29 +134,138 @@ export const mergeImagingStudies = (
   let result = [...existing];
 
   incoming.forEach(inc => {
-    const incDate = parseDate(inc.date);
+    const incDateStr = (inc.date || '').trim();
     const incRegion = (inc.bodyRegion || '').toLowerCase().trim();
+    const incType = (inc.type || '').toUpperCase().trim();
+    const incFindings = (inc.relevantFindings || '').trim();
 
     const matchIdx = result.findIndex(ex => {
-      if (ex.type !== inc.type) return false;
+      // 1. Tipo de estudio debe coincidir
+      const exType = (ex.type || '').toUpperCase().trim();
+      if (exType !== incType) return false;
+
+      // 2. Fechas deben coincidir de forma unívoca y exacta
+      const exDateStr = (ex.date || '').trim();
+      if (!exDateStr || !incDateStr || exDateStr === 'S/F' || incDateStr === 'S/F' || exDateStr !== incDateStr) {
+        return false;
+      }
+
+      // 3. Región anatómica debe coincidir si ambas están definidas
       const exRegion = (ex.bodyRegion || '').toLowerCase().trim();
       const isRegionMatch = exRegion === incRegion || exRegion.includes(incRegion) || incRegion.includes(exRegion);
-      if (!isRegionMatch) return false;
+      if (!isRegionMatch && exRegion && incRegion) return false;
 
-      const exDate = parseDate(ex.date);
-      if (!exDate || !incDate) return false;
-      const diffDays = Math.abs(exDate - incDate) / (1000 * 60 * 60 * 24);
-      return diffDays <= 3;
+      // 4. Hallazgos: no considerar identidad por similitud léxica ni contención de palabras.
+      // Si ambos tienen hallazgos no vacíos y difieren, son estudios distintos o con identidad ambigua -> no fusionar
+      const exF = (ex.relevantFindings || '').trim().toLowerCase();
+      const inF = incFindings.toLowerCase();
+      if (exF && inF && exF !== inF) {
+        return false;
+      }
+
+      // 5. Parámetros cuantitativos y clínicos: no deben contradecirse
+      // SUVmax: si ambos tienen valor, deben coincidir exactamente. NUNCA fusionar estudios con distinto SUV.
+      const exSuv = parseSafeMeasurement(ex.suvMax);
+      const incSuv = parseSafeMeasurement(inc.suvMax);
+      if (exSuv !== null && incSuv !== null && Math.abs(exSuv - incSuv) > 0.01) {
+        return false;
+      }
+
+      // newLesions: si ambos tienen booleans explícitos y difieren, son contradictorios
+      if (
+        ex.newLesions !== undefined &&
+        inc.newLesions !== undefined &&
+        Boolean(ex.newLesions) !== Boolean(inc.newLesions)
+      ) {
+        return false;
+      }
+
+      // targetLesions: no deben tener mediciones contradictorias para la misma lesión
+      const exLesions = Array.isArray(ex.targetLesions) ? ex.targetLesions : [];
+      const incLesions = Array.isArray(inc.targetLesions) ? inc.targetLesions : [];
+      for (const inL of incLesions) {
+        if (!inL) continue;
+        const inKey = inL.lesionKey || generateLesionKey(inL.location || '');
+        const exMatch = exLesions.find(l => (l.lesionKey || generateLesionKey(l.location || '')) === inKey);
+        if (exMatch) {
+          const exM = parseSafeMeasurement(exMatch.measurement);
+          const inM = parseSafeMeasurement(inL.measurement);
+          if (exM !== null && inM !== null && Math.abs(exM - inM) > 0.01) {
+            return false;
+          }
+        }
+      }
+
+      return true;
     });
 
     if (matchIdx !== -1) {
+      const ex = result[matchIdx];
+
+      // 1. Preservar y enriquecer targetLesions sin borrar lesiones ya medidas/validadas
+      const exLesions = Array.isArray(ex.targetLesions) ? ex.targetLesions : [];
+      const incLesions = Array.isArray(inc.targetLesions) ? inc.targetLesions : [];
+      const mergedLesions = [...exLesions];
+
+      for (const inL of incLesions) {
+        if (!inL) continue;
+        const inKey = inL.lesionKey || generateLesionKey(inL.location || '');
+        const exIdx = mergedLesions.findIndex(l => (l.lesionKey || generateLesionKey(l.location || '')) === inKey);
+        if (exIdx === -1) {
+          mergedLesions.push(inL);
+        } else {
+          // Si el existente no tenía medida válida y el nuevo sí la tiene, enriquecer
+          const exMeas = parseSafeMeasurement(mergedLesions[exIdx].measurement);
+          const inMeas = parseSafeMeasurement(inL.measurement);
+          if (exMeas === null && inMeas !== null) {
+            mergedLesions[exIdx] = { ...mergedLesions[exIdx], measurement: inMeas };
+          }
+        }
+      }
+
+      // 2. Preservar nonTargetLesions
+      const exNonTarget = Array.isArray(ex.nonTargetLesions) ? ex.nonTargetLesions : [];
+      const incNonTarget = Array.isArray(inc.nonTargetLesions) ? inc.nonTargetLesions : [];
+      const mergedNonTarget = [...exNonTarget];
+      for (const inNt of incNonTarget) {
+        if (!inNt) continue;
+        const inLoc = (inNt.location || '').toLowerCase().trim();
+        if (!mergedNonTarget.some(nt => (nt.location || '').toLowerCase().trim() === inLoc)) {
+          mergedNonTarget.push(inNt);
+        }
+      }
+
+      // 3. Preservar hallazgos: si el existente tiene texto, resguardarlo prioritariamente
+      const exFindings = (ex.relevantFindings || '').trim();
+      const finalFindings = exFindings || (inc.relevantFindings || '').trim();
+
+      // 4. Preservar decisiones manuales y estado validado existente:
+      // - Si ex tiene isBaseline definido, preservarlo estrictamente
+      const finalIsBaseline = ex.isBaseline !== undefined ? ex.isBaseline : (inc.isBaseline === true);
+      // - Preservar override de respuesta manual definido por el médico
+      const finalResponseOverride = ex.responseOverride || inc.responseOverride || null;
+
+      // 5. Preservar SUVmax: si ex tiene SUVmax numérico, preservarlo intacto.
+      // Si ex no tenía y el entrante sí, enriquecerlo. NUNCA usar Math.max()
+      const exSuv = parseSafeMeasurement(ex.suvMax);
+      const incSuv = parseSafeMeasurement(inc.suvMax);
+      const finalSuvMax = exSuv !== null ? exSuv : incSuv;
+
+      // 6. Preservar newLesions: si ex lo tiene definido, preservarlo
+      const finalNewLesions = ex.newLesions !== undefined ? ex.newLesions : Boolean(inc.newLesions);
+
       result[matchIdx] = {
-        ...inc,
-        id: result[matchIdx].id || inc.id,
-        isBaseline: inc.isBaseline ?? result[matchIdx].isBaseline,
-        responseOverride: inc.responseOverride ?? result[matchIdx].responseOverride,
-        relevantFindings: inc.relevantFindings || result[matchIdx].relevantFindings,
-        rawReport: inc.rawReport || result[matchIdx].rawReport
+        ...ex, // Preserva todos los datos originales validados y campos manuales
+        id: ex.id || inc.id,
+        isBaseline: finalIsBaseline,
+        responseOverride: finalResponseOverride,
+        relevantFindings: finalFindings,
+        rawReport: ex.rawReport || inc.rawReport,
+        targetLesions: mergedLesions,
+        nonTargetLesions: mergedNonTarget,
+        newLesions: finalNewLesions,
+        suvMax: finalSuvMax,
+        treatment: ex.treatment || inc.treatment || null,
       };
     } else {
       result.push(inc);

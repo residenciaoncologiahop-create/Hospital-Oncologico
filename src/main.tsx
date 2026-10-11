@@ -691,11 +691,7 @@ ${p.historyText || p.clinicalContext || 'Sin notas adicionales.'}`;
                 .filter((l: any) => isPlausibleLabResult(l.test, l.value, l.unit));
             const validExtractedLabs = extractedLabs.filter((l: any) => isPlausibleLabResult(l.test, l.value, l.unit));
             const combinedLabs = validExtractedLabs.length > 0
-                ? deduplicateByKey(
-                    currentLabs,
-                    validExtractedLabs,
-                    (l: any) => `${l.date}|${normalizeLabTestName(l.test)}`
-                )
+                ? [...currentLabs, ...validExtractedLabs]
                 : currentLabs;
 
             // 7. Determinar bloques exitosos: NINGÚN bloque se persiste en processedChunks si falló algún proceso obligatorio

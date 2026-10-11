@@ -166,7 +166,12 @@ export interface PatientClinicalProfile {
   organOrSite?: string; // ej. 'colon', 'pulmon', 'mama', 'melanoma', 'pancreas'
   histology?: string;   // ej. 'adenocarcinoma', 'carcinoma ductal'
   stageDocumented?: string; // Solo si está explícito, sino undefined
+  tnmDocumented?: string;   // TNM explícito documentado (ej. pT2 pN0)
+  clinicalScenarioDocumented?: string; // Escenario clínico explícito documentado
   isMetastaticDocumented?: boolean; // true si explícitamente se describe metastásico
+  cnsInvolvementDocumented?: boolean; // Compromiso de SNC documentado
+  priorSurgeries?: string[]; // Cirugías previas documentadas
+  priorRadiotherapy?: boolean; // Radioterapia previa documentada
   biomarkersDocumented: Array<{
     name: string;      // ej. 'KRAS', 'BRAF', 'HER2', 'EGFR', 'MSI'
     status: string;    // ej. 'Mutado', 'Wild-Type', 'Positivo', 'Negativo', 'MSS', 'Exón 19 del'

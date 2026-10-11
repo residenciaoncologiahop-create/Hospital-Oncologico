@@ -16,6 +16,7 @@ import {
   extractTimelineSecure,
   extractLabsSecure,
   extractImagingFromHistorySecure,
+  consolidateImagingStudies,
   callGemini,
   acquireRateLimitSlot,
   resetRateLimiterState,
@@ -884,6 +885,232 @@ describe('Procesamiento Robusto de PDFs, Límites de Transporte y Frecuencia en 
         /supera\s+el\s+l[ií]mite\s+m[aá]ximo\s+permitido\s+para\s+el\s+transporte\s+seguro/i.test(w)
       );
       expect(inocuousOmitted.length).toBe(0);
+    });
+  });
+
+  describe('Pruebas de Deduplicación Robusta y Preservación de Datos Clínicos', () => {
+    it('1. Dos laboratorios idénticos legítimos en la misma fecha: conserva ambas determinaciones', async () => {
+      mockCallable.mockResolvedValueOnce({
+        data: {
+          text: JSON.stringify([
+            { date: '20/05/2025', test: 'Hemoglobina', value: 12.4, unit: 'g/dL' },
+            { date: '20/05/2025', test: 'Hemoglobina', value: 12.4, unit: 'g/dL' },
+          ]),
+        },
+      });
+
+      const labs = await extractLabsSecure('notas', []);
+      expect(labs.length).toBe(2);
+      expect(labs[0].value).toBe(12.4);
+      expect(labs[1].value).toBe(12.4);
+    });
+
+    it('2. Estudios distintos con texto muy similar: conserva ambos estudios sin fusionar por similitud léxica', () => {
+      const studyA = {
+        date: '10/04/2025',
+        type: 'TC',
+        bodyRegion: 'Tórax',
+        relevantFindings: 'TC de tórax con contraste: nódulo pulmonar espiculado en lóbulo superior derecho de 18 mm.',
+        targetLesions: [{ location: 'Lóbulo superior derecho', measurement: 18 }],
+        newLesions: false,
+      };
+      const studyB = {
+        date: '10/04/2025',
+        type: 'TC',
+        bodyRegion: 'Tórax',
+        relevantFindings: 'TC de tórax con contraste: nódulo pulmonar espiculado en lóbulo superior izquierdo de 18 mm.',
+        targetLesions: [{ location: 'Lóbulo superior izquierdo', measurement: 18 }],
+        newLesions: false,
+      };
+
+      const consolidated = consolidateImagingStudies([studyA, studyB]);
+      expect(consolidated.length).toBe(2);
+      expect(consolidated.some(s => s.relevantFindings.includes('superior derecho'))).toBe(true);
+      expect(consolidated.some(s => s.relevantFindings.includes('superior izquierdo'))).toBe(true);
+    });
+
+    it('3. Distintos SUVs: conserva ambos estudios por separado sin usar Math.max() ni fusionar mediciones', () => {
+      const study1 = {
+        date: '15/06/2025',
+        type: 'PET-TC',
+        bodyRegion: 'Cuerpo entero',
+        relevantFindings: 'PET-TC: Masa hipermetabólica parahiliar derecha.',
+        suvMax: 4.8,
+        targetLesions: [],
+        newLesions: false,
+      };
+      const study2 = {
+        date: '15/06/2025',
+        type: 'PET-TC',
+        bodyRegion: 'Cuerpo entero',
+        relevantFindings: 'PET-TC: Masa hipermetabólica parahiliar derecha.',
+        suvMax: 11.2,
+        targetLesions: [],
+        newLesions: false,
+      };
+
+      const consolidated = consolidateImagingStudies([study1, study2]);
+      expect(consolidated.length).toBe(2);
+      expect(consolidated[0].suvMax).toBe(4.8);
+      expect(consolidated[1].suvMax).toBe(11.2);
+    });
+
+    it('4. newLesions contradictorias: conserva ambos estudios en lugar de combinarlos automáticamente', () => {
+      const studyNoNew = {
+        date: '12/03/2025',
+        type: 'TC',
+        bodyRegion: 'Abdomen',
+        relevantFindings: 'TC de abdomen: Lesión hepática conocida sin nuevas lesiones.',
+        targetLesions: [{ location: 'Hígado', measurement: 30 }],
+        newLesions: false,
+      };
+      const studyWithNew = {
+        date: '12/03/2025',
+        type: 'TC',
+        bodyRegion: 'Abdomen',
+        relevantFindings: 'TC de abdomen: Lesión hepática conocida con aparición de nueva lesión satélite.',
+        targetLesions: [{ location: 'Hígado', measurement: 30 }],
+        newLesions: true,
+      };
+
+      const consolidated = consolidateImagingStudies([studyNoNew, studyWithNew]);
+      expect(consolidated.length).toBe(2);
+      expect(consolidated.some(s => s.newLesions === false)).toBe(true);
+      expect(consolidated.some(s => s.newLesions === true)).toBe(true);
+    });
+
+    it('5. Re-extracción incompleta sobre estudio validado: no sobrescribe lesiones diana, mediciones, reportes, SUV, baseline ni responseOverride', () => {
+      const existingStudies = [
+        {
+          id: 'img-saved-1',
+          type: 'TC',
+          date: '15/01/2024',
+          bodyRegion: 'Tórax',
+          treatment: 'Inmunoterapia',
+          relevantFindings: 'Nódulo pulmonar en LSD evaluado y confirmado por oncólogo.',
+          targetLesions: [{ location: 'LSD', measurement: 25, lesionKey: 'lsd' }],
+          nonTargetLesions: [{ location: 'Pleura', status: 'presente' }],
+          newLesions: false,
+          suvMax: 5.6,
+          extractedAt: 1000,
+          isBaseline: true,
+          responseOverride: { status: 'RP', note: 'Respuesta parcial clínica confirmada' },
+          rawReport: 'Informe completo original verificado por radiología.',
+        },
+      ];
+
+      // Re-extracción entrante incompleta (sin targetLesions, sin nonTargetLesions, suvMax null, sin responseOverride, isBaseline: false)
+      const incomingStudies = [
+        {
+          id: 'img-new-1',
+          type: 'TC',
+          date: '15/01/2024',
+          bodyRegion: 'Tórax',
+          treatment: null,
+          relevantFindings: 'Nódulo pulmonar en LSD evaluado y confirmado por oncólogo.',
+          targetLesions: [],
+          nonTargetLesions: [],
+          newLesions: false,
+          suvMax: null,
+          extractedAt: 2000,
+          isBaseline: false,
+          responseOverride: null,
+          rawReport: '',
+        },
+      ];
+
+      const merged = mergeImagingStudies(existingStudies as any, incomingStudies as any);
+      expect(merged.length).toBe(1);
+      // Las lesiones diana y mediciones validadas previamente se conservan intactas
+      expect(merged[0].targetLesions.length).toBe(1);
+      expect(merged[0].targetLesions[0].measurement).toBe(25);
+      expect(merged[0].nonTargetLesions.length).toBe(1);
+      // El estado basal, SUVmax y la sobrescritura de respuesta manual se deben preservar
+      expect(merged[0].isBaseline).toBe(true);
+      expect(merged[0].suvMax).toBe(5.6);
+      expect(merged[0].responseOverride?.status).toBe('RP');
+      expect(merged[0].responseOverride?.note).toBe('Respuesta parcial clínica confirmada');
+      expect(merged[0].rawReport).toBe('Informe completo original verificado por radiología.');
+    });
+
+    it('6. Casos ambiguos (fechas distintas, mediciones en conflicto o identidad no confirmada): conserva ambos registros', () => {
+      // Caso 6a: Fechas distintas en mergeImagingStudies
+      const existingStudy = {
+        id: 'img-1',
+        type: 'TC',
+        date: '01/03/2024',
+        bodyRegion: 'Abdomen',
+        treatment: null,
+        relevantFindings: 'Ascitis moderada con engrosamiento peritoneal difuso.',
+        targetLesions: [],
+        nonTargetLesions: [],
+        newLesions: false,
+        extractedAt: 1000,
+      };
+
+      const incomingStudy = {
+        id: 'img-2',
+        type: 'TC',
+        date: '03/03/2024',
+        bodyRegion: 'Abdomen',
+        treatment: null,
+        relevantFindings: 'Colección organizada retroperitoneal compatible con absceso.',
+        targetLesions: [],
+        nonTargetLesions: [],
+        newLesions: false,
+        extractedAt: 2000,
+      };
+
+      const merged = mergeImagingStudies([existingStudy] as any, [incomingStudy] as any);
+      expect(merged.length).toBe(2);
+      expect(merged[0].relevantFindings).toContain('Ascitis');
+      expect(merged[1].relevantFindings).toContain('Colección');
+
+      // Caso 6b: Mediciones contradictorias de la misma lesión en consolidateImagingStudies
+      const studyConflict1 = {
+        date: '10/05/2024',
+        type: 'TC',
+        bodyRegion: 'Hígado',
+        relevantFindings: 'Lesión focal hepática en segmento VI.',
+        targetLesions: [{ location: 'Segmento VI', measurement: 15 }],
+        newLesions: false,
+      };
+      const studyConflict2 = {
+        date: '10/05/2024',
+        type: 'TC',
+        bodyRegion: 'Hígado',
+        relevantFindings: 'Lesión focal hepática en segmento VI.',
+        targetLesions: [{ location: 'Segmento VI', measurement: 38 }],
+        newLesions: false,
+      };
+
+      const consolidatedConflict = consolidateImagingStudies([studyConflict1, studyConflict2]);
+      expect(consolidatedConflict.length).toBe(2);
+      expect(consolidatedConflict[0].targetLesions[0].measurement).toBe(15);
+      expect(consolidatedConflict[1].targetLesions[0].measurement).toBe(38);
+    });
+
+    it('7. Duplicado exacto confirmado por solapamiento de páginas: consolida en un único registro sin pérdida de información', () => {
+      const studyExact1 = {
+        date: '05/05/2024',
+        type: 'TC',
+        bodyRegion: 'Tórax',
+        relevantFindings: 'Sin hallazgos patológicos significativos.',
+        targetLesions: [],
+        newLesions: false,
+        suvMax: null,
+      };
+      const studyExact2 = {
+        date: '05/05/2024',
+        type: 'TC',
+        bodyRegion: 'Tórax',
+        relevantFindings: 'Sin hallazgos patológicos significativos.',
+        targetLesions: [],
+        newLesions: false,
+        suvMax: null,
+      };
+      const consolidatedImg = consolidateImagingStudies([studyExact1, studyExact2]);
+      expect(consolidatedImg.length).toBe(1);
     });
   });
 });

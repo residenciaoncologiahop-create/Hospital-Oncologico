@@ -672,7 +672,7 @@ export const extractLabsSecure = async (
     'braf', 'alk', 'ros1', 'met', 'ret', 'fgfr', 'ntrk', 'esr1', 'brca', 'pik3ca', 'ki67'
   ];
 
-  const resultMap = new Map<string, any>();
+  const validatedLabs: any[] = [];
   for (const item of accumulatedRawLabs) {
     if (!item || !item.test || typeof item.test !== 'string') continue;
     const tLower = item.test.toLowerCase().trim();
@@ -680,17 +680,17 @@ export const extractLabsSecure = async (
 
     const normTest = normalizeLabTestName(item.test);
     const date = item.date ? item.date.trim() : 'S/F';
-    const key = `${date}|${normTest.toLowerCase()}`;
     const valNum = parseFloat(String(item.value).replace(',', '.'));
     const unit = item.unit || '';
 
     if (
       !isNaN(valNum) &&
       valNum !== 0 &&
-      !resultMap.has(key) &&
       isPlausibleLabResult(normTest, valNum, unit)
     ) {
-      resultMap.set(key, {
+      // Preservar todas las determinaciones plausibles sin descartar resultados válidos
+      // solo por coincidir en analito, fecha y valor (ej. controles seriados o determinaciones múltiples).
+      validatedLabs.push({
         ...item,
         test: normTest,
         value: valNum,
@@ -699,7 +699,7 @@ export const extractLabsSecure = async (
     }
   }
 
-  return Array.from(resultMap.values());
+  return validatedLabs;
 };
 
 // ── Auditoría Clínica / Control de Calidad ──────────────────
@@ -923,20 +923,171 @@ export const extractImagingFromHistorySecure = async (
     throw new Error(`Falló la extracción de estudios de imágenes en todos los bloques procesados (${failedChunks.join(', ')}).`);
   }
 
-  // Deduplicar estudios idénticos entre chunks que compartan solapamiento (overlap)
-  const seenStudyKeys = new Set<string>();
-  const uniqueStudies: any[] = [];
-  for (const item of accumulatedRawStudies) {
-    if (!item || typeof item !== 'object') continue;
-    const key = `${(item.date || '').trim()}|${(item.type || '').toUpperCase()}|${(item.bodyRegion || '').toLowerCase().trim()}|${(item.relevantFindings || '').slice(0, 40)}`;
-    if (!seenStudyKeys.has(key)) {
-      seenStudyKeys.add(key);
-      uniqueStudies.push(item);
+  // Deduplicar y consolidar estudios entre chunks que compartan solapamiento (overlap) de forma segura
+  return consolidateImagingStudies(accumulatedRawStudies);
+};
+
+/**
+ * Helper para validar y extraer mediciones numéricas finitas en mm.
+ */
+function parseSafeNum(val: unknown): number | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'number') {
+    return (!Number.isNaN(val) && Number.isFinite(val) && val >= 0) ? val : null;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!/^\d+(\.\d+)?$/.test(trimmed)) return null;
+    const num = Number(trimmed);
+    return (!Number.isNaN(num) && Number.isFinite(num) && num >= 0) ? num : null;
+  }
+  return null;
+}
+
+/**
+ * Deduplica y consolida estudios de imágenes extraídos entre bloques de páginas solapados.
+ * - Elimina duplicados genuinos producidos por la página de solapamiento.
+ * - Si el mismo estudio aparece en dos bloques (ej. corte de página), fusiona la información
+ *   conservando el informe más completo, todas las lesiones diana medidas, lesiones nuevas y SUVmax.
+ * - Si dos estudios se realizaron el mismo día pero tienen hallazgos distintos (no son subconjunto),
+ *   conserva ambos estudios sin descartar ninguno.
+ */
+export function consolidateImagingStudies(studies: any[]): any[] {
+  if (!Array.isArray(studies) || studies.length === 0) return [];
+
+  const consolidated: any[] = [];
+
+  for (const incoming of studies) {
+    if (!incoming || typeof incoming !== 'object') continue;
+
+    const inDate = (incoming.date || '').trim();
+    const inType = (incoming.type || '').toUpperCase().trim();
+    const inRegion = (incoming.bodyRegion || '').toLowerCase().trim();
+    const inFindings = (incoming.relevantFindings || '').trim();
+
+    // Buscar si ya existe un estudio confirmado idéntico por solapamiento exacto de bloques
+    const matchIdx = consolidated.findIndex(existing => {
+      const exDate = (existing.date || '').trim();
+      const exType = (existing.type || '').toUpperCase().trim();
+      const exRegion = (existing.bodyRegion || '').toLowerCase().trim();
+      const exFindings = (existing.relevantFindings || '').trim();
+
+      // 1. Tipo de estudio y fecha deben coincidir de forma unívoca (ambas definidas y distintas de S/F)
+      if (exType !== inType) return false;
+      if (!exDate || !inDate || exDate === 'S/F' || inDate === 'S/F' || exDate !== inDate) {
+        return false;
+      }
+
+      // 2. Región anatómica debe coincidir
+      if (exRegion !== inRegion && exRegion && inRegion) return false;
+
+      // 3. Hallazgos: PROHIBIDO deducir identidad por similitud léxica o contención de palabras.
+      // La similitud textual por sí sola no es evidencia suficiente.
+      // Únicamente se considera el mismo estudio si los hallazgos son idénticos (duplicado exacto de bloque).
+      if (exFindings.toLowerCase() !== inFindings.toLowerCase()) {
+        return false;
+      }
+
+      // 4. Parámetros cuantitativos y clínicos: no deben presentar discrepancias o contradicciones
+      // SUVmax: si ambos tienen valor, deben coincidir exactamente. NUNCA fusionar estudios con distinto SUV.
+      const exSuv = parseSafeNum(existing.suvMax);
+      const inSuv = parseSafeNum(incoming.suvMax);
+      if (exSuv !== null && inSuv !== null && Math.abs(exSuv - inSuv) > 0.01) {
+        return false;
+      }
+
+      // newLesions: si ambos tienen booleans explícitos y difieren, son contradictorios
+      if (
+        existing.newLesions !== undefined &&
+        incoming.newLesions !== undefined &&
+        Boolean(existing.newLesions) !== Boolean(incoming.newLesions)
+      ) {
+        return false;
+      }
+
+      // targetLesions: no deben tener mediciones contradictorias para la misma ubicación
+      const exLesions = Array.isArray(existing.targetLesions) ? existing.targetLesions : [];
+      const inLesions = Array.isArray(incoming.targetLesions) ? incoming.targetLesions : [];
+      for (const inL of inLesions) {
+        if (!inL) continue;
+        const inLoc = (inL.location || '').toLowerCase().trim();
+        const exMatch = exLesions.find(l => (l.location || '').toLowerCase().trim() === inLoc);
+        if (exMatch) {
+          const exM = parseSafeNum(exMatch.measurement);
+          const inM = parseSafeNum(inL.measurement);
+          if (exM !== null && inM !== null && Math.abs(exM - inM) > 0.01) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    });
+
+    if (matchIdx === -1) {
+      // Identidad no confirmada con seguridad: conservar como estudio independiente sin descartar nada
+      consolidated.push({ ...incoming });
+    } else {
+      // Duplicado exacto confirmado: consolidar campos completando valores faltantes sin alterar mediciones
+      const ex = consolidated[matchIdx];
+
+      // Región: conservar la más específica/completa
+      const finalRegion = (incoming.bodyRegion || '').length >= (ex.bodyRegion || '').length
+        ? (incoming.bodyRegion || ex.bodyRegion)
+        : ex.bodyRegion;
+
+      // SUVmax: conservar el valor existente sin usar Math.max(); si era null y el nuevo tiene valor, asignarlo
+      const exSuv = parseSafeNum(ex.suvMax);
+      const inSuv = parseSafeNum(incoming.suvMax);
+      const finalSuvMax = exSuv !== null ? exSuv : inSuv;
+
+      // targetLesions: preservar todas las mediciones existentes; no sumar ni inventar mediciones
+      const exLesions = Array.isArray(ex.targetLesions) ? ex.targetLesions : [];
+      const inLesions = Array.isArray(incoming.targetLesions) ? incoming.targetLesions : [];
+      const mergedLesions = [...exLesions];
+
+      for (const inL of inLesions) {
+        if (!inL) continue;
+        const inLoc = (inL.location || '').toLowerCase().trim();
+        const matchLIdx = mergedLesions.findIndex(l => (l.location || '').toLowerCase().trim() === inLoc);
+        if (matchLIdx === -1) {
+          mergedLesions.push({ ...inL });
+        } else {
+          const exMeas = parseSafeNum(mergedLesions[matchLIdx].measurement);
+          const inMeas = parseSafeNum(inL.measurement);
+          if (exMeas === null && inMeas !== null) {
+            mergedLesions[matchLIdx] = { ...mergedLesions[matchLIdx], measurement: inMeas };
+          }
+        }
+      }
+
+      // nonTargetLesions: unión sin duplicar ubicaciones
+      const exNonTarget = Array.isArray(ex.nonTargetLesions) ? ex.nonTargetLesions : [];
+      const inNonTarget = Array.isArray(incoming.nonTargetLesions) ? incoming.nonTargetLesions : [];
+      const mergedNonTarget = [...exNonTarget];
+      for (const inNt of inNonTarget) {
+        if (!inNt) continue;
+        const inLoc = (inNt.location || '').toLowerCase().trim();
+        if (!mergedNonTarget.some(nt => (nt.location || '').toLowerCase().trim() === inLoc)) {
+          mergedNonTarget.push({ ...inNt });
+        }
+      }
+
+      consolidated[matchIdx] = {
+        ...ex,
+        bodyRegion: finalRegion,
+        relevantFindings: ex.relevantFindings || incoming.relevantFindings,
+        targetLesions: mergedLesions,
+        nonTargetLesions: mergedNonTarget,
+        newLesions: ex.newLesions !== undefined ? ex.newLesions : incoming.newLesions,
+        suvMax: finalSuvMax,
+        treatment: ex.treatment || incoming.treatment || null,
+      };
     }
   }
 
-  return uniqueStudies;
-};
+  return consolidated;
+}
 
 // ── Comparación RECIST 1.1 entre estudios ─────────────────────────────
 export const compareRecistSecure = async (

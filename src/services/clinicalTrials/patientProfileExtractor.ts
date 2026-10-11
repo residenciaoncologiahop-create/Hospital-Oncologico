@@ -582,6 +582,22 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     stageDocumented = extractStageDocumented(fullText);
   }
 
+  // TNM explícito documentado
+  const tnmMatch = fullText.match(/\b([cyp]?T[0-4][a-d]?(?:[,\s/]+[cyp]?N[0-3][a-c]?(?:[sn]+)?)?(?:[,\s/]+[cyp]?M[01][a-c]?)?)\b/i);
+  const tnmDocumented = (tnmMatch && tnmMatch[1].trim().length >= 4) ? tnmMatch[1].trim() : undefined;
+
+  // Escenario clínico documentado
+  let clinicalScenarioDocumented: string | undefined = undefined;
+  if (/\b(?:adyuvancia|adyuvante|post-operatorio|postoperatorio)\b/i.test(fullTextNorm)) {
+    clinicalScenarioDocumented = 'Adyuvancia';
+  } else if (/\b(?:neoadyuvancia|neoadyuvante|pre-operatorio|preoperatorio)\b/i.test(fullTextNorm)) {
+    clinicalScenarioDocumented = 'Neoadyuvancia';
+  } else if (/\b(?:metast[aá]sico|metast[aá]sica|avanzado|avanzada|estadio\s+iv)\b/i.test(fullTextNorm)) {
+    clinicalScenarioDocumented = 'Metastásico / Avanzado';
+  } else if (/\b(?:vigilancia|control\s+oncol[oó]gico|libre\s+de\s+enfermedad|remisi[oó]n\s+completa)\b/i.test(fullTextNorm)) {
+    clinicalScenarioDocumented = 'Vigilancia';
+  }
+
   // 6. ENFERMEDAD METASTÁSICA Y SITIOS
   let isMetastaticDocumented = false;
   let metastaticSites: string[] | undefined = undefined;
@@ -592,6 +608,7 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     isMetastaticDocumented = metaInfo.isMetastatic;
     if (metaInfo.sites.length > 0) metastaticSites = metaInfo.sites;
   }
+  const cnsInvolvementDocumented = metastaticSites ? metastaticSites.includes('cerebro_snc') : false;
 
   // 7. BIOMARCADORES EXPLÍCITAMENTE DOCUMENTADOS
   const biomarkersDocumented: Array<{ name: string; status: string; rawText: string }> = [];
@@ -760,6 +777,26 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
   // Complementar laboratorios con el texto libre de la historia si faltan
   const labsDocumented = extractLabsFromText(fullText, baseLabs);
 
+  // 12. CIRUGÍAS Y RADIOTERAPIA PREVIAS DOCUMENTADAS
+  const planSplit = fullText.split(/\b(?:PLAN|CONDUCTA|Plan\s+terap[eé]utico|Conducta\s+sugerida|Se\s+solicita|Se\s+indica|Se\s+planifica)[:\s]+/i);
+  const historyBeforePlan = planSplit[0] || fullText;
+
+  const priorSurgeries: string[] = [];
+  const surgeryMatches = historyBeforePlan.match(/\b(mastectom[ií]a(?:\s+radical|\s+parcial)?|tumorectom[ií]a|cuadrantectom[ií]a|colectom[ií]a|hemicolectom[ií]a|sigmoidectom[ií]a|histerectom[ií]a(?:\s+total|\s+radical)?|anexohisterectom[ií]a|ooforectom[ií]a|salpingooforectom[ií]a|lobectom[ií]a|neumonectom[ií]a|nefrectom[ií]a(?:\s+total|\s+parcial)?|prostatectom[ií]a(?:\s+radical)?|resecci[oó]n(?:\s+quir[uú]rgica|\s+R0|\s+R1)?)\b/gi);
+  if (surgeryMatches) {
+    for (const s of surgeryMatches) {
+      const clean = s.trim();
+      if (!priorSurgeries.some(existing => existing.toLowerCase() === clean.toLowerCase())) {
+        priorSurgeries.push(clean);
+      }
+    }
+  }
+
+  let priorRadiotherapy: boolean | undefined = undefined;
+  if (/\b(?:radioterapia|rtx|rt\s+adyuvante|rt\s+paliativa|braquiterapia|irradiaci[oó]n|cyberknife|radiocirug[ií]a)\b/i.test(normalize(historyBeforePlan))) {
+    priorRadiotherapy = true;
+  }
+
   return {
     patientId: patient.id || 'N/A',
     hcNumber: patient.hcNumber || patient.name || 'S/N',
@@ -770,13 +807,18 @@ export function extractPatientClinicalProfile(patient: any): PatientClinicalProf
     organOrSite,
     histology,
     stageDocumented,
+    tnmDocumented,
+    clinicalScenarioDocumented,
     isMetastaticDocumented,
+    cnsInvolvementDocumented,
     biomarkersDocumented,
     linesDocumented,
     priorTreatments,
     currentTreatment: linesDocumented[linesDocumented.length - 1],
     progressionDocumented,
     ecogDocumented,
+    priorSurgeries: priorSurgeries.length > 0 ? priorSurgeries : undefined,
+    priorRadiotherapy,
     labsDocumented,
     diagnosticConflict,
     metastaticSites

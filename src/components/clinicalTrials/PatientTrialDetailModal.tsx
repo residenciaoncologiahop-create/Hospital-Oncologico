@@ -108,6 +108,13 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
             </div>
           </div>
 
+          {/* DISCLAIMER OBLIGATORIO DE PRE-SCREENING ORIENTATIVO */}
+          <div className="bg-amber-50/90 border-b border-amber-200/80 px-6 py-2.5 flex items-center gap-3 shrink-0">
+            <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+            <div className="text-xs font-semibold text-amber-950 leading-tight">
+              Este resultado es un pre-screening orientativo. No confirma elegibilidad ni disponibilidad del ensayo. La elegibilidad definitiva y la apertura del centro deben verificarse con el equipo investigador y el protocolo vigente.
+            </div>
+          </div>
 
           {/* ADVERTENCIA DE CONFLICTO DIAGNÓSTICO */}
           {evaluation.profile?.diagnosticConflict?.hasConflict && (
@@ -144,7 +151,7 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
                     : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
                 }`}
               >
-                🟢 Potencialmente elegibles ({candidateCount})
+                🟢 Potencialmente compatible ({candidateCount})
               </button>
             )}
             {missingDataCount > 0 && (
@@ -156,7 +163,7 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
                     : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
                 }`}
               >
-                🟡 Falta información ({missingDataCount})
+                🟡 Potencialmente compatible, faltan datos ({missingDataCount})
               </button>
             )}
             {notCompatibleCount > 0 && (
@@ -168,7 +175,7 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
                     : 'bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200'
                 }`}
               >
-                🔴 No cumple criterio ({notCompatibleCount})
+                🔴 Criterio incompatible identificado ({notCompatibleCount})
               </button>
             )}
             {notEvaluableCount > 0 && (
@@ -180,7 +187,7 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
                 }`}
               >
-                ⚪ No evaluables ({notEvaluableCount})
+                ⚪ No evaluable ({notEvaluableCount})
               </button>
             )}
           </div>
@@ -224,19 +231,33 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
                               ? 'bg-rose-100 text-rose-800'
                               : 'bg-gray-100 text-gray-700'
                           }`}>
-                            {m.categoryBadge}
+                            {m.category === 'potential_candidate'
+                              ? '🟢 Potencialmente compatible'
+                              : m.category === 'potential_missing_data'
+                              ? '🟡 Potencialmente compatible, faltan datos'
+                              : m.category === 'not_compatible'
+                              ? '🔴 Criterio incompatible identificado'
+                              : '⚪ No evaluable'}
                           </span>
 
-                          {/* BADGE CORDOBA: Diferencia estricta entre Recruiting de sede vs no recruiting */}
+                          {/* BADGE UBICACIÓN / SEDE */}
                           {isCordobaSiteRecruiting(m.trial) ? (
                             <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm">
-                              <MapPin size={10} /> Córdoba · Recruiting
+                              <MapPin size={10} /> Córdoba · Sede reclutando
                             </span>
                           ) : m.trial.hasCordobaCenter ? (
-                            <span className="text-[10px] font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md flex items-center gap-1 border border-gray-200">
-                              <MapPin size={10} /> Córdoba · {m.trial.cordobaRecruitingStatus === 'NOT_YET_RECRUITING' ? 'Aún no recluta' : m.trial.cordobaRecruitingStatus === 'SUSPENDED' ? 'Suspendido' : 'Estado no confirmado'}
+                            <span className="text-[10px] font-bold bg-amber-50 text-amber-800 px-2 py-0.5 rounded-md flex items-center gap-1 border border-amber-200">
+                              <MapPin size={10} /> Córdoba · {m.trial.cordobaRecruitingStatus === 'NOT_YET_RECRUITING' ? 'Aún no recluta' : m.trial.cordobaRecruitingStatus === 'SUSPENDED' ? 'Suspendido' : 'Pendiente de verificación'}
                             </span>
-                          ) : null}
+                          ) : m.trial.hasArgentinaCenter ? (
+                            <span className="text-[10px] font-bold bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md flex items-center gap-1 border border-blue-200">
+                              <MapPin size={10} /> Sede en Argentina (fuera de Cba)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md flex items-center gap-1 border border-gray-200">
+                              <MapPin size={10} /> Reclutamiento global (sin sede local confirmada)
+                            </span>
+                          )}
 
                           <span className="text-[10px] font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md">
                             {m.trial.phaseNormalized}
@@ -318,7 +339,7 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
                         <div className="bg-rose-50/50 border border-rose-100 rounded-xl p-3 space-y-1.5">
                           <div className="text-[10px] font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
                             <AlertCircle size={13} className="text-rose-600" />
-                            Criterios no cumplidos / Exclusiones ({m.incompatibilities.length})
+                            Criterios incompatibles identificados ({m.incompatibilities.length})
                           </div>
                           <div className="space-y-1">
                             {m.incompatibilities.map((item, i) => (
@@ -485,7 +506,10 @@ export const PatientTrialDetailModal: React.FC<Props> = ({ evaluation, onClose, 
           </div>
 
           {/* FOOTER */}
-          <div className="p-4 border-t bg-gray-50 flex items-center justify-end gap-3 text-xs text-gray-500">
+          <div className="p-4 border-t bg-gray-50 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
+            <span className="text-[11px] text-gray-500 max-w-2xl leading-tight">
+              Este resultado es un pre-screening orientativo. No confirma elegibilidad ni disponibilidad del ensayo. La elegibilidad definitiva y la apertura del centro deben verificarse con el equipo investigador y el protocolo vigente.
+            </span>
             <button
               onClick={onClose}
               className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition-colors shrink-0"

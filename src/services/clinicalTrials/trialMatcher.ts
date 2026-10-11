@@ -32,7 +32,7 @@ export const ORGAN_LABELS: Record<string, string> = {
   solido_agnostico: 'Tumores Sólidos Avanzados'
 };
 
-const REQUIRED_NOTICE = 'Paciente potencialmente elegible. Requiere verificación de criterios por el equipo investigador. Herramienta orientativa para el médico residente. No constituye confirmación de elegibilidad ni reemplaza la evaluación por el investigador principal del ensayo.';
+const REQUIRED_NOTICE = 'Este resultado es un pre-screening orientativo. No confirma elegibilidad ni disponibilidad del ensayo. La elegibilidad definitiva y la apertura del centro deben verificarse con el equipo investigador y el protocolo vigente.';
 
 /**
  * Determina si la sede específica de Córdoba está activamente reclutando (RECRUITING).

@@ -15,6 +15,7 @@ import ClinicalAuditModal from './components/ClinicalAuditModal';
 import ClinicalReportModal from './components/ClinicalReportModal';
 import ClinicalEvolutionModal from './components/ClinicalEvolutionModal';
 import { PatientTrialDetailModal } from './components/clinicalTrials/PatientTrialDetailModal';
+import { ClinicalTrialsModal } from './components/clinicalTrials/ClinicalTrialsModal';
 import { evaluateSinglePatientTrials } from './services/clinicalTrials/trialMatcher';
 import { getStoredClinicalTrials, syncAndStoreTrials } from './services/clinicalTrials/clinicalTrialStorage';
 import { PatientMatchingEvaluation } from './types/clinicalTrials';
@@ -56,6 +57,8 @@ const ResidentApp = () => {
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [selectedPatientTrialEvaluation, setSelectedPatientTrialEvaluation] = useState<PatientMatchingEvaluation | null>(null);
   const [isEvaluatingPatientTrials, setIsEvaluatingPatientTrials] = useState(false);
+  const [showClinicalTrialsModal, setShowClinicalTrialsModal] = useState(false);
+  const [trialsFeedback, setTrialsFeedback] = useState<{ type: 'error' | 'warning' | 'info'; message: string } | null>(null);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [auditContent, setAuditContent] = useState<string | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
@@ -63,6 +66,7 @@ const ResidentApp = () => {
   const handleCheckPatientTrials = async (patient: ResidentPatient) => {
     if (!patient || isEvaluatingPatientTrials) return;
     setIsEvaluatingPatientTrials(true);
+    setTrialsFeedback(null);
     try {
       const { trials: loaded } = await getStoredClinicalTrials();
       let trialsList = (loaded || []).filter(t => t.syncStatus !== 'STALE' && t.isOncology !== false);
@@ -70,10 +74,21 @@ const ResidentApp = () => {
         const res = await syncAndStoreTrials();
         trialsList = (res.trials || []).filter(t => t.syncStatus !== 'STALE' && t.isOncology !== false);
       }
+      if (!trialsList || trialsList.length === 0) {
+        setTrialsFeedback({
+          type: 'warning',
+          message: 'No hay ensayos clínicos disponibles en la base de datos en este momento. Verifique la conexión o intente más tarde.'
+        });
+        return;
+      }
       const evaluation = evaluateSinglePatientTrials(patient, trialsList);
       setSelectedPatientTrialEvaluation(evaluation);
     } catch (err) {
       console.error('Error evaluando ensayos para el paciente:', err);
+      setTrialsFeedback({
+        type: 'error',
+        message: 'No se pudo completar la búsqueda de ensayos clínicos debido a un error de red o sincronización. Intente nuevamente.'
+      });
     } finally {
       setIsEvaluatingPatientTrials(false);
     }
@@ -483,7 +498,28 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                   <div className="space-y-6">
                     <FileUploader label="Documentos del Caso" files={selectedPatient.files} setFiles={(newFiles) => updateCurrentPatient({ files: newFiles })} />
                     
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {trialsFeedback && (
+                      <div className={`p-3 rounded-2xl text-xs flex items-center justify-between gap-3 border ${
+                        trialsFeedback.type === 'error'
+                          ? 'bg-rose-50 text-rose-800 border-rose-200'
+                          : trialsFeedback.type === 'warning'
+                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                          : 'bg-blue-50 text-blue-800 border-blue-200'
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={15} className="shrink-0" />
+                          <span>{trialsFeedback.message}</span>
+                        </div>
+                        <button
+                          onClick={() => setTrialsFeedback(null)}
+                          className="text-gray-400 hover:text-gray-700 text-xs font-bold px-1.5 py-0.5 rounded"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                       <button 
                         onClick={() => setShowEvolutionModal(true)}
                         className="flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all shadow-md"
@@ -507,6 +543,15 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
                         className="flex flex-col items-center justify-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all border border-emerald-100"
                       >
                         <CalendarHeart size={16} className="mb-1" /> Seguimiento
+                      </button>
+                      <button
+                        onClick={() => handleCheckPatientTrials(selectedPatient)}
+                        disabled={isEvaluatingPatientTrials}
+                        className="flex flex-col items-center justify-center gap-1 bg-emerald-700 text-white hover:bg-emerald-800 p-3 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all shadow-md disabled:opacity-50 col-span-2 sm:col-span-1"
+                        title="Buscar ensayos clínicos potencialmente relevantes para el paciente"
+                      >
+                        {isEvaluatingPatientTrials ? <Loader2 size={16} className="animate-spin mb-1 text-white" /> : <Microscope size={16} className="mb-1 text-white" />}
+                        Ensayos
                       </button>
                     </div>
 
@@ -866,6 +911,16 @@ ${selectedPatient.historyText || 'Sin notas adicionales.'}`;
         <PatientTrialDetailModal
           evaluation={selectedPatientTrialEvaluation}
           onClose={() => setSelectedPatientTrialEvaluation(null)}
+          onOpenFullSearch={() => {
+            setSelectedPatientTrialEvaluation(null);
+            setShowClinicalTrialsModal(true);
+          }}
+        />
+      )}
+      {showClinicalTrialsModal && (
+        <ClinicalTrialsModal
+          patients={patients}
+          onClose={() => setShowClinicalTrialsModal(false)}
         />
       )}
       
