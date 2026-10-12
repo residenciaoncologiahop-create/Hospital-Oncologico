@@ -86,12 +86,14 @@ describe('Storage Security Rules', () => {
     });
 
     it('deniega escritura y lectura a otro medico autorizado que no es dueno del paciente', async () => {
-      // Primero sembramos el archivo como medicoA
-      const storageA = testEnv.authenticatedContext('medicoA').storage();
-      const fileRefA = ref(storageA, 'patients/pacienteA/estudios/tac_torax.pdf');
-      await assertSucceeds(uploadBytes(fileRefA, sampleFileContent));
+      // 1. Sembrar el archivo de prueba con reglas deshabilitadas
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const adminStorage = context.storage();
+        const fileRef = ref(adminStorage, 'patients/pacienteA/estudios/tac_torax.pdf');
+        await uploadBytes(fileRef, sampleFileContent);
+      });
 
-      // medicoB intenta acceder al archivo de pacienteA
+      // 2. medicoB intenta acceder al archivo de pacienteA
       const storageB = testEnv.authenticatedContext('medicoB').storage();
       const fileRefB = ref(storageB, 'patients/pacienteA/estudios/tac_torax.pdf');
       const newFileRefB = ref(storageB, 'patients/pacienteA/estudios/intento_subida.pdf');
