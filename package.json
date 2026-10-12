@@ -12,6 +12,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:rules": "npx firebase-tools@15.33.0 emulators:exec --project demo-oncoguide-rules --only firestore,storage \"vitest run --config vitest.rules.config.ts\"",
     "typecheck": "node .ci/tsc-ratchet.mjs",
     "ci": "npm run lint && npm run typecheck && npm test"
   },
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@firebase/rules-unit-testing": "^3.0.4",
     "@types/node": "^22.14.0",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
