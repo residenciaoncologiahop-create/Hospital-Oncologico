@@ -57,10 +57,10 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
-    // 4. Coleccion clinical_trials (Registro publico sincronizado exclusivamente por Cloud Functions backend)
+    // 4. Coleccion clinical_trials (Sincronizado exclusivamente por Cloud Functions backend)
     match /clinical_trials/{trialId} {
-      // Lectura: todos los usuarios autenticados
-      allow read: if isAuthenticated();
+      // Lectura: solo usuarios autenticados y autorizados
+      allow read: if isAuthorized();
       
       // Escritura: prohibida desde el frontend (solo Admin SDK via Cloud Functions)
       allow write: if false;

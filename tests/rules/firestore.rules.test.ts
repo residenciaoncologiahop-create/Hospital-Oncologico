@@ -95,6 +95,14 @@ describe('Firestore Security Rules', () => {
       await assertFails(getDoc(doc(unauthDb, 'otra_coleccion', 'doc1')));
       await assertFails(setDoc(doc(unauthDb, 'otra_coleccion', 'doc2'), { data: 'nuevo' }));
     });
+
+    it('deniega leer y escribir clinical_trials para usuario no autenticado', async () => {
+      await seedAuthorizedUsers();
+      const unauthDb = testEnv.unauthenticatedContext().firestore();
+
+      await assertFails(getDoc(doc(unauthDb, 'clinical_trials', 'trial1')));
+      await assertFails(setDoc(doc(unauthDb, 'clinical_trials', 'trial2'), { title: 'Nuevo' }));
+    });
   });
 
   describe('2. Usuarios autenticados pero NO autorizados', () => {
@@ -126,11 +134,11 @@ describe('Firestore Security Rules', () => {
         await assertFails(setDoc(doc(userDb, 'audit_logs', 'log_nuevo'), { doctorId: 'sin_documento' }));
       });
 
-      it('permite leer clinical_trials pero deniega escritura', async () => {
+      it('deniega leer y escribir clinical_trials para usuario no autorizado', async () => {
         await seedAuthorizedUsers();
         const userDb = testEnv.authenticatedContext('sin_documento').firestore();
 
-        await assertSucceeds(getDoc(doc(userDb, 'clinical_trials', 'trial1')));
+        await assertFails(getDoc(doc(userDb, 'clinical_trials', 'trial1')));
         await assertFails(setDoc(doc(userDb, 'clinical_trials', 'trial2'), { title: 'Nuevo' }));
       });
 
@@ -171,6 +179,14 @@ describe('Firestore Security Rules', () => {
 
         // audit_logs
         await assertFails(setDoc(doc(inactiveDb, 'audit_logs', 'log_nuevo'), { doctorId: 'inactivo' }));
+      });
+
+      it('deniega leer y escribir clinical_trials para usuario inactivo (active: false)', async () => {
+        await seedAuthorizedUsers();
+        const inactiveDb = testEnv.authenticatedContext('inactivo').firestore();
+
+        await assertFails(getDoc(doc(inactiveDb, 'clinical_trials', 'trial1')));
+        await assertFails(setDoc(doc(inactiveDb, 'clinical_trials', 'trial2'), { title: 'Nuevo' }));
       });
 
       it('permite leer su propio registro en authorized_users pero deniega de otro y escritura', async () => {
