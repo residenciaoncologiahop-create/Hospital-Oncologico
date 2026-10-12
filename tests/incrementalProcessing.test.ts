@@ -1113,5 +1113,215 @@ describe('Procesamiento Robusto de PDFs, Límites de Transporte y Frecuencia en 
       expect(consolidatedImg.length).toBe(1);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 12. Desidentificación de sourceFileName y Resiliencia en processedChunks
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('Pruebas de Desidentificación de sourceFileName y Resiliencia en processedChunks', () => {
+    it('genera un sourceFileName genérico doc_<hash8>.pdf para PDFs y no persiste datos del paciente en el registro', async () => {
+      const chunkWithSensitiveName: DocumentChunk = {
+        chunkIndex: 0,
+        totalChunks: 1,
+        startPage: 1,
+        endPage: 5,
+        totalPages: 5,
+        label: 'TAC_Perez_Juan_DNI_38472918.pdf (Bloque 1)',
+        sourceFileName: 'TAC_Perez_Juan_DNI_38472918.pdf',
+        file: { name: 'TAC_Perez_Juan_DNI_38472918.pdf', type: 'application/pdf', data: Buffer.from('test_sensitive_patient_pdf').toString('base64') },
+      };
+
+      const hash = await computeChunkHash(chunkWithSensitiveName);
+      const { newRecords, newChunks } = await filterProcessableChunks([chunkWithSensitiveName], []);
+
+      expect(newRecords.length).toBe(1);
+      // El sourceFileName persistible en Firestore es genérico y determinístico: doc_<hash8>.pdf
+      const expectedGeneric = `doc_${hash.substring(0, 8)}.pdf`;
+      expect(newRecords[0].sourceFileName).toBe(expectedGeneric);
+
+      // Verificación estricta de que ningún dato sensible del nombre original queda en newRecords
+      expect(newRecords[0].sourceFileName).not.toContain('Perez');
+      expect(newRecords[0].sourceFileName).not.toContain('Juan');
+      expect(newRecords[0].sourceFileName).not.toContain('38472918');
+
+      // En memoria durante la sesión, el DocumentChunk preserva su label y sourceFileName para la UI/toasts
+      expect(newChunks[0].sourceFileName).toBe('TAC_Perez_Juan_DNI_38472918.pdf');
+      expect(newChunks[0].label).toContain('TAC_Perez_Juan_DNI_38472918.pdf');
+    });
+
+    it('genera un sourceFileName genérico conservando la extensión real en imágenes (doc_<hash8>.jpg / .png)', async () => {
+      const imageChunkJpg: DocumentChunk = {
+        chunkIndex: 0,
+        totalChunks: 1,
+        startPage: 1,
+        endPage: 1,
+        totalPages: 1,
+        label: 'Foto_Lesion_Gonzalez_40123456.JPG',
+        sourceFileName: 'Foto_Lesion_Gonzalez_40123456.JPG',
+        file: { name: 'Foto_Lesion_Gonzalez_40123456.JPG', type: 'image/jpeg', data: Buffer.from('jpeg_image_data').toString('base64') },
+      };
+
+      const hashJpg = await computeChunkHash(imageChunkJpg);
+      const { newRecords: recordsJpg } = await filterProcessableChunks([imageChunkJpg], []);
+
+      expect(recordsJpg[0].sourceFileName).toBe(`doc_${hashJpg.substring(0, 8)}.jpg`);
+      expect(recordsJpg[0].sourceFileName).not.toContain('Gonzalez');
+
+      const imageChunkPng: DocumentChunk = {
+        chunkIndex: 0,
+        totalChunks: 1,
+        startPage: 1,
+        endPage: 1,
+        totalPages: 1,
+        label: 'dermoscopia_paciente_123.png',
+        sourceFileName: 'dermoscopia_paciente_123.png',
+        file: { name: 'dermoscopia_paciente_123.png', type: 'image/png', data: Buffer.from('png_image_data').toString('base64') },
+      };
+
+      const hashPng = await computeChunkHash(imageChunkPng);
+      const { newRecords: recordsPng } = await filterProcessableChunks([imageChunkPng], []);
+
+      expect(recordsPng[0].sourceFileName).toBe(`doc_${hashPng.substring(0, 8)}.png`);
+    });
+
+    it('genera doc_<hash8> sin extensión si el archivo de origen no posee extensión', async () => {
+      const chunkNoExt: DocumentChunk = {
+        chunkIndex: 0,
+        totalChunks: 1,
+        startPage: 1,
+        endPage: 1,
+        totalPages: 1,
+        label: 'documento_sin_extension',
+        sourceFileName: 'documento_sin_extension',
+        file: { name: 'documento_sin_extension', type: 'application/octet-stream', data: Buffer.from('no_ext_data').toString('base64') },
+      };
+
+      const hash = await computeChunkHash(chunkNoExt);
+      const { newRecords } = await filterProcessableChunks([chunkNoExt], []);
+
+      expect(newRecords[0].sourceFileName).toBe(`doc_${hash.substring(0, 8)}`);
+    });
+
+    it('preserva __clinical_text__ cuando el origen son notas de texto clínico', async () => {
+      const textChunk: DocumentChunk = {
+        chunkIndex: 0,
+        totalChunks: 1,
+        startPage: 1,
+        endPage: 1,
+        totalPages: 1,
+        label: '__clinical_text__',
+        sourceFileName: '__clinical_text__',
+        file: { name: '__clinical_text__', type: 'text/plain', data: Buffer.from('notas_clinicas').toString('base64') },
+      };
+
+      const { newRecords } = await filterProcessableChunks([textChunk], []);
+      expect(newRecords[0].sourceFileName).toBe('__clinical_text__');
+    });
+
+    it('la deduplicación por hash es agnóstica al nombre del archivo y respeta registros legados', async () => {
+      const binaryContent = Buffer.from('contenido_clinico_identico_12345').toString('base64');
+
+      // Chunk subido previamente en un paciente legado con el nombre original sensible
+      const legacyChunk: DocumentChunk = {
+        chunkIndex: 0,
+        totalChunks: 1,
+        startPage: 1,
+        endPage: 10,
+        totalPages: 10,
+        label: 'TAC_Lopez_Carlos_DNI.pdf',
+        sourceFileName: 'TAC_Lopez_Carlos_DNI.pdf',
+        file: { name: 'TAC_Lopez_Carlos_DNI.pdf', type: 'application/pdf', data: binaryContent },
+      };
+      const commonHash = await computeChunkHash(legacyChunk);
+
+      // Simula el registro ya existente en Firestore (guardado con el nombre legado)
+      const existingRecords: ProcessedChunkRecord[] = [
+        {
+          hash: commonHash,
+          sourceFileName: 'TAC_Lopez_Carlos_DNI.pdf',
+          startPage: 1,
+          endPage: 10,
+          totalPages: 10,
+          processedAt: 1000,
+        },
+      ];
+
+      // El médico vuelve a cargar el mismo documento pero ahora con un nombre genérico
+      const reuploadedChunk: DocumentChunk = {
+        chunkIndex: 0,
+        totalChunks: 1,
+        startPage: 1,
+        endPage: 10,
+        totalPages: 10,
+        label: 'tac_control_2026.pdf',
+        sourceFileName: 'tac_control_2026.pdf',
+        file: { name: 'tac_control_2026.pdf', type: 'application/pdf', data: binaryContent },
+      };
+
+      const result = await filterProcessableChunks([reuploadedChunk], existingRecords);
+
+      // Debe detectar que el hash ya existe y omitirlo de Gemini sin importar la diferencia de nombres
+      expect(result.skippedChunks.length).toBe(1);
+      expect(result.newChunks.length).toBe(0);
+      expect(result.newRecords.length).toBe(0);
+    });
+
+    it('el procesamiento incremental opera con normalidad mezclando registros existentes y nuevos bloques disociados', async () => {
+      const data1 = Buffer.from('documento_1_procesado').toString('base64');
+      const data2 = Buffer.from('documento_2_nuevo').toString('base64');
+
+      const chunk1: DocumentChunk = {
+        chunkIndex: 0,
+        totalChunks: 2,
+        startPage: 1,
+        endPage: 5,
+        totalPages: 10,
+        label: 'doc1.pdf',
+        sourceFileName: 'doc1.pdf',
+        file: { name: 'doc1.pdf', type: 'application/pdf', data: data1 },
+      };
+      const chunk2: DocumentChunk = {
+        chunkIndex: 1,
+        totalChunks: 2,
+        startPage: 6,
+        endPage: 10,
+        totalPages: 10,
+        label: 'Biopsia_Rodriguez.pdf',
+        sourceFileName: 'Biopsia_Rodriguez.pdf',
+        file: { name: 'Biopsia_Rodriguez.pdf', type: 'application/pdf', data: data2 },
+      };
+
+      const hash1 = await computeChunkHash(chunk1);
+      const hash2 = await computeChunkHash(chunk2);
+
+      const existingRecords: ProcessedChunkRecord[] = [
+        { hash: hash1, sourceFileName: `doc_${hash1.substring(0, 8)}.pdf`, startPage: 1, endPage: 5, totalPages: 10, processedAt: 500 },
+      ];
+
+      const { newChunks, skippedChunks, newRecords } = await filterProcessableChunks([chunk1, chunk2], existingRecords);
+
+      expect(skippedChunks.length).toBe(1);
+      expect(newChunks.length).toBe(1);
+      expect(newRecords.length).toBe(1);
+      expect(newRecords[0].sourceFileName).toBe(`doc_${hash2.substring(0, 8)}.pdf`);
+      expect(newRecords[0].sourceFileName).not.toContain('Rodriguez');
+
+      // Filtrado de bloques exitosos para Firestore
+      const successful = filterSuccessfulChunkRecords({
+        newChunks,
+        newRecords,
+        failedChunkLabels: new Set(),
+        batchProcessesSucceeded: true,
+      });
+
+      expect(successful.length).toBe(1);
+      expect(successful[0].hash).toBe(hash2);
+      expect(successful[0].sourceFileName).toBe(`doc_${hash2.substring(0, 8)}.pdf`);
+
+      // Consolidación final de processedChunks (existentes + exitosos)
+      const consolidated = [...existingRecords, ...successful];
+      expect(consolidated.length).toBe(2);
+      expect(consolidated.map(r => r.hash)).toEqual([hash1, hash2]);
+    });
+  });
 });
 
