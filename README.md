@@ -228,6 +228,9 @@ npm run test
 
 # Modo interactivo en desarrollo
 npm run test:watch
+
+# Pruebas automatizadas de reglas de seguridad en emuladores (requiere Java JDK >= 21)
+npm run test:rules
 ```
 
 ### 7.1. Cobertura actual
@@ -245,7 +248,7 @@ El proyecto cuenta con **13 archivos de prueba** y **166 tests** que validan la 
 - `recist.test.ts`: Cálculo de suma de diámetros, determinación de nadir, cálculo porcentual de cambio y asignación de respuesta según RECIST 1.1 e iRECIST.
 
 ### 7.2. Qué NO cubren los tests actuales
-- No evalúan las reglas de seguridad de Firestore (`firestore.rules`) ni de Storage (`storage.rules`) mediante emuladores automatizados (`@firebase/rules-unit-testing`).
+- Las reglas de seguridad de Firestore (`firestore.rules`) y Storage (`storage.rules`) cuentan con una suite automatizada dedicada sobre emuladores (`tests/rules/`), ejecutable con `npm run test:rules` (requiere Java JDK >= 21) y en CI; no forman parte de `npm test` por defecto para permitir una ejecución rápida sin requerir Java ni emuladores en local.
 - No realizan pruebas de integración de extremo a extremo (E2E) contra la API real de ClinicalTrials.gov v2 ni contra el entorno de Cloud Functions / Gemini en producción.
 - No incluyen pruebas de interfaz de usuario de extremo a extremo en navegadores (como Playwright o Cypress).
 
