@@ -9,6 +9,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, 
   CartesianGrid, Cell, AreaChart, Area
 } from 'recharts';
+import { Patient as BasePatient } from '../types/patient';
 
 interface ClinicalEvent {
   date: string;
@@ -19,7 +20,7 @@ interface ClinicalEvent {
   detail?: string;
 }
 
-interface Patient {
+interface Patient extends Omit<BasePatient, 'timeline' | 'clinicalNotes' | 'imagingStudies'> {
   id: string;
   doctorId?: string;
   hcNumber?: string;

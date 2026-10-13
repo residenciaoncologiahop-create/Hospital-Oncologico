@@ -1,47 +1,8 @@
 import { db, storage } from '../lib/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { ImagingStudy } from '../components/ImagingPanel'; // Asegúrate de importar la interfaz
-import { ProcessedChunkRecord } from '../utils/chunkHasher';
-
-export interface Patient {
-    id?: string;
-    name: string;
-    age: number;
-    diagnosis: string;
-    historyText: string;
-    clinicalNotes?: ClinicalNote[];
-    timeline: any[];
-    chatHistory: any[];
-    lastUpdated: number;
-    fileUrls?: string[];
-    imagingStudies?: ImagingStudy[];
-    clinicalContext?: string;
-    clinicalContextUpdatedAt?: number;
-    processedChunks?: ProcessedChunkRecord[];
-}
-
-// Definición de una Evolución Médica
-export interface ClinicalNote {
-    id: string;
-    date: string;     // Fecha de la nota
-    text: string;     // Contenido
-}
-
-export interface Patient {
-    id?: string;
-    name: string;
-    age: number;
-    diagnosis: string;
-    historyText: string;
-    clinicalNotes?: ClinicalNote[];
-    timeline: any[];
-    chatHistory: any[];
-    lastUpdated: number;
-    fileUrls?: string[];
-    clinicalContext?: string;
-    clinicalContextUpdatedAt?: number;
-}
+import type { Patient, ClinicalNote, NewPatient } from '../types/patient';
+export type { Patient, ClinicalNote, NewPatient };
 
 const PATIENTS_COLLECTION = 'patients';
 
@@ -63,7 +24,7 @@ export const cleanForFirestore = <T,>(obj: T): T => {
 };
 
 // Crear
-export const createPatient = async (patientData: Patient) => {
+export const createPatient = async (patientData: NewPatient | Patient) => {
     return await addDoc(collection(db, PATIENTS_COLLECTION), cleanForFirestore(patientData));
 };
 

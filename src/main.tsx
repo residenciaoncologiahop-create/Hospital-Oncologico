@@ -89,32 +89,7 @@ const logAction = async (action: string, patientId: string | null, doctorName: s
 };
 
 // --- TYPES ---
-interface ChatMessage { role: 'user' | 'model'; text: string; timestamp: number; }
-interface ClinicalEvent { date: string; professional: string; category: string; note: string; isKey: boolean; detail?: string; }
-
-interface Patient {
-    id: string;
-    doctorId: string; 
-    hcNumber: string;
-    ageRange: string;
-    diagnosis: string;
-    historyText: string;
-    lastUpdated: number;
-    chatHistory?: ChatMessage[];
-    timeline?: ClinicalEvent[];
-    labResults?: LabResult[];
-    imagingStudies?: ImagingStudy[];
-    validationCriteria?: ClinicalValidationChecklist;
-    processedChunks?: ProcessedChunkRecord[];
-    clinicalContext?: string;
-    clinicalContextUpdatedAt?: number | null;
-    // ── Perfil oncológico estructurado (auto-calculado, confirmable manualmente) ──
-    stage?: 'Estadio I' | 'Estadio II' | 'Estadio III' | 'Estadio IV' | 'No consignado';
-    stageConfidence?: 'confirmed' | 'auto' | 'pending';
-    organOrSite?: string;
-    isMetastatic?: boolean;
-    biomarkersStructured?: Array<{ name: string; status: string; rawText: string }>;
-}
+import { Patient, ChatMessage, ClinicalEvent } from './types/patient';
 
 interface FileData { name: string; type: string; data: string; }
 
