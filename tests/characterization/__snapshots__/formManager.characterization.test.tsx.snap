@@ -1,0 +1,3380 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 1. Resumen Clínico Institucional (Prompts y Coordenadas PDF) > contexto ADMISIÓN: genera el prompt exacto y dibuja las coordenadas del PDF de resumen > resumen_clinico_admision_pdf_drawLine 1`] = `
+[
+  {
+    "end": {
+      "x": 541.28,
+      "y": 737.89,
+    },
+    "page": 1,
+    "start": {
+      "x": 54,
+      "y": 737.89,
+    },
+    "thickness": 0.8,
+  },
+  {
+    "end": {
+      "x": 541.28,
+      "y": 711.89,
+    },
+    "page": 1,
+    "start": {
+      "x": 54,
+      "y": 711.89,
+    },
+    "thickness": 0.8,
+  },
+  {
+    "end": {
+      "x": 541.28,
+      "y": 583.89,
+    },
+    "page": 1,
+    "start": {
+      "x": 54,
+      "y": 583.89,
+    },
+    "thickness": 0.8,
+  },
+  {
+    "end": {
+      "x": 541.28,
+      "y": 429.89,
+    },
+    "page": 1,
+    "start": {
+      "x": 54,
+      "y": 429.89,
+    },
+    "thickness": 0.8,
+  },
+]
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 1. Resumen Clínico Institucional (Prompts y Coordenadas PDF) > contexto ADMISIÓN: genera el prompt exacto y dibuja las coordenadas del PDF de resumen > resumen_clinico_admision_pdf_drawText 1`] = `
+[
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 13,
+    "text": "HOSPITAL ONCOLÓGICO PROVINCIAL",
+    "x": 176.97,
+    "y": 805.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 13,
+    "text": "RESUMEN DE HISTORIA CLÍNICA",
+    "x": 193.54,
+    "y": 781.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "ADMISIÓN BANCO DE DROGAS",
+    "x": 217.69,
+    "y": 765.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Córdoba Capital, 15/10/2026",
+    "x": 419.82,
+    "y": 747.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "IDENTIFICACION",
+    "x": 54,
+    "y": 715.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Nombre: ",
+    "x": 54,
+    "y": 695.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "PRUEBA, PACIENTE FICTICIO",
+    "x": 92.59,
+    "y": 695.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Fecha de nacimiento: ",
+    "x": 54,
+    "y": 681.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "01/01/1970",
+    "x": 146.7,
+    "y": 681.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Edad: ",
+    "x": 54,
+    "y": 667.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "56 años",
+    "x": 80.99,
+    "y": 667.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Sexo: ",
+    "x": 54,
+    "y": 653.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Masculino",
+    "x": 80.17,
+    "y": 653.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "DNI: ",
+    "x": 54,
+    "y": 639.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "11.111.111",
+    "x": 75.17,
+    "y": 639.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Historia Clínica: ",
+    "x": 54,
+    "y": 625.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "HC-000000",
+    "x": 122.82,
+    "y": 625.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "RESUMEN CLINICO",
+    "x": 54,
+    "y": 587.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Paciente ficticio de prueba masculino de 56 años de edad con diagnóstico patológico de fecha 01/02/2024",
+    "x": 54,
+    "y": 567.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "correspondiente a adenocarcinoma de prueba en colon sigmoides moderadamente diferenciado. Los estudios",
+    "x": 54,
+    "y": 554.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "moleculares simulados constataron mutación en KRAS con estabilidad microsatelital (MSS). En fecha 10/03/2024",
+    "x": 54,
+    "y": 540.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "se realizó resección oncológica quirúrgica programada.",
+    "x": 54,
+    "y": 527.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Completó posteriormente tratamiento sistémico adyuvante protocolizado. En estudio tomográfico de",
+    "x": 54,
+    "y": 510.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "reestadificación de fecha 01/08/2024 se evidenció progresión de enfermedad a nivel hepático con lesión secundaria",
+    "x": 54,
+    "y": 497.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "focal de 30 mm. Al momento actual conserva adecuado estado general con ECOG 1 y parámetros analíticos de",
+    "x": 54,
+    "y": 483.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "función renal y hepática en rangos de seguridad terapéutica.",
+    "x": 54,
+    "y": 470.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "JUSTIFICACION",
+    "x": 54,
+    "y": 433.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Se fundamenta y solicita la provisión de Bevacizumab asociado a quimioterapia en régimen de primera línea",
+    "x": 54,
+    "y": 413.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "avanzada, conforme a las guías de práctica clínica oncológica ante progresión a distancia con biomarcadores",
+    "x": 54,
+    "y": 400.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "compatibles.",
+    "x": 54,
+    "y": 386.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Dr/a. Dr. Médico de Prueba Ficticio",
+    "x": 321.28,
+    "y": 65,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8.5,
+    "text": "M.P. MP-00000/0",
+    "x": 321.28,
+    "y": 53,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8.5,
+    "text": "Oncología Clínica",
+    "x": 321.28,
+    "y": 41,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8.5,
+    "text": "Servicio de Oncología Clínica",
+    "x": 321.28,
+    "y": 29,
+  },
+  {
+    "color": "{"type":"RGB","red":0.3,"green":0.3,"blue":0.3}",
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Hospital Oncológico Provincial - Córdoba",
+    "x": 321.28,
+    "y": 17,
+  },
+]
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 1. Resumen Clínico Institucional (Prompts y Coordenadas PDF) > contexto ADMISIÓN: genera el prompt exacto y dibuja las coordenadas del PDF de resumen > resumen_clinico_admision_prompt 1`] = `
+"
+        Actúa como un Oncólogo Clínico del Hospital Oncológico Provincial de Córdoba.
+        Hoy es 15/10/2026.
+        Redacta el texto para el documento institucional "RESUMEN DE HISTORIA CLÍNICA" correspondiente a: ADMISIÓN BANCO DE DROGAS.
+        
+        OBJETIVO ESPECÍFICO DEL TRÁMITE: ADMISIÓN AL BANCO DE DROGAS DE BEVACIZUMAB.
+- En el resumen clínico: sintetizar la historia oncológica, estadio actual, cirugías o líneas previas relevantes y situación clínica actual.
+- En la justificación final: fundamentar brevemente la indicación inicial de Bevacizumab acorde a la histología, estadio y línea terapéutica documentada, sin reiterar la historia previa.
+        
+        FÁRMACO SOLICITADO POR EL MÉDICO: Bevacizumab
+
+        DIRECTIVAS DE REDACCIÓN Y ESTILO:
+        - Redactar un informe médico continuo, fluido, narrativo y conciso. La extensión orientativa total debe ser de 2 a 4 párrafos en prosa (ajustada a la complejidad del caso).
+        - ❌ PROHIBIDO usar listas con viñetas, guiones de lista o enumeraciones numéricas (NO escribir "1.", "2.", "3.", etc.). Redactar siempre en prosa médica continua.
+        - ❌ PROHIBIDO incluir subtítulos intermedios o fragmentar el texto en múltiples apartados. Usar ÚNICAMENTE los dos encabezados principales: RESUMEN CLINICO y JUSTIFICACION.
+        - ❌ PROHIBIDO incluir datos de filiación o identificación del paciente al inicio ni firmas al final (el sistema los inserta automáticamente).
+        - ❌ PROHIBIDO repetir en la JUSTIFICACION la historia clínica, antecedentes, cirugías, estadio o tratamientos que ya quedaron claros en el RESUMEN CLINICO.
+        - Mantener lenguaje médico profesional, preciso y natural, como un informe redactado por el oncólogo tratante.
+        - Conservar fechas relevantes (en formato DD/MM/AAAA), esquemas previos, dosis y datos documentados necesarios para la evaluación y auditoría administrativa del medicamento.
+        - ❌ NO inventar estadio, biomarcadores, respuesta terapéutica, progresión, líneas previas ni datos que no consten en la historia clínica. Si un dato no está documentado (ej. ECOG), mantener "no documentado", sin inferencias.
+        - Texto plano limpio: SIN asteriscos (* o **), SIN numerales (#), SIN formato markdown.
+
+        ESTRUCTURA DE RESPUESTA REQUERIDA (UTILIZAR EXCLUSIVAMENTE ESTOS DOS ENCABEZADOS EN MAYÚSCULAS):
+
+        RESUMEN CLINICO
+        Redacta en prosa continua (de 1 a 3 párrafos fluidos, sin listas ni subtítulos):
+        - Primer párrafo (Historia oncológica): diagnóstico anatomopatológico con fecha, localización primaria, estadio (inicial y actual si consta) y biomarcadores relevantes documentados (ej. RE, RP, HER2, mutaciones, etc.).
+        - Segundo y/o tercer párrafo (Evolución y tratamientos): síntesis cronológica de cirugías, tratamientos sistémicos y radioterapia (con fechas de inicio/fin, ciclos y motivos de cambio o respuesta clínica/radiológica documentada), finalizando con la evaluación reciente (estudios de imágenes clave con fechas, situación clínica actual y ECOG documentado).
+
+        JUSTIFICACION
+        Redacta un único párrafo breve y específico (de 3 a 6 líneas):
+        - Explica de forma concisa y fundamentada la indicación o continuidad de Bevacizumab en el contexto clínico actual del paciente.
+        - No reiteres diagnóstico, estadio, biomarcadores ni historia clínica previa ya explicada en el Resumen Clínico. Enfócate exclusivamente en fundamentar la necesidad terapéutica de la solicitud.
+
+        CONTEXTO CLÍNICO: Paciente ficticio de prueba de 56 años de edad.
+Diagnóstico simulado en fecha 01/02/2024: Neoplasia maligna de prueba en colon sigmoides.
+Biopsia patológica simulada (01/02/2024): Adenocarcinoma invasor ficticio G2. Marcadores: KRAS mutado (G12D simulado), NRAS no mutado, BRAF no mutado, MSS, HER2 negativo.
+Cirugía simulada: Resección oncológica de prueba el 10/03/2024 (ganglios resecados: 12, comprometidos: 2).
+Tomografía de control simulada (01/08/2024): Lesión secundaria hepática única de 30 mm.
+Laboratorio de prueba (01/10/2024): Hb 12.0 g/dl, Plaquetas 200000, Creatinina 0.9 mg/dl, CEA 40.0 ng/ml.
+Tratamiento previo de prueba: Esquema adyuvante ficticio recibido entre 04/2024 y 07/2024.
+Plan médico simulado: Solicitud de inicio de FOLFIRI + Bevacizumab como primera línea para enfermedad avanzada.
+
+--- LÍNEA DE TIEMPO / HISTORIAL DE EVENTOS ---
+• [01/02/2024] Biopsia [CLAVE]: Biopsia colon G2 simulada KRAS mutado
+• [10/03/2024] Cirugía [CLAVE]: Colectomía de prueba 2/12 ganglios
+• [01/08/2024] Imágenes [CLAVE]: TC control de prueba con progresión hepática
+        "
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 1. Resumen Clínico Institucional (Prompts y Coordenadas PDF) > contexto RENOVACIÓN: genera el prompt exacto y dibuja las coordenadas del PDF de resumen > resumen_clinico_renovacion_pdf_drawText 1`] = `
+[
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 13,
+    "text": "HOSPITAL ONCOLÓGICO PROVINCIAL",
+    "x": 176.97,
+    "y": 805.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 13,
+    "text": "RESUMEN DE HISTORIA CLÍNICA",
+    "x": 193.54,
+    "y": 781.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "RENOVACIÓN - BANCO DE DROGAS",
+    "x": 206.04,
+    "y": 765.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Córdoba Capital, 15/10/2026",
+    "x": 419.82,
+    "y": 747.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "IDENTIFICACION",
+    "x": 54,
+    "y": 715.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Nombre: ",
+    "x": 54,
+    "y": 695.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "PRUEBA, PACIENTE FICTICIO",
+    "x": 92.59,
+    "y": 695.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Fecha de nacimiento: ",
+    "x": 54,
+    "y": 681.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "01/01/1970",
+    "x": 146.7,
+    "y": 681.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Edad: ",
+    "x": 54,
+    "y": 667.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "56 años",
+    "x": 80.99,
+    "y": 667.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Sexo: ",
+    "x": 54,
+    "y": 653.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Masculino",
+    "x": 80.17,
+    "y": 653.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "DNI: ",
+    "x": 54,
+    "y": 639.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "11.111.111",
+    "x": 75.17,
+    "y": 639.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Historia Clínica: ",
+    "x": 54,
+    "y": 625.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "HC-000000",
+    "x": 122.82,
+    "y": 625.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "RESUMEN CLINICO",
+    "x": 54,
+    "y": 587.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Paciente ficticio de prueba masculino de 56 años de edad con diagnóstico patológico de fecha 01/02/2024",
+    "x": 54,
+    "y": 567.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "correspondiente a adenocarcinoma de prueba en colon sigmoides moderadamente diferenciado. Los estudios",
+    "x": 54,
+    "y": 554.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "moleculares simulados constataron mutación en KRAS con estabilidad microsatelital (MSS). En fecha 10/03/2024",
+    "x": 54,
+    "y": 540.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "se realizó resección oncológica quirúrgica programada.",
+    "x": 54,
+    "y": 527.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Completó posteriormente tratamiento sistémico adyuvante protocolizado. En estudio tomográfico de",
+    "x": 54,
+    "y": 510.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "reestadificación de fecha 01/08/2024 se evidenció progresión de enfermedad a nivel hepático con lesión secundaria",
+    "x": 54,
+    "y": 497.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "focal de 30 mm. Al momento actual conserva adecuado estado general con ECOG 1 y parámetros analíticos de",
+    "x": 54,
+    "y": 483.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "función renal y hepática en rangos de seguridad terapéutica.",
+    "x": 54,
+    "y": 470.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "JUSTIFICACION",
+    "x": 54,
+    "y": 433.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Se fundamenta y solicita la provisión de Bevacizumab asociado a quimioterapia en régimen de primera línea",
+    "x": 54,
+    "y": 413.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "avanzada, conforme a las guías de práctica clínica oncológica ante progresión a distancia con biomarcadores",
+    "x": 54,
+    "y": 400.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "compatibles.",
+    "x": 54,
+    "y": 386.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Dr/a. Dr. Médico de Prueba Ficticio",
+    "x": 321.28,
+    "y": 65,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8.5,
+    "text": "M.P. MP-00000/0",
+    "x": 321.28,
+    "y": 53,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8.5,
+    "text": "Oncología Clínica",
+    "x": 321.28,
+    "y": 41,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8.5,
+    "text": "Servicio de Oncología Clínica",
+    "x": 321.28,
+    "y": 29,
+  },
+  {
+    "color": "{"type":"RGB","red":0.3,"green":0.3,"blue":0.3}",
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Hospital Oncológico Provincial - Córdoba",
+    "x": 321.28,
+    "y": 17,
+  },
+]
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 1. Resumen Clínico Institucional (Prompts y Coordenadas PDF) > contexto RENOVACIÓN: genera el prompt exacto y dibuja las coordenadas del PDF de resumen > resumen_clinico_renovacion_prompt 1`] = `
+"
+        Actúa como un Oncólogo Clínico del Hospital Oncológico Provincial de Córdoba.
+        Hoy es 15/10/2026.
+        Redacta el texto para el documento institucional "RESUMEN DE HISTORIA CLÍNICA" correspondiente a: RENOVACIÓN - BANCO DE DROGAS.
+        
+        OBJETIVO ESPECÍFICO DEL TRÁMITE: RENOVACIÓN DE BEVACIZUMAB (BANCO DE DROGAS).
+- En el resumen clínico: describir la evolución cronológica bajo el tratamiento con Bevacizumab, ciclos administrados y la última evaluación clínica o imagenológica disponible, resumiendo fielmente la respuesta, estabilidad, progresión, toxicidad o cualquier situación documentada, sin omitir datos ni asumir respuestas o tolerancias no constatadas.
+- En la justificación final: fundamentar brevemente la continuidad solicitada conforme a la indicación terapéutica y la evolución clínica efectivamente registrada. Si existe progresión, toxicidad, respuesta no evaluable o información insuficiente, reflejarlo con precisión y sin inventar motivos para continuar.
+        
+        FÁRMACO SOLICITADO POR EL MÉDICO: Bevacizumab
+
+        DIRECTIVAS DE REDACCIÓN Y ESTILO:
+        - Redactar un informe médico continuo, fluido, narrativo y conciso. La extensión orientativa total debe ser de 2 a 4 párrafos en prosa (ajustada a la complejidad del caso).
+        - ❌ PROHIBIDO usar listas con viñetas, guiones de lista o enumeraciones numéricas (NO escribir "1.", "2.", "3.", etc.). Redactar siempre en prosa médica continua.
+        - ❌ PROHIBIDO incluir subtítulos intermedios o fragmentar el texto en múltiples apartados. Usar ÚNICAMENTE los dos encabezados principales: RESUMEN CLINICO y JUSTIFICACION.
+        - ❌ PROHIBIDO incluir datos de filiación o identificación del paciente al inicio ni firmas al final (el sistema los inserta automáticamente).
+        - ❌ PROHIBIDO repetir en la JUSTIFICACION la historia clínica, antecedentes, cirugías, estadio o tratamientos que ya quedaron claros en el RESUMEN CLINICO.
+        - Mantener lenguaje médico profesional, preciso y natural, como un informe redactado por el oncólogo tratante.
+        - Conservar fechas relevantes (en formato DD/MM/AAAA), esquemas previos, dosis y datos documentados necesarios para la evaluación y auditoría administrativa del medicamento.
+        - ❌ NO inventar estadio, biomarcadores, respuesta terapéutica, progresión, líneas previas ni datos que no consten en la historia clínica. Si un dato no está documentado (ej. ECOG), mantener "no documentado", sin inferencias.
+        - Texto plano limpio: SIN asteriscos (* o **), SIN numerales (#), SIN formato markdown.
+
+        ESTRUCTURA DE RESPUESTA REQUERIDA (UTILIZAR EXCLUSIVAMENTE ESTOS DOS ENCABEZADOS EN MAYÚSCULAS):
+
+        RESUMEN CLINICO
+        Redacta en prosa continua (de 1 a 3 párrafos fluidos, sin listas ni subtítulos):
+        - Primer párrafo (Historia oncológica): diagnóstico anatomopatológico con fecha, localización primaria, estadio (inicial y actual si consta) y biomarcadores relevantes documentados (ej. RE, RP, HER2, mutaciones, etc.).
+        - Segundo y/o tercer párrafo (Evolución y tratamientos): síntesis cronológica de cirugías, tratamientos sistémicos y radioterapia (con fechas de inicio/fin, ciclos y motivos de cambio o respuesta clínica/radiológica documentada), finalizando con la evaluación reciente (estudios de imágenes clave con fechas, situación clínica actual y ECOG documentado).
+
+        JUSTIFICACION
+        Redacta un único párrafo breve y específico (de 3 a 6 líneas):
+        - Explica de forma concisa y fundamentada la indicación o continuidad de Bevacizumab en el contexto clínico actual del paciente.
+        - No reiteres diagnóstico, estadio, biomarcadores ni historia clínica previa ya explicada en el Resumen Clínico. Enfócate exclusivamente en fundamentar la necesidad terapéutica de la solicitud.
+
+        CONTEXTO CLÍNICO: Paciente ficticio de prueba de 56 años de edad.
+Diagnóstico simulado en fecha 01/02/2024: Neoplasia maligna de prueba en colon sigmoides.
+Biopsia patológica simulada (01/02/2024): Adenocarcinoma invasor ficticio G2. Marcadores: KRAS mutado (G12D simulado), NRAS no mutado, BRAF no mutado, MSS, HER2 negativo.
+Cirugía simulada: Resección oncológica de prueba el 10/03/2024 (ganglios resecados: 12, comprometidos: 2).
+Tomografía de control simulada (01/08/2024): Lesión secundaria hepática única de 30 mm.
+Laboratorio de prueba (01/10/2024): Hb 12.0 g/dl, Plaquetas 200000, Creatinina 0.9 mg/dl, CEA 40.0 ng/ml.
+Tratamiento previo de prueba: Esquema adyuvante ficticio recibido entre 04/2024 y 07/2024.
+Plan médico simulado: Solicitud de inicio de FOLFIRI + Bevacizumab como primera línea para enfermedad avanzada.
+
+--- LÍNEA DE TIEMPO / HISTORIAL DE EVENTOS ---
+• [01/02/2024] Biopsia [CLAVE]: Biopsia colon G2 simulada KRAS mutado
+• [10/03/2024] Cirugía [CLAVE]: Colectomía de prueba 2/12 ganglios
+• [01/08/2024] Imágenes [CLAVE]: TC control de prueba con progresión hepática
+        "
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 1. Resumen Clínico Institucional (Prompts y Coordenadas PDF) > contexto SOLICITUD / DINADIC: genera el prompt exacto y dibuja las coordenadas del PDF de resumen > resumen_clinico_solicitud_dinadic_pdf_drawText 1`] = `
+[
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 13,
+    "text": "HOSPITAL ONCOLÓGICO PROVINCIAL",
+    "x": 176.97,
+    "y": 805.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 13,
+    "text": "RESUMEN DE HISTORIA CLÍNICA",
+    "x": 193.54,
+    "y": 781.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "DINADIC - Dir. de Asistencia Directa por Situaciones Especiales",
+    "x": 138.86,
+    "y": 765.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Córdoba Capital, 15/10/2026",
+    "x": 419.82,
+    "y": 747.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "IDENTIFICACION",
+    "x": 54,
+    "y": 715.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Nombre: ",
+    "x": 54,
+    "y": 695.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "PRUEBA, PACIENTE FICTICIO",
+    "x": 92.59,
+    "y": 695.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Fecha de nacimiento: ",
+    "x": 54,
+    "y": 681.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "01/01/1970",
+    "x": 146.7,
+    "y": 681.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Edad: ",
+    "x": 54,
+    "y": 667.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "56 años",
+    "x": 80.99,
+    "y": 667.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Sexo: ",
+    "x": 54,
+    "y": 653.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Masculino",
+    "x": 80.17,
+    "y": 653.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "DNI: ",
+    "x": 54,
+    "y": 639.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "11.111.111",
+    "x": 75.17,
+    "y": 639.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Historia Clínica: ",
+    "x": 54,
+    "y": 625.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "HC-000000",
+    "x": 122.82,
+    "y": 625.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "RESUMEN CLINICO",
+    "x": 54,
+    "y": 587.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Paciente ficticio de prueba masculino de 56 años de edad con diagnóstico patológico de fecha 01/02/2024",
+    "x": 54,
+    "y": 567.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "correspondiente a adenocarcinoma de prueba en colon sigmoides moderadamente diferenciado. Los estudios",
+    "x": 54,
+    "y": 554.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "moleculares simulados constataron mutación en KRAS con estabilidad microsatelital (MSS). En fecha 10/03/2024",
+    "x": 54,
+    "y": 540.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "se realizó resección oncológica quirúrgica programada.",
+    "x": 54,
+    "y": 527.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Completó posteriormente tratamiento sistémico adyuvante protocolizado. En estudio tomográfico de",
+    "x": 54,
+    "y": 510.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "reestadificación de fecha 01/08/2024 se evidenció progresión de enfermedad a nivel hepático con lesión secundaria",
+    "x": 54,
+    "y": 497.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "focal de 30 mm. Al momento actual conserva adecuado estado general con ECOG 1 y parámetros analíticos de",
+    "x": 54,
+    "y": 483.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "función renal y hepática en rangos de seguridad terapéutica.",
+    "x": 54,
+    "y": 470.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 10.5,
+    "text": "JUSTIFICACION",
+    "x": 54,
+    "y": 433.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Se fundamenta y solicita la provisión de Bevacizumab asociado a quimioterapia en régimen de primera línea",
+    "x": 54,
+    "y": 413.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "avanzada, conforme a las guías de práctica clínica oncológica ante progresión a distancia con biomarcadores",
+    "x": 54,
+    "y": 400.39,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "compatibles.",
+    "x": 54,
+    "y": 386.89,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 9.5,
+    "text": "Dr/a. Dr. Médico de Prueba Ficticio",
+    "x": 321.28,
+    "y": 65,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8.5,
+    "text": "M.P. MP-00000/0",
+    "x": 321.28,
+    "y": 53,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8.5,
+    "text": "Oncología Clínica",
+    "x": 321.28,
+    "y": 41,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8.5,
+    "text": "Servicio de Oncología Clínica",
+    "x": 321.28,
+    "y": 29,
+  },
+  {
+    "color": "{"type":"RGB","red":0.3,"green":0.3,"blue":0.3}",
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Hospital Oncológico Provincial - Córdoba",
+    "x": 321.28,
+    "y": 17,
+  },
+]
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 1. Resumen Clínico Institucional (Prompts y Coordenadas PDF) > contexto SOLICITUD / DINADIC: genera el prompt exacto y dibuja las coordenadas del PDF de resumen > resumen_clinico_solicitud_dinadic_prompt 1`] = `
+"
+        Actúa como un Oncólogo Clínico del Hospital Oncológico Provincial de Córdoba.
+        Hoy es 15/10/2026.
+        Redacta el texto para el documento institucional "RESUMEN DE HISTORIA CLÍNICA" correspondiente a: DINADIC - Dir. de Asistencia Directa por Situaciones Especiales.
+        
+        OBJETIVO ESPECÍFICO DEL TRÁMITE: SOLICITUD ANTE DINADIC (DADSE) DE BEVACIZUMAB.
+- En el resumen clínico: sintetizar la historia oncológica, estadio actual, líneas terapéuticas previas con sus respuestas y la situación clínica actual.
+- En la justificación final: fundamentar brevemente la indicación de inicio o cambio a Bevacizumab acorde al estadio, histología/biomarcadores y línea documentada, sin reiterar la historia previa.
+        
+        FÁRMACO SOLICITADO POR EL MÉDICO: Bevacizumab
+
+        DIRECTIVAS DE REDACCIÓN Y ESTILO:
+        - Redactar un informe médico continuo, fluido, narrativo y conciso. La extensión orientativa total debe ser de 2 a 4 párrafos en prosa (ajustada a la complejidad del caso).
+        - ❌ PROHIBIDO usar listas con viñetas, guiones de lista o enumeraciones numéricas (NO escribir "1.", "2.", "3.", etc.). Redactar siempre en prosa médica continua.
+        - ❌ PROHIBIDO incluir subtítulos intermedios o fragmentar el texto en múltiples apartados. Usar ÚNICAMENTE los dos encabezados principales: RESUMEN CLINICO y JUSTIFICACION.
+        - ❌ PROHIBIDO incluir datos de filiación o identificación del paciente al inicio ni firmas al final (el sistema los inserta automáticamente).
+        - ❌ PROHIBIDO repetir en la JUSTIFICACION la historia clínica, antecedentes, cirugías, estadio o tratamientos que ya quedaron claros en el RESUMEN CLINICO.
+        - Mantener lenguaje médico profesional, preciso y natural, como un informe redactado por el oncólogo tratante.
+        - Conservar fechas relevantes (en formato DD/MM/AAAA), esquemas previos, dosis y datos documentados necesarios para la evaluación y auditoría administrativa del medicamento.
+        - ❌ NO inventar estadio, biomarcadores, respuesta terapéutica, progresión, líneas previas ni datos que no consten en la historia clínica. Si un dato no está documentado (ej. ECOG), mantener "no documentado", sin inferencias.
+        - Texto plano limpio: SIN asteriscos (* o **), SIN numerales (#), SIN formato markdown.
+
+        ESTRUCTURA DE RESPUESTA REQUERIDA (UTILIZAR EXCLUSIVAMENTE ESTOS DOS ENCABEZADOS EN MAYÚSCULAS):
+
+        RESUMEN CLINICO
+        Redacta en prosa continua (de 1 a 3 párrafos fluidos, sin listas ni subtítulos):
+        - Primer párrafo (Historia oncológica): diagnóstico anatomopatológico con fecha, localización primaria, estadio (inicial y actual si consta) y biomarcadores relevantes documentados (ej. RE, RP, HER2, mutaciones, etc.).
+        - Segundo y/o tercer párrafo (Evolución y tratamientos): síntesis cronológica de cirugías, tratamientos sistémicos y radioterapia (con fechas de inicio/fin, ciclos y motivos de cambio o respuesta clínica/radiológica documentada), finalizando con la evaluación reciente (estudios de imágenes clave con fechas, situación clínica actual y ECOG documentado).
+
+        JUSTIFICACION
+        Redacta un único párrafo breve y específico (de 3 a 6 líneas):
+        - Explica de forma concisa y fundamentada la indicación o continuidad de Bevacizumab en el contexto clínico actual del paciente.
+        - No reiteres diagnóstico, estadio, biomarcadores ni historia clínica previa ya explicada en el Resumen Clínico. Enfócate exclusivamente en fundamentar la necesidad terapéutica de la solicitud.
+
+        CONTEXTO CLÍNICO: Paciente ficticio de prueba de 56 años de edad.
+Diagnóstico simulado en fecha 01/02/2024: Neoplasia maligna de prueba en colon sigmoides.
+Biopsia patológica simulada (01/02/2024): Adenocarcinoma invasor ficticio G2. Marcadores: KRAS mutado (G12D simulado), NRAS no mutado, BRAF no mutado, MSS, HER2 negativo.
+Cirugía simulada: Resección oncológica de prueba el 10/03/2024 (ganglios resecados: 12, comprometidos: 2).
+Tomografía de control simulada (01/08/2024): Lesión secundaria hepática única de 30 mm.
+Laboratorio de prueba (01/10/2024): Hb 12.0 g/dl, Plaquetas 200000, Creatinina 0.9 mg/dl, CEA 40.0 ng/ml.
+Tratamiento previo de prueba: Esquema adyuvante ficticio recibido entre 04/2024 y 07/2024.
+Plan médico simulado: Solicitud de inicio de FOLFIRI + Bevacizumab como primera línea para enfermedad avanzada.
+
+--- LÍNEA DE TIEMPO / HISTORIAL DE EVENTOS ---
+• [01/02/2024] Biopsia [CLAVE]: Biopsia colon G2 simulada KRAS mutado
+• [10/03/2024] Cirugía [CLAVE]: Colectomía de prueba 2/12 ganglios
+• [01/08/2024] Imágenes [CLAVE]: TC control de prueba con progresión hepática
+        "
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 2. PAMI Oncológico (extractPamiData, resolveDrugDetails y AcroForm) > genera ambos prompts y rellena con exactitud los campos AcroForm de pami.pdf > pami_extract_prompt 1`] = `
+"
+        Actúa como un MÉDICO ONCÓLOGO EXPERTO. Hoy es 15/10/2026.
+        OBJETIVO: Extraer y deducir de forma experta todos los datos requeridos para completar el formulario PAMI Oncológico oficial de provisión de medicamentos.
+        IDIOMA: Todo en español.
+        
+        REGLAS DE EXTRACCIÓN Y DEDUCCIÓN CLÍNICA:
+        1. fecha_diagnostico_inicial: DEDUCE OBLIGATORIAMENTE la fecha de diagnóstico analizando la fecha del primer estudio patológico, biopsia o consulta inicial en los eventos de la Línea de Tiempo o Historia Clínica (Formato DD/MM/AAAA).
+        2. histopatologico: Resumen MUY CONCISO Y SINTÉTICO de la anatomía patológica e inmunohistoquímica (tipo tumoral, grado, RE, RP, HER2, Ki67, mutaciones si aplican). MÁXIMO 180-200 caracteres. ❌ NO explayarse en párrafos extensos.
+        3. antecedentes_qx: EXCLUSIVAMENTE procedimientos QUIRÚRGICOS con fecha aproximada (ej: "Mastectomía radical mod. (02/2024)", "Nefrectomía (05/2023)"). ❌ NUNCA colocar tratamientos sistémicos (quimioterapia o drogas) en antecedentes quirúrgicos.
+        4. antecedentes_radio: Resumen CONCISO usando abreviaturas médicas estándar (RT=radioterapia, QRT=quimiorradioterapia, BT=braquiterapia, IMRT, SBRT). Incluir dosis y fecha si están disponibles. Máximo 120 caracteres. Ej: "RT adyuvante 50 Gy + boost (09-10/2023)".
+        5. fecha_nacimiento (paciente_fnac): Buscar "Fecha nac.:", "Fecha de nacimiento:", "F. Nac" o deducir si está disponible. Formato DD/MM/AAAA.
+        6. estadio_inicial: Estadio FIGO o TNM al momento del diagnóstico inicial (ej: "FIGO IVB", "T2N1M0 Estadio IIB", "miT3b N1 M0"). NO el actual.
+        7. estadio_actual: Estado de la enfermedad actual (ej: "Enfermedad localmente avanzada (miT3b N1 M0)", "Progresión", "Respuesta parcial", "Remisión completa").
+        8. linea_tratamiento: Línea de tratamiento actual (ej: "1ra línea", "2da línea", "Adyuvancia", "Mantenimiento").
+        9. laboratorio_formateado: SOLO parámetros oncológicamente relevantes o positivos (hemograma, función renal/hepática, marcadores tumorales como PSA, CEA, CA125). Formato conciso: "Hb 12g/dl, Cr 0.8, PSA 2.27 ng/ml". Máximo 110 caracteres.
+        10. INFORME CLÍNICO ACTUAL Y JUSTIFICACIÓN ONCOLÓGICA DETALLADA (informe_clinico_detallado):
+            - Redactar un informe clínico oncológico EXHAUSTIVO, PRECISO Y CRONOLÓGICO estructurado en párrafos claros que detalle todos los hitos diagnósticos, imagenológicos y terapéuticos del paciente para fundamentar de manera irrefutable la indicación del esquema de tratamiento oncológico.
+            - ESTRUCTURA Y HITOS OBLIGATORIOS:
+              * Párrafo 1 (Diagnóstico inicial, histología y presentación): Edad del paciente, diagnóstico oncológico exacto con histopatología completa (tipo histológico, grado, Gleason, biomarcadores RE/RP/HER2/Ki67/BRCA/mutaciones), fecha exacta de biopsia y forma de presentación/marcadores iniciales con fechas.
+              * Párrafo 2 (Evolución por imágenes y estadificación cronológica): Detallar cronológicamente los estudios complementarios con fechas y hallazgos clave (RMN, Centellograma, TAC, PET/CT, PET-PSMA, etc.), valores cuantitativos relevantes (SUV máx, medidas en mm/cm), estadificación TNM o FIGO inicial y reestadificación si hubo cambios de estadio o descarte/confirmación de secundarismo.
+              * Párrafo 3 (Estrategia terapéutica y justificación del esquema): Objetivo terapéutico (intención curativa, control sistémico avanzado, adyuvancia, rescate), tratamientos previos realizados o suspendidos con sus motivos, y justificación oncológica detallada del esquema propuesto en el plan médico actual con fechas.
+            - EXTENSIÓN: Entre 850 y 1400 caracteres. Texto corrido en español con saltos de línea entre párrafos, sin asteriscos ni markdown.
+        11. DROGAS / FÁRMACOS RELEVANTES DEL PLAN ACTUAL (droga_1, droga_2, droga_3, droga_4):
+            - Si en la historia clínica figuran drogas indicadas, colocarlas en droga_1, droga_2, droga_3, droga_4.
+        12. motivo_solicitud: Elegir EXACTAMENTE uno: "Inicio", "Renovación", "Cambio de Toxicidad", "Cambio por Progresión".
+        13. tipo_tratamiento: Elegir EXACTAMENTE uno: "Adyuvante", "Neoadyuvante", "Avanzado".
+        14. esquema_tratamiento_solicitado: Nombre del esquema o combinación solicitada si figura en el plan.
+        
+        Devolver ÚNICAMENTE este objeto JSON sin markdown:
+        {
+          "paciente_nombre_real": "",
+          "paciente_fnac": "DD/MM/AAAA",
+          "paciente_celular": "",
+          "diagnostico_cie10": "",
+          "histopatologico": "",
+          "peso": "",
+          "talla": "",
+          "ecog": "",
+          "estadio_inicial": "",
+          "estadio_actual": "",
+          "fecha_diagnostico_inicial": "DD/MM/AAAA",
+          "linea_tratamiento": "",
+          "antecedentes_qx": "",
+          "antecedentes_radio": "",
+          "laboratorio_formateado": "",
+          "informe_clinico_detallado": "",
+          "motivo_solicitud": "Inicio",
+          "tipo_tratamiento": "Avanzado",
+          "ciclos_planeados": "",
+          "frecuencia_dias": "",
+          "esquema_tratamiento_solicitado": "",
+          "droga_1": "",
+          "droga_2": "",
+          "droga_3": "",
+          "droga_4": ""
+        }
+    
+CONTEXTO CLÍNICO:
+Paciente ficticio de prueba de 56 años de edad.
+Diagnóstico simulado en fecha 01/02/2024: Neoplasia maligna de prueba en colon sigmoides.
+Biopsia patológica simulada (01/02/2024): Adenocarcinoma invasor ficticio G2. Marcadores: KRAS mutado (G12D simulado), NRAS no mutado, BRAF no mutado, MSS, HER2 negativo.
+Cirugía simulada: Resección oncológica de prueba el 10/03/2024 (ganglios resecados: 12, comprometidos: 2).
+Tomografía de control simulada (01/08/2024): Lesión secundaria hepática única de 30 mm.
+Laboratorio de prueba (01/10/2024): Hb 12.0 g/dl, Plaquetas 200000, Creatinina 0.9 mg/dl, CEA 40.0 ng/ml.
+Tratamiento previo de prueba: Esquema adyuvante ficticio recibido entre 04/2024 y 07/2024.
+Plan médico simulado: Solicitud de inicio de FOLFIRI + Bevacizumab como primera línea para enfermedad avanzada.
+
+--- LÍNEA DE TIEMPO / HISTORIAL DE EVENTOS ---
+• [01/02/2024] Biopsia [CLAVE]: Biopsia colon G2 simulada KRAS mutado
+• [10/03/2024] Cirugía [CLAVE]: Colectomía de prueba 2/12 ganglios
+• [01/08/2024] Imágenes [CLAVE]: TC control de prueba con progresión hepática"
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 2. PAMI Oncológico (extractPamiData, resolveDrugDetails y AcroForm) > genera ambos prompts y rellena con exactitud los campos AcroForm de pami.pdf > pami_pdf_acroform_records 1`] = `
+[
+  {
+    "field": "Apellido y Nombre",
+    "type": "setText",
+    "value": "PRUEBA, Paciente Ficticio",
+  },
+  {
+    "field": "Apellido y Nombre",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "fill_21",
+    "type": "setText",
+    "value": "01/01/1970",
+  },
+  {
+    "field": "fill_21",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "NUMERO CELULAR",
+    "type": "setText",
+    "value": "000-0000001",
+  },
+  {
+    "field": "NUMERO CELULAR",
+    "type": "setFontSize",
+    "value": 8.5,
+  },
+  {
+    "field": "NUMERO CELULAR 1",
+    "type": "setText",
+    "value": "000-0000001",
+  },
+  {
+    "field": "NUMERO CELULAR 1",
+    "type": "setFontSize",
+    "value": 8.5,
+  },
+  {
+    "field": "Diagnóstico CIE 10",
+    "type": "setText",
+    "value": "Neoplasia Maligna de Colon Ficticia (C18.9)",
+  },
+  {
+    "field": "Diagnóstico CIE 10",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Histopatológico",
+    "type": "setText",
+    "value": "Adenocarcinoma invasor G2 simulado. KRAS mutado. MSS.",
+  },
+  {
+    "field": "Histopatológico",
+    "type": "setFontSize",
+    "value": 9,
+  },
+  {
+    "field": "ECOG",
+    "type": "setText",
+    "value": "1",
+  },
+  {
+    "field": "ECOG",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Estadio actual",
+    "type": "setText",
+    "value": "Estadio IV progresivo simulado",
+  },
+  {
+    "field": "Estadio actual",
+    "type": "setFontSize",
+    "value": 8.5,
+  },
+  {
+    "field": "Fecha diagnostico inicial",
+    "type": "setText",
+    "value": "01/02/2024",
+  },
+  {
+    "field": "Fecha diagnostico inicial",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Fecha de Diagnóstico Inicial Estadio Inicial",
+    "type": "setText",
+    "value": "Estadio IV simulado",
+  },
+  {
+    "field": "Fecha de Diagnóstico Inicial Estadio Inicial",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Línea tratamiento",
+    "type": "setText",
+    "value": "1ra línea avanzada",
+  },
+  {
+    "field": "Línea tratamiento",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Ciclos",
+    "type": "setText",
+    "value": "12",
+  },
+  {
+    "field": "Ciclos",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Ciclos Días",
+    "type": "setText",
+    "value": "Cada 14 días",
+  },
+  {
+    "field": "Ciclos Días",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Antecedentes Quirúrgicos",
+    "type": "setText",
+    "value": "Colectomía oncológica (10/03/2024)",
+  },
+  {
+    "field": "Antecedentes Quirúrgicos",
+    "type": "setFontSize",
+    "value": 9,
+  },
+  {
+    "field": "Antecedentes Terapia Radiante",
+    "type": "setText",
+    "value": "No registra",
+  },
+  {
+    "field": "Antecedentes Terapia Radiante",
+    "type": "setFontSize",
+    "value": 9,
+  },
+  {
+    "field": "Informe clínico actual",
+    "type": "setText",
+    "value": "",
+  },
+  {
+    "field": "Informe Clínico ActualRow1",
+    "type": "setFontSize",
+    "value": 8.5,
+  },
+  {
+    "field": "Informe Clínico ActualRow1",
+    "type": "setText",
+    "value": "Paciente ficticio masculino de 56 años con diagnóstico simulado de adenocarcinoma de colon sigmoides en febrero de 2024. Perfil molecular con KRAS mutado y MSS.
+En marzo de 2024 se efectuó colectomía oncológica. En control tomográfico de agosto de 2024 presentó lesión secundaria hepática única.
+Actualmente se encuentra en ECOG 1 y se indica Bevacizumab asociado a quimioterapia como primera línea para control sistémico avanzado.",
+  },
+  {
+    "field": "Datos positivos Laboratorio",
+    "type": "setText",
+    "value": "Hb 12.0, Cr 0.9, CEA 40.0 ng/ml",
+  },
+  {
+    "field": "Datos positivos Laboratorio",
+    "type": "setFontSize",
+    "value": 8.5,
+  },
+  {
+    "field": "Peso",
+    "type": "setText",
+    "value": "70",
+  },
+  {
+    "field": "Peso",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Talla",
+    "type": "setText",
+    "value": "170",
+  },
+  {
+    "field": "Talla",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Sup Corpora",
+    "type": "setText",
+    "value": "1.82",
+  },
+  {
+    "field": "Sup Corpora",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Esquema de tratamiento solicitado",
+    "type": "setText",
+    "value": "FOLFIRI + Bevacizumab",
+  },
+  {
+    "field": "Esquema de tratamiento solicitado",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Inicio",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Renovación",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Cambio de Toxicidad",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Cambio por Progresión",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Adyuvante",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Neoadyuvante",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Avanzado",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "DrogaGenéricoRow1",
+    "type": "setText",
+    "value": "Bevacizumab",
+  },
+  {
+    "field": "DrogaGenéricoRow1",
+    "type": "setFontSize",
+    "value": 9,
+  },
+  {
+    "field": "PresentaciónRow1",
+    "type": "setText",
+    "value": "Fco amp 400 mg / 16 ml",
+  },
+  {
+    "field": "PresentaciónRow1",
+    "type": "setFontSize",
+    "value": 6.5,
+  },
+  {
+    "field": "DosisRow1",
+    "type": "setText",
+    "value": "5 mg/kg (350 mg) EV",
+  },
+  {
+    "field": "DosisRow1",
+    "type": "setFontSize",
+    "value": 8.5,
+  },
+  {
+    "field": "N CiclosDuración díasRow1",
+    "type": "setText",
+    "value": "Cada 14 días / Hasta prog/tox",
+  },
+  {
+    "field": "N CiclosDuración díasRow1",
+    "type": "setFontSize",
+    "value": 8,
+  },
+  {
+    "field": "DrogaGenéricoRow2",
+    "type": "setText",
+    "value": "Irinotecan",
+  },
+  {
+    "field": "DrogaGenéricoRow2",
+    "type": "setFontSize",
+    "value": 9,
+  },
+  {
+    "field": "PresentaciónRow2",
+    "type": "setText",
+    "value": "Fco amp 100 mg / 5 ml",
+  },
+  {
+    "field": "PresentaciónRow2",
+    "type": "setFontSize",
+    "value": 6.5,
+  },
+  {
+    "field": "DosisRow2",
+    "type": "setText",
+    "value": "180 mg/m² (320 mg) EV",
+  },
+  {
+    "field": "DosisRow2",
+    "type": "setFontSize",
+    "value": 8.5,
+  },
+  {
+    "field": "N CiclosDuración díasRow2",
+    "type": "setText",
+    "value": "Cada 14 días / 12 ciclos",
+  },
+  {
+    "field": "N CiclosDuración díasRow2",
+    "type": "setFontSize",
+    "value": 8.5,
+  },
+  {
+    "field": "Apellido y Nombre_2",
+    "type": "setText",
+    "value": "Dr. Médico de Prueba Ficticio",
+  },
+  {
+    "field": "Apellido y Nombre_2",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Matricula",
+    "type": "setText",
+    "value": "MP-00000/0",
+  },
+  {
+    "field": "Matricula",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Especialidad",
+    "type": "setText",
+    "value": "Oncología Clínica",
+  },
+  {
+    "field": "Especialidad",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Email_2",
+    "type": "setText",
+    "value": "medico.ficticio@hospital-de-prueba.gob.ar",
+  },
+  {
+    "field": "Email_2",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Provincia",
+    "type": "setText",
+    "value": "Córdoba",
+  },
+  {
+    "field": "Provincia",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "CUIL",
+    "type": "setText",
+    "value": "20",
+  },
+  {
+    "field": "CUIL",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "CUIL1",
+    "type": "setText",
+    "value": "11111111",
+  },
+  {
+    "field": "CUIL1",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "CUIL2",
+    "type": "setText",
+    "value": "9",
+  },
+  {
+    "field": "CUIL2",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Celular",
+    "type": "setText",
+    "value": "000",
+  },
+  {
+    "field": "Celular",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Celular1",
+    "type": "setText",
+    "value": "0000000",
+  },
+  {
+    "field": "Celular1",
+    "type": "setFontSize",
+    "value": 10,
+  },
+]
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 2. PAMI Oncológico (extractPamiData, resolveDrugDetails y AcroForm) > genera ambos prompts y rellena con exactitud los campos AcroForm de pami.pdf > pami_resolve_drug_details_prompt 1`] = `
+"
+      Actúa como un MÉDICO ONCÓLOGO EXPERTO.
+      Paciente: Diagnóstico: "Neoplasia Maligna de Colon Ficticia (C18.9)", Peso: "70 kg", Talla: "170 cm".
+      Lista de drogas solicitadas: ["Bevacizumab","Irinotecan"].
+      
+      Para cada droga de la lista, completa sus parámetros para el formulario oficial PAMI:
+      - droga: Nombre genérico oficial (ej: "Leuprolide", "Darolutamida", "Pembrolizumab", "Carboplatino", "Paclitaxel", "Osimertinib", "Docetaxel", "Capecitabina").
+      - presentacion: Presentación farmacéutica habitual en Argentina (ej: "Fco amp 22.5 mg", "Comp 300 mg", "Fco amp 100 mg / 4 ml", "Comp 80 mg", "Fco amp 150 mg / 15 ml", "Fco amp 300 mg / 50 ml").
+      - dosis: Dosis posológica estándar recomendada calculada según peso/BSA si corresponde o dosis habitual de ficha técnica (ej: "22.5 mg IM", "600 mg VO cada 12 hs", "200 mg EV", "AUC 5 (750 mg) EV", "175 mg/m² (295 mg) EV", "80 mg VO diario").
+      - duracion_dias: Frecuencia y duración habitual (ej: "Cada 84 días / Hasta prog/tox", "Continuo / Hasta prog/tox", "Cada 21 días / 6 ciclos", "Cada 28 días / Hasta prog/tox").
+
+      Devolver ÚNICAMENTE un array JSON válido sin formato markdown:
+      [
+        { "droga": "", "presentacion": "", "dosis": "", "duracion_dias": "" }
+      ]
+    "
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 3. Banco de Drogas — ADMISIÓN (extractBancoDrogasData y AcroForm) > genera el prompt de admisión y rellena con exactitud los campos AcroForm de admision.pdf > banco_admision_extract_prompt 1`] = `
+"
+      Actúa como MÉDICO ONCÓLOGO EXPERTO. Hoy es 15/10/2026.
+      Analizá la historia clínica y extraé TODOS los datos posibles para el formulario Banco de Drogas ADMISIÓN.
+      IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown.
+
+      REGLAS DE EXTRACCIÓN Y DEDUCCIÓN CLÍNICA (MUY ESTRICTAS):
+      1. nombre_apellido: Dejar SIEMPRE en blanco ("") para que el médico lo ingrese manualmente en la celda correspondiente. ❌ NUNCA inventar nombres ni extraer frases clínicas (como "derivado por melanoma", "paciente", etc.).
+      2. fecha_diagnostico: Deducir fecha del primer estudio patológico, biopsia o consulta diagnóstica inicial (DD/MM/AAAA).
+      3. cx_primario_si: true SOLAMENTE SI el paciente tuvo una CIRUGÍA/RESECCIÓN QUIRÚRGICA de su tumor primario (ej: Mastectomía, Biopsia escisional, Resección). Si solo tuvo tratamientos farmacológicos sistémicos o no fue operado, DEBE SER false.
+      4. cx_especificar: EXCLUSIVAMENTE el nombre del PROCEDIMIENTO QUIRÚRGICO. ❌ PROHIBIDO TERMINANTEMENTE colocar nombres de fármacos, quimioterapias o tratamientos sistémicos en campos de cirugía.
+      5. cx_metastasis_si: true SOLAMENTE si se realizó metastectomía quirúrgica.
+      6. rt_primario_si, rt_metastasis_si: true si recibió radioterapia.
+      7. tratamientos_sistemicos_si: true si recibió quimioterapia, hormonoterapia, biológicos o inmunoterapia previa.
+      8. drogas_solicitadas: Extraer el fármaco principal y secundarios indicados en el plan actual con dosis, días y total/día si figuran.
+      9. IHQ / RECEPTORES (RE, RP, HER2, KRAS, EGFR, Otros/BRAF):
+         - Completar ÚNICAMENTE si el marcador es POSITIVO o MUTADO (ej: "Positivo", "BRAF V600E mutado (+)").
+         - En marcadores negativos, no evaluados o no aplicables, DEJAR OBLIGATORIAMENTE EN BLANCO ("").
+         - ❌ PROHIBIDO TERMINANTEMENTE escribir "no aplica", "no aplicable", "negativo" o "no evaluado".
+
+      
+      CONTEXTO ADMISIÓN:
+      - anatomia_patologica: Resumen MUY CONCISO Y SINTÉTICO de la patología e IHQ (tipo tumoral, grado, RE, RP, HER2, Ki67). MÁXIMO 180 caracteres.
+      - tnm_t, tnm_n, tnm_m: clasificación TNM si existe
+      
+
+      Devolver este objeto JSON:
+      {
+        "nombre_apellido": "",
+        "dni": "",
+        "fnac": "DD/MM/AAAA",
+        "edad": "",
+        "sexo": "M" o "F",
+        "domicilio": "",
+        "telefono": "",
+        "localidad": "",
+        "provincia": "Córdoba",
+        "pais": "Argentina",
+        "institucion": "Hospital Oncológico Provincial - Córdoba",
+        "profesion": "",
+        "diagnostico": "",
+        "fecha_diagnostico": "DD/MM/AAAA",
+        "cie10": "",
+        "estadio": "",
+        "tnm_t": "", "tnm_n": "", "tnm_m": "",
+        "receptor_RE": "", "receptor_RP": "", "receptor_HER2": "", "receptor_KRAS": "", "receptor_EGER": "", "receptor_otros": "",
+        "anatomia_patologica": "",
+        "peso": "",
+        "talla": "",
+        "ecog": "0",
+        "cx_primario_si": false,
+        "cx_especificar": "",
+        "cx_ganglios_resecados": "",
+        "cx_ganglios_comprometidos": "",
+        "cx_fecha": "",
+        "cx_metastasis_si": false,
+        "cx_metastasis_especificar": "",
+        "cx_metastasis_fecha": "",
+        "rt_primario_si": false,
+        "rt_metastasis_si": false,
+        "rt_localizacion": "",
+        "tratamientos_sistemicos_si": false,
+        "hormonoterapia_tipo": "",
+        "hormonoterapia_droga": "",
+        "quimioterapia_tipo": "",
+        "quimioterapia_droga": "",
+        "terapia_blanco_droga": "",
+        "terapia_blanco_fecha": "",
+        "inmunoterapia_droga": "",
+        "inmunoterapia_fecha": "",
+        "tipo_tratamiento": "avanzado",
+        "linea": "1",
+        "intervalo_ciclo": "21",
+        "ciclos_programados": "6",
+        "droga_1": "", "dosis_1": "", "dias_1": "", "total_dia_1": "",
+        "droga_2": "", "dosis_2": "", "dias_2": "", "total_dia_2": "",
+        "droga_3": "", "dosis_3": "", "dias_3": "", "total_dia_3": "",
+        
+        "motivo_renovacion": "continua",
+        "ciclos_realizados": "",
+        "respuesta": "estable",
+        "sitio_progresion": ""
+        
+      }
+
+      CONTEXTO CLÍNICO: Paciente ficticio de prueba de 56 años de edad.
+Diagnóstico simulado en fecha 01/02/2024: Neoplasia maligna de prueba en colon sigmoides.
+Biopsia patológica simulada (01/02/2024): Adenocarcinoma invasor ficticio G2. Marcadores: KRAS mutado (G12D simulado), NRAS no mutado, BRAF no mutado, MSS, HER2 negativo.
+Cirugía simulada: Resección oncológica de prueba el 10/03/2024 (ganglios resecados: 12, comprometidos: 2).
+Tomografía de control simulada (01/08/2024): Lesión secundaria hepática única de 30 mm.
+Laboratorio de prueba (01/10/2024): Hb 12.0 g/dl, Plaquetas 200000, Creatinina 0.9 mg/dl, CEA 40.0 ng/ml.
+Tratamiento previo de prueba: Esquema adyuvante ficticio recibido entre 04/2024 y 07/2024.
+Plan médico simulado: Solicitud de inicio de FOLFIRI + Bevacizumab como primera línea para enfermedad avanzada.
+
+--- LÍNEA DE TIEMPO / HISTORIAL DE EVENTOS ---
+• [01/02/2024] Biopsia [CLAVE]: Biopsia colon G2 simulada KRAS mutado
+• [10/03/2024] Cirugía [CLAVE]: Colectomía de prueba 2/12 ganglios
+• [01/08/2024] Imágenes [CLAVE]: TC control de prueba con progresión hepática
+    "
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 3. Banco de Drogas — ADMISIÓN (extractBancoDrogasData y AcroForm) > genera el prompt de admisión y rellena con exactitud los campos AcroForm de admision.pdf > banco_admision_pdf_acroform_records 1`] = `
+[
+  {
+    "field": "Text1",
+    "type": "setText",
+    "value": "PRUEBA, Paciente Ficticio",
+  },
+  {
+    "field": "Text1",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text2",
+    "type": "setText",
+    "value": "Argentina",
+  },
+  {
+    "field": "Text2",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text3",
+    "type": "setText",
+    "value": "01",
+  },
+  {
+    "field": "Text3",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text4",
+    "type": "setText",
+    "value": "01",
+  },
+  {
+    "field": "Text4",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text5",
+    "type": "setText",
+    "value": "1970",
+  },
+  {
+    "field": "Text5",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text6",
+    "type": "setText",
+    "value": "11.111.111",
+  },
+  {
+    "field": "Text6",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text7",
+    "type": "setText",
+    "value": "Ocupación Ficticia",
+  },
+  {
+    "field": "Text7",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text11",
+    "type": "setText",
+    "value": "56",
+  },
+  {
+    "field": "Text11",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text12",
+    "type": "setText",
+    "value": "Calle Falsa 123",
+  },
+  {
+    "field": "Text12",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text13",
+    "type": "setText",
+    "value": "000-0000000",
+  },
+  {
+    "field": "Text13",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text14",
+    "type": "setText",
+    "value": "Ciudad Ficticia",
+  },
+  {
+    "field": "Text14",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text15",
+    "type": "setText",
+    "value": "Córdoba",
+  },
+  {
+    "field": "Text15",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text16",
+    "type": "setText",
+    "value": "Argentina",
+  },
+  {
+    "field": "Text16",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text17",
+    "type": "setText",
+    "value": "Hospital Oncológico Provincial - Córdoba",
+  },
+  {
+    "field": "Text17",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Button8",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button9",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Text18",
+    "type": "setText",
+    "value": "Neoplasia Maligna de Prueba Estadio IV",
+  },
+  {
+    "field": "Text18",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text19",
+    "type": "setText",
+    "value": "C18.9",
+  },
+  {
+    "field": "Text19",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text23",
+    "type": "setText",
+    "value": "Mutado G12D",
+  },
+  {
+    "field": "Text23",
+    "type": "setFontSize",
+    "value": 7,
+  },
+  {
+    "field": "Text27",
+    "type": "setText",
+    "value": "01",
+  },
+  {
+    "field": "Text27",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text28",
+    "type": "setText",
+    "value": "02",
+  },
+  {
+    "field": "Text28",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text29",
+    "type": "setText",
+    "value": "2024",
+  },
+  {
+    "field": "Text29",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text30",
+    "type": "setText",
+    "value": "3",
+  },
+  {
+    "field": "Text30",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text31",
+    "type": "setText",
+    "value": "1",
+  },
+  {
+    "field": "Text31",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text32",
+    "type": "setText",
+    "value": "1",
+  },
+  {
+    "field": "Text32",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text33",
+    "type": "setText",
+    "value": "IV",
+  },
+  {
+    "field": "Text33",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text34",
+    "type": "setText",
+    "value": "Adenocarcinoma invasor G2 simulado. KRAS mutado. MSS.",
+  },
+  {
+    "field": "Text34",
+    "type": "setFontSize",
+    "value": 8,
+  },
+  {
+    "field": "Text36",
+    "type": "setText",
+    "value": "1.82",
+  },
+  {
+    "field": "Text36",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text37",
+    "type": "setText",
+    "value": "70",
+  },
+  {
+    "field": "Text37",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text38",
+    "type": "setText",
+    "value": "170",
+  },
+  {
+    "field": "Text38",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Button39",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button40",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button41",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button42",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button44",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button45",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Text46",
+    "type": "setText",
+    "value": "Colectomía oncológica",
+  },
+  {
+    "field": "Text46",
+    "type": "setFontSize",
+    "value": 9,
+  },
+  {
+    "field": "Text47",
+    "type": "setText",
+    "value": "12",
+  },
+  {
+    "field": "Text47",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text48",
+    "type": "setText",
+    "value": "2",
+  },
+  {
+    "field": "Text48",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text49",
+    "type": "setText",
+    "value": "10",
+  },
+  {
+    "field": "Text49",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text50",
+    "type": "setText",
+    "value": "03",
+  },
+  {
+    "field": "Text50",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text51",
+    "type": "setText",
+    "value": "2024",
+  },
+  {
+    "field": "Text51",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Button52",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button53",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button58",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button59",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button60",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button61",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button63",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button64",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button69",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Text71",
+    "type": "setText",
+    "value": "FOLFOX simulado",
+  },
+  {
+    "field": "Text71",
+    "type": "setFontSize",
+    "value": 9,
+  },
+  {
+    "field": "Button83",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button84",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button85",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button86",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button87",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button88",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button89",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button90",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button91",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Text92",
+    "type": "setText",
+    "value": "14",
+  },
+  {
+    "field": "Text92",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text94",
+    "type": "setText",
+    "value": "12",
+  },
+  {
+    "field": "Text94",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text95",
+    "type": "setText",
+    "value": "BEVACIZUMAB",
+  },
+  {
+    "field": "Text95",
+    "type": "setFontSize",
+    "value": 9,
+  },
+  {
+    "field": "Text96",
+    "type": "setText",
+    "value": "5 mg/kg",
+  },
+  {
+    "field": "Text96",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text97",
+    "type": "setText",
+    "value": "1",
+  },
+  {
+    "field": "Text97",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text98",
+    "type": "setText",
+    "value": "350 mg",
+  },
+  {
+    "field": "Text98",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text99",
+    "type": "setText",
+    "value": "IRINOTECAN",
+  },
+  {
+    "field": "Text99",
+    "type": "setFontSize",
+    "value": 9,
+  },
+  {
+    "field": "Text100",
+    "type": "setText",
+    "value": "180 mg/m2",
+  },
+  {
+    "field": "Text100",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text101",
+    "type": "setText",
+    "value": "1",
+  },
+  {
+    "field": "Text101",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text102",
+    "type": "setText",
+    "value": "320 mg",
+  },
+  {
+    "field": "Text102",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text141",
+    "type": "setText",
+    "value": "Córdoba, 15/10/2026",
+  },
+  {
+    "field": "Text141",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text142",
+    "type": "setText",
+    "value": "Hospital Oncológico Prov. Cba - Dr. Médico de Prueba Ficticio Mat.MP-00000/0",
+  },
+  {
+    "field": "Text142",
+    "type": "setFontSize",
+    "value": 7,
+  },
+]
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 4. Banco de Drogas — RENOVACIÓN (extractBancoDrogasData y AcroForm) > genera el prompt de renovación y rellena con exactitud los campos AcroForm de renovacion.pdf > banco_renovacion_extract_prompt 1`] = `
+"
+      Actúa como MÉDICO ONCÓLOGO EXPERTO. Hoy es 15/10/2026.
+      Analizá la historia clínica y extraé TODOS los datos posibles para el formulario Banco de Drogas RENOVACIÓN.
+      IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown.
+
+      REGLAS DE EXTRACCIÓN Y DEDUCCIÓN CLÍNICA (MUY ESTRICTAS):
+      1. nombre_apellido: Dejar SIEMPRE en blanco ("") para que el médico lo ingrese manualmente en la celda correspondiente. ❌ NUNCA inventar nombres ni extraer frases clínicas (como "derivado por melanoma", "paciente", etc.).
+      2. fecha_diagnostico: Deducir fecha del primer estudio patológico, biopsia o consulta diagnóstica inicial (DD/MM/AAAA).
+      3. cx_primario_si: true SOLAMENTE SI el paciente tuvo una CIRUGÍA/RESECCIÓN QUIRÚRGICA de su tumor primario (ej: Mastectomía, Biopsia escisional, Resección). Si solo tuvo tratamientos farmacológicos sistémicos o no fue operado, DEBE SER false.
+      4. cx_especificar: EXCLUSIVAMENTE el nombre del PROCEDIMIENTO QUIRÚRGICO. ❌ PROHIBIDO TERMINANTEMENTE colocar nombres de fármacos, quimioterapias o tratamientos sistémicos en campos de cirugía.
+      5. cx_metastasis_si: true SOLAMENTE si se realizó metastectomía quirúrgica.
+      6. rt_primario_si, rt_metastasis_si: true si recibió radioterapia.
+      7. tratamientos_sistemicos_si: true si recibió quimioterapia, hormonoterapia, biológicos o inmunoterapia previa.
+      8. drogas_solicitadas: Extraer el fármaco principal y secundarios indicados en el plan actual con dosis, días y total/día si figuran.
+      9. IHQ / RECEPTORES (RE, RP, HER2, KRAS, EGFR, Otros/BRAF):
+         - Completar ÚNICAMENTE si el marcador es POSITIVO o MUTADO (ej: "Positivo", "BRAF V600E mutado (+)").
+         - En marcadores negativos, no evaluados o no aplicables, DEJAR OBLIGATORIAMENTE EN BLANCO ("").
+         - ❌ PROHIBIDO TERMINANTEMENTE escribir "no aplica", "no aplicable", "negativo" o "no evaluado".
+
+      
+      CONTEXTO RENOVACIÓN:
+      - motivo_renovacion: "continua" si sigue igual, "cambio" si hubo toxicidad o progresión
+      - ciclos_realizados: número de ciclos ya completados
+      - ciclos_programados: número total planificado
+      - respuesta: "estable", "parcial" o "completa"
+      - sitio_progresion: si hubo progresión, dónde
+      
+
+      Devolver este objeto JSON:
+      {
+        "nombre_apellido": "",
+        "dni": "",
+        "fnac": "DD/MM/AAAA",
+        "edad": "",
+        "sexo": "M" o "F",
+        "domicilio": "",
+        "telefono": "",
+        "localidad": "",
+        "provincia": "Córdoba",
+        "pais": "Argentina",
+        "institucion": "Hospital Oncológico Provincial - Córdoba",
+        "profesion": "",
+        "diagnostico": "",
+        "fecha_diagnostico": "DD/MM/AAAA",
+        "cie10": "",
+        "estadio": "",
+        "tnm_t": "", "tnm_n": "", "tnm_m": "",
+        "receptor_RE": "", "receptor_RP": "", "receptor_HER2": "", "receptor_KRAS": "", "receptor_EGER": "", "receptor_otros": "",
+        "anatomia_patologica": "",
+        "peso": "",
+        "talla": "",
+        "ecog": "0",
+        "cx_primario_si": false,
+        "cx_especificar": "",
+        "cx_ganglios_resecados": "",
+        "cx_ganglios_comprometidos": "",
+        "cx_fecha": "",
+        "cx_metastasis_si": false,
+        "cx_metastasis_especificar": "",
+        "cx_metastasis_fecha": "",
+        "rt_primario_si": false,
+        "rt_metastasis_si": false,
+        "rt_localizacion": "",
+        "tratamientos_sistemicos_si": false,
+        "hormonoterapia_tipo": "",
+        "hormonoterapia_droga": "",
+        "quimioterapia_tipo": "",
+        "quimioterapia_droga": "",
+        "terapia_blanco_droga": "",
+        "terapia_blanco_fecha": "",
+        "inmunoterapia_droga": "",
+        "inmunoterapia_fecha": "",
+        "tipo_tratamiento": "avanzado",
+        "linea": "1",
+        "intervalo_ciclo": "21",
+        "ciclos_programados": "6",
+        "droga_1": "", "dosis_1": "", "dias_1": "", "total_dia_1": "",
+        "droga_2": "", "dosis_2": "", "dias_2": "", "total_dia_2": "",
+        "droga_3": "", "dosis_3": "", "dias_3": "", "total_dia_3": "",
+        
+        "motivo_renovacion": "continua",
+        "ciclos_realizados": "",
+        "respuesta": "estable",
+        "sitio_progresion": ""
+        
+      }
+
+      CONTEXTO CLÍNICO: Paciente ficticio de prueba de 56 años de edad.
+Diagnóstico simulado en fecha 01/02/2024: Neoplasia maligna de prueba en colon sigmoides.
+Biopsia patológica simulada (01/02/2024): Adenocarcinoma invasor ficticio G2. Marcadores: KRAS mutado (G12D simulado), NRAS no mutado, BRAF no mutado, MSS, HER2 negativo.
+Cirugía simulada: Resección oncológica de prueba el 10/03/2024 (ganglios resecados: 12, comprometidos: 2).
+Tomografía de control simulada (01/08/2024): Lesión secundaria hepática única de 30 mm.
+Laboratorio de prueba (01/10/2024): Hb 12.0 g/dl, Plaquetas 200000, Creatinina 0.9 mg/dl, CEA 40.0 ng/ml.
+Tratamiento previo de prueba: Esquema adyuvante ficticio recibido entre 04/2024 y 07/2024.
+Plan médico simulado: Solicitud de inicio de FOLFIRI + Bevacizumab como primera línea para enfermedad avanzada.
+
+--- LÍNEA DE TIEMPO / HISTORIAL DE EVENTOS ---
+• [01/02/2024] Biopsia [CLAVE]: Biopsia colon G2 simulada KRAS mutado
+• [10/03/2024] Cirugía [CLAVE]: Colectomía de prueba 2/12 ganglios
+• [01/08/2024] Imágenes [CLAVE]: TC control de prueba con progresión hepática
+    "
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 4. Banco de Drogas — RENOVACIÓN (extractBancoDrogasData y AcroForm) > genera el prompt de renovación y rellena con exactitud los campos AcroForm de renovacion.pdf > banco_renovacion_pdf_acroform_records 1`] = `
+[
+  {
+    "field": "Text2",
+    "type": "setText",
+    "value": "PRUEBA, Paciente Ficticio",
+  },
+  {
+    "field": "Text2",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text3",
+    "type": "setText",
+    "value": "Argentina",
+  },
+  {
+    "field": "Text3",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text4",
+    "type": "setText",
+    "value": "01",
+  },
+  {
+    "field": "Text4",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text5",
+    "type": "setText",
+    "value": "01",
+  },
+  {
+    "field": "Text5",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text6",
+    "type": "setText",
+    "value": "1970",
+  },
+  {
+    "field": "Text6",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text7",
+    "type": "setText",
+    "value": "11.111.111",
+  },
+  {
+    "field": "Text7",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text12",
+    "type": "setText",
+    "value": "56",
+  },
+  {
+    "field": "Text12",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text13",
+    "type": "setText",
+    "value": "Calle Falsa 123",
+  },
+  {
+    "field": "Text13",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text14",
+    "type": "setText",
+    "value": "000-0000000",
+  },
+  {
+    "field": "Text14",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text15",
+    "type": "setText",
+    "value": "Ciudad Ficticia",
+  },
+  {
+    "field": "Text15",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text16",
+    "type": "setText",
+    "value": "Córdoba",
+  },
+  {
+    "field": "Text16",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text17",
+    "type": "setText",
+    "value": "Argentina",
+  },
+  {
+    "field": "Text17",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text19",
+    "type": "setText",
+    "value": "Hospital Oncológico Provincial - Córdoba",
+  },
+  {
+    "field": "Text19",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Button9",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button10",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button23",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button24",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Text20",
+    "type": "setText",
+    "value": "Neoplasia Maligna de Prueba Estadio IV",
+  },
+  {
+    "field": "Text20",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text21",
+    "type": "setText",
+    "value": "C18.9",
+  },
+  {
+    "field": "Text21",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text35",
+    "type": "setText",
+    "value": "Mutado G12D",
+  },
+  {
+    "field": "Text35",
+    "type": "setFontSize",
+    "value": 7,
+  },
+  {
+    "field": "Text51",
+    "type": "setText",
+    "value": "1.82",
+  },
+  {
+    "field": "Text51",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text52",
+    "type": "setText",
+    "value": "70",
+  },
+  {
+    "field": "Text52",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text53",
+    "type": "setText",
+    "value": "170",
+  },
+  {
+    "field": "Text53",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Button57",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button58",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button59",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button60",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button62",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button63",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button64",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button65",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button66",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button67",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button68",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button69",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button70",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Text71",
+    "type": "setText",
+    "value": "14",
+  },
+  {
+    "field": "Text71",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text72",
+    "type": "setText",
+    "value": "6",
+  },
+  {
+    "field": "Text72",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text73",
+    "type": "setText",
+    "value": "12",
+  },
+  {
+    "field": "Text73",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Button137",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Button138",
+    "type": "check",
+    "value": true,
+  },
+  {
+    "field": "Button139",
+    "type": "uncheck",
+    "value": false,
+  },
+  {
+    "field": "Text76",
+    "type": "setText",
+    "value": "BEVACIZUMAB",
+  },
+  {
+    "field": "Text76",
+    "type": "setFontSize",
+    "value": 9,
+  },
+  {
+    "field": "Text79",
+    "type": "setText",
+    "value": "5 mg/kg",
+  },
+  {
+    "field": "Text79",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text80",
+    "type": "setText",
+    "value": "1",
+  },
+  {
+    "field": "Text80",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text81",
+    "type": "setText",
+    "value": "350 mg",
+  },
+  {
+    "field": "Text81",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text140",
+    "type": "setText",
+    "value": "Córdoba, 15/10/2026",
+  },
+  {
+    "field": "Text140",
+    "type": "setFontSize",
+    "value": 10,
+  },
+  {
+    "field": "Text141",
+    "type": "setText",
+    "value": "Hospital Oncológico Prov. Cba - Dr. Médico de Prueba Ficticio Mat.MP-00000/0",
+  },
+  {
+    "field": "Text141",
+    "type": "setFontSize",
+    "value": 7,
+  },
+]
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 5. DINADIC (generateDinadicPDF Prompt y Coordenadas PDF) > captura el fármaco por prompt window, genera el prompt exacto y dibuja en nuevo_dinadic.pdf > dinadic_extract_prompt 1`] = `
+"
+Actúa como oncólogo experto. Hoy es 15/10/2026.
+Analizá la historia clínica y extraé datos para el formulario DINADIC (Solicitud de Medicamentos - DADSE).
+FÁRMACO SOLICITADO POR EL MÉDICO: Bevacizumab. Usar EXACTAMENTE este valor en el campo "medicamentos".
+IDIOMA: Todo en español. Devolvé ÚNICAMENTE JSON sin markdown ni bloques de código.
+
+{
+  "nombre_apellido": "",
+  "tipo_documento": "DNI",
+  "numero_documento": "",
+  "edad": "",
+  "sexo": "Femenino o Masculino",
+  "domicilio": "",
+  "localidad": "",
+  "provincia": "Córdoba",
+  "telefono": "",
+  "celular": "",
+  "email": "",
+  "diagnostico": "",
+  "altura": "",
+  "peso": "",
+  "n_ciclo": "1",
+  "fecha_diagnostico": "DD/MM/AAAA",
+  "resumen_hc": "Resumen clínico con estadio e inmunohistoquímica. Narrativa cronológica. Máx 690 chars (6 líneas × 115).",
+  "metodos_complementarios": "Estudios de imagen y laboratorio con fechas y resultados clave. Máx 575 chars (5 líneas).",
+  "estado_general": "ECOG y comorbilidades relevantes. Máx 345 chars (3 líneas).",
+  "tratamientos_previos": "Tratamientos oncológicos previos con fechas. Máx 345 chars (3 líneas).",
+  "tipo_terapia_previa": "Cx, QT, RT, etc con fechas. Abreviaturas médicas. Máx 460 chars (4 líneas).",
+  "fundamentacion": "Justificación oncológica MUY CONCISA. Máximo 2 oraciones. No más de 200 caracteres. Sin cortes abruptos, terminar siempre con punto final y con coherencia."
+}
+
+CONTEXTO CLÍNICO: Paciente ficticio de prueba de 56 años de edad.
+Diagnóstico simulado en fecha 01/02/2024: Neoplasia maligna de prueba en colon sigmoides.
+Biopsia patológica simulada (01/02/2024): Adenocarcinoma invasor ficticio G2. Marcadores: KRAS mutado (G12D simulado), NRAS no mutado, BRAF no mutado, MSS, HER2 negativo.
+Cirugía simulada: Resección oncológica de prueba el 10/03/2024 (ganglios resecados: 12, comprometidos: 2).
+Tomografía de control simulada (01/08/2024): Lesión secundaria hepática única de 30 mm.
+Laboratorio de prueba (01/10/2024): Hb 12.0 g/dl, Plaquetas 200000, Creatinina 0.9 mg/dl, CEA 40.0 ng/ml.
+Tratamiento previo de prueba: Esquema adyuvante ficticio recibido entre 04/2024 y 07/2024.
+Plan médico simulado: Solicitud de inicio de FOLFIRI + Bevacizumab como primera línea para enfermedad avanzada.
+
+--- LÍNEA DE TIEMPO / HISTORIAL DE EVENTOS ---
+• [01/02/2024] Biopsia [CLAVE]: Biopsia colon G2 simulada KRAS mutado
+• [10/03/2024] Cirugía [CLAVE]: Colectomía de prueba 2/12 ganglios
+• [01/08/2024] Imágenes [CLAVE]: TC control de prueba con progresión hepática
+      "
+`;
+
+exports[`Tests de Caracterización de FormManager (Prompts y PDFs) > 5. DINADIC (generateDinadicPDF Prompt y Coordenadas PDF) > captura el fármaco por prompt window, genera el prompt exacto y dibuja en nuevo_dinadic.pdf > dinadic_pdf_drawText_records 1`] = `
+[
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "PRUEBA, Paciente Ficticio",
+    "x": 153,
+    "y": 559.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "DNI 11.111.111",
+    "x": 276,
+    "y": 547.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "56",
+    "x": 87,
+    "y": 535.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Masculino",
+    "x": 229,
+    "y": 535.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Calle Falsa 123",
+    "x": 115,
+    "y": 523.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Ciudad Ficticia",
+    "x": 110,
+    "y": 511.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Córdoba",
+    "x": 347,
+    "y": 511.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "000-0000000",
+    "x": 103,
+    "y": 499.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "000-0000001",
+    "x": 318,
+    "y": 499.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "paciente.ficticio@prueba-email.com",
+    "x": 152,
+    "y": 487.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Neoplasia Maligna de Colon Ficticia",
+    "x": 121,
+    "y": 475.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "1",
+    "x": 114,
+    "y": 463.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "170 cm",
+    "x": 91,
+    "y": 451.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "70 kg",
+    "x": 191,
+    "y": 451.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "1.82 m²",
+    "x": 362,
+    "y": 451.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Dr. Médico de Prueba Ficticio",
+    "x": 253,
+    "y": 409.8,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Oncología Clínica",
+    "x": 124,
+    "y": 398.3,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Oncología",
+    "x": 100,
+    "y": 385.3,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "000 0000000",
+    "x": 226,
+    "y": 361.8,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "000 0000000",
+    "x": 96,
+    "y": 349.8,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "medico.ficticio@hospital-de-prueba.gob.ar",
+    "x": 358,
+    "y": 349.3,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Neoplasia Maligna de Colon Ficticia",
+    "x": 121,
+    "y": 305.8,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "01",
+    "x": 490,
+    "y": 305.8,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "02",
+    "x": 512,
+    "y": 305.8,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "2024",
+    "x": 530,
+    "y": 305.8,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "Paciente ficticio de 56 años con neoplasia de colon estadio IV metastásica simulada. Biopsia 01/02/2024 KRAS",
+    "x": 57,
+    "y": 255.9,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "mutado. Colectomía 10/03/2024.",
+    "x": 57,
+    "y": 243.9,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 1,
+    "size": 8,
+    "text": "TC 01/08/2024: secundaria hepática única de 30 mm. CEA 40.0 ng/ml.",
+    "x": 57,
+    "y": 147.9,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 2,
+    "size": 8,
+    "text": "ECOG 1, buen estado general conservado.",
+    "x": 57,
+    "y": 755.3,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 2,
+    "size": 8,
+    "text": "Tratamiento adyuvante completado en 07/2024.",
+    "x": 57,
+    "y": 624.8,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 2,
+    "size": 8,
+    "text": "Cirugía colectomía y quimioterapia adyuvante de prueba.",
+    "x": 57,
+    "y": 551.6,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 2,
+    "size": 8,
+    "text": "Bevacizumab",
+    "x": 57,
+    "y": 334.4,
+  },
+  {
+    "color": undefined,
+    "lineHeight": undefined,
+    "maxWidth": undefined,
+    "page": 2,
+    "size": 8,
+    "text": "Indicación de Bevacizumab en primera línea avanzada tras progresión hepática.",
+    "x": 57,
+    "y": 274.3,
+  },
+]
+`;
