@@ -976,9 +976,17 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
 
         let strategyPrompt = "";
         if (data.context === 'RENOVACIÓN') {
-            strategyPrompt = `ESTRATEGIA: RENOVACIÓN DE ${drugName.toUpperCase()}. Objetivo: Demostrar beneficio clínico y tolerancia.`;
+            strategyPrompt = `OBJETIVO ESPECÍFICO DEL TRÁMITE: RENOVACIÓN DE ${drugName.toUpperCase()} (BANCO DE DROGAS).
+- En el resumen clínico: describir la evolución cronológica bajo el tratamiento con ${drugName}, ciclos administrados y la última evaluación clínica o imagenológica disponible, resumiendo fielmente la respuesta, estabilidad, progresión, toxicidad o cualquier situación documentada, sin omitir datos ni asumir respuestas o tolerancias no constatadas.
+- En la justificación final: fundamentar brevemente la continuidad solicitada conforme a la indicación terapéutica y la evolución clínica efectivamente registrada. Si existe progresión, toxicidad, respuesta no evaluable o información insuficiente, reflejarlo con precisión y sin inventar motivos para continuar.`;
+        } else if (data.context === 'SOLICITUD') {
+            strategyPrompt = `OBJETIVO ESPECÍFICO DEL TRÁMITE: SOLICITUD ANTE DINADIC (DADSE) DE ${drugName.toUpperCase()}.
+- En el resumen clínico: sintetizar la historia oncológica, estadio actual, líneas terapéuticas previas con sus respuestas y la situación clínica actual.
+- En la justificación final: fundamentar brevemente la indicación de inicio o cambio a ${drugName} acorde al estadio, histología/biomarcadores y línea documentada, sin reiterar la historia previa.`;
         } else {
-            strategyPrompt = `ESTRATEGIA: ADMISIÓN / SOLICITUD DE ${drugName.toUpperCase()}. Objetivo: Justificar indicación inicial (ignorar continuidad si ya la tomó).`;
+            strategyPrompt = `OBJETIVO ESPECÍFICO DEL TRÁMITE: ADMISIÓN AL BANCO DE DROGAS DE ${drugName.toUpperCase()}.
+- En el resumen clínico: sintetizar la historia oncológica, estadio actual, cirugías o líneas previas relevantes y situación clínica actual.
+- En la justificación final: fundamentar brevemente la indicación inicial de ${drugName} acorde a la histología, estadio y línea terapéutica documentada, sin reiterar la historia previa.`;
         }
 
         const entityLabel = data.context === 'SOLICITUD'
@@ -988,43 +996,37 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
           : `${data.context} - BANCO DE DROGAS`;
 
         const prompt = `
-        Actúa como un Oncólogo Experto del Hospital Oncológico Provincial de Córdoba.
+        Actúa como un Oncólogo Clínico del Hospital Oncológico Provincial de Córdoba.
         Hoy es ${today}.
         Redacta el texto para el documento institucional "RESUMEN DE HISTORIA CLÍNICA" correspondiente a: ${entityLabel}.
         
         ${strategyPrompt}
         
         FÁRMACO SOLICITADO POR EL MÉDICO: ${drugName}
-        
-        DATOS DE IDENTIFICACIÓN DEL PACIENTE:
-        - Nombre: ${data.nombre || patient?.name || ''}
-        - Fecha de Nacimiento: ${data.fnac || patient?.birthDate || ''}
-        - Edad: ${data.edad || patient?.age || ''}
-        - Sexo: ${data.sexo || patient?.gender || ''}
-        - DNI: ${data.dni || patient?.dni || ''}
-        - Historia Clínica: ${data.hc || patient?.hcNumber || patient?.id || ''}
-        
-        ESTRUCTURA DE RESPUESTA REQUERIDA (TEXTO PLANO, SIN MARKDOWN NI ASTERISCOS):
-        
+
+        DIRECTIVAS DE REDACCIÓN Y ESTILO:
+        - Redactar un informe médico continuo, fluido, narrativo y conciso. La extensión orientativa total debe ser de 2 a 4 párrafos en prosa (ajustada a la complejidad del caso).
+        - ❌ PROHIBIDO usar listas con viñetas, guiones de lista o enumeraciones numéricas (NO escribir "1.", "2.", "3.", etc.). Redactar siempre en prosa médica continua.
+        - ❌ PROHIBIDO incluir subtítulos intermedios o fragmentar el texto en múltiples apartados. Usar ÚNICAMENTE los dos encabezados principales: RESUMEN CLINICO y JUSTIFICACION.
+        - ❌ PROHIBIDO incluir datos de filiación o identificación del paciente al inicio ni firmas al final (el sistema los inserta automáticamente).
+        - ❌ PROHIBIDO repetir en la JUSTIFICACION la historia clínica, antecedentes, cirugías, estadio o tratamientos que ya quedaron claros en el RESUMEN CLINICO.
+        - Mantener lenguaje médico profesional, preciso y natural, como un informe redactado por el oncólogo tratante.
+        - Conservar fechas relevantes (en formato DD/MM/AAAA), esquemas previos, dosis y datos documentados necesarios para la evaluación y auditoría administrativa del medicamento.
+        - ❌ NO inventar estadio, biomarcadores, respuesta terapéutica, progresión, líneas previas ni datos que no consten en la historia clínica. Si un dato no está documentado (ej. ECOG), mantener "no documentado", sin inferencias.
+        - Texto plano limpio: SIN asteriscos (* o **), SIN numerales (#), SIN formato markdown.
+
+        ESTRUCTURA DE RESPUESTA REQUERIDA (UTILIZAR EXCLUSIVAMENTE ESTOS DOS ENCABEZADOS EN MAYÚSCULAS):
+
         RESUMEN CLINICO
-        Redacta una narrativa cronológica exhaustiva y detallada:
-        1. Motivo de consulta inicial, fecha de primera consulta, antecedentes patológicos y quirúrgicos relevantes.
-        2. Biopsias y confirmación diagnóstica con fechas exactas, informe anatomopatológico, inmunohistoquímica (receptores, HER2, BRAF, Ki-67, etc.).
-        3. Estudios de estadificación por imágenes cronológicos (RMN, PET-TC, TAC, centellograma) con fechas exactas, medidas milimétricas, SUV max y órganos comprometidos.
-        4. Tratamientos oncológicos previos recibidos con fechas de inicio/fin, ciclos administrados, toxicidades o causas de cambio/suspensión.
-        5. Estado clínico actual del paciente, síntomas, laboratorio reciente y ECOG.
-        
+        Redacta en prosa continua (de 1 a 3 párrafos fluidos, sin listas ni subtítulos):
+        - Primer párrafo (Historia oncológica): diagnóstico anatomopatológico con fecha, localización primaria, estadio (inicial y actual si consta) y biomarcadores relevantes documentados (ej. RE, RP, HER2, mutaciones, etc.).
+        - Segundo y/o tercer párrafo (Evolución y tratamientos): síntesis cronológica de cirugías, tratamientos sistémicos y radioterapia (con fechas de inicio/fin, ciclos y motivos de cambio o respuesta clínica/radiológica documentada), finalizando con la evaluación reciente (estudios de imágenes clave con fechas, situación clínica actual y ECOG documentado).
+
         JUSTIFICACION
-        Redacta una justificación oncológica sólida y fundamentada para la solicitud de ${drugName}:
-        - Justificación de la terapia en base a la histología, mutaciones (ej. BRAF V600E), estadio de la enfermedad y líneas previas.
-        - Beneficio esperado (tasas de respuesta, sobrevida libre de progresión).
-        - Detalle de la dosis y posología prescripta para el tratamiento específico.
-        
-        REGLAS OBLIGATORIAS:
-        - ❌ SIN ASTERISCOS ni MARKDOWN. Texto limpio.
-        - Todas las fechas en formato DD/MM/AAAA.
-        - NO incluyas encabezados institucionales ni firmas finales (se colocan automáticamente).
-        
+        Redacta un único párrafo breve y específico (de 3 a 6 líneas):
+        - Explica de forma concisa y fundamentada la indicación o continuidad de ${drugName} en el contexto clínico actual del paciente.
+        - No reiteres diagnóstico, estadio, biomarcadores ni historia clínica previa ya explicada en el Resumen Clínico. Enfócate exclusivamente en fundamentar la necesidad terapéutica de la solicitud.
+
         CONTEXTO CLÍNICO: ${getEffectiveClinicalContext()}${regenParams?.accumulatedCorrections ? `\n\nCORRECCIONES SOLICITADAS POR EL MÉDICO:\n${regenParams.accumulatedCorrections}` : ''}
         `;
 
