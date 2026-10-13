@@ -48,8 +48,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('');
   
-  // Tab/Filtro activo para la visualización de formularios
-  const [activeCategory, setActiveCategory] = useState<'todos' | 'coberturas' | 'institucionales' | 'practicas'>('todos');
 
   // Estados para parámetros de re-generación con corrección acumulativa
   const [lastRegenParams, setLastRegenParams] = useState<Record<string, { drugName: string; formId?: string; accumulatedCorrections: string }>>({});
@@ -76,7 +74,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
     filename: string;
   } | null>(null);
   const [isPreviewUpdating, setIsPreviewUpdating] = useState(false);
-  const [dinadicData, setDinadicData] = useState<any>(null);
   const [summaryTextContent, setSummaryTextContent] = useState<string>('');
 
   // Estado exclusivo e independiente para la Vista Previa de DINADIC
@@ -163,7 +160,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
   };
 
   // PAMI State
-  const [showPamiReviewModal, setShowPamiReviewModal] = useState(false);
   const [showPamiMissingConfirm, setShowPamiMissingConfirm] = useState(false);
   const [pamiFormData, setPamiFormData] = useState({
     paciente_nombre_real: '',
@@ -1394,7 +1390,6 @@ const FormManager: React.FC<FormManagerProps> = ({ patient, historyText, files, 
       const { blob, filename } = await generatePamiPDFDocument(data);
       setPamiPreview({ blob, filename });
       setShowPamiMissingConfirm(false);
-      setShowPamiReviewModal(false);
     } catch (e: any) {
       alert('Error al generar vista previa de PAMI: ' + e.message);
     } finally {
