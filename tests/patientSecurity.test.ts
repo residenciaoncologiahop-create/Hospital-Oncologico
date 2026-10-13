@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cleanForFirestore, Patient } from '../src/services/patientService';
+import { cleanForFirestore, NewPatient } from '../src/services/patientService';
 
 describe('Seguridad de Pacientes - Contrato de Capa Cliente', () => {
   describe('1. Sanitización e integridad de payload (cleanForFirestore)', () => {
@@ -44,7 +44,7 @@ describe('Seguridad de Pacientes - Contrato de Capa Cliente', () => {
 
   describe('2. Contrato de propiedad y estructura de paciente (doctorId ownership)', () => {
     it('exige el campo doctorId para cumplir con la regla isOwner(doctorId) de Firestore', () => {
-      const patientPayload: Patient & { doctorId: string } = {
+      const patientPayload: NewPatient & { doctorId: string } = {
         name: 'Paciente A',
         age: 62,
         diagnosis: 'Adenocarcinoma de Pulmón',

@@ -41,8 +41,8 @@ export type StageCategory =
 export type StageConfidence = 'confirmed' | 'auto' | 'pending';
 
 export interface Patient {
-  // Identificador (opcional en creación / payload, obligatorio en persistencia)
-  id?: string;
+  // Identificador obligatorio (referencia main.tsx)
+  id: string;
   doctorId?: string;
   hcNumber?: string;
 
